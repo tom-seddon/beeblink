@@ -262,6 +262,8 @@ async function main(options: ICommandLineOptions) {
 
     const server = new Server(options.rom, bfs);
 
+    let hello = false;
+
     while (!done) {
         try {
             let message = false;
@@ -307,6 +309,11 @@ async function main(options: ICommandLineOptions) {
             }
 
             const reader = new InEndpointReader(beebLink.inEndpoint);
+
+            if (!hello) {
+                process.stdout.write('Server running...\n');
+                hello = true;
+            }
 
             //log.pn('Waiting for header...');
             const t = await reader.readUInt8();
