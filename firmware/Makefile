@@ -46,8 +46,8 @@ include $(LUFA_PATH)/Build/lufa_atprogram.mk
 
 .PHONY:tags
 tags:
-	@$(CTAGS) $(CTAGS_OPTS) -R $(SRC) . /opt/local/avr/include
-	@$(CTAGS) $(CTAGS_OPTS) -R --append=yes $(LUFA_PATH)Common/*.h $(LUFA_PATH)Drivers/Board/AVR8/MINIMUS/*.h $(LUFA_PATH)CodeTemplates/*.h $(LUFA_PATH)CodeTemplates/DeviceTemplate/*.h $(LUFA_PATH)CodeTemplates/DriverStubs/*.h $(LUFA_PATH)CodeTemplates/HostTemplate/*.h $(LUFA_PATH)Common/*.h $(LUFA_PATH)Drivers/Board/*.h $(LUFA_PATH)Drivers/Board/AVR8/MINIMUS/*.h $(LUFA_PATH)Drivers/Misc/*.h $(LUFA_PATH)Drivers/Peripheral/*.h $(LUFA_PATH)Drivers/Peripheral/AVR8/*.h $(LUFA_PATH)Drivers/USB/*.h $(LUFA_PATH)Drivers/USB/Class/*.h $(LUFA_PATH)Drivers/USB/Class/Common/*.h $(LUFA_PATH)Drivers/USB/Class/Device/*.h $(LUFA_PATH)Drivers/USB/Class/Host/*.h $(LUFA_PATH)Drivers/USB/Core/*.h $(LUFA_PATH)Drivers/USB/Core/AVR8/*.h $(LUFA_PATH)Platform/*.h
+	@-$(CTAGS) $(CTAGS_OPTS) -R $(SRC) . /opt/local/avr/include
+	@-$(CTAGS) $(CTAGS_OPTS) -R --append=yes $(LUFA_PATH)Common/*.h $(LUFA_PATH)Drivers/Board/AVR8/MINIMUS/*.h $(LUFA_PATH)CodeTemplates/*.h $(LUFA_PATH)CodeTemplates/DeviceTemplate/*.h $(LUFA_PATH)CodeTemplates/DriverStubs/*.h $(LUFA_PATH)CodeTemplates/HostTemplate/*.h $(LUFA_PATH)Common/*.h $(LUFA_PATH)Drivers/Board/*.h $(LUFA_PATH)Drivers/Board/AVR8/MINIMUS/*.h $(LUFA_PATH)Drivers/Misc/*.h $(LUFA_PATH)Drivers/Peripheral/*.h $(LUFA_PATH)Drivers/Peripheral/AVR8/*.h $(LUFA_PATH)Drivers/USB/*.h $(LUFA_PATH)Drivers/USB/Class/*.h $(LUFA_PATH)Drivers/USB/Class/Common/*.h $(LUFA_PATH)Drivers/USB/Class/Device/*.h $(LUFA_PATH)Drivers/USB/Class/Host/*.h $(LUFA_PATH)Drivers/USB/Core/*.h $(LUFA_PATH)Drivers/USB/Core/AVR8/*.h $(LUFA_PATH)Platform/*.h
 
 clean: beeblink_clean
 
@@ -55,4 +55,3 @@ clean: beeblink_clean
 beeblink_clean:
 	@echo $(MSG_REMOVE_CMD) Removing BeebLink constants file
 	rm -f $(C_CONSTANTS)
-
