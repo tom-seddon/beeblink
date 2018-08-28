@@ -8,8 +8,6 @@ build:
 	mkdir -p $(DEST)
 	python ../tools/make_constants.py -o $(DEST)/beeblink_constants.s65 ../server/beeblink.ts 6502
 	$(TASS) beeblink.s65 -L$(DEST)/beeblink.lst -o$(DEST)/beeblink.rom "-DVERSION=\"$(VER)\""
-	sha1sum $(DEST)/beeblink.rom $(OLDROM)
-	@echo vbindiff $(abspath $(DEST)/beeblink.rom) $(OLDROM)
 
 .PHONY:clean
 clean:
