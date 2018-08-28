@@ -15,7 +15,7 @@ LD_FLAGS:=
 CTAGS:=exuberant-ctags
 CTAGS_OPTS:=--C-kinds=+px -e --totals=yes
 OBJDIR:=./.build
-TYPESCRIPT_CONSTANTS:=$(WC)/server2/beeblink.ts
+TYPESCRIPT_CONSTANTS:=$(WC)/server/beeblink.ts
 C_CONSTANTS:=$(OBJDIR)/beeblink_constants.h
 
 # Don't call this `all'. LUFA unhelpfully has an `all' target of its
