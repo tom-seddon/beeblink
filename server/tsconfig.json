@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "lib": [
+            "es2017"
+        ],
+        "module": "commonjs",
+        "target": "es2017",
+        "outDir": "./.build",
+        "alwaysStrict": true,
+        "sourceMap": true,
+        "noImplicitAny": true,
+        "noImplicitReturns": true,
+        "noImplicitThis": true,
+        "strict": true,
+        "strictNullChecks":true
+    },
+    "include": [
+        "./main.ts",
+        "./utils.ts",
+        "./beeblink.ts",
+        "./beebfs.ts",
+        "./server.ts",
+        "./volumebrowser.ts"
+    ]
+}

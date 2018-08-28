@@ -1,0 +1,7 @@
+/server/node_modules/
+/server/.vscode/
+/server/.build/
+/bbc_tests/beeblink/0/TFILE
+/bbc_tests/beeblink/0/TFILE.lea
+/bbc_tests/beeblink/0/_pl*
+/tmp/

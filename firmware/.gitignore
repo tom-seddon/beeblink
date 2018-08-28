@@ -1,0 +1,9 @@
+*.eep
+*.hex
+*.elf
+*.map
+*.sym
+TAGS
+*.lss
+*.bin
+.build/

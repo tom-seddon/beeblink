@@ -1,0 +1,5022 @@
+;-------------------------------------------------------------------------
+;-------------------------------------------------------------------------
+;
+; BeebLink - BBC Micro file storage system
+; Copyright (C) 2018 Tom Seddon
+; 
+; This program is free software: you can redistribute it and/or
+; modify it under the terms of the GNU General Public License as
+; published by the Free Software Foundation, either version 3 of the
+; License, or (at your option) any later version.
+; 
+; This program is distributed in the hope that it will be useful, but
+; WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+; General Public License for more details.
+; 
+; You should have received a copy of the GNU General Public License
+; along with this program. If not, see
+; <https://www.gnu.org/licenses/>.
+;
+;-------------------------------------------------------------------------
+;-------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------
+;
+; BeebLink ROM
+; ------------
+;
+;-------------------------------------------------------------------------
+;
+; Notes:
+;
+; . in general, assume routines change their inputs and all registers,
+; unless otherwise stated
+;
+;-------------------------------------------------------------------------
+
+                .include ".build/beeblink_constants.s65"
+                
+;-------------------------------------------------------------------------
+
+; MOS entry points
+
+gsinit=$ffc2
+gsread=$ffc5
+osargs=$ffda
+osnewl=$ffe7
+osrdch=$ffe0
+osasci=$ffe3
+oswrch=$ffee
+osword=$fff1
+osbyte=$fff4
+oscli=$fff7
+
+cliv=$208
+filev=$212
+                
+; Tube transfer reasons
+
+tube_multi_byte_parasite_to_host=0
+tube_multi_byte_host_to_parasite=1
+tube_256_byte_parasite_to_host=6
+tube_256_byte_host_to_parasite=7
+                
+;-------------------------------------------------------------------------
+
+; Set up C-style escape for CR.
+                .edef "\r",13
+
+; This one isn't strictly necessary, but my Emacs mode for 6502 source
+; code doesn't colourize single quoted apostrophes properly, and this
+; is a quick fix...
+                .edef "\'",$27
+
+;-------------------------------------------------------------------------
+
+; Config toggles.
+                
+; If true, set VON by default on hard reset.
+default_von=false
+
+; If true, disable debug prints in print_server_string, then restore
+; the old state on exit. Generally a good idea when not actively
+; debugging the mechanism.
+print_server_string_voff=true
+
+; If false, the .debug_print macro turns into nothing.
+;
+; 
+enable_debug_print=true
+
+; Various verbosity flags.
+verbose_file_data=false
+
+; Use optimised or simplified version of send/receive file data
+; routines.
+recv_file_data_optimised=true
+send_file_data_optimised=true
+
+;-------------------------------------------------------------------------
+
+; ROM status byte flags
+
+; if set, *VON.
+sf_von=$80
+
+; if set, pretend to be DFS.
+sf_act_as_dfs=$40
+
+; if set, (try to) trap *DISC and *DISK.
+sf_trap_disc=$20
+                
+;-------------------------------------------------------------------------
+
+; FS number as per OSARGS A=0
+blfs_fs_number=93
+
+; FS number for DFS
+dfs_fs_number=4
+
+; Where to copy BRKstuff to
+brkthunk=$104
+
+; Maximum size of BRKstuff
+;
+; http://www.cowsarenotpurple.co.uk/bbccomputer/native/master-mosmemory.html
+; suggests $128 is used when the Tube is active, so probably best to
+; avoid that...
+brkthunk_max_size=$128-brkthunk
+
+; Can this ever move??
+roms_table=$DF0
+
+; In principle, it ought to work with multiple user ports. Might even
+; be possible to fix it up for port A...
+via=$fe60
+
+; Key to hold down to select this filing system on BREAK (AUG p143)
+boot_key=100                    ;100=B
+
+; Tube claimant ID.
+tube_claimant_id=35
+
+; Number of chars to buffer up when printing the
+; server's string.
+server_string_buffer_size=20
+
+                .cerror server_string_buffer_size<1,"server string buffer must be 1+ bytes"
+                .cerror server_string_buffer_size>64,"string packet has to fit on the 6502 stack"
+
+;-------------------------------------------------------------------------
+; 
+; Load word from memory and push onto stack.
+;
+
+push8 .macro
+                lda \1
+                pha
+                .endm
+                
+push16 .macro
+                push8 \1+1
+                push8 \1+0
+                .endm
+
+push32 .macro
+                push8 \1+3
+                push8 \1+2
+                push8 \1+1
+                push8 \1+0
+                .endm
+
+push16zx: .macro
+                lda 0,x
+                pha
+                lda 1,x
+                pha
+                .endm
+
+push32zx: .macro
+                lda 0,x
+                pha
+                lda 1,x
+                pha
+                lda 2,x
+                pha
+                lda 3,x
+                pha
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Pop word from stack and store into memory.
+;
+
+pop8 .macro
+                pla
+                sta \1
+                .endm
+                
+pop16 .macro
+                pop8 \1
+                pop8 \1+1
+                .endm
+
+pop32 .macro
+                pop8 \1+0
+                pop8 \1+1
+                pop8 \1+2
+                pop8 \1+3
+                .endm
+
+pop16zx: .macro
+                pla
+                sta 1,x
+                pla
+                sta 0,x
+                .endm
+
+pop32zx: .macro
+                pla
+                sta 3,x
+                pla
+                sta 2,x
+                pla
+                sta 1,x
+                pla
+                sta 0,x
+                .endm
+                
+;-------------------------------------------------------------------------
+;
+; debug print nonsense.
+;
+; The macro's single argument is a list of items to print. Each item
+; can be:
+;
+; string - string is printed as-is using osasci
+;
+; 16-bit integer - hex value of byte at that address is printed
+;
+; DP_A, DP_X, DP_Y - print hex value of that register
+;
+; DP_ZPn_X - print X?n (as per 0,x addressing mode)
+;
+; print - always prints using osasci
+; preserves: A; X; Y: p
+;
+; debug_print - prints using osasci if the VON flag is set
+; preserves: A; X; Y; P
+
+DP_A=-1
+DP_X=-2
+DP_Y=-3
+DP_P=-4
+DP_ZP0_X=-1000
+DP_ZP1_X=DP_ZP0_X+1
+DP_ZP2_X=DP_ZP0_X+2
+DP_ZP3_X=DP_ZP0_X+3
+DP_ZP255_X=DP_ZP0_X+255
+
+print: .macro items
+                php             ;103=p
+                pha             ;102=a
+                txa
+                pha             ;101=x
+                tsx
+                .for i=0,i<len(\items),i+=1
+
+                .if type(\items[i])==str
+
+                .if \items[i]=="\r"
+                jsr osnewl
+                .elsif len(\items[i])==1
+                lda #\items[i][0]
+                jsr osasci
+                .else
+                jsr pcprint
+                .text \items[i],255
+                .endif
+                
+                .elsif type(\items[i])==int||type(\items[i])==bits||type(\items[i])==code
+                
+                .if \items[i]>=0&&\items[i]<=65535
+                lda \items[i]
+                jsr print_hex_byte
+                .elsif \items[i]==DP_A
+                lda $102,x
+                jsr print_hex_byte
+                .elsif \items[i]==DP_X
+                lda $101,x
+                jsr print_hex_byte
+                .elsif \items[i]==DP_Y
+                tya
+                jsr print_hex_byte
+                .elsif \items[i]==DP_P
+                lda $103,x
+                jsr print_p
+                .elsif \items[i]>=DP_ZP0_X&&\items[i]<=DP_ZP255_X
+                lda $101,x
+                tax
+                lda \items[i]-DP_ZP0_X,x
+                jsr print_hex_byte
+                tsx
+                .else
+                .cerror true,"bad debug_print integer"
+                .endif
+
+                .else
+
+                .cerror true,"bad debug_print item: ",\items[i]," ",type(\items[i])
+
+                .endif
+                
+                .next
+                
+                pla
+                tax
+                pla
+                plp
+                .endm
+
+;-------------------------------------------------------------------------
+;
+;
+
+debug_print .macro items,enabled=true
+                .if enable_debug_print
+                .if \enabled
+                php             ;104=p
+                jsr get_vstatus
+                bcs +
+                jmp debug_print_done
++
+                print list(\items)
+debug_print_done:
+                plp
+                .endif
+                .endif
+                .endm
+
+;-------------------------------------------------------------------------
+;
+;
+; 
+command .macro name,value,routine
+                .cerror (\value&$80)!=0,"command value bit 7 can't be set"
+
+                .text \name
+                .byte \value|$80
+                .word \routine
+                
+                .endm
+
+;-------------------------------------------------------------------------
+;
+;
+;
+
+strings_list .macro strings
+
+addresses:=[]
+strings:
+                .for i=0,i<len(\strings),i+=1
+addresses:=addresses..[*]
+                .text \strings[i],255
+                .next
+
+l:
+                .byte <addresses
+h:
+                .byte >addresses
+                .endm
+
+;-------------------------------------------------------------------------
+
+brk_error .macro code,text
+                jsr dobrk
+                .text \code,\text,0
+                .endm
+                
+;-------------------------------------------------------------------------
+
+                .dsection bss
+
+; MOS command workspace
+*=$a8
+print_ptr .fill 0
+cmd_ptr .fill 0
+brk_ptr .fill 0
+                .fill 2
+                
+                .cerror *>$b0,"MOS command workspace overflow"
+                
+; Filing system scratch space
+*=$b0
+scratch_p_size .fill 4
+scratch_ptr .fill 2
+                
+scratch_run_metadata:
+scratch_command_line_tail_offset .fill 1
+scratch_load .fill 4
+scratch_exec .fill 4
+                .cerror scratch_load!=scratch_command_line_tail_offset+1,"Scratch space load must follow command line tail offset"
+                .cerror scratch_exec!=scratch_load+4,"Scratch space exec must follow load"
+                .cerror *>$c0,"Filing system scratch space overflow"
+
+; Filing system private space
+*=$c0
+private_ptr .fill 2
+private_request .fill 1
+private_response .fill 1
+private_x .fill 1
+private_y .fill 1
+private_command_line_ptr .fill 2
+private_old_cliv .fill 2
+                .cerror *>$d0,"Filing system scratch space overflow"
+
+;-------------------------------------------------------------------------
+
+                .dsection code
+                
+*=$8000
+
+                brk
+                brk
+                brk
+                jmp svc
+
+                .byte $82       ;has service entry
+                .byte rom_copyright&$ff
+                .byte 0         ;version
+rom_name:
+                .text "BeebLink"
+                .if default_von
+                .text "(VON)"
+                .endif
+rom_version:
+                .text 0,VERSION
+rom_copyright:
+                .text 0,"(C)",0
+
+;-------------------------------------------------------------------------
+
+help_subjects_commands:
+                .command "BLFS",0,svc_help.blfs
+                .command "UTILS",0,svc_help.utils
+                .byte 255
+
+utils_commands:
+                .command "BLCONFIG",blconfig_syntax-syntaxes,blconfig_cmd
+                .command "BLFS",0,init_blfs
+                .command "BLSELFUPDATE",0,selfupdate_cmd
+                .command "DISC",0,init_blfs
+                .command "DISK",0,init_blfs
+                .byte 255
+
+fs_trap_commands:
+                .command "TAPE",0,0
+                .command "DISC",0,0
+                .command "DISK",0,0
+                .byte 255
+
+;-------------------------------------------------------------------------
+
+syntaxes:
+                .text 255
+args_syntax:
+                .text "<args>",255
+p1_syntax:
+                .text "<T> <P>",255
+pn_syntax:
+                .text "<T> <start> <end>",255
+blconfig_syntax:
+                .text "([V*D][+-]...)",255
+
+;-------------------------------------------------------------------------
+
+m128_fs_info: .block
+                .text 'BLFS    '
+                .byte FIRST_FILE_HANDLE
+                .byte FIRST_FILE_HANDLE+NUM_FILE_HANDLES-1
+                .byte blfs_fs_number
+                .cerror (*-m128_fs_info)%11!=0,'oops'
+blfs_end:
+                .text 'DISC    '
+                .byte FIRST_FILE_HANDLE
+                .byte FIRST_FILE_HANDLE+NUM_FILE_HANDLES-1
+                .byte dfs_fs_number
+                .cerror (*-m128_fs_info)%11!=0,'oops'
+                .text 'DISK    '
+                .byte FIRST_FILE_HANDLE
+                .byte FIRST_FILE_HANDLE+NUM_FILE_HANDLES-1
+                .byte dfs_fs_number
+                .cerror (*-m128_fs_info)%11!=0,'oops'
+end:
+                .bend
+                
+;-------------------------------------------------------------------------
+
+svc: .proc
+                cmp #$02
+                beq svc_claim_private_workspace
+                cmp #$03
+                beq svc_boot
+                cmp #$04
+                beq star
+                cmp #$09
+                beq help
+                cmp #$25
+                beq svc_get_m128_fs_info
+done:
+                ldx $f4
+                rts
+
+star:
+                jmp svc_star
+
+help:
+                jmp svc_help
+
+                .pend
+
+;-------------------------------------------------------------------------
+;
+;
+;
+svc_fs_init: .proc
+                cpy #fs_number
+                beq init_as_blfs
+
+                ; if a DFS ROM is present, it should already have
+                ; caught this.
+                cpy #dfs_fs_number
+                beq init_as_dfs
+
+                jmp svc.done
+
+as_blfs:
+                jsr init_blfs
+                lda #0
+                jmp svc.done
+
+as_dfs:
+                jsr init_dfs
+                lda #0
+                jmp svc.done
+                
+                .pend
+
+;-------------------------------------------------------------------------
+;
+;
+svc_get_m128_fs_info: .proc
+                lda $a8
+                pha
+
+                lda #sf_act_as_dfs
+                jsr get_rom_status_flag
+                
+                lda #m128_fs_info.blfs_end-m128_fs_info
+                bcc +
+                lda #m128_fs_info.end-m128_fs_info
++
+                sta $a8
+                
+                ldx #0
+loop:
+                lda m128_fs_info,x
+                sta ($f2),y
+                iny
+                inx
+                cpx $a8
+                bne loop
+
+                pla
+                sta $a8
+
+                lda #$25
+                jmp svc.done
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+;
+; 
+svc_claim_private_workspace: .proc
+                tya
+                pha
+
+                ; this isn't actually a private workspace claim, but
+                ; it uses the same table, so...
+
+                lda #253
+                jsr osbyte_x00_yff ;check BREAK type
+                cpx #0
+                beq done        ;taken if it was a soft BREAK
+
+                .if default_von
+                sec
+                jsr set_vstatus
+                .endif
+
+                cpx #1
+                bne done        ;taken if it was a hard BREAK
+
+                ; Power-on reset.
+                
+                ldx $f4
+                lda roms_table,x
+                and #~(sf_act_as_dfs|sf_trap_disc)&$ff
+                sta roms_table,x
+
+done:
+                pla
+                tay
+                lda #2
+                jmp svc.done
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; 
+svc_boot: .proc
+                tya
+                pha
+
+                lda #$7a        ;keyboard scan, AUG 143
+                jsr osbyte
+                
+                cpx #$ff
+                beq boot_fs     ;taken if no key pressed
+                
+                cpx #boot_key
+                bne pass_on     ;taken if something other than the
+                                ;special key was held down
+
+boot_fs:
+                jsr print_rom_name
+
+                lda #sf_act_as_dfs
+                jsr get_rom_status_flag
+                bcc +
+                jsr pcprint
+                .text " (DFS)",255
++
+
+                lda #sf_trap_disc
+                jsr get_rom_status_flag
+                bcc +
+                jsr pcprint
+                .text " (*DISC)",255
++
+
+show_avr_status:
+
+                jsr pcprint
+                .text " - ",255
+
+                jsr via_reset
+                jsr verbose_get_beeblink_status
+
+                pha
+
+                jsr osnewl
+                jsr osnewl
+
+                pla
+
+                cmp #BEEBLINK_STATUS_OK
+                bne pass_on
+
+                lda #253        ;get reset type in X (AUG 244)
+                jsr osbyte_x00_yff
+                
+                lda #REQUEST_RESET
+                jsr send_request_1
+
+                ldx #scratch_p_size
+                jsr recv_response
+
+                ; whatever it was, I'm sure it was fine...
+                jsr discard_remaining_payload
+
+                jsr init_blfs
+
+                lda #sf_trap_disc
+                jsr get_rom_status_flag
+                bcc +
+                jsr init_oscli_hack
++
+
+                pla
+                bne booted
+
+                jsr boot
+
+booted:
+                lda #0
+                jmp svc.done
+
+pass_on:
+                pla
+                tay
+                lda #3
+                jmp svc.done
+
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Auto-boot the current disc.
+;
+; Might not return.
+;
+boot: .proc
+                lda #REQUEST_BOOT_OPTION
+                jsr send_request_1_recv_response_1
+
+                cmp #0
+                beq done
+
+                and #3
+                
+                tax
+                ldy command_lines.h,x
+                lda command_lines.l,x
+                tax
+                jsr oscli
+done:
+                rts
+                
+command_lines: .strings_list ["","LOAD !BOOT\r","RUN !BOOT\r","EXEC !BOOT\r"]
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; 
+svc_star: .proc
+                .push16 cmd_ptr
+                tya
+                pha
+
+                jsr select_utils_commands
+                jsr find_cmd
+                bcs found
+
+                ldx #4
+                jmp svc_help_or_star_done
+
+found:
+                jsr cmd_call_pointer
+                ldx #0
+                jmp svc_help_or_star_done
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; 
+svc_help: .proc
+                .push16 cmd_ptr
+                tya
+                pha
+
+                lda #<help_subjects_commands
+                sta cmd_ptr+0
+                lda #>help_subjects_commands
+                sta cmd_ptr+1
+                lda ($f2),y
+                cmp #13
+                beq print_table
+check_for_subject:
+                jsr find_cmd
+                bcc done
+                jmp cmd_call_pointer
+
+utils:
+                jsr select_utils_commands
+                print_table
+                jsr print_rom_banner
+                jsr print_cmds
+                jmp done
+
+blfs:
+                jsr print_rom_banner
+
+                jsr is_blfs_active
+                bcc blfs_help_unavailable
+
+                lda #REQUEST_HELP_BLFS
+                ldx #0
+                jsr send_request_1_recv_response_1
+
+                jsr print_server_string
+                jmp done
+
+blfs_help_unavailable:
+                jsr pcprint
+                .text "  Help available when active",13,255
+done:
+                ldx #9
+                .pend
+                ; fall through...
+svc_help_or_star_done:
+                
+                pla
+                tay
+                .pop16 cmd_ptr
+                txa
+                jmp svc.done
+
+;-------------------------------------------------------------------------
+;
+; Point cmd_ptr at the UTILS table.
+; 
+select_utils_commands: .proc
+                lda #<utils_commands
+                sta cmd_ptr+0
+                lda #>utils_commands
+                sta cmd_ptr+1
+                rts                
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; entry: ($f2),y = command line
+;        (cmd_ptr) = table
+; exit:  C clear: not matched
+;                 preserves ($f2); Y
+;        C set: matched
+;               ($f2),y = command line tail
+;               (cmd_ptr) = cmd metadata
+
+find_cmd: .proc
+                tya
+                pha
+                ldx #cmd_ptr
+check_cmd:
+                pla
+                pha
+                tay
+                bit rom_copyright+2 ;value is 'C' - set V flag
+loop:
+                lda (0,x)
+                bmi maybe_match
+                lda ($f2),y
+                iny
+                bvs +           ;don't allow 0-char abbreviations
+                cmp #'.'
+                beq match
++
+                clv
+                jsr toupper
+                cmp (0,x)
+                bne no_match
+                jsr add1z16
+                jmp loop
+
+maybe_match:
+                lda ($f2),y
+                cmp #33
+                bcs no_match
+match:
+                jsr cmd_metadata
+                pla
+                tya
+                pha
+                sec
+done:
+                pla
+                tay
+                rts
+
+no_match:
+                jsr cmd_metadata
+                jsr add3z16
+                lda (0,x)
+                bpl check_cmd
+                clc
+                bmi done
+                .pend
+
+;-------------------------------------------------------------------------
+; advance (cmd_ptr) to the metadata for the current command
+;
+; entry: (cmd_ptr) = point to somewhere in the text of the command
+; exit: (cmd_ptr) = points to command's metadata
+; preserves: X; Y; C
+
+cmd_metadata: .proc
+                txa
+                pha
+                ldx #cmd_ptr
+loop:
+                lda (0,x)
+                bmi found
+                jsr add1z16
+                jmp loop
+
+found:
+                pla
+                tax
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+; get command's pointer from its metadata
+;
+; entry: (cmd_ptr) = points to command's metadata
+; exit: (cmd_ptr) = value of command's pointer
+; preserves: X; Y; C
+
+cmd_pointer: .proc
+                tya
+                pha
+                ldy #1
+                lda (cmd_ptr),y
+                pha
+                iny
+                lda (cmd_ptr),y
+                sta cmd_ptr+1
+                pla
+                sta cmd_ptr+0
+                pla
+                tay
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+; assume command's pointer is a routine, and call it as if by a jsr
+;
+; entry: (cmd_ptr) = points to command's metadata
+
+cmd_call_pointer: .proc
+                jsr cmd_pointer
+                jmp (cmd_ptr)
+                .pend
+                
+;-------------------------------------------------------------------------
+
+print_cmds: .proc
+                ldx #cmd_ptr
+loop:
+                lda (0,x)
+                bmi done
+
+                jsr print_2_spaces
+                
+name_loop:
+                lda (0,x)
+                bmi print_syntax
+                jsr osasci
+                jsr add1z16
+                jmp name_loop
+
+print_syntax:
+                ; this needless space is mildly annoying.
+                jsr print_1_space
+                
+                txa
+                pha
+                
+                clc
+                lda (0,x)
+                and #$7f
+                adc #<syntaxes
+                tax
+
+                lda #0
+                adc #>syntaxes
+                tay
+
+                jsr printyx
+
+                pla
+                tax
+
+syntax_done:                
+                jsr add3z16
+                jsr osnewl
+                jmp loop
+
+done:
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Gets value of one of the ROM's status byte flags.
+;
+; entry: A = mask of flag to test
+; exit: C=1 if on, C=0 if off
+; preserves: Y
+get_rom_status_flag: .proc
+                ldx $f4
+                and roms_table,x
+                cmp #1
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Get value of the ROM's various status byte flags.
+;
+; exit: C=1 if on, C=0 if off
+; preserves: A; X; Y
+
+get_rom_status_flag_routine: .macro
+                pha
+                txa
+                pha
+                lda #\1
+                jsr get_rom_status_flag
+                pla
+                tax
+                pla
+                rts
+                .endm
+
+get_vstatus: .get_rom_status_flag_routine sf_von
+; get_act_as_dfs: .get_rom_status_flag_routine sf_act_as_dfs
+; get_trap_disc: .get_rom_status_flag_routine sf_trap_disc
+                
+;-------------------------------------------------------------------------
+;
+; sets status of the *VON/*VOFF flag.
+;
+; entry: C=1 to set on, C=0 to set off.
+; preserves: Y
+set_vstatus: .proc
+                ldx $f4
+                lda roms_table,x
+                and #(~sf_von)&$ff
+                bcc store
+                ora #sf_von
+store:
+                sta roms_table,x
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+;
+toupper: .proc
+                cmp #'a'
+                bcc done
+                cmp #'z'+1
+                bcs done
+                and #$df
+done:
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Print some spaces.
+;
+; preserves: X; Y
+
+print_2_spaces:
+                jsr print_1_space
+print_1_space:
+                lda #' '
+                jmp osasci
+                
+;-------------------------------------------------------------------------
+;
+; Print string pointed to by Y/X.
+;
+; entry: YX = points to string
+;
+printyx: .proc
+                .push16 print_ptr
+                stx print_ptr+0
+                sty print_ptr+1
+                jsr print_print_ptr
+                .pop16 print_ptr
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+print_print_ptr: .proc
+                ldx #print_ptr
+loop:
+                lda (0,x)
+                cmp #255
+                beq done
+                tay
+                .push16zx
+                tya
+                jsr osasci
+                .pop16zx
+                jsr add1z16
+                jmp loop
+done:
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+pcprint: .proc
+                php
+                pha
+                txa
+                pha
+                tya
+                pha
+                .push16 print_ptr
+                tsx
+                lda $107,x
+                sta print_ptr+0
+                lda $108,x
+                sta print_ptr+1
+                ldx #print_ptr
+                jsr add1z16
+                jsr print_print_ptr
+                tsx
+                lda print_ptr+0
+                sta $107,x
+                lda print_ptr+1
+                sta $108,x
+                .pop16 print_ptr
+                pla
+                tay
+                pla
+                tax
+                pla
+                plp
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+print_bool_c: .proc
+                bcc print_no
+                bcs print_yes
+                .pend
+
+;-------------------------------------------------------------------------
+
+print_bool:
+                cmp #0
+                beq print_no
+print_yes:
+                jsr pcprint
+                .text "yes",255
+                rts
+print_no:
+                jsr pcprint
+                .text "no",255
+                rts
+
+;-------------------------------------------------------------------------
+;
+;
+print_rom_name_char: .proc
+                cmp #0
+                bne ok
+                lda #" "
+ok:
+                jmp osasci
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Print ROM details.
+;
+
+print_rom_name: .proc
+                ldy #rom_version-rom_name
+print:
+                ldx #0
+loop:
+                lda rom_name,x
+                jsr print_rom_name_char
+                inx
+                dey
+                bne loop
+done:
+                rts
+                .pend
+
+print_rom_banner: .proc
+                jsr osnewl
+                ldy #rom_copyright-rom_name
+                jsr print_rom_name.print
+                jsr osnewl
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Calls OSBYTE with X=0 and Y=255
+;
+; entry: A = OSBYTE to call
+; exit: as per whichever OSBYTE it was
+; 
+osbyte_x00_yff: .proc
+                ldx #0
+                ldy #$ff
+                jmp osbyte
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Get length of CR-terminated string.
+;
+; entry: X = ZP address of pointer to string
+; exit: Y = length of string excluding CR terminator
+; preserves: X
+;
+strlen_cr: .proc
+                .push16zx
+
+                ldy #0
+loop:
+                lda (0,x)
+                cmp #13
+                beq done
+                iny
+                beq done
+                jsr add1z16
+                jmp loop
+done:       
+                .pop16zx
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; Set a 16-bit value in zero page to 0.
+;
+; entry: X = zero page address of 16-bit value
+; exit: 
+; preserves: A; X; Y; C
+;
+clrz16: .proc
+                pha
+                lda #0
+                sta 0,x
+                sta 1,x
+                pla
+                rts
+                .pend
+                
+                
+;-------------------------------------------------------------------------
+;
+; Add a small constant value to a 16-bit value in zero page.
+;
+; entry: X = zero page address of 16-bit value
+; exit: Z set if value became zero
+; preserves: A; X; Y; C
+;
+add3z16:
+                jsr add1z16
+add2z16:
+                jsr add1z16
+add1z16: .proc
+                inc 0,x
+                bne done
+                inc 1,x
+done:
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Add Y to a 16-bit value in zero page.
+;
+; entry: X = zero page address of 16-bit value
+;        Y = value to add
+; preserves: A; X; Y; P
+;
+addyz16: .proc
+                php
+                pha
+                clc
+                tya
+                adc 0,x
+                sta 0,x
+                bcc addyz16_done
+                inc 1,x
+addyz16_done:
+                pla
+                plp
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Fetch a value via a pointer in zero page, with post-increment.
+;
+; entry: X = zero page address of 16-bit pointer
+; exit: A = value fetched
+;       pointer incremented
+;       N,Z set as per new value of A
+; preserves: X,Y
+fetch_add1z16: .proc
+                lda (0,x)
+                php
+                jsr add1z16
+                plp
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Set a 32-bit value in zero page to a zero-extended 8-bit value.
+;
+; entry: A = 8-bit value to set
+;        X = zero page address of 32-bit value
+; exit: 
+; preserves: A; X; Y; C
+setz32: .proc
+                pha
+                sta 0,x
+                lda #0
+                sta 1,x
+                sta 2,x
+                sta 3,x
+                pla
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Add Y to a 32-bit value in zero page.
+;
+; entry: X = zero page address of 32-bit value
+;        Y = value to add
+; preserves: A; X; Y
+;
+addyz32: .proc
+                pha
+                clc
+                tya
+                adc 0,x
+                sta 0,x
+                bcc done
+                inc 1,x
+                bne done
+                inc 2,x
+                bne done
+                inc 3,x
+done:
+                pla
+                rts
+                .pend
+;-------------------------------------------------------------------------
+;
+; ORs all 4 bytes of a 32-bit zero page value into the accumulator.
+;
+; entry: X = zero page address of 32-bitvalue
+; exit: A = a|b|c|d
+; takes: 22 cycles
+;
+ldunionz32: .proc
+                lda 0,x
+                ora 1,x
+                ora 2,x
+                ora 3,x
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Increment a 32-bit value in zero page.
+;
+; entry: X = zero page address of 32-bit value
+; exit: Z set as per new value
+; preserves: A; X; Y; C
+;
+incz32: .proc
+                inc 0,x
+                bne done
+                inc 1,x
+                bne done
+                inc 2,x
+                bne done
+                inc 3,x
+done:
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; Does a few INXs.
+;
+; inx3 exists to keep the calling code looking short...
+; 
+inx4:
+                inx
+inx3:
+                inx
+                inx
+                inx
+                rts
+
+;-------------------------------------------------------------------------
+;
+; Does a few DEXs. (See comment about inx3)
+; 
+dex4:
+                dex
+dex3:
+                dex
+                dex
+                dex
+                rts
+                
+;-------------------------------------------------------------------------
+;
+; Shift a 32-bit value in zero page left.
+;
+; entry: X = zero page address of 32-bit value
+; exit: C set as per last bit shifted out
+; preserves: A; X; Y
+
+asl4z32:
+                jsr asl1z32
+                jsr asl1z32
+                jsr asl1z32
+asl1z32:
+                asl 0,x
+                rol 1,x
+                rol 2,x
+                rol 3,x
+                rts
+
+;-------------------------------------------------------------------------
+;
+; Invert a 32-bit value in zero page.
+;
+; entry: X = zero page address of 32-bit value
+; preserves: A; X; Y; C
+;
+notz32: .proc
+                pha
+                jsr not
+                jsr not
+                jsr not
+                jsr not
+                pla
+                jsr dex4
+                rts
+
+not:
+                lda 0,x
+                eor #$ff
+                sta 0,x
+                inx
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; Negate a 32-bit value in zero page.
+;
+; entry: X = zero page address of 32-bit value
+; exit: Z set as per new value
+; preserves: A; X; Y
+;
+negz32: .proc
+                jsr notz32
+                jsr incz32
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+p_bit: .macro set,reset
+                asl a
+                pha
+                .if \set==\reset
+                lda #\set
+                .else
+                lda #\reset
+                bcs +
+                lda #\set
++
+                .endif
+                jsr osasci
+                pla
+                .endm                
+                
+print_p: .proc
+                p_bit "N","n"
+                p_bit "V","v"
+                p_bit "-","-"
+                p_bit "B","b",
+                p_bit "D","d"
+                p_bit "I","i"
+                p_bit "Z","z"
+                p_bit "C","c",
+                rts
+                
+                .pend
+                
+;-------------------------------------------------------------------------
+
+print_hex_byte: .proc
+                pha
+                jsr get_ascii_hi_nybble
+                jsr osasci
+                pla
+                pha
+                jsr get_ascii_lo_nybble
+                jsr osasci
+                pla
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+get_ascii_hi_nybble:
+                lsr a
+                lsr a
+                lsr a
+                lsr a
+get_ascii_lo_nybble:
+                and #$0f
+                sed
+                clc
+                adc #$90
+                adc #$40
+                cld
+                rts
+
+;-------------------------------------------------------------------------
+
+dobrk: .proc
+                pla
+                sta $a8
+                pla
+                sta $a9
+                ldy #0
+                tya
+                sta brkthunk,y
+                iny
+dobrk_loop:
+                lda ($a8),y
+                beq dobrk_done
+                sta brkthunk,y
+                iny
+                cpy #32
+                bne dobrk_loop
+
+dobrk_done:
+                lda #0
+                sta brkthunk,y
+                jmp brkthunk
+                .pend
+
+;-------------------------------------------------------------------------
+
+osbrk: .proc
+                pha
+                txa
+                pha
+                tya
+                pha
+                tsx
+                lda $104,x
+                sta brk_ptr+0
+                lda $105,x
+                sta brk_ptr+1
+                lda #0
+                sta brkthunk+0
+                lda #255
+                sta brkthunk+1
+                ldy #1
+loop:
+                lda (brk_ptr),y
+                beq done
+                sta brkthunk+2-1,y
+                iny
+                bne loop
+
+done:
+                iny             ;account for the crazy indexing above
+                inx
+                inx             ;$101,x=A
+                
+                lda #'A'
+                jsr reg
+                
+                dex
+
+                lda #'X'
+                jsr reg
+
+                dex
+
+                lda #'Y'
+                jsr reg
+
+                lda #0
+                sta brkthunk,y
+
+                jmp brkthunk
+
+reg:
+                pha
+                lda #32
+                sta brkthunk,y
+                iny
+
+                pla
+                sta brkthunk,y
+                iny
+
+                lda #'='
+                sta brkthunk,y
+                iny
+
+                lda $101,x
+                jsr get_ascii_hi_nybble
+                sta brkthunk,y
+                iny
+
+                lda $101,x
+                jsr get_ascii_lo_nybble
+                sta brkthunk,y
+                iny
+
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+via_reset: .proc
+                lda via+12
+                and #$1f
+                ora #$e0        ;CB2=1
+                jsr reset2
+
+                lda via+12
+                and #$1f
+                ora #$C0        ;CB2=0
+                jsr reset2
+
+                lda via+12
+                and #$1f
+                ora #$e0        ;CB2=1
+reset2:
+                sta via+12
+                lda #19
+                jmp osbyte
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Configure a prepared VIA for the receive operation. Must have
+; previously called prepare_via!
+;
+; preserves: X; Y; C
+;
+prepare_via_for_recv: .macro
+                lda #0
+                sta via+2
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Configure a prepared VIA for a send operation. Must have previously
+; called prepare_via!
+;
+; preserves: X; Y; C
+;
+prepare_via_for_send: .macro
+                lda #255
+                sta via+2
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Prepare VIA for use, setting it up for the initial send operation.
+;
+; preserves: A; X; Y; C
+
+prepare_via: .proc
+                pha
+                
+                lda #$18
+                sta via+14      ;disable CB1+CB2 IRQs
+                sta via+13      ;acknowledge any pending such IRQs
+
+                lda via+11
+                ora #2          ;enable port B input latching
+                sta via+11
+
+                .prepare_via_for_send
+
+                lda via+12
+                and #$0f
+                ora #$e0        ;CB2=1, CB1 -ve edge
+                sta via+12
+
+                lda via+12
+                and #$0f
+                ora #$80        ;CB2=1, handshake mode, CB1 -ve edge
+                sta via+12
+
+                pla
+
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Send byte. *Call prepare_via_for_send first.*
+;
+; preserves: X; Y; C
+; 
+send_byte: .proc
+                sta via+0       ;set ORB
+loop:
+                lda via+13
+                and #$10        ;wait for CB2 IRQ
+                beq loop
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Receive byte. *Call prepare_via_for_recv first.*
+;
+; exit: A = byte read
+;       N, Z = set as per byte read
+; preserves: X; Y; C
+; takes: ~25 cycles best case
+recv_byte: .proc
+                sta via+0       ;write something into ORB, anything,
+                                ;to set the handshaking off
+loop:
+                lda via+13
+                and #$10
+                beq loop
+                lda via+0
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+; 
+; send byte with timeout. *Call prepare_via_for_send first.*
+; 
+; entry: A = byte to send
+; exit: C=1 if sent, C=0 if not
+; preserves: X; Y
+; 
+send_byte_with_timeout: .proc
+                sta via+0
+                txa
+                pha
+                ldx #0
+loop:
+                lda via+13
+                and #$10
+                bne done
+                inx
+                bne loop
+done:
+                cmp #$10
+                pla
+                tax
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Start sending a request with an N-byte payload.
+;
+; 1. Initialise 4-byte request payload size in ZP
+; 2. Call send_request_n
+; 3. Call send_payload_byte as many times as necessary
+; 4. Call recv_response
+;
+; entry: A = packet T (bit 7 must be clear)
+;        X = ZP address of the request payload size (32 bits)
+; exit: Request payload size negated
+; preserves: X; Y
+;
+send_request_n: .proc
+                jsr prepare_via
+
+                .debug_print ["send_request_n: Request: T=&",DP_A," p_size=&",DP_ZP3_X,DP_ZP2_X,DP_ZP1_X,DP_ZP0_X,"\r"]
+
+                ; If payload size is 1, it could just do a 2-byte
+                ; send. But it's so annoying to check for.
+                ora #$80
+
+                jsr send_byte
+
+                lda 0,x
+                jsr send_byte
+
+                lda 1,x
+                jsr send_byte
+                
+                lda 2,x
+                jsr send_byte
+
+                lda 3,x
+                jsr send_byte
+
+                jsr negz32
+                rts
+
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Send payload byte.
+;
+; entry: X = zero-page address of negated request payload size
+;            (as initialised by send_request_n)
+; exit: C = 1: byte sent
+;       C = 0: payload overflow
+; preserves: X; Y
+;
+send_payload_byte: .proc
+                pha
+                jsr ldunionz32
+                bne more
+
+                pla
+                clc
+                rts
+
+more:
+                pla
+                jsr send_byte
+                jsr incz32
+                sec
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Send a request with a 1-byte payload.
+;
+; 1. Call send_request_1
+; 2. Call recv_response
+;
+; entry: A = packet T (bit 7 must be clear);
+;        X = packet P
+;
+send_request_1: .proc
+                jsr prepare_via
+                
+without_prepare:
+                .debug_print ["send_request_1: T=&",DP_A," P=&",DP_X,"\r"]
+
+                jsr send_byte
+                txa
+                jsr send_byte
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Send a request with a 1-byte payload, receive the first byte of the
+; response, and discard the rest.
+;
+; There is a fast path if the response is a 1-byte packet, and a
+; not-so-fast path if it isn't.
+;
+; entry: A = request C (bit 7 clear)
+;        X = request P
+; exit: A = response P (*not* T!) (0 if response payload was 0 bytes)
+;       X = response C (*not* P!)
+
+send_request_1_recv_response_1: .block
+                jsr prepare_via
+
+without_prepare:
+                jsr send_byte
+send_payload:
+                txa
+                jsr send_byte
+
+                .bend
+
+recv_response_1: .block
+                .prepare_via_for_recv
+
+without_prepare:
+                jsr recv_byte
+                bmi got_n
+
+                tax
+
+                jsr recv_byte
+                rts
+
+got_n:
+                .push32 scratch_p_size
+                ldx #scratch_p_size
+                jsr recv_response.got_n
+                pha             ;response C
+                jsr recv_payload_byte
+                pha             ;response P
+                jsr discard_remaining_payload
+                pla
+                tay             ;response P
+                pla
+                tax             ;response C
+                .pop32 scratch_p_size
+                tya             ;response P
+                rts
+                .bend
+
+;-------------------------------------------------------------------------
+;
+; As send_request_1_recv_response_1, but with a timeout for the
+; initial byte.
+;
+; entry: A = request C (bit 7 clear)
+;        X = request P
+; exit: C = 0: timed out sending first byte
+;       C = 1: A = response P (*not* C!) (0 if response payload was 0 bytes)
+;              X = response C (*not* P!)
+;
+send_request_1_with_timeout_recv_response_1: .proc
+                jsr prepare_via
+                jsr send_byte_with_timeout
+                bcs send_request_1_recv_response_1.send_payload
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Receive response and discard the payload. For use when the response
+; is either an error (which will be handled by recv_response) or not
+; (and it doesn't really matter what exactly).
+;
+; exit: X = response type
+; preserves: Y
+;
+recv_response_and_discard_payload: .proc
+                .push32 scratch_p_size
+                
+                ldx #scratch_p_size
+                
+                .prepare_via_for_recv
+
+                jsr recv_response
+
+                jsr discard_remaining_payload
+
+                tax
+                
+                .pop32 scratch_p_size
+                
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+; 
+; Receive response.
+;
+; If the response is an error, it will be handled automatically by
+; doing the usual BRK thing. Otherwise, things will be set up so that
+; calling recv_payload_byte will receive the payload bytes in turn.
+;
+; entry: X = zero-page address of where to put negated 4-byte packet
+;            size.
+; exit: A = response C (bit 7 clear)
+;       C = 1: payload is 1 byte
+;       C = 0: payload might not be 1 byte
+; preserves: X; Y
+                
+recv_response: .proc
+                .prepare_via_for_recv
+
+                jsr recv_byte
+                bmi got_n
+got_1:
+                pha
+                lda #$ff
+                sta 0,x
+                sta 1,x
+                sta 2,x
+                sta 3,x
+                pla
+                .debug_print ["recv_response: T=&",DP_A," p_size=1\r"]
+                cmp #RESPONSE_ERROR
+                beq got_error
+                sec
+                jmp done
+
+got_n:
+                pha
+                jsr recv_byte
+                sta 0,x
+                jsr recv_byte
+                sta 1,x
+                jsr recv_byte
+                sta 2,x
+                jsr recv_byte
+                sta 3,x
+                jsr negz32
+                pla
+                and #$7f
+                jsr got_n_debug_print
+                cmp #RESPONSE_ERROR
+                beq got_error
+                clc
+
+done:
+                rts
+
+got_error:
+                .debug_print ["recv_response: handling error.\r"]
+                
+                ; For debugging, make sure there's a valid error of
+                ; some kind in the right place already.
+                ldy #dummy_error_end-dummy_error-1
+copy_dummy_error_loop:
+                lda dummy_error,y
+                sta brkthunk,y
+                dey
+                bpl copy_dummy_error_loop
+
+                ldy #0
+loop:
+                jsr recv_payload_byte
+                bcc got_error_done
+                sta brkthunk,y
+                ;jsr print_hex_byte
+                iny
+                cpy #brkthunk_max_size
+                bne loop
+
+got_error_done:
+                ; Pop an additional 0 at the end, in case the packet
+                ; was too large.
+                lda #0
+                sta brkthunk,y
+
+                jsr discard_remaining_payload
+
+                jmp brkthunk
+
+got_n_debug_print:
+                ; this is too many bytes to put inlined :(
+                .debug_print ["recv_response: T=&",DP_A," p_size=&",DP_ZP3_X,DP_ZP2_X,DP_ZP1_X,DP_ZP0_X,"\r"]
+                rts
+
+dummy_error:
+                .text 0,255,"!",0
+dummy_error_end:
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Receive one byte of payload.
+;
+; entry: X = ZP address of negated count of bytes remaining
+; exit: C = 0: no more bytes in payload, A=0, Z=1
+;       C = 1: A = byte read from payload
+; 
+recv_payload_byte: .proc
+                jsr ldunionz32
+                bne more
+
+                clc
+                rts
+
+more:
+                jsr recv_byte
+                jsr incz32
+                sec
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; Discard rest of payload, if any.
+; 
+; entry: X = ZP address of negated count of bytes remaining
+; preserves: A; X; Y
+
+discard_remaining_payload: .proc
+                pha
+loop:
+                jsr recv_payload_byte
+                bcs loop
+                
+                pla
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Get current status.
+;
+; exit: A=BEEBLINK_STATUS_NO_AVR - AVR not present
+;       A=BEEBLINK_STATUS_AVR_NOT_READY - AVR present, but not ready
+;       A=BEEBLINK_STATUS_NO_SERVER - AVR ready but server not connected
+;       A=BEEBLINK_STATUS_OK - all systems (apparently) go
+
+BEEBLINK_STATUS_NO_AVR=0
+BEEBLINK_STATUS_WRONG_PROTOCOL=1
+BEEBLINK_STATUS_AVR_NOT_READY=2
+BEEBLINK_STATUS_NO_SERVER=3
+BEEBLINK_STATUS_OK=4
+
+beeblink_status_strings: strings_list ["no AVR","protocol not "..format("%02X",AVR_PROTOCOL_VERSION),"AVR not ready","no server","OK"]
+
+get_beeblink_status: .proc
+
+                jsr via_reset
+                jsr prepare_via
+                
+                lda #REQUEST_AVR_PRESENCE
+                jsr send_byte_with_timeout
+                
+                bcs check_avr_ready
+                
+                ; AVR is apparently not present.
+                lda #BEEBLINK_STATUS_NO_AVR
+                rts             
+
+check_avr_ready:
+                lda #REQUEST_AVR
+                ldx #REQUEST_AVR_READY
+                jsr send_request_1
+
+                ldx #scratch_p_size
+                jsr recv_response
+
+                tay                   ;Y = response
+                
+                jsr recv_payload_byte ;A = protocol version
+                bcc wrong_protocol    ;bleargh
+
+                jsr discard_remaining_payload
+
+                cmp #AVR_PROTOCOL_VERSION
+                beq check_avr_ready_2
+
+wrong_protocol:
+                ; AVR is the wrong protocol version.
+                lda #BEEBLINK_STATUS_WRONG_PROTOCOL
+                rts
+
+check_avr_ready_2:
+                cpy #RESPONSE_YES
+                beq avr_ready
+
+                lda #BEEBLINK_STATUS_AVR_NOT_READY
+                rts
+
+avr_ready:
+                ; Don't ask where BEEBLINK_STATUS_NO_SERVER is...
+
+                lda #BEEBLINK_STATUS_OK
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Get and print AVR status
+;
+; exit: A=0 - AVR not present
+;       A=1 - AVR present, but not ready
+;       A=2 - AVR ready
+;
+
+verbose_get_beeblink_status: .proc
+                jsr get_beeblink_status
+                pha
+                tax
+                ldy beeblink_status_strings.h,x
+                lda beeblink_status_strings.l,x
+                tax
+                jsr printyx
+                pla
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Convert hex digit to value.
+;
+; entry: A = hex digit
+; exit:  C = 1: A = value
+;        C = 0: invalid digit
+
+xtoi: .proc
+                cmp #"0"
+                bcc no
+                cmp #"9"+1
+                bcc digit
+
+                cmp #"A"
+                bcc no
+                cmp #"F"+1
+                bcc xdigit
+
+                cmp #"a"
+                bcc no
+                cmp #"f"+1
+                bcc xdigit
+no:
+                rts
+                
+digit:
+                sec
+                sbc #"0"
+                rts
+
+xdigit:
+                and #$df
+                sec
+                sbc #"A"-10
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+;-------------------------------------------------------------------------
+
+blconfig_cmd: .proc
+                push8 $a8
+
+                ldx $f4
+                
+                lda roms_table,x
+                sta $a8
+                
+loop:
+                lda #" "
+                jsr cl_skip
+
+                lda ($f2),y
+                cmp #13
+                beq done
+                
+                lda ($f2),y
+                iny
+                jsr toupper
+
+                cmp #"*"
+                beq trap_disc
+
+                cmp #"V"
+                beq von
+
+                cmp #"D"
+                beq act_as_dfs
+
+                jmp syntax_brk
+
+trap_disc:
+                lda #sf_trap_disc
+                jmp parse_setting
+
+von:
+                lda #sf_von
+                jmp parse_setting
+
+act_as_dfs:
+                lda #sf_act_as_dfs
+
+parse_setting:
+                pha
+                
+                lda ($f2),y
+                iny
+                
+                cmp #"+"
+                beq on
+
+                cmp #"-"
+                beq off
+
+                jmp syntax_brk
+
+on:
+                ldx $f4
+                pla
+                ora roms_table,x
+                sta roms_table,x
+                jmp loop
+                
+off:
+                ldx $f4
+                pla
+                eor #$ff
+                and roms_table,x
+                sta roms_table,x
+                jmp loop
+
+                ldx $f4
+                lda roms_table,x
+
+done:
+                ldx #<von_text
+                ldy #>von_text
+                lda #sf_von
+                jsr print_flag_status
+                
+                ldx #<trap_disc_text
+                ldy #>trap_disc_text
+                lda #sf_trap_disc
+                jsr print_flag_status
+
+                ldx #<act_as_dfs_text
+                ldy #>act_as_dfs_text
+                lda #sf_act_as_dfs
+                jsr print_flag_status
+
+                ldx $f4                
+                lda $a8
+                eor roms_table,x
+                and #(sf_act_as_dfs|sf_trap_disc)
+                beq +
+                jsr pcprint
+                .text "Changes to D/* take effect after BREAK",13,255
++
+                pop8 $a8
+                rts
+
+print_flag_status:
+                pha
+                jsr printyx
+                pla
+                jsr get_rom_status_flag
+                jsr print_bool_c
+                jmp osnewl
+
+                
+von_text:
+                .text "V - debug verbosity: ",255
+trap_disc_text:
+                .text "* - trap *DISC: ",255
+act_as_dfs_text:
+                .text "D - act as DFS: ",255
+                
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Initialise BLFS.
+;
+init_blfs: .proc
+                lda #$77        ;close *SPOOL/*EXEC handles (AUG 141)
+                jsr osbyte
+                
+                lda #$A8        ;get extended vector table address
+                                ;(AUG 181)
+                jsr osbyte_x00_yff
+                
+                ;YX=extended vector table
+                stx private_ptr+0
+                sty private_ptr+1
+                ldx #0
+                
+                ;offset from $212/fsvectors
+                ldy #$12/2*3
+                
+                ;offset from vector table
+                sei
+loop:
+                ;store $FF00+n*3 in vector table
+                tya
+                sta $212,x
+                lda #$FF
+                sta $213,x
+                
+                ;store actual address in extended vector table
+                lda fsvectors+0,x
+                sta (private_ptr),y
+                iny 
+                lda fsvectors+1,x
+                sta (private_ptr),y
+                iny 
+                lda $F4
+                sta (private_ptr),y
+                iny
+                inx
+                inx
+                cpx #fsvectors.end-fsvectors
+                bne loop
+                
+                cli
+                lda #143
+                ldx #$0F
+                ldy #0
+                jsr osbyte ;vectors claimed (AUG p167, p324)
+
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Initialise awful OSCLI hack.
+;
+; exit: C=0 if hack failed because vector already taken
+;       C=1 if hack successfully installed
+init_oscli_hack: .proc
+                push16 $a8
+
+                ; Check CLIV has its default value.
+                lda $ffb7
+                sta $a8
+                lda $ffb8
+                sta $a9
+
+                ldy #cliv-$200
+
+                lda $200,y
+                cmp ($a8),y
+                bne bad
+
+                iny
+                lda $200,y
+                cmp ($a8),y
+                bne bad
+
+                ; Store $FF00+n*3 in vector table.
+                lda #(cliv-$200)/2*3
+                sta cliv+0
+
+                lda #$ff
+                sta cliv+1
+
+                ; Store actual address in extended vector table.
+                lda #$A8        ;get extended vector table address
+                                ;(AUG 181)
+                jsr osbyte_x00_yff
+
+                stx $a8
+                sty $a9
+
+                ldy #(cliv-$200)/2*3
+                lda #<blfs_oscli_hack
+                sta ($a8),y
+                iny
+                lda #>blfs_oscli_hack
+                sta ($a8),y
+                iny
+                lda $f4
+                sta ($a8),y
+
+good:
+                sec
+done:
+                pop16 $a8
+                rts
+
+bad:
+                clc
+                bcc done
+                .pend
+
+;-------------------------------------------------------------------------
+
+blfs_oscli_hack: .proc
+
+                ; save two slots for the return address in the
+                ; unmatched case.
+                pha
+                pha
+                
+                push16 $f2
+                stx $f2
+                sty $f3
+
+                ldy #0
+
+                ; quality parsing here.
+                
+                lda #" "
+                jsr cl_skip
+
+                lda #"*"
+                jsr cl_skip
+
+                lda #" "
+                jsr cl_skip
+
+                ; tya
+                ; jsr print_hex_byte
+                ; jsr print_1_space
+                ; lda $f3
+                ; jsr print_hex_byte
+                ; lda $f2
+                ; jsr print_hex_byte
+
+                push16 cmd_ptr
+                
+                lda #<fs_trap_commands
+                sta cmd_ptr+0
+                
+                lda #>fs_trap_commands
+                sta cmd_ptr+1
+
+                jsr find_cmd
+                
+                pop16 cmd_ptr
+
+                bcc not_matched
+
+matched:
+                ; lda #"M"
+                ; jsr osasci
+                
+                ; pretend it was *BLFS. Then restore registers and
+                ; return.
+                jsr init_blfs
+
+                ldx $f2
+                ldy $f3
+                pop16 $f2
+
+                ; discard the two extra slots.
+                pla
+                pla
+                rts
+                
+not_matched:
+                ; lda #"N"
+                ; jsr osasci
+                
+                push16 $a8
+                lda $ffb7
+                sta $a8
+                lda $ffb8
+                sta $a9
+
+                ; $101,x = old $a8
+                ; $102,x = old $a9
+                ; $103,x = old $f2
+                ; $104,x = old $f3
+                ; $105,x = spare slot for return LSB
+                ; $106,x = spare slot for return MSB
+                tsx
+
+                sec
+                
+                ldy #cliv-$200
+                lda ($a8),y
+                sbc #1
+                sta $105,x
+                
+                iny
+                
+                lda ($a8),y
+                sbc #0
+                sta $106,x
+
+                ; lda $106,x
+                ; jsr print_hex_byte
+                ; lda $105,x
+                ; jsr print_hex_byte
+                
+                pop16 $a8
+                
+                ldx $f2
+                ldy $f3
+                pop16 $f2
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Skips 0 or more characters in the command line.
+;
+; entry: A = character to skip
+;        ($f2),y = command line
+; exit: ($f2),y updated
+; preserves: A; X
+;
+cl_skip: .proc
+                cmp ($f2),y
+                bne done
+                iny
+                bne cl_skip
+done:
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+
+fsvectors .proc
+                .word blfs_osfile;$212
+                .word blfs_osargs;$214
+                .word blfs_osbget;$216
+                .word blfs_osbput;$218
+                .word blfs_osgbpb;$21a
+                .word blfs_osfind;$21c
+                .word blfs_osfsc;$21e
+end:
+                .pend
+
+;-------------------------------------------------------------------------
+
+blfs_osfile: .proc
+                stx private_ptr+0
+                sty private_ptr+1
+                sta private_request
+
+                ; Packet size starts out at 0.
+                lda #0
+                ldx #scratch_p_size
+                jsr setz32
+
+                ; If the request was $00, the size of the data to save
+                ; needs to be handled.
+                lda private_request
+                bne not_save
+
+                ; Add end address to total.
+                ldy #$0e
+                ldx #0
+                clc
+                php
+add_end_loop:
+                plp
+                lda (private_ptr),y
+                adc scratch_p_size,x
+                sta scratch_p_size,x
+                php
+                iny
+                inx
+                cpx #4
+                bne add_end_loop
+                pla
+
+                ; Subtract start address from total. Also, take a copy
+                ; of the start address.
+                ldy #$0a
+                ldx #0
+                sec
+                php
+subtract_start_loop:
+                plp
+                lda scratch_p_size,x
+                sbc (private_ptr),y
+                sta scratch_p_size,x
+                php
+                
+                lda (private_ptr),y
+                sta scratch_load,x
+
+                iny
+                inx
+                cpx #4
+                bne subtract_start_loop
+                pla
+                
+                lda scratch_p_size+3
+                jsr check_size_msbyte
+
+not_save:
+                ; Account for parameter block and A value.
+                ldx #scratch_p_size
+                ldy #17
+                jsr addyz32
+
+                ; Add length of file name.
+                ldy #0
+                lda (private_ptr),y
+                sta scratch_ptr+0
+                iny
+                lda (private_ptr),y
+                sta scratch_ptr+1
+
+                ldx #scratch_ptr
+                jsr strlen_cr
+                
+                sty private_y
+
+                ldx #scratch_p_size
+                jsr addyz32
+
+                ; Account for the terminating CR.
+                jsr incz32
+
+                ; Send the request.
+                lda #REQUEST_OSFILE
+                ldx #scratch_p_size
+                jsr send_request_n
+
+                lda private_request
+                jsr send_payload_byte
+
+                ldy #2
+send_block_loop:
+                lda (private_ptr),y
+                jsr send_payload_byte
+                iny
+                cpy #18
+                bne send_block_loop
+
+                ldy #0
+send_name_loop:
+                cpy private_y
+                beq send_name_done
+                lda (scratch_ptr),y
+                jsr send_payload_byte
+                iny
+                jmp send_name_loop
+
+send_name_done:
+                lda #13
+                jsr send_payload_byte
+
+                ; Doesn't matter if this isn't a save; it'll figure it
+                ; out from the packet size.
+                jsr send_file_data
+
+                ; Receive response.
+                ldx #scratch_p_size
+                jsr recv_response
+
+                ; Get result A.
+                jsr recv_payload_byte
+                sta private_response
+
+                ; Get result parameter block.
+                ldy #2
+recv_block_loop:
+                jsr recv_payload_byte
+                sta (private_ptr),y
+                iny
+                cpy #18
+                bne recv_block_loop
+
+                ; If the request was $FF, there's data to handle.
+                lda private_request
+                cmp #$ff
+                beq recv_data
+
+done:
+                lda private_response
+                rts
+
+recv_data:
+                ; Read the data address.
+                jsr recv_payload_byte
+                sta scratch_load+0
+                jsr recv_payload_byte
+                sta scratch_load+1
+                jsr recv_payload_byte
+                sta scratch_load+2
+                jsr recv_payload_byte
+                sta scratch_load+3
+
+                .if enable_debug_print
+                ldx #scratch_p_size
+                jsr negz32
+                .debug_print ["Receive &",scratch_p_size+3,scratch_p_size+2,scratch_p_size+1,scratch_p_size+0," @ &",scratch_load+3,scratch_load+2,scratch_load+1,scratch_load+0,"\r"]
+                jsr negz32
+                .endif
+
+                ; Get the file data.
+                jsr recv_file_data
+
+                .debug_print ["Received\r"]
+
+                jmp done
+                .pend
+
+;-------------------------------------------------------------------------
+
+blfs_osargs: .proc
+                cpy #0
+                bne handle
+
+                ; Y=0,A=$ff is an honorary handle operation
+                cmp #$ff
+                beq handle
+
+                cmp #0
+                beq number
+
+                cmp #1
+                beq command_line_ptr
+
+                rts
+
+number:
+                stx private_x
+                lda #sf_act_as_dfs
+                jsr get_rom_status_flag
+                ldx private_x
+                
+                lda #blfs_fs_number
+                bcc number_done
+                lda #dfs_fs_number
+number_done:
+                rts
+
+command_line_ptr:
+                pha
+                lda private_command_line_ptr+0
+                sta 0,x
+                lda private_command_line_ptr+1
+                sta 1,x
+                lda #$ff
+                sta 2,x
+                sta 3,x
+                pla
+                rts
+
+handle:
+                sta private_request
+                stx private_x
+                sty private_y
+
+                ldx private_x
+                lda 3,x
+                pha
+                lda 2,x
+                pha
+                lda 1,x
+                pha
+                lda 0,x
+                pha
+
+                ; Account for A, Y, and the 4-byte control block.
+                lda #6
+                ldx #scratch_p_size
+                jsr setz32
+
+                lda #REQUEST_OSARGS
+                ldx #scratch_p_size
+                jsr send_request_n
+
+                lda private_request
+                jsr send_payload_byte
+
+                lda private_y
+                jsr send_payload_byte
+
+                ldy #4
+send_value_loop:
+                pla
+                jsr send_payload_byte
+                dey
+                bne send_value_loop
+
+                ldx #scratch_p_size
+                jsr recv_response
+
+                ldy #4
+recv_value_loop:
+                jsr recv_payload_byte
+                pha
+                dey
+                bne recv_value_loop
+
+                jsr discard_remaining_payload
+
+                ldx private_x
+                pla
+                sta 3,x
+                pla
+                sta 2,x
+                pla
+                sta 1,x
+                pla
+                sta 0,x
+
+                ldy private_y
+                lda private_request
+                
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Causes a Channel error.
+;
+channel_brk: .proc
+                .brk_error 222,"Channel",0
+                .pend
+
+; -------------------------------------------------------------------------
+
+blfs_osbget: .proc
+                stx private_x
+                sty private_y
+
+                lda #REQUEST_OSBGET
+                ldx private_y   ;handle
+                jsr send_request_1
+
+                ldx #scratch_p_size
+                jsr recv_response
+
+                tay
+                jsr recv_payload_byte
+                jsr discard_remaining_payload
+
+                cpy #RESPONSE_OSBGET
+                beq ok
+
+eof:
+                sec
+                ldx private_x
+                ldy private_y
+                rts
+
+ok:
+                clc
+                ldx private_x
+                ldy private_y
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+blfs_osbput: .proc
+                sta private_request
+                stx private_x
+                sty private_y
+
+                ; Ugh. A 2-byte payload is the worst possible case.
+                lda #2
+                ldx #scratch_p_size
+                jsr setz32
+
+                lda #REQUEST_OSBPUT
+                jsr send_request_n
+
+                lda private_y ;handle
+                jsr send_payload_byte
+
+                lda private_request
+                jsr send_payload_byte ;value
+
+                jsr recv_response_and_discard_payload
+
+                ldy private_y
+                ldx private_x
+                lda private_request
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+blfs_osgbpb: .proc
+                cmp #9
+                bcc +
+                ; Unrecognised request.
+                rts
++
+                sta private_request
+                stx private_ptr+0
+                sty private_ptr+1
+
+                ; Account for reason code and parameter block.
+                lda #14
+                ldx #scratch_p_size
+                jsr setz32
+
+                ; Account for any file data.
+                lda private_request
+                cmp #1
+                beq write
+                cmp #2
+                bne read_or_write
+
+write:
+                ; It's a write request - add data size to payload
+                ; size.
+                ldy #5
+                clc
+                lda (private_ptr),y
+                adc scratch_p_size+0
+                sta scratch_p_size+0
+                iny
+                lda (private_ptr),y
+                adc scratch_p_size+1
+                sta scratch_p_size+1
+                iny
+                lda (private_ptr),y
+                adc scratch_p_size+2
+                sta scratch_p_size+2
+                iny
+                lda (private_ptr),y
+                adc scratch_p_size+3
+                sta scratch_p_size+3
+
+read_or_write:
+                
+                lda #REQUEST_OSGBPB
+                ldx #scratch_p_size
+                jsr send_request_n
+
+                ; Send reason code.
+                lda private_request
+                jsr send_payload_byte
+
+                ; Send parameter block.
+                ldy #0
+send_block_loop:
+                lda (private_ptr),y
+                jsr send_payload_byte
+                iny
+                cpy #13
+                bne send_block_loop
+
+                jsr get_osgbpb_address
+
+                jsr send_file_data ;no-op if a read operation
+
+                ldx #scratch_p_size
+                jsr recv_response
+
+                jsr recv_payload_byte
+                pha                   ;store C flag
+
+                jsr get_osgbpb_address
+
+                ldy #0
+recv_block_loop:
+                jsr recv_payload_byte
+                sta (private_ptr),y
+                iny
+                cpy #13
+                bne recv_block_loop
+
+                jsr recv_file_data
+
+                pla
+                cmp #1          ;set carry flag
+
+                ldy private_ptr+1
+                ldx private_ptr+0
+                lda private_request
+
+                rts
+
+                ; Copy OSGBPB parameter block address to
+                ; !scratch_p_load.
+get_osgbpb_address:
+                ldy #1
+                lda (private_ptr),y
+                sta scratch_load+0
+                iny
+                lda (private_ptr),y
+                sta scratch_load+1
+                iny
+                lda (private_ptr),y
+                sta scratch_load+2
+                iny
+                lda (private_ptr),y
+                sta scratch_load+3
+                rts
+
+                .pend
+
+;-------------------------------------------------------------------------
+
+blfs_osfind: .proc
+                cmp #0
+                bne open
+
+close:
+                pha
+                txa
+                pha
+                tya
+                pha
+                
+                tax
+                lda #REQUEST_OSFIND_CLOSE
+                jsr send_request_1
+                
+                jsr recv_response_and_discard_payload
+
+                pla
+                tay
+                pla
+                tax
+                pla
+                
+                rts
+
+open:
+                sta private_request
+                stx scratch_ptr+0
+                sty scratch_ptr+1
+
+                ; Account for the open mode.
+                lda #1
+                ldx #scratch_p_size
+                jsr setz32
+
+                ; Account for the file name.                
+                ldx #scratch_ptr
+                jsr strlen_cr
+
+                ldx #scratch_p_size
+                jsr addyz32
+
+                lda #REQUEST_OSFIND_OPEN
+                jsr send_request_n
+
+                lda private_request
+                jsr send_payload_byte
+
+                ldy #0
+send_name_loop:
+                lda (scratch_ptr),y
+                jsr send_payload_byte
+                bcc send_name_done
+
+                iny
+                jmp send_name_loop
+
+send_name_done:
+                jsr recv_response
+
+                jsr recv_payload_byte
+                jsr discard_remaining_payload
+
+                ldx scratch_ptr+0
+                ldy scratch_ptr+1
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+                
+blfs_osfsc: .proc
+fsc_routines=[fsc_opt,fsc_eof,fsc_slash,fsc_star,fsc_run,fsc_cat,fsc_shut_down_fs,fsc_get_handle_range,fsc_oscli,fsc_ex,fsc_info]
+                
+                cmp #len(fsc_routines)
+                bcc +
+                rts
++
+                stx scratch_ptr+0
+                
+                tax
+                lda fsc_routines_l,x
+                pha
+                lda fsc_routines_h,x
+                pha
+
+                ldx scratch_ptr+0
+
+                pla
+                sta scratch_ptr+1
+                pla
+                sta scratch_ptr+0
+                
+                jmp (scratch_ptr)
+
+fsc_routines_l:
+                .byte <fsc_routines
+fsc_routines_h:
+                .byte >fsc_routines
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; FSCV A=0 - *OPT.
+;
+fsc_opt: .proc
+                tya
+                pha
+                txa
+                pha
+
+                ldx #scratch_p_size
+                
+                lda #2
+                jsr setz32
+
+                lda #REQUEST_OPT
+                jsr send_request_n
+
+                pla
+                jsr send_payload_byte ;x
+
+                pla
+                jsr send_payload_byte ;y
+
+                jsr recv_response_and_discard_payload
+
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; FSCV A=1 - check EOF.
+;
+fsc_eof: .proc
+                lda #REQUEST_EOF
+                jsr send_request_1
+
+                ldx #scratch_p_size
+                jsr recv_response
+
+                jsr recv_payload_byte
+                
+                jsr discard_remaining_payload
+
+                tax
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; FSCV A=2 - */
+;
+fsc_slash: .proc
+                ; Do these two cases need handling any differently??
+                jmp fsc_run
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; FSCV A=3 - * command
+;
+fsc_star: .proc
+                lda #REQUEST_STAR_COMMAND
+                jmp communicate_star_command
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; FSCV A=4 - *RUN
+;
+fsc_run: .proc
+                lda #REQUEST_STAR_RUN
+                jmp communicate_star_command
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; FSCV A=5 - *CAT
+;
+fsc_cat: .proc
+                lda #REQUEST_STAR_CAT
+                jmp communicate_star_command
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; FSCV A=6 - Shut down FS
+;be
+fsc_shut_down_fs: .proc
+                .debug_print ["OSFSC shut down\r"]
+                lda #$77
+                jsr osbyte
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; FSCV A=7 - Get handle range
+; 
+; Would be nice if this were configurable somehow? I think the Master
+; 128 named filing system stuff means the range has to be known
+; statically. Could maybe use CMOS RAM to do it.
+;
+fsc_get_handle_range: .proc
+                ldx #FIRST_FILE_HANDLE
+                ldy #FIRST_FILE_HANDLE+NUM_FILE_HANDLES-1
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; FSC A=8 - OSCLI
+;
+fsc_oscli: .proc
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; FSC A=9 - *EX
+;
+fsc_ex: .proc
+                lda #REQUEST_STAR_EX
+                jmp communicate_star_command
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; FSC A=10 - *INFO
+;
+fsc_info: .proc
+                lda #REQUEST_STAR_INFO
+                jmp communicate_star_command
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Submits some kind of * command to the server. Sends packet plus
+; CR-terminated string to the server, waits for response, and fields
+; response appropriately. Expected responses are:
+;
+; RESPONSE_ERROR - error is printed
+; RESPONSE_YES - command finishes silently
+; RESPONSE_TEXT - the server's string is printed
+; RESPONSE_RUN - program data is loaded and run
+;
+; Other responses produce a BRK.
+;
+; entry: A = packet type to send (bit 7 reset)
+;        YX = points to command line
+; exit:
+; modifies: scratch_ptr, scratch_p_size
+communicate_star_command: .proc
+                pha
+                stx scratch_ptr+0
+                sty scratch_ptr+1
+
+                lda #0
+                ldx #scratch_p_size
+                jsr setz32
+
+                .debug_print ["scratch_ptr=&",scratch_ptr+1,scratch_ptr+0,"\r"]
+
+                ldx #scratch_ptr
+                jsr strlen_cr
+
+                .debug_print ["scratch_ptr=&",scratch_ptr+1,scratch_ptr+0,", len=",DP_Y,"\r"]
+
+                sty scratch_p_size+0
+
+                pla
+                ldx #scratch_p_size
+                jsr send_request_n
+
+                ldy #0
+send_loop:
+                lda (scratch_ptr),y
+                jsr send_payload_byte
+                bcc send_done
+                iny
+                jmp send_loop
+
+send_done:
+                jsr recv_response
+
+                cmp #RESPONSE_YES
+                beq yes
+
+                cmp #RESPONSE_TEXT
+                beq text
+
+                cmp #RESPONSE_RUN
+                beq run
+
+                cmp #RESPONSE_SPECIAL
+                beq special
+
+bad_response:
+                .brk_error 255,"Bad response",0
+
+yes:
+                jsr discard_remaining_payload
+                rts
+
+text:
+                jsr discard_remaining_payload
+                jsr print_server_string
+                rts
+
+run:
+                ldy #0
+recv_run_metadata_loop:
+                jsr recv_payload_byte
+                bcc bad_response
+                sta scratch_run_metadata,y ;abs,Y :(
+                iny
+                cpy #9
+                bne recv_run_metadata_loop
+
+                ; save off the command line pointer for OSARGS.
+                clc
+                tya
+                lda scratch_ptr+0
+                adc scratch_command_line_tail_offset
+                sta private_command_line_ptr+0
+
+                lda scratch_ptr+1
+                adc #0
+                sta private_command_line_ptr+1
+
+                jsr recv_file_data
+
+                ldx #scratch_exec
+                jsr is_parasite_address
+                bcs exec_parasite
+
+                ldy scratch_command_line_tail_offset
+                jmp (scratch_exec)
+
+exec_parasite:
+                jsr claim_tube
+
+                ldx #<scratch_exec
+                ldy #>scratch_exec
+                lda #4          ;Execute
+                jmp $406
+
+special:
+                jsr recv_payload_byte
+                bcc bad_response
+
+                cmp #len(special_routines)
+                bcs bad_response
+
+                tay
+                lda special_routines_l,y
+                sta private_ptr+0
+
+                lda special_routines_h,y
+                sta private_ptr+1
+
+                jmp (private_ptr)
+
+special_routines=[volumes_browser_special]
+special_routines_l:
+                .byte <special_routines
+special_routines_h:
+                .byte >special_routines
+                
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Claim Tube.
+;
+claim_tube: .proc
+                lda #$C0+tube_claimant_id
+                jsr $406
+                bcc claim_tube
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Release Tube.
+; 
+release_tube: .proc
+                lda #$80+tube_claimant_id
+                jsr $406
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Produce a delay that's some multiple of 12 cycles.
+;
+delay_48_cycles:
+                jsr delay_12_cycles
+delay_36_cycles:
+                jsr delay_12_cycles
+delay_24_cycles:
+                jsr delay_12_cycles
+delay_12_cycles:
+                rts            
+
+;-------------------------------------------------------------------------
+;
+; Determine whether a 32-bit address is in parasite memory.
+;
+; entry: X = zero page address of address
+; exit: C = 0 - accessing host memory
+;       C = 1 - accessing parasite memory
+
+is_parasite_address: .proc
+                lda 3,x
+                cmp #$ff
+                bne maybe_parasite
+                lda 2,x
+                cmp #$ff
+                bne maybe_parasite
+
+host:
+                clc
+                rts
+
+maybe_parasite:
+                lda #234
+                jsr osbyte_x00_yff
+                cpx #$ff
+                bne host        ;if Tube is inactive, it's got to be
+                                ;host...
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; Receive file data: whatever is left of the current payload.
+;
+; entry: !scratch_p_size = negated amount of data left
+;        !scratch_load = where to write the data to
+;
+recv_file_data: .proc
+                ldx #scratch_p_size
+                jsr ldunionz32
+                bne +
+                rts
++
+                ldx #scratch_load
+                jsr is_parasite_address
+                bcc recv_file_data_host
+                jmp recv_file_data_parasite
+                .pend
+
+;-------------------------------------------------------------------------
+
+                .if recv_file_data_optimised
+
+;-------------------------------------------------------------------------
+
+recv_file_data_host: .proc
+
+                ; Receive data in 256-byte chunks, then receive any
+                ; stragglers.
+
+                jsr fix_up_packet_size_for_pagewise_transfer
+                bcc last_page
+
+first_pages:
+                ldy #0
+one_page_loop:
+                sta via+0
+
+-
+                lda via+13
+                and #$10
+                beq -
+
+                lda via+0
+                sta (scratch_load),y
+
+                iny
+                bne one_page_loop
+
+                inc scratch_load+1
+                
+                inc scratch_p_size+1
+                bne one_page_loop
+                inc scratch_p_size+2
+                bne one_page_loop
+                inc scratch_p_size+3
+                bne one_page_loop
+
+last_page:
+                ldx scratch_p_size+0
+                beq done
+                
+                ldy #0
+last_page_loop:
+                sta via+0
+
+-
+                lda via+13
+                and #$10
+                beq -
+
+                lda via+0
+                sta (scratch_load),y
+
+                iny
+                inx
+                bne last_page_loop
+
+                ; ldx #scratch_load
+                ; jsr addyz16
+done:
+                
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+
+                .else
+
+;-------------------------------------------------------------------------
+
+recv_file_data_host: .proc
+
+                ldx #scratch_p_size
+                ldy #0
+loop:
+                jsr recv_payload_byte
+                bcc done
+
+                sta (scratch_load),y
+                iny
+                bne loop
+
+                inc scratch_load+1
+                jmp loop
+
+done:
+                ldx #scratch_load
+                jsr addyz16
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+
+                .endif
+
+;-------------------------------------------------------------------------
+
+                .if recv_file_data_optimised
+
+;-------------------------------------------------------------------------
+
+recv_file_data_parasite: .proc
+
+                jsr claim_tube
+
+                jsr fix_up_packet_size_for_pagewise_transfer
+                bcc last_page
+
+first_pages:
+                ldx #<scratch_load
+                ldy #>scratch_load
+                lda #tube_256_byte_host_to_parasite
+                jsr $406
+
+                ldy #0
+
+                ; inter-byte delay is 10 uS, or 20 cycles
+                
+one_page_loop:
+                sta via+0       ;+6
+
+-
+                lda via+13      ;+12
+                and #$10        ;+14
+                beq -           ;+16
+
+                lda via+0       ;+22
+                sta $fee5
+
+                iny
+                bne one_page_loop
+
+                inc scratch_load+1
+                bne +
+                inc scratch_load+2
+                bne +
+                inc scratch_load+3
++
+
+                inc scratch_p_size+1
+                bne first_pages
+                inc scratch_p_size+2
+                bne first_pages
+                inc scratch_p_size+3
+                bne first_pages
+
+last_page:
+                lda scratch_p_size+0
+                beq done
+
+                ldx #<scratch_load
+                ldy #>scratch_load
+                lda #tube_multi_byte_host_to_parasite
+                jsr $406
+
+                ldx scratch_p_size+0
+
+                ; inter-byte delay is 24 uS, or 48 cycles
+last_page_loop:
+                sta via+0       ;+6
+-
+                lda via+13      ;+12
+                and #$10        ;+14
+                beq -           ;+16
+
+                lda via+0       ;+22
+
+                jsr delay_24_cycles ;+46
+                
+                sta $fee5       ;it's safe, there's another 3 cycles
+                                ;before the write...
+
+                ; this stuff should be done during the dead time
+                ; above!
+                inx
+                bne last_page_loop
+
+done:
+                jsr release_tube
+                
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+
+                .else
+
+;-------------------------------------------------------------------------
+
+recv_file_data_parasite: .proc
+
+                jsr claim_tube
+
+                ldx #<scratch_load
+                ldy #>scratch_load
+                lda #tube_multi_byte_host_to_parasite
+                jsr $406
+
+                ldx #scratch_p_size
+loop:
+                jsr recv_payload_byte
+                bcc done
+
+                sta $fee5
+                jmp loop
+
+done:
+                jsr release_tube
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+                .endif
+
+;-------------------------------------------------------------------------
+;
+; Fix up the packet size for a pagewise transfer. The result makes no
+; real sense, it's just convenient for the calling code.
+;
+; entry: !scratch_p_size = negated packet size
+; exit: ?scratch_p_size is negated number of bytes (possibly 0) to
+;       transfer in the final loop
+;       C=0 if there are 0 whole pages to transfer
+;       C=1 if there are >=1 whole pages to transfer. The negated
+;           page count is in scratch_p_size+1..3 (a 24-bit value).
+;
+                .if recv_file_data_optimised
+fix_up_packet_size_for_pagewise_transfer: .proc
+                ldy scratch_p_size+0
+                                     
+                ldx #scratch_p_size
+                jsr negz32
+                
+                lda scratch_p_size+1
+                ora scratch_p_size+2
+                ora scratch_p_size+3
+                beq no_pages
+
+some_pages:
+                lda #0
+                sta scratch_p_size+0
+                jsr negz32
+                sty scratch_p_size+0
+                sec
+                rts
+
+no_pages:
+                sty scratch_p_size+0
+                clc
+                rts
+
+
+                
+                jsr negz32
+                pla
+                rts
+                .pend
+                .endif
+
+;-------------------------------------------------------------------------
+;
+; Send file data: whatever is left of the current payload.
+;
+; entry: !scratch_p_size = negated amount of data left
+;        !scratch_load = where to read the data from
+;
+send_file_data: .proc
+                ldx #scratch_p_size
+                jsr ldunionz32
+                bne +
+                rts
++
+                ldx #scratch_load
+                jsr is_parasite_address
+                bcc send_file_data_host
+                jmp send_file_data_parasite
+                .pend
+
+;-------------------------------------------------------------------------
+
+                .if send_file_data_optimised
+
+;-------------------------------------------------------------------------
+
+send_file_data_host: .proc
+
+                jsr fix_up_packet_size_for_pagewise_transfer
+                bcc last_page
+
+first_pages:
+                ldy #0
+one_page_loop:
+                lda (scratch_load),y
+                sta via+0
+-
+                lda via+13
+                and #$10
+                beq -
+                iny
+                bne one_page_loop
+
+                inc scratch_load+1
+
+                inc scratch_p_size+1
+                bne one_page_loop
+                inc scratch_p_size+2
+                bne one_page_loop
+                inc scratch_p_size+2
+
+last_page:
+                ldx scratch_p_size+0
+                beq done
+
+                ldy #0
+last_page_loop:
+                lda (scratch_load),y
+                sta via+0
+-
+                lda via+13
+                and #$10
+                beq -
+
+                iny
+                inx
+                bne last_page_loop
+
+done:
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+
+                .else
+
+;-------------------------------------------------------------------------
+
+                .debug_print ["Send from host memory\r"],verbose_file_data
+send_file_data_host: .proc
+                ldy #0
+                ldx #scratch_p_size
+send_host_loop:
+                ; this is currently rather inefficient.
+
+                ; check for zero first - don't touch any bytes outside
+                ; the transfer range.
+                jsr ldunionz32
+                beq send_host_done
+                
+                lda (scratch_load),y
+                jsr send_payload_byte
+
+                iny
+                bne send_host_loop
+
+                inc scratch_load+1
+                jmp send_host_loop
+
+done:
+send_host_done:
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+                .endif
+
+;-------------------------------------------------------------------------
+
+                .if send_file_data_optimised
+
+;-------------------------------------------------------------------------
+
+send_file_data_parasite: .proc
+
+                jsr claim_tube
+
+                jsr fix_up_packet_size_for_pagewise_transfer
+                bcc last_page
+
+first_pages:
+                ldx #<scratch_load
+                ldy #>scratch_load
+                lda #tube_256_byte_parasite_to_host
+                jsr $406
+
+                ; initial delay is 19 uS, or 38 cycles
+                jsr delay_36_cycles
+                nop
+
+                ldy #0
+                ; inter-byte delay is 10 uS, or 20 cycles
+one_page_loop:
+                lda $fee5
+                sta via+0
+-
+                lda via+13
+                and #$10
+                beq -
+
+                iny
+                bne one_page_loop
+
+                inc scratch_load+1
+                bne +
+                inc scratch_load+2
+                bne +
+                inc scratch_load+3
++
+
+                inc scratch_p_size+1
+                bne first_pages
+                inc scratch_p_size+2
+                bne first_pages
+                inc scratch_p_size+3
+                bne first_pages
+
+last_page:
+                lda scratch_p_size+0
+                beq done
+
+                ldx #<scratch_load
+                ldy #>scratch_load
+                lda #tube_multi_byte_parasite_to_host
+                jsr $406
+
+                ; initial delay is 24 uS, or 48 cycles
+                jsr delay_48_cycles
+
+                ldy #0
+                ldx scratch_p_size+0
+                
+                ; inter-byte delay is 24 uS, or 48 cycles
+last_page_loop:
+                lda $fee5       ;4
+                sta via+0       ;10
+-
+                lda via+13      ;16
+                and #$10        ;18
+                beq -           ;20
+
+                jsr delay_24_cycles ;44
+
+                inx             ;46
+
+                bne last_page_loop ;49
+
+done:
+                jsr release_tube
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+                .else
+
+;-------------------------------------------------------------------------
+
+send_file_data_parasite: .proc
+                .debug_print ["Send from parasite memory\r"],verbose_file_data
+
+                .debug_print ["  claiming tube\r"],verbose_file_data
+                jsr claim_tube
+
+                .debug_print ["  initiating transfer\r"],verbose_file_data
+                ldx #<scratch_load
+                ldy #>scratch_load
+                lda #tube_multi_byte_parasite_to_host
+                jsr $406
+
+                ; ; Add remaining packet size to load address.
+                ; ;
+                ; ; (This could probably serves as the 24 usec delay.
+                ; ; Not sure it makes a big difference.)
+                ; jsr subtract_size_from_load
+
+                jsr delay_48_cycles
+
+                ldx #scratch_p_size
+send_tube_loop:
+                jsr ldunionz32
+                beq send_tube_done
+
+                lda $fee5
+                jsr send_payload_byte
+
+                jmp send_tube_loop
+
+send_tube_done:
+                .debug_print ["  releasing tube\r"],verbose_file_data
+                jsr release_tube
+                .debug_print ["  done\r"],verbose_file_data
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+
+                .endif
+                
+;-------------------------------------------------------------------------
+;
+; Print the server's string.
+;
+; In principle there could be filing system changes during this, e.g.,
+; if you do *SPOOL -DISC-FRED and then *CAT. It correctly preserves
+; zero page, but maybe it ought to re-do the VIA initialisation?
+;
+; entry: -
+; exit: -
+
+print_server_string: .proc
+                .if print_server_string_voff
+                
+                jsr get_vstatus
+                php
+                clc
+                jsr set_vstatus
+                
+                .endif
+
+                .if server_string_buffer_size==1
+                
+                lda #REQUEST_READ_STRING
+                jsr get_vstatus
+                bcc +
+                lda #REQUEST_READ_STRING_VERBOSE
++
+                pha
+
+                
+loop:
+                .prepare_via_for_send
+
+                pla
+                pha
+                ldx #server_string_buffer_size
+                jsr send_request_1_recv_response_1.without_prepare
+
+                cpx #RESPONSE_DATA
+                bne done
+
+                jsr oswrch
+
+                ; Check for Escape, but leave it up to the language to
+                ; acknowledge it.
+                bit $ff
+                bmi done
+                
+                jmp loop
+
+done:
+
+                pla
+                
+                .else
+
+                ; This routine is fiddly, as it tries to preserve zero
+                ; page between OSASCI calls...
+
+                ldx #server_string_buffer_size
+push_stack_loop:
+                pha
+                dex
+                bne push_stack_loop
+
+                tsx
+                txa
+                tay
+                ; $101,y is the string buffer.
+
+loop:
+                .prepare_via_for_send
+
+                lda #REQUEST_READ_STRING
+                jsr get_vstatus
+                bcc +
+                lda #REQUEST_READ_STRING_VERBOSE
++
+                ldx #server_string_buffer_size
+                jsr send_request_1
+
+                push8 scratch_ptr
+                push32 scratch_p_size
+                
+                sty scratch_ptr
+
+                ldx #scratch_p_size
+                jsr recv_response
+
+                cmp #RESPONSE_DATA
+                bne done
+
+recv_chars_loop:
+                jsr recv_payload_byte
+                bcc recv_chars_done
+                sta $101,y
+                iny
+                jmp recv_chars_loop
+
+recv_chars_done:
+                tya
+                sec
+                sbc scratch_ptr
+                tax
+                ldy scratch_ptr
+                
+                
+print_chars_loop:
+                cpx #0
+                beq print_chars_done
+                lda $101,y
+                jsr oswrch
+                iny
+                dex
+                jmp print_chars_loop
+
+print_chars_done:
+                ldy scratch_ptr
+                
+                pop32 scratch_p_size
+                pop8 scratch_ptr
+
+                bit $ff
+                bmi done2
+                
+                jmp loop
+
+done:
+                ; the packet is still incoming - discard it.
+                ldx #scratch_p_size
+                jsr discard_remaining_payload
+
+                pop32 scratch_p_size ;restore
+                pop8 scratch_ptr     ;restore
+
+done2:
+                
+                ldx #server_string_buffer_size
+pop_stack_loop:
+                pla
+                dex
+                bne pop_stack_loop
+                
+
+                .endif
+                
+                .if print_server_string_voff
+                plp
+                jsr set_vstatus
+                .endif
+                
+                rts
+
+                .pend
+
+;-------------------------------------------------------------------------
+; 
+; 
+;
+
+
+; dump_row:
+;                 ldx #p_size
+;                 jsr ldunionz32
+;                 beq dump_done
+                
+;                 lda pp_offset+1
+;                 jsr print_hex_byte
+                
+;                 lda pp_offset+0
+;                 jsr print_hex_byte
+
+;                 lda #":"
+;                 jsr osasci
+
+;                 ldy #num_columns
+
+; hex_loop:
+;                 jsr print_1_space
+                
+;                 ldx #p_size
+;                 jsr recv_payload_byte
+;                 bcc hex_out_of_range
+
+;                 php
+;                 pha
+;                 jsr print_hex_byte
+;                 jmp hex_next
+
+; hex_out_of_range:
+;                 php
+;                 pha             ;ignored
+;                 lda #"*"
+;                 jsr osasci
+;                 jsr osasci
+                
+; hex_next:
+;                 dey
+;                 bne hex_loop
+
+;                 jsr print_1_space
+
+;                 ; the data is on the stack in reverse order, so PLA
+;                 ; isn't really the thing...
+;                 tsx
+;                 ; $101+x*2 = A, $101+x*2+1 = P
+
+;                 txa
+;                 clc
+;                 adc #(num_columns-1)*2
+;                 tax
+                
+;                 ldy #num_columns
+; ascii_loop:
+;                 lda $102,x         ;get P
+;                 and #1             ;check carry flag
+;                 bne ascii_in_range ;taken if C was set for this byte
+
+;                 lda #" "
+;                 bne ascii_print
+
+; ascii_in_range:
+;                 lda $101,x      ;get byte for this column
+;                 cmp #" "
+;                 bcc ascii_nonprint
+;                 cmp #127
+;                 bcc ascii_print
+
+; ascii_nonprint:
+;                 lda #"."
+                
+; ascii_print:
+;                 jsr osasci
+
+;                 dex
+;                 dex
+;                 dey
+;                 bne ascii_loop
+
+;                 tsx
+;                 txa
+;                 clc
+;                 adc #num_columns*2
+;                 tax
+;                 txs
+
+;                 ldy #num_columns
+;                 ldx #pp_offset
+;                 jsr addyz16
+
+;                 jsr osnewl
+;                 jmp dump_row
+
+; dump_done:
+;                 rts
+;                 .pend
+;                 .endif
+
+;-------------------------------------------------------------------------
+;
+; Read a range ("<begin> <end>" or "<begin>+<size>").
+;
+; Does a BRK if there's a problem.
+;
+; entry: X = zero page address of where to store values (8 bytes)
+;        ($f2),y points to input char
+; exit: ($f2),y points to following char
+;       C=1: the range was found
+;            X!0 = begin address
+;            X!4 = size
+;       C=0: the range was not found
+;      
+; preserves: X
+cl_parse_optional_range: .proc
+                jsr cl_skip_spaces
+
+                cmp #13
+                beq not_found
+
+                jsr cl_parse_required_range
+                sec
+                rts
+
+not_found:
+                clc
+                rts
+                .pend
+
+cl_parse_required_range: .proc
+                jsr cl_parse_required_x32
+
+                jsr cl_skip_spaces
+
+                jsr inx4
+
+                cmp #"+"
+                bne begin_and_end
+
+begin_and_size:
+                iny             ;skip +
+                
+                jsr cl_parse_required_x32
+
+                jmp done
+
+begin_and_end:
+                jsr cl_parse_required_x32
+
+                sec
+                lda 0,x
+                sbc -4&$ff,x
+                sta 0,x
+
+                lda 1,x
+                sbc -3&$ff,x
+                sta 1,x
+
+                lda 2,x
+                sbc -2&$ff,x
+                sta 2,x
+
+                lda 3,x
+                sbc -1&$ff,x
+                sta 3,x
+
+                bmi bad_address_brk
+
+done:
+                jsr dex4
+                rts
+
+                .pend
+
+;-------------------------------------------------------------------------
+;
+;
+bad_address_brk: .proc
+                brkerror 252,"Bad address"
+                .pend
+
+;-------------------------------------------------------------------------
+;                
+; Read an optional 32-bit hex value from ($f2),y
+;
+; Does a BRK if there's a problem.
+;
+; entry: X = zero page address of where to store value (4 bytes)
+;        ($f2),y points to input char
+; exit:  ($f2),y points to following char
+;        C=1 if the hex value was found
+;        C=0 if the hex value wasn't found
+; preserves: X
+
+cl_parse_optional_x32: .proc
+                jsr cl_skip_spaces
+
+                cmp #13
+                beq not_found
+
+                jsr cl_parse_required_x32
+                sec
+                rts
+
+not_found:
+                clc
+                rts
+                .pend
+                
+; 
+;-------------------------------------------------------------------------
+;  
+; Read a required 32-bit hex value from ($f2),y.
+;
+; Does a BRK if there's a problem.
+;
+; entry: X = zero page address of where to store value (4 bytes)
+;        ($f2),y points to input char
+; exit:  ($f2),y points to following char
+; preserves: X
+
+cl_parse_required_x32: .proc
+                jsr clrz32
+
+                jsr cl_skip_spaces
+
+                ; Bad syntax if end of string.
+                cmp #13
+                beq syntax
+
+                ; Check first digit is valid hex.
+                lda ($f2),y
+                jsr xtoi
+                bcs parse
+
+                jmp bad_hex_brk
+
+parse:
+
+                ; Consume up to 8 digits.
+                .rept 8
+                jsr x4
+                bcc done
+                .next
+
+                ; 8 digits were consumed. Success if there are no
+                ; more.
+                lda ($f2),y
+                jsr xtoi
+                bcs done
+
+syntax:
+                ; Syntax error.
+                jmp syntax_brk
+                
+done:
+                rts
+
+x4:
+                ; Check Nth digit. Keep going until the first invalid
+                ; hex char; this is a bit slack, but it then handles
+                ; everything (CR, spaces, +, and so on).
+                lda ($f2),y
+                jsr xtoi
+                bcc x4_done
+
+                ; Consume and store.
+                iny
+                jsr asl4z32
+                ora 0,x
+                sta 0,x
+
+                ; This digit was valid.
+                sec
+x4_done:
+                rts
+
+                .pend                
+                
+; 
+;-------------------------------------------------------------------------
+;
+; Read a required 8-bit hex value from ($f2),y
+;
+; Does a BRK if there's a problem.
+;
+; X = zero page address of where to store value
+                
+cl_parse_required_x8: .proc
+                lda #0
+                sta 0,x
+
+                jsr cl_skip_spaces
+
+                ; Bad syntax if end of string.
+                cmp #13
+                beq syntax_brk
+
+                ; Translate first digit. Bad hex if invalid.
+                lda ($f2),y
+                jsr xtoi
+                bcc bad_hex_brk
+
+                ; Consume and store.
+                iny
+                sta 0,x
+
+                ; Check second digit. Success if end of string or
+                ; space.
+                lda ($f2),y
+                jsr cmp_cr_or_space
+                beq done
+
+                ; Translate second digit. Bad hex if invalid.
+                jsr xtoi
+                bcc bad_hex_brk
+
+                ; Consume and store
+                iny
+                asl 0,x
+                asl 0,x
+                asl 0,x
+                asl 0,x
+                ora 0,x
+                sta 0,x
+
+                ; Check next char. Success if end of string or space.
+                lda ($f2),y
+                jsr cmp_cr_or_space
+                beq done
+
+                ; Syntax error otherwise.
+                jmp syntax_brk
+done:
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; 
+; 
+syntax_brk: .proc
+                .brk_error 220,"Syntax"
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Overloads "Bad address".
+; 
+bad_hex_brk: .proc
+                .brk_error 252,"Bad hex"
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Check file size top byte, and produce a 'Too big' error if it's too
+; big.
+;
+; entry: A = top byte of 32-bit file size
+check_size_msbyte: .proc
+                cmp #0
+                bne +
+                rts
++
+                .brk_error 198,"Too big"
+                .pend
+
+;-------------------------------------------------------------------------
+
+cl_skip_spaces: .proc
+                lda ($f2),y
+                jsr cmp_space
+                bne done
+                iny
+                jmp cl_skip_spaces
+done:
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+cmp_cr_or_space:
+                cmp #13
+                beq cmp_space_done
+cmp_space:
+                cmp #9
+                beq cmp_space_done
+                cmp #" "
+                beq cmp_space_done
+cmp_space_done:
+                rts
+
+;-------------------------------------------------------------------------
+;
+; Self-update thing for use when running from sideways RAM.
+;
+selfupdate_cmd: .proc
+                
+                lda #$77        ;close *SPOOL/*EXEC handles (AUG 141)
+                jsr osbyte
+
+new_rom=$a000
+                
+is_m128=brkthunk                ;bit 7 set if M128
+old_fe34_bit5=brkthunk+1        ;if M128, original value of $fe34 bit
+                                ;5
+abr_offset=brkthunk+2           ;if M128, if bit 7 clear, offset from
+                                ;$fcdd to write to after copy
+relocator=brkthunk+3            ;where to put the relocating code
+
+                lda #0
+                sta is_m128
+
+                jsr is_rom
+                beq +
+                jmp rom_writeable
++
+                
+                ; Some support for using the Retro Hardware ABR
+                ; cartridge with the Master 128, since I happen to
+                ; have one...
+                lda #0
+                ldx #1
+                jsr osbyte
+                cpx #3
+                bcc rom_not_writeable ;taken if not M128
+
+                lda #$80
+                sta is_m128
+                sta abr_offset
+
+                lda $fe34
+                and #$20
+                sta old_fe34_bit5
+
+                lda $f4
+                cmp #4
+                bcs rom_not_writeable ;taken if not cartridge ROM slot
+
+                jsr pcprint
+                .text "Attempt ABR unlock (Y/N)? ",255
+
+                jsr osrdch
+                jsr oswrch
+                pha
+                jsr osnewl
+                pla
+                jsr toupper
+                cmp #"Y"
+                bne rom_not_writeable                
+
+                lda $fe34
+                ora #$20        ;make FRED/JIM access cartridge, not
+                                ;1MHz bus
+                sta $fe34
+                
+                ; Turn ROM slot index into offset of lock/unlock
+                ; address. Lock=$fcdd+((rom&1)<<1);
+                ; unlock=$fcdc+((rom&1)<<1).
+                lda $f4
+                and #1
+                asl a
+                tax
+                stx abr_offset
+
+                sta $fcdc,x
+
+                jsr is_rom
+                bne rom_writeable
+
+rom_not_writeable:
+                .brk_error 255,"ROM not writeable"
+
+rom_writeable:
+                lda #REQUEST_GET_ROM
+                ldx #0
+                jsr send_request_1
+
+                ldx #scratch_p_size
+                jsr recv_response
+
+                clc
+                lda scratch_p_size+1
+                adc #>new_rom
+                lda scratch_p_size+2
+                adc #0
+                lda scratch_p_size+3
+                adc #0
+                beq size_ok
+                bmi size_ok
+
+                jsr discard_remaining_payload
+                
+                .brk_error 255,"New ROM is too large"
+
+size_ok:
+                lda #<new_rom
+                sta scratch_load+0
+                lda #>new_rom
+                sta scratch_load+1
+                lda #$ff
+                sta scratch_load+2
+                sta scratch_load+3
+
+                jsr recv_file_data
+                
+                jsr pcprint
+                .text "Old: ",255
+
+                ldx #9
+print_old_name_loop:
+                lda $8000,x
+                jsr print_rom_name_char
+                inx
+                cpx $8007
+                bne print_old_name_loop
+
+                jsr pcprint
+                .text 13,"New: ",255
+
+                ldx #9
+print_new_name_loop:
+                lda new_rom,x
+                jsr print_rom_name_char
+                inx
+                cpx new_rom+7
+                bne print_new_name_loop
+
+                ldx #0
+copy_relocator_loop:
+                lda relocator_start,x
+                sta relocator,x
+                inx
+                cpx #relocator_end-relocator_start
+                bne copy_relocator_loop
+
+                sei
+                jmp relocator
+
+is_rom:
+                ; after call, BNE will be taken if RAM, BEQ taken if
+                ; ROM.
+                lda selfupdate_cmd
+                tax
+                eor #$ff
+                sta selfupdate_cmd
+                cpx selfupdate_cmd
+                stx selfupdate_cmd
+                rts
+
+                ; In principle the relocator could be part of the ROM,
+                ; but it's easier just to copy it into main RAM...
+relocator_start: .proc
+                .logical relocator
+                ldx #0
+                ldy #$20        ;just copy all 8K...
+copy_loop:
+read:
+                lda new_rom,x
+write:
+                sta $8000,x
+                inx
+                bne copy_loop
+                inc read+2
+                inc write+2
+                dey
+                bne copy_loop
+
+                ldx #0
+print_loop:
+                lda message,x
+                jsr osasci
+                inx
+                cpx #message_end-message
+                bne print_loop
+print_done:
+                bit is_m128
+                bpl hang
+
+                ldx abr_offset
+                bmi reset_fe34
+                sta $fcdd,x
+
+reset_fe34:                
+                lda $fe34
+                and #(~$20)&$ff
+                ora old_fe34_bit5
+                sta $fe34
+
+hang:
+                jmp hang
+                
+message:
+                .text 13,"Press CTRL+BREAK."
+message_end:
+                
+                .here
+                .pend
+relocator_end:
+                .cerror relocator_end-relocator_start>80,"relocator too large"
+                .pend
+
+;-------------------------------------------------------------------------
+
+volumes_browser_special: .proc
+                jsr discard_remaining_payload
+
+                lda #3          ;switch off printer
+                jsr oswrch
+
+                lda #$77        ;close SPOOL/EXEC files
+                jsr osbyte
+
+                lda #26         ;restore default text + graphics windows
+                jsr oswrch
+
+                ldx #scratch_p_size
+                lda #5
+                jsr setz32
+
+                lda #REQUEST_VOLUME_BROWSER
+                jsr send_request_n
+
+                lda #REQUEST_VOLUME_BROWSER_RESET
+                jsr send_payload_byte
+
+                lda $34f        ;screen mode layout type
+                jsr send_payload_byte
+
+                ldy $30a        ;text window right
+                iny
+                tya             ;text width 
+                jsr send_payload_byte
+
+                ldy $309        ;text window bottom
+                iny
+                tya             ;text height
+                jsr send_payload_byte
+
+                lda #0          ;get machine type
+                ldx #1
+                jsr osbyte
+                txa
+                ldx #scratch_p_size
+                jsr send_payload_byte
+                
+                ldy #3
+send_text_window_loop:
+                lda $308,y
+                jsr send_payload_byte
+                dey
+                bpl send_text_window_loop
+
+                jsr recv_response_and_discard_payload
+
+                ; Disable cursor editing and make cursor keys return
+                ; key codes.
+                lda #4
+                ldx #1
+                jsr osbyte
+                stx private_x   ;old cursors setting.
+
+                ; Make Escape return 27.
+                lda #229
+                jsr osbyte_x00_yff
+                stx private_y   ;old escape setting.
+                
+                lda #229
+                ldx #1
+                ldy #0
+                jsr osbyte      ;make Escape return 27.
+                
+print_string_and_flush:
+                jsr print_server_string
+                jsr flush_keyboard_buffer
+                jmp getch
+
+print_string:
+                jsr print_server_string
+
+getch:
+                jsr osrdch
+                pha             ;key pressed
+
+                lda #$81
+                ldy #$ff
+                ldx #$ff
+                jsr osbyte
+                txa
+                pha             ;non-0 if SHIFT pressed
+
+                ldx #scratch_p_size
+                lda #3
+                jsr setz32
+
+                lda #REQUEST_VOLUME_BROWSER
+                jsr send_request_n
+
+                lda #REQUEST_VOLUME_BROWSER_KEYPRESS
+                jsr send_payload_byte
+
+                pla             ;SHIFT flag
+                jsr send_payload_byte
+
+                pla             ;key value
+                jsr send_payload_byte
+
+                jsr recv_response_1
+
+                cpx #RESPONSE_VOLUME_BROWSER
+                bne done
+
+                cmp #RESPONSE_VOLUME_BROWSER_CANCELED
+                beq done
+
+                cmp #RESPONSE_VOLUME_BROWSER_MOUNTED
+                beq done
+
+                cmp #RESPONSE_VOLUME_BROWSER_BOOT
+                beq done
+
+                cmp #RESPONSE_VOLUME_BROWSER_KEY_IGNORED
+                beq getch
+
+                cmp #RESPONSE_VOLUME_BROWSER_PRINT_STRING
+                beq print_string
+
+                cmp #RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER
+                beq print_string_and_flush
+
+done:
+                pha
+                
+                jsr print_server_string
+
+                jsr flush_keyboard_buffer
+
+                ; Restore Escape.
+                ldx private_y
+                ldy #0
+                lda #229
+                jsr osbyte
+
+                ; Restore cursor keys.
+                ldx private_x
+                lda #4
+                jsr osbyte
+
+                pla
+                cmp #RESPONSE_VOLUME_BROWSER_BOOT
+                beq +
+                rts
+
++
+                jmp boot
+
+flush_keyboard_buffer:
+                lda #21         ;flush buffer
+                ldx #0          ;flush keyboard buffer
+                jmp osbyte
+
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; Determine whether the BeebLink filing system is active.
+;
+; entry: none
+; exit: C = 0 - BLFS inactive
+;       C = 1 - BLFS active
+;
+is_blfs_active: .proc
+
+                .push16 $a8
+
+                ; If the current FS number is the BLFS number, it's
+                ; definitely active.
+                lda #0
+                tay
+                jsr osargs
+                cmp #blfs_fs_number
+                beq active
+
+                ; If it's not the DFS number either, it's definitely
+                ; inactive.
+                cmp #dfs_fs_number
+                bne inactive
+
+                ; If OSARGS says it's DFS, but FILEV points to the
+                ; BLFS OSFILE (via the extended vector table), it's in
+                ; act-as-DFS mode and BLFS is active.
+                lda filev+0
+                cmp #$12/2*3
+                bne inactive
+
+                lda filev+1
+                cmp #$ff
+                bne inactive
+
+                lda #$a8  ;get extended vector table address (AUG 181)
+                jsr osbyte_x00_yff
+
+                stx $a8
+                sty $a9
+
+                ldy #$12/2*3
+
+                lda ($a8),y
+                cmp fsvectors+0
+                bne inactive
+
+                iny
+                
+                lda ($a8),y
+                cmp fsvectors+1
+                bne inactive
+
+                iny
+
+                lda ($a8),y
+                cmp $f4
+                bne inactive
+                
+active:
+                .pop16 $a8
+                sec
+                rts
+
+inactive:
+                .pop16 $a8
+                clc
+                rts
+
+
+                
+                .pend
+
+                
+;-------------------------------------------------------------------------
+
+                ; If the ROM goes over 8K, I'll just have to do
+                ; something else.
+                .cerror *>$a000,"ROM too large for self-update"
