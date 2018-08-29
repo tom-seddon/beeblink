@@ -22,7 +22,9 @@ C_CONSTANTS:=$(OBJDIR)/beeblink_constants.h
 # own, which if made phony adds a bunch of (rather verbose) stuff to
 # the build.
 .PHONY:beeblink_all
-beeblink_all: $(C_CONSTANTS) lss tags dfu2 
+beeblink_all: lss tags dfu2
+
+$(OBJDIR)/beeblink.o : $(C_CONSTANTS)
 
 $(C_CONSTANTS) : $(TYPESCRIPT_CONSTANTS) $(WC)/tools/make_constants.py
 	python $(WC)/tools/make_constants.py -o $@ $(TYPESCRIPT_CONSTANTS) c

@@ -5,10 +5,17 @@ default:
 	$(error specify target)
 
 .PHONY:travis_osx
-travis_osx:
-	cd ./firmware && make lss
+build_travis_osx:
+	cd ./firmware && make beeblink.hex
 	cd ./rom && make
 	cd ./server && npm install
 	cd ./server && npm run compile
 	-cd ./server && npm run lint
 	cd ./server && ./node_modules/.bin/pkg -t node8-macos-x64 .
+
+.PHONY:clean_travis_osx
+clean_travis_osx:
+	cd ./firmware && make clean
+	cd ./rom && make clean
+	cd ./server && rm -Rf node_modules
+	-cd ./server && rm beeblink-server

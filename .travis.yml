@@ -37,7 +37,7 @@ before_deploy:
   - git config --local user.email "modelb@bbcmicro.com"
   - git tag $RELEASE_NAME
 
-script: make -f ./tools/Makefile_build_osx travis_osx
+script: make -f ./tools/Makefile_build_osx build_travis_osx
 
 # deploy:
 #   - provider: releases
