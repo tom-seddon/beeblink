@@ -11,7 +11,8 @@ before_install:
   - export SUFFIX=$(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $TRAVIS_COMMIT)
   - export TIMESTAMP=$(git log -1 --format=%cd --date=format:%Y%m%d-%H%M%S $TRAVIS_COMMIT)
   - export RELEASE_NAME=beeblink-$SUFFIX
-  - export OUTPUT_NAME=./.build/$RELEASE_NAME-osx.zip
+  - export SERVER_ZIP_NAME=./$RELEASE_NAME-server-osx.zip
+  - export FIRMWARE_ZIP_NAME=./$RELEASE_NAME-firmware.zip
   - export PATH=/opt/local/bin:$PATH
   - export COLUMNS=80
   - pwd
@@ -29,6 +30,17 @@ before_install:
   - (cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1584)
   - (cd ~/tass64-code && make all && make install)
 
+script:
+  - (cd ./firmware && make beeblink.hex)
+  - (cd ./rom && make)
+  - (cd ./server && npm install)
+  - (cd ./server && npm run compile)
+  - (cd ./server && ./node_modules/.bin/pkg -t node8-macos-x64 .)
+  - (cd ./server && 7z a ../$SERVER_ZIP_NAME beeblink-server)
+  - (7z a $SERVER_ZIP_NAME ./volumes)
+  - (cd ./firmware && 7z a ../$FIRMWARE_ZIP_NAME *.hex)
+  - (cd ./rom/.build && 7z a ../../$FIRMWARE_ZIP_NAME beeblink.rom)
+
 before_deploy:
   - pwd
   - echo $OUTPUT_NAME
@@ -38,11 +50,12 @@ before_deploy:
   - git config --local user.email "modelb@bbcmicro.com"
   - git tag $RELEASE_NAME --force
 
-script: make -f ./tools/Makefile_build_osx build_travis_osx
 
 deploy:
   - provider: releases
-    file: ${OUTPUT_NAME}
+    file:
+      - ${SERVER_ZIP_NAME}
+      - ${FIRMWARE_ZIP_NAME}
     skip_cleanup: true
     api_key:
       secure: m9rpUF8NJ10uXXIwISdL4lnUg3ijhIoTVxUDD5ztNVYf1oB/aXZMkIl4zcnI+pPx851MI4rDWbVWHF6h7fWo7+Qtq8XwXGOjvYFxWhfEMd7+l8i1tx0x8swr2CaXcV24bVCAY7OH9QVzxYe9WRPkajyzf45rEYmY4/AWSbUeSJe9xT4FRpGkkdGTKjcgEbYsV6v3wUulaLmC9o8WshE9AanfIkb+zZxzmqnmAjQTueUZd1ngz7gZ0ata6/MhIRbUhOurKdAo1xTjM31mii8E4+srqDruvuSnz37/ZTVrwxOmS0Lg0CEQmoRfYH0if2ew5UZiaBtdTFue2WNvu+rnGpNN55G4HDaqMel5iY9xKUWsjncBdp0IrOsyS0JzNdLcuEmPkdL6AQK5wgxw8UqjqKMpNR1dzfTqBw/w+pJtpntWfkvFJtRa2/tNPlHL/6Ny9bpm6ACTweK2zbdGhMQy9391ARoxgqiKtx1dcx/nhVA9s1JoD2vf+zFkDf3rk7iav/J0dop5PxTR+OwwwtG/vIx8dD3mwuiFPz971EVNFbE8S1Y2ryj51ddH52c6IMbpJGU/lmXaY2eSrcsHL8XBtVaRWNX3p+FaA8AW6y1eRvbVWoPt8LbY7vEW6U8e0H4fJU+fBAN9t69oVZjco9LimJvZqaUHWM2FdLOZoFvaTL4=
