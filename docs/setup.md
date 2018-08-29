@@ -35,7 +35,7 @@ For MacPorts, you can get the AVR toolchain and DFU programmer with
 Connect AVR to BBC's user port as follows:
 
 | User Port | AVR |
-|----
+| --- | --- |
 | GND | GND | 
 | PB0 | PB0 |
 | PB1 | PB1 |
@@ -48,16 +48,14 @@ Connect AVR to BBC's user port as follows:
 | CB1 | PC6 |
 | CB2 | PC7 |
 
-## Connet AVR to PC's serial port (optional) ##
+## Connect AVR to PC's serial port (optional) ##
 
 If you've got a serial port that can accept +5V, you can connect the
-AVR's PC4 to its Receive Data pin and get debug serial output.
+AVR's PC4 to its Receive Data pin to see its debug serial output.
 
 The serial output is 115200 baud, no parity, 1 stop bit.
 
-# Set up BBC ROM
-
-## Build ROM
+# Build ROM
 
 Change to `rom` in the working copy and run `make`. You should get
 some output and no obvious errors.

@@ -192,7 +192,8 @@ down.
 
 ### `VOLBROWSER`
 
-Activate the volume browser: an interactive method of changing volume.
+Activate the volume browser: an interactive method of loading a
+volume.
 
 The list of available volumes is shown. Use the cursor keys to
 navigate. Press ESCAPE to cancel, RETURN to load that volume, or
@@ -215,9 +216,17 @@ The volume browser isn't recommended in 20-column modes.
 
 # `BLCONFIG` options
 
-## `V - debug verbosity`
+To switch an option on, use `*BLCONFIG X+`, where `X` is that option's
+code (see below). Use `-` to switch it off. You can specify multiple
+options on the command line.
 
-## `*` - `trap *DISC`
+The current ROM options are as follows.
+
+## `V` - debug verbosity
+
+I find it best to leave this switched off.
+
+## `*` - trap *DISC
 
 Some programs do `*DISC` in their loader or `!BOOT`, which is no good
 if you're trying to run from the BLFS.
@@ -235,9 +244,9 @@ filing systems. This can make it a bit hard to select the actual DFS.
 
 (All the above applies to `*DISK` as well.)
 
-## `D - act as DFS`
+## `D` - act as DFS
 
-With `act as DFS` active, the BLFS will report itself to be filing
+With act as DFS active, the BLFS will report itself to be filing
 system 4 (DFS) when called upon to identify itself via
 [OSARGS A=0 Y=0](http://beebwiki.mdfs.net/OSARGS#Functions.2C_handle.3D0).
 
@@ -257,8 +266,8 @@ the server, that the BBC can't see because it has no corresponding
 `.inf` file.
 
 There's not much you can do about this at the BBC end. You'll need to
-move the offending file out of the folder. (Well, or pick a different
-name...)
+move the offending file out of the folder on the server. (Well, that
+or pick a different name...)
 
 ## `POSIX error: XXX` (same code as `Disc fault`)
 
