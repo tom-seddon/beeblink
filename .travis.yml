@@ -15,10 +15,13 @@ before_install:
   # - brew tap osx-cross/avr
   # - brew install avr-gcc
   - cd ~ && git clone https://github.com/macports/macports-base.git
-  - cd ~/macports-base && git checkout v2.5.2
-  - cd ~/macports-base && ./configure --enabled-readline
+  - cd ~/macports-base && git checkout v2.5.3
+  - cd ~/macports-base && ./configure --enable-readline
   - cd ~/macports-base && make
   - cd ~/macports-base && sudo make install
+  - sudo port install avr-binutils
+  - sudo port install avr-gcc
+  - sudo port install avr-libc
   - cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1584 && cd ~/tass64-code && make all && make install
 
 before_deploy:

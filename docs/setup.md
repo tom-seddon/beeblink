@@ -9,8 +9,9 @@
   built from source out of the box)
 * [node.js](https://nodejs.org/en/download/)
 
-For MacPorts, you can get the AVR toolchain and DFU programmer with
-`sudo port install avr-binutils avr-gcc avr-libc dfu-programmer`.
+For MacPorts, you can get the AVR toolchain with `sudo port install
+avr-libc` and the DFU programmer with `sudo port install
+dfu-programmer`.
 
 # Set up AVR
 
