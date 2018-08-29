@@ -25,6 +25,7 @@ before_install:
   - sudo port -N install avr-binutils
   - sudo port -N install avr-gcc
   - sudo port -N install avr-libc
+  - sudo port -N install p7zip
   - (cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1584)
   - (cd ~/tass64-code && make all && make install)
 
