@@ -7,8 +7,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "tslint": "./node_modules/.bin/tslint",
+    "compile": "tsc -p ./tsconfig.json",
     "lint": "tslint --project ./tsconfig.json",
-    "start": "echo tsc... && tsc -p ./tsconfig.json && node ./.build/main.js"
+    "start": "npm run compile && node ./.build/main.js"
   },
   "author": "",
   "license": "GPL-3.0-or-later",
