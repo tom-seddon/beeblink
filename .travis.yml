@@ -12,8 +12,13 @@ before_install:
   - export TIMESTAMP=$(git log -1 --format=%cd --date=format:%Y%m%d-%H%M%S $TRAVIS_COMMIT)
   - export RELEASE_NAME=beeblink-$SUFFIX
   - export OUTPUT_BASENAME=beeblink-osx-$SUFFIX.dmg
-  - brew tap osx-cross/avr
-  - brew install avr-gcc
+  # - brew tap osx-cross/avr
+  # - brew install avr-gcc
+  - cd ~ && git clone https://github.com/macports/macports-base.git
+  - cd ~/macports-base && git checkout v2.5.2
+  - cd ~/macports-base && ./configure --enabled-readline
+  - cd ~/macports-base && make
+  - cd ~/macports-base && sudo make install
   - cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1584 && cd ~/tass64-code && make all && make install
 
 before_deploy:
