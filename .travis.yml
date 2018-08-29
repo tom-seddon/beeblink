@@ -36,7 +36,7 @@ before_deploy:
   # https://docs.travis-ci.com/user/deployment/releases/
   - git config --local user.name "Tom Seddon"
   - git config --local user.email "modelb@bbcmicro.com"
-  - git tag $RELEASE_NAME
+  - git tag $RELEASE_NAME --force
 
 script: make -f ./tools/Makefile_build_osx build_travis_osx
 
