@@ -30,6 +30,9 @@ before_install:
   - (cd ~/tass64-code && make all && make install)
 
 before_deploy:
+  - pwd
+  - echo $OUTPUT_NAME
+  - find . -name '*.zip'
   # https://docs.travis-ci.com/user/deployment/releases/
   - git config --local user.name "Tom Seddon"
   - git config --local user.email "modelb@bbcmicro.com"
