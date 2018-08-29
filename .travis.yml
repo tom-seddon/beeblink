@@ -20,6 +20,7 @@ before_install:
   - cd ~/macports-base && ./configure --enable-readline
   - cd ~/macports-base && make
   - cd ~/macports-base && sudo make install
+  - sudo port -v selfupdate
   - sudo port install avr-binutils
   - sudo port install avr-gcc
   - sudo port install avr-libc
