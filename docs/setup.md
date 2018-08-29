@@ -1,14 +1,20 @@
+# Setup
+
 # Prerequisites
 
-* Minimus AVR 32K board
 * AVR toolchain
 * DFU programming tool
 * GNU Make (comes with Xcode)
+* [64tass](https://sourceforge.net/projects/tass64/) (I found this
+  built from source out of the box)
+* [node.js](https://nodejs.org/en/download/)
 
-For MacPorts, you can get these with `sudo port install avr-binutils
-   avr-gcc avr-libc dfu-programmer`.
+For MacPorts, you can get the AVR toolchain and DFU programmer with
+`sudo port install avr-binutils avr-gcc avr-libc dfu-programmer`.
 
-# Program AVR
+# Set up AVR
+
+## Program AVR ##
 
 0. Connect AVR to PC via USB
 
@@ -24,7 +30,7 @@ For MacPorts, you can get these with `sudo port install avr-binutils
    
 3. Tap RESET on the AVR. The red and blue LEDs should both light up
 
-# Connect AVR to BBC
+## Connect AVR to BBC ##
 
 Connect AVR to BBC's user port as follows:
 
@@ -42,9 +48,27 @@ Connect AVR to BBC's user port as follows:
 | CB1 | PC6 |
 | CB2 | PC7 |
 
-# Connet AVR to PC's serial port (optional) #
+## Connet AVR to PC's serial port (optional) ##
 
 If you've got a serial port that can accept +5V, you can connect the
 AVR's PC4 to its Receive Data pin and get debug serial output.
 
 The serial output is 115200 baud, no parity, 1 stop bit.
+
+# Set up BBC ROM
+
+## Build ROM
+
+Change to `rom` in the working copy and run `make`. You should get
+some output and no obvious errors.
+
+The ROM is built to `rom/.build/beeblink.rom` in the working copy. If
+you've got some way of getting files over to your BBC already, easiest
+to copy it over using that - but if not, you can sort it out in a
+moment.
+
+# Set up server
+
+Change to `server` in the working copy and run `npm install`. You
+should get some output and no obvious errors.
+

@@ -7,6 +7,21 @@ limitations.
 
 # Try it out
 
+## Run server on PC
+
+There are various options, but for starters run it like this. Run it
+from the terminal inside the `server` folder in the working copy:
+
+    npm start -- --rom ../rom/.build/beeblink.rom --mount beeblink ../volumes
+	
+After a moment you should get a `Server running...` message.
+
+## Load ROM on BBC
+
+If you've got the ROM on your BBC already, load it into sideways RAM
+(EEPROM, etc.); if not, now that the server's running, you can use the
+[bootstrap process](./bootstrap.md).
+
 ## Whirlwind tour
 
 With the server running and the ROM installed, press CTRL+B+BREAK.
@@ -115,13 +130,11 @@ Activate BLFS.
 
 ### `BLSELFUPDATE`
 
-If the ROM is running from sideways RAM, it will update itself with
-the latest copy from the server.
+Attempt to update the ROM, if it's loaded into sideways RAM or a
+write-protected ABR cartridge. The server must have been started with
+the `--rom` option.
 
-(If you have a Retro Hardware ABR cartridge, and the RAM is
-write-protected, the self-update process can try to unlock it for you,
-and lock it again when it's done. This is probably not worth trying
-with some other type of setup.)
+This is mainly for my benefit when working on the ROM code.
 
 ### `DISC`, `DISK`
 

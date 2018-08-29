@@ -1,32 +1,29 @@
+**This repo has submodules** - clone it with `git clone --recursive`,
+or do `git submodule init && git submodule update` from the working
+copy after a normal clone.
+
 # BeebLink
 
 A file storage system for the BBC Micro. Make your PC do something
 useful for a change: have it act as a file server for your BBC. No
 more swapping discs, no more noisy drives, no more 31 file limit.
 
-# Installation and setup
-
 This is all 100% self-assembly at the moment, and the system
-requirements are a bit specific, but this will improve...
+requirements are a bit specific. But this will improve...
 
-Requirements:
+# Requirements
 
 * Minimus AVR 32K microcontroller board
-* BBC Micro with sideways RAM (Master 128 recommended)
-* PC running Mac OS X
+* PC running Mac OS X 
+* BBC Micro with some good way of loading the ROM image (i.e., with
+  something like EEPROM or write-protected battery-backed sideways
+  RAM... it's not stable enough for EPROM, but it's no fun having to
+  reload it on each boot and/or have it zapped by careless programs)
 
-**This repo has submodules** - clone it with `git clone --recursive`,
-or do `git submodule init && git submodule update` from the working
-copy after a normal clone.
+# Installation and setup
 
-Steps:
+[Setup instructions](./docs/setup.md)
 
-1. [AVR setup and wiring instructions](./docs/avr.md)
+[Filing system docs](./docs/fs.md)
 
-2. [Assemble filing system ROM for BBC Micro](./docs/build-rom.md)
-
-3. [Run server on PC](./docs/run-server.md)
-
-4. [Get ROM running on BBC](./docs/run-rom.md)
-
-5. [Try filing system on BBC](./docs/fs.md)
+[Useful server command line options](./docs/server.md)
