@@ -9,7 +9,7 @@ branches:
 
 before_install:
   - pwd
-  - pushd
+  - pushd ~
   - export SUFFIX=$(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $TRAVIS_COMMIT)
   - export TIMESTAMP=$(git log -1 --format=%cd --date=format:%Y%m%d-%H%M%S $TRAVIS_COMMIT)
   - export PATH=/opt/local/bin:$PATH
