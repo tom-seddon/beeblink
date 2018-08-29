@@ -13,6 +13,7 @@ before_install:
   - export PATH=/opt/local/bin:$PATH
   - export RELEASE_NAME=beeblink-$SUFFIX
   - export OUTPUT_BASENAME=beeblink-osx-$SUFFIX.dmg
+  - export COLUMNS=80
   # - brew tap osx-cross/avr
   # - brew install avr-gcc
   - cd ~ && git clone https://github.com/macports/macports-base.git
