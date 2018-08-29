@@ -11,4 +11,4 @@ build:
 
 .PHONY:clean
 clean:
-	rm -R $(DEST)
+	rm -Rf $(DEST)

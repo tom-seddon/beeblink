@@ -8,28 +8,25 @@ branches:
     - master
 
 before_install:
-  - pwd
-  - pushd ~
   - export SUFFIX=$(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $TRAVIS_COMMIT)
   - export TIMESTAMP=$(git log -1 --format=%cd --date=format:%Y%m%d-%H%M%S $TRAVIS_COMMIT)
-  - export PATH=/opt/local/bin:$PATH
   - export RELEASE_NAME=beeblink-$SUFFIX
-  - export OUTPUT_BASENAME=beeblink-osx-$SUFFIX.dmg
+  - export OUTPUT_NAME=./.build/$(RELEASE_NAME).zip
+  - export PATH=/opt/local/bin:$PATH
   - export COLUMNS=80
-  # - brew tap osx-cross/avr
-  # - brew install avr-gcc
-  - cd ~ && git clone https://github.com/macports/macports-base.git
-  - cd ~/macports-base && git checkout v2.5.3
-  - cd ~/macports-base && ./configure --enable-readline
-  - cd ~/macports-base && make
-  - cd ~/macports-base && sudo make install
+  - pwd
+  - env
+  - (cd ~ && git clone https://github.com/macports/macports-base.git)
+  - (cd ~/macports-base && git checkout v2.5.3)
+  - (cd ~/macports-base && ./configure --enable-readline)
+  - (cd ~/macports-base && make)
+  - (cd ~/macports-base && sudo make install)
   - sudo port -v selfupdate
   - sudo port -N install avr-binutils
   - sudo port -N install avr-gcc
   - sudo port -N install avr-libc
-  - cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1584 && cd ~/tass64-code && make all && make install
-  - popd
-  - pwd
+  - (cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1584)
+  - (cd ~/tass64-code && make all && make install)
 
 before_deploy:
   # https://docs.travis-ci.com/user/deployment/releases/
@@ -39,16 +36,9 @@ before_deploy:
 
 script: make -f ./tools/Makefile_build_osx build_travis_osx
 
-# deploy:
-#   - provider: releases
-#     api_key:
-#       secure: r/uHB0E2ZQXdlakXeEISZdZD8K4WLkptyaYouPXG2xFLFZAgosuBkComk8uPkM4YH/qOo+7zHptELft8yO9uinil1IAWKmz6gxX6TrLQkdUWQThgRr0Vw5iLwymFr6MeESZ2G8jqc6CAw2YQJqhGhOU9AO5gvKfHFItrrVtoF+EOdRCd9w1wYUcH20uY0rGXD7vx6JmEpS1S48dDDr2XlAel368M1o3cjtaYo23uiW4K+21XMPCdK91Dz6fvnDXibnMTnOHmWGKIVp0lBow5R91a9ywHDmzNgyrEw+dmjAuMFtV3q05B8Wd5zg9zGAOt3dqkEdepvV+x9yqT1WXMg3t89x3gwKBPfrHIMPXDhDAg5iIDxi9L29XqvvZLExQIqQxDGQxRjAP2IinHfBsTBvBZAOA7gBVMDYppNTVOGU8FCxu3OGq9/CBlSQlgltZANDjboOexcc3abrNBhIvr0Fw7aE5YmCmwbIwmj+IQi2wmCsn1+o9jSACkm8h7k9mGuhw5LxvArZbu5W+Ka/wiTgXZnp3BcPaTMFLoMcoycY4DvweVLeALBg5esTbBsNbcxdHkOicwh8kwZIMCEes71WguXZV8fBoUsTn9GqzLY0MG3LQL7/RPobLBY+vdwrFb5zMEeuQCHu2uFXDUYbzfpTdE/ViXyUsqulajBbO5aGg=
-#     file: ${OUTPUT_NAME}
-#     skip_cleanup: true
-#     on:
-#       branch: build
-#   - provider: script
-#     script: ftp -u ftp://b2_upload:${FFE3_PASSWORD}@ffe3.com/ffe3.com/b2/ci/${OUTPUT_BASENAME} ${OUTPUT_NAME}
-#     on:
-#       branch: master
-#     skip_cleanup: true
+deploy:
+  - provider: releases
+    file: ${OUTPUT_NAME}
+    skip_cleanup: true
+    api_key:
+      secure: m9rpUF8NJ10uXXIwISdL4lnUg3ijhIoTVxUDD5ztNVYf1oB/aXZMkIl4zcnI+pPx851MI4rDWbVWHF6h7fWo7+Qtq8XwXGOjvYFxWhfEMd7+l8i1tx0x8swr2CaXcV24bVCAY7OH9QVzxYe9WRPkajyzf45rEYmY4/AWSbUeSJe9xT4FRpGkkdGTKjcgEbYsV6v3wUulaLmC9o8WshE9AanfIkb+zZxzmqnmAjQTueUZd1ngz7gZ0ata6/MhIRbUhOurKdAo1xTjM31mii8E4+srqDruvuSnz37/ZTVrwxOmS0Lg0CEQmoRfYH0if2ew5UZiaBtdTFue2WNvu+rnGpNN55G4HDaqMel5iY9xKUWsjncBdp0IrOsyS0JzNdLcuEmPkdL6AQK5wgxw8UqjqKMpNR1dzfTqBw/w+pJtpntWfkvFJtRa2/tNPlHL/6Ny9bpm6ACTweK2zbdGhMQy9391ARoxgqiKtx1dcx/nhVA9s1JoD2vf+zFkDf3rk7iav/J0dop5PxTR+OwwwtG/vIx8dD3mwuiFPz971EVNFbE8S1Y2ryj51ddH52c6IMbpJGU/lmXaY2eSrcsHL8XBtVaRWNX3p+FaA8AW6y1eRvbVWoPt8LbY7vEW6U8e0H4fJU+fBAN9t69oVZjco9LimJvZqaUHWM2FdLOZoFvaTL4=
