@@ -13,7 +13,7 @@ install:
   - git submodule update
   - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
   - ps: $env:RELEASE_NAME = "beeblink-"+$env:SUFFIX
-  - ps: $env:OUTPUT_NAME = "beeblink-"+$env:SUFFIX+"-win64-server.zip"
+  - ps: $env:OUTPUT_NAME = "beeblink-"+$env:SUFFIX+"-server-windows-x64.zip"
 
 build_script:
   - cd .\server
