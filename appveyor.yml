@@ -1,0 +1,16 @@
+version: '{build}'
+
+branches:
+  only:
+    - master
+
+image: Visual Studio 2017
+
+install:
+  - git submodule init
+  - git submodule update
+  - bash -c 'pwd'
+  - bash: echo install test
+
+build_script:
+  - echo hello build_script
