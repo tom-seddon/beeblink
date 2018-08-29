@@ -9,8 +9,29 @@ image: Visual Studio 2017
 install:
   - git submodule init
   - git submodule update
-  - bash -c 'pwd'
-  - bash: echo install test
+  - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
+  - ps: $env:RELEASE_NAME = "beeblink-"+$env:SUFFIX
+  - ps: $env:OUTPUT_NAME = "beeblink-"+$env:SUFFIX+"-win64-server.zip"
 
 build_script:
-  - echo hello build_script
+  - cd .\server
+  - npm install
+  - npm compile
+  - .\node_modules\.bin\pkg -t node8-win-x64 .
+  - 7z a ..\%OUTPUT_NAME% .\beeblink-server.exe
+
+artifacts:
+  - path: $(OUTPUT_NAME)
+    name: output
+
+deploy:
+  - release: $(RELEASE_NAME)
+    description: 'beeblink'
+    provider: GitHub
+    auth_token:
+      secure: T5CPAJmNl5j/eAVlQln8WoiFKTDkq2ebT9Y/PbWRbMIa4GFyov+t5QdqlU0O2sY9
+    artifact: output
+    draft: false
+    prerelease: false
+    on:
+      branch: master
