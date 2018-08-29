@@ -19,6 +19,8 @@ build_script:
   - npm run compile
   - .\node_modules\.bin\pkg -t node8-win-x64 .
   - 7z a ..\%OUTPUT_NAME% .\beeblink-server.exe
+  - cd ..
+  - 7z a %OUTPUT_NAME% .\volumes
 
 artifacts:
   - path: $(OUTPUT_NAME)
@@ -35,3 +37,5 @@ deploy:
     prerelease: false
     on:
       branch: master
+    tag: $(APPVEYOR_REPO_TAG_NAME)
+    
