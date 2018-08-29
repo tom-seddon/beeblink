@@ -13,12 +13,13 @@ requirements are a bit specific. But this will improve...
 
 # Requirements
 
-* Minimus AVR 32K microcontroller board
+* Minimus AVR 32K microcontroller board (used to connect BBC's user
+  port and PC's USB port)
 * PC running Mac OS X 
 * BBC Micro with some good way of loading the ROM image (i.e., with
   something like EEPROM or write-protected battery-backed sideways
-  RAM... it's not stable enough for EPROM, but it's no fun having to
-  reload it on each boot and/or have it zapped by careless programs)
+  RAM... it's no fun having to reload it on each boot and/or have it
+  zapped by careless programs)
 
 # Installation and setup
 
