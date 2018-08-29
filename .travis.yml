@@ -8,6 +8,8 @@ branches:
     - master
 
 before_install:
+  - pwd
+  - pushd
   - export SUFFIX=$(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $TRAVIS_COMMIT)
   - export TIMESTAMP=$(git log -1 --format=%cd --date=format:%Y%m%d-%H%M%S $TRAVIS_COMMIT)
   - export PATH=/opt/local/bin:$PATH
@@ -26,6 +28,8 @@ before_install:
   - sudo port -N install avr-gcc
   - sudo port -N install avr-libc
   - cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1584 && cd ~/tass64-code && make all && make install
+  - popd
+  - pwd
 
 before_deploy:
   # https://docs.travis-ci.com/user/deployment/releases/

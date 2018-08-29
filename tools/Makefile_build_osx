@@ -1,8 +1,6 @@
 # -*- mode:makefile-gmake; -*-
 
-REMAKE:=$(MAKE) 
-
-.PHONY:default:
+.PHONY:default
 default:
 	$(error specify target)
 
@@ -11,6 +9,6 @@ travis_osx:
 	cd ./firmware && make lss
 	cd ./rom && make
 	cd ./server && npm install
-	cd ./server && npm compile
-	cd ./server && npm lint
+	cd ./server && npm run compile
+	-cd ./server && npm run lint
 	cd ./server && ./node_modules/.bin/pkg -t node8-macos-x64 .
