@@ -16,7 +16,7 @@ install:
 build_script:
   - cd .\server
   - npm install
-  - npm compile
+  - npm run compile
   - .\node_modules\.bin\pkg -t node8-win-x64 .
   - 7z a ..\%OUTPUT_NAME% .\beeblink-server.exe
 
