@@ -11,7 +11,7 @@ before_install:
   - export SUFFIX=$(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $TRAVIS_COMMIT)
   - export TIMESTAMP=$(git log -1 --format=%cd --date=format:%Y%m%d-%H%M%S $TRAVIS_COMMIT)
   - export RELEASE_NAME=beeblink-$SUFFIX
-  - export OUTPUT_NAME=./.build/$(RELEASE_NAME).zip
+  - export OUTPUT_NAME=./.build/$RELEASE_NAME-osx.zip
   - export PATH=/opt/local/bin:$PATH
   - export COLUMNS=80
   - pwd

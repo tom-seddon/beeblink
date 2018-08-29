@@ -31,7 +31,7 @@ build_travis_osx:
 	cp ./rom/.build/beeblink.rom $(TMP)/
 	cp ./server/beeblink-server $(TMP)/
 	cp -R ./volumes $(TMP)/
-	cd $(DEST) && 7z a $(RELEASE_NAME).zip $(RELEASE_NAME)
+	cd $(DEST) && 7z a $(RELEASE_NAME)-osx.zip $(RELEASE_NAME)
 
 ##########################################################################
 ##########################################################################
