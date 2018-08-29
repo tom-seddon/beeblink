@@ -9,7 +9,7 @@ OPTIMIZATION:=s
 TARGET:=beeblink
 SRC=beeblink.c usb.c serial.c $(LUFA_SRC_USB)
 LUFA_PATH:=$(WC)/submodules/lufa/LUFA/
-CC_FLAGS:=-Wall -std=c99 -DFIXED_CONTROL_ENDPOINT_SIZE=32 -DUSB_DEVICE_ONLY '-DUSB_PRODUCT_STRING="BeebLink"' -DUSB_VID=0x3eb -DUSB_PID=0x206c -Werror=implicit-function-declaration -DUSB_TIMEOUT_MS=500
+CC_FLAGS:=-Wall -std=c99 -DFIXED_CONTROL_ENDPOINT_SIZE=32 -DUSB_DEVICE_ONLY '-DUSB_PRODUCT_STRING="BeebLink"' -DUSB_VID=0x1209 -DUSB_PID=0xbeeb -Werror=implicit-function-declaration -DUSB_TIMEOUT_MS=500
 # CC_FLAGS:=$(CC_FLAGS) -DEA_INPUT_PACKET_SIZE=8 -DEA_OUTPUT_PACKET_SIZE=8
 LD_FLAGS:=
 CTAGS:=exuberant-ctags

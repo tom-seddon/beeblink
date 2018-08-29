@@ -37,8 +37,8 @@ import { Server } from './server';
 /////////////////////////////////////////////////////////////////////////
 
 // pain to do this properly with argparse.
-const DEFAULT_USB_VID = 0x3eb;
-const DEFAULT_USB_PID = 0x206c;
+const DEFAULT_USB_VID = 0x1209;
+const DEFAULT_USB_PID = 0xbeeb;
 
 const DEVICE_RETRY_DELAY_MS = 1000;
 
