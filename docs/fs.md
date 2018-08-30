@@ -44,18 +44,16 @@ The suggested command line for the server will make some files
 accessible. Do a `*.` to see them.
 
     >*.
-    TEST VOLUME
     Volume: beeblink
-    Drive 0 (0 - None)  Dir :0.$  Lib :0.$
+    Drive 0 (3 - EXEC)  Dir :0.$  Lib :0.$
     
-        BSTRAP              FSTEST
-        ROMS                X
-      +.0                 +.1
-      +.2                 +.3
+        !BOOT               BOOTSTRAP
+        BOOTSTRAP2          FS-TEST
+        HELLO               ROMS
 	
     >
 
-Try `CH."ROMS"`.
+Try Shift+BREAK, or `CH."ROMS"`.
 
 It's supposed to feel fairly familiar.
 
