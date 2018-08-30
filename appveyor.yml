@@ -30,7 +30,6 @@ artifacts:
 
 deploy:
   - release: $(RELEASE_NAME)
-    description: 'beeblink'
     provider: GitHub
     auth_token:
       secure: T5CPAJmNl5j/eAVlQln8WoiFKTDkq2ebT9Y/PbWRbMIa4GFyov+t5QdqlU0O2sY9
