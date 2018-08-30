@@ -7,6 +7,8 @@ Prerequisites:
 * Usual Unix stuff (GNU make + GNU tools)
 * Python 2.x on PATH
 
+Steps:
+
 0. Change to `firmware` folder
 
 1. Run `make`
@@ -21,6 +23,8 @@ Prerequisites:
 * [64tass](https://sourceforge.net/projects/tass64/) on the PATH
 * Python 2.x on PATH
 
+Steps:
+
 0. Change to `rom` folder
 
 1. Run `make`
@@ -32,6 +36,8 @@ The ROM is built to `rom/.build/beeblink.rom`.
 Prerequisites:
 
 * [node.js](https://nodejs.org/en/download/)
+
+Steps:
 
 0. Change to `server` folder
 

@@ -20,8 +20,8 @@ To program the Minimus:
    
 2. Erase and program:
 
-    dfu-programmer atmega32u2 erase
-	dfu-programmer atmega32u2 flash beeblink.hex
+       dfu-programmer atmega32u2 erase
+       dfu-programmer atmega32u2 flash beeblink.hex
 	
    If it works, you get a message along the lines of `7022 bytes used
    (24.49%)`
