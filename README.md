@@ -4,6 +4,8 @@ A file storage system for the BBC Micro. Make your PC do something
 useful for a change: have it act as a file server for your BBC. No
 more swapping discs, no more noisy drives, no more 31 file limit.
 
+["Action" screen grabs](./docs/screens.md)
+
 I use this as the default filing system for my BBC Master, and will be
 improving it over time...
 

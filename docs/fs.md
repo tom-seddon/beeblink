@@ -87,6 +87,9 @@ Creating a new empty folder in the right place is enough to create a
 volume; the server will automatically create folders for the drives on
 demand.
 
+(You can have the server find volumes from multiple folders. See the
+list of [server command line options](./server.md).)
+
 ## Using existing BBC files with BLFS
 
 Files are stored on the PC in the standard .inf format. Copy such
@@ -119,6 +122,15 @@ to the PC name, but the server tries not to do this itself.)
 
 While a file is open on the BBC, it is buffered in RAM. Changes won't
 be seen on disk until the file is closed or flushed with OSARGS A=&FF.
+
+## Communication problems?
+
+The error checking for a broken connection is not so great, so if you
+reset the AVR or quit the server then the BBC will just hang on the
+next filing system operation. 
+
+CTRL+BREAK should sort it out. The startup message will say something
+like `BeebLink - no AVR`.
 
 # Command reference
 
