@@ -166,6 +166,9 @@ if you prefer. See the `BLCONFIG options` section.)
 
 ## Commands available with BLFS selected ##
 
+If another ROM is stealing a command, you can also access it by
+spelling it out in full with a `BLFS_` prefix, e.g., `*BLFS_FILES`.
+
 ### `ACCESS <afsp> (<mode>)`
 
 Lock or unlock file(s). `<mode>` can be blank to unlock, or `L` to
@@ -206,6 +209,15 @@ first matching volume found will be selected.
 
 Show a list of available volumes. Use wildcards to narrow the list
 down.
+
+### `DUMP <fsp>`, `LIST <fsp>`, `TYPE <fsp>`, `WDUMP <fsp>`
+
+As per the standard DFS UTILS commands, along with the new `WDUMP`,
+which produces `*DUMP`-style output but in 80 columns.
+
+Note that unlike the UTILS commands in the DFS, these only operate
+when the BLFS is active; and on the Master, the built-in MOS `DUMP`,
+`LIST` and `TYPE` will always be used.
 
 ### `VOLBROWSER`
 

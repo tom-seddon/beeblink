@@ -1141,6 +1141,40 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    // this follows what MOS 3.20 *TYPE does: any of CR, LF, CRLF or LFCR is a
+    // new line. See routine at $8f14 (part of *TYPE).
+
+    public async readTextFile(file: BeebFile): Promise<string[]> {
+        const b = await this.readFile(file);
+
+        const lines = [];
+        let i = 0;
+        let j = 0;
+        while (j < b.length) {
+            if (b[j] === 10 || b[j] === 13) {
+                lines.push(b.toString('binary', i, j));
+
+                ++j;
+                if (j < b.length && (b[j] === 10 || b[j] === 13) && b[j] !== b[j - 1]) {
+                    ++j;
+                }
+
+                i = j;
+            } else {
+                j++;
+            }
+        }
+
+        if (i !== j) {
+            lines.push(b.toString('binary', i, j));
+        }
+
+        return lines;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     public async tryGetBeebFile(fqn: BeebFQN): Promise<BeebFile | undefined> {
         return await this.getBeebFileInternal(fqn, false);
     }

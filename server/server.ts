@@ -176,13 +176,17 @@ export class Server {
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
             new Command('DIR', '(<dir>)', this.dirCommand),
             new Command('DRIVE', '(<drive>)', this.driveCommand),
+            new Command('DUMP', '<fsp>', this.dumpCommand),
             new Command('FILES', undefined, this.filesCommand),
             new Command('LIB', '(<dir>)', this.libCommand),
+            new Command('LIST', '<fsp>', this.listCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
             new Command('TITLE', '<title>', this.titleCommand),
+            new Command('TYPE', '<fsp>', this.typeCommand),
             new Command('VOLBROWSER', undefined, this.volbrowserCommand),
             new Command('VOL', '(<avsp>)', this.volCommand),
             new Command('VOLS', '(<avsp>)', this.volsCommand),
+            new Command('WDUMP', '<fsp>', this.wdumpCommand),
         ];
 
         this.handlers = [];
@@ -864,7 +868,7 @@ export class Server {
     //     this.stringBufferIdx = 0;
     // }
 
-    private textResponse(value: string | Buffer, p: number = 0) {
+    private textResponse(value: string | Buffer) {
         if (typeof value === 'string') {
             value = Buffer.from(value, 'binary');
         }
@@ -875,7 +879,7 @@ export class Server {
         // ...args: (number | string)[]) {
         // this.setString(...args);
 
-        return new Packet(beeblink.RESPONSE_TEXT, p);
+        return new Packet(beeblink.RESPONSE_TEXT, 0);
     }
 
     private initCommandLine(commandLineString: string): beebfs.CommandLine {
@@ -1018,6 +1022,88 @@ export class Server {
         return new Packet(beeblink.RESPONSE_YES, 0);
     }
 
+    private async typeCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+        if (commandLine.parts.length !== 2) {
+            throw new CommandSyntaxError();
+        }
+
+        const lines = await this.bfs.readTextFile(await this.bfs.getBeebFile(this.bfs.parseFQN(commandLine.parts[1])));
+
+        return this.textResponse(lines.join(BNL) + BNL);
+    }
+
+    private async listCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+        if (commandLine.parts.length !== 2) {
+            throw new CommandSyntaxError();
+        }
+
+        const lines = await this.bfs.readTextFile(await this.bfs.getBeebFile(this.bfs.parseFQN(commandLine.parts[1])));
+
+        let text = '';
+
+        for (let i = 0; i < lines.length; ++i) {
+            text += ((i + 1) % 10000).toString().padStart(4, ' ') + ' ' + lines[i] + BNL;
+        }
+
+        return this.textResponse(text);
+    }
+
+    private async dumpCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+        return await this.dumpCommandInternal(commandLine, false);
+    }
+
+    private async wdumpCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+        return await this.dumpCommandInternal(commandLine, true);
+    }
+
+    private async dumpCommandInternal(commandLine: beebfs.CommandLine, wide: boolean): Promise<Packet> {
+        if (commandLine.parts.length !== 2) {
+            throw new CommandSyntaxError();
+        }
+
+        const data = await this.bfs.readFile(await this.bfs.getBeebFile(this.bfs.parseFQN(commandLine.parts[1])));
+
+        let text = '';
+
+        const numColumns = wide ? 16 : 8;
+
+        for (let i = 0; i < data.length; i += numColumns) {
+            if (wide) {
+                text += utils.hex8(i).toUpperCase() + ':';
+            } else {
+                text += utils.hex(i & 0xffffff, 6).toUpperCase();
+            }
+
+            for (let j = 0; j < numColumns; ++j) {
+                text += ' ';
+                if (i + j < data.length) {
+                    text += utils.hex2(data[i + j]).toUpperCase();
+                } else {
+                    text += '  ';
+                }
+            }
+
+            text += wide ? '  ' : ' ';
+
+            for (let j = 0; j < numColumns; ++j) {
+                if (i + j < data.length) {
+                    const c = data[i + j];
+                    if (c >= 32 && c < 127) {
+                        text += String.fromCharCode(c);
+                    } else {
+                        text += '.';
+                    }
+                } else {
+                    text += ' ';
+                }
+            }
+
+            text += BNL;
+        }
+
+        return this.textResponse(text);
+    }
+
     private async renameCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
         if (commandLine.parts.length < 3) {
             throw new CommandSyntaxError();
@@ -1056,4 +1142,3 @@ export class Server {
         return this.textResponse('Volume: ' + this.bfs.getVolumeName() + BNL + 'Path: ' + this.bfs.getVolumePath() + BNL);
     }
 }
-
