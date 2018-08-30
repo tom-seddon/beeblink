@@ -123,11 +123,13 @@ to the PC name, but the server tries not to do this itself.)
 While a file is open on the BBC, it is buffered in RAM. Changes won't
 be seen on disk until the file is closed or flushed with OSARGS A=&FF.
 
-## Communication problems?
+## Quitting the server
+
+Press Ctrl+C.
 
 The error checking for a broken connection is not so great, so if you
-reset the AVR or quit the server then the BBC will just hang on the
-next filing system operation. 
+do this (or reset the AVR) then the BBC will just hang up on the next
+filing system operation.
 
 CTRL+BREAK should sort it out. The startup message will say something
 like `BeebLink - no AVR`.
