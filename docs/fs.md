@@ -9,18 +9,22 @@ limitations.
 
 ## Run server on PC
 
-There are various options, but for starters run it like this. Run it
-from the terminal inside the `server` folder in the working copy:
+Unzip the server zip file somewhere on your PC. There are various
+options, but for starters run it like this from the command line:
 
-    npm start -- --rom ../rom/.build/beeblink.rom --mount beeblink ../volumes
-	
+OS X/Linux: `./beeblink_server --mount beeblink ./volumes`
+
+Windows: `beeblink_server --mount beeblink ./volumes`
+
 After a moment you should get a `Server running...` message.
 
 ## Load ROM on BBC
 
-If you've got the ROM on your BBC already, load it into sideways RAM
-(EEPROM, etc.); if not, now that the server's running, you can use the
-[bootstrap process](./bootstrap.md).
+If you've got some way of getting files onto your BBC already, copy
+the ROM across and load it into sideways RAM or EEPROM or what have
+you.
+
+Otherwise, you can use the [bootstrap process](./bootstrap.md).
 
 ## Whirlwind tour
 
@@ -102,7 +106,7 @@ For example: `$.!BOOT` and `$.!BOOT.inf`.
 
 The name seen on the BBC will be exactly the name it has on the PC.
 
-## Accessing BBC files from the PC ##
+## Accessing BBC files on the server
 
 The server does its best to name the PC file after the BBC file when
 creating a file, so it should be easy to find. A simple escaping

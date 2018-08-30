@@ -1,35 +1,32 @@
 # Setup
 
-# Prerequisites
-
-* AVR toolchain
-* DFU programming tool
-* GNU Make (comes with Xcode)
-* [64tass](https://sourceforge.net/projects/tass64/) (I found this
-  built from source out of the box)
-* [node.js](https://nodejs.org/en/download/)
-
-For MacPorts, you can get the AVR toolchain with `sudo port install
-avr-libc` and the DFU programmer with `sudo port install
-dfu-programmer`.
+Unzip the firmware release zip. There's two files: a .hex file for the
+AVR, and a .rom file for the BBC.
 
 # Set up AVR
 
-## Program AVR ##
+For Windows (untested), try the FLIP tool, but you're on your own:
+http://www.microchip.com/developmenttools/ProductDetails/PartNo/flip
 
-0. Connect AVR to PC via USB
+On OS X or Linux, get dfu-programmer via the package manager (the
+package seems to be `dfu-programmer` everywhere).
 
-1. Ready AVR for programming: hold RESET, hold HWB, release RESET,
-   release HWB. There may be no obvious indication that this has done
-   anything, but the programming tool will complain if the AVR is in
-   the wrong state, so you'll know to retry
+To program the Minimus:
+
+0. Connect to PC via USB
+
+1. Ready for programming: hold RESET, hold HWB, release RESET, release
+   HWB
    
-2. Change to `firmware` in the working copy and run `make`. This
-   compiles the code and programs the device. You should get a bunch
-   of output, and no obvious errors, and a message at the end along
-   the lines of `7022 bytes used (24.49%)`
-   
-3. Tap RESET on the AVR. The red and blue LEDs should both light up
+2. Erase and program:
+
+    dfu-programmer atmega32u2 erase
+	dfu-programmer atmega32u2 flash beeblink.hex
+	
+   If it works, you get a message along the lines of `7022 bytes used
+   (24.49%)`
+
+3. Press RESET. Both LEDs should light up
 
 ## Connect AVR to BBC ##
 
@@ -55,19 +52,3 @@ If you've got a serial port that can accept +5V, you can connect the
 AVR's PC4 to its Receive Data pin to see its debug serial output.
 
 The serial output is 115200 baud, no parity, 1 stop bit.
-
-# Build ROM
-
-Change to `rom` in the working copy and run `make`. You should get
-some output and no obvious errors.
-
-The ROM is built to `rom/.build/beeblink.rom` in the working copy. If
-you've got some way of getting files over to your BBC already, easiest
-to copy it over using that - but if not, you can sort it out in a
-moment.
-
-# Set up server
-
-Change to `server` in the working copy and run `npm install`. You
-should get some output and no obvious errors.
-

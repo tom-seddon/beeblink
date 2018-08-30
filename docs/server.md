@@ -13,9 +13,9 @@ Use `--mount` to get the server to load a specific volume on startup
 (following the same rules in case of ambiguity). The default is
 `65boot`.
 
-Use `--rom` to tell the server where to find the BLFS ROM image. This
-is the ROM it will send to the bootstrap program, or when using
-`*BLSELFUPDATE`.
+Use `--rom` to tell the server where to find the BLFS ROM image. It
+will then try to load it from this location, not the current folder,
+when using the bootstrap program or `*BLSELFUPDATE`.
 
 # Other options
 
