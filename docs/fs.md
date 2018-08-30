@@ -65,8 +65,9 @@ drive containing files. The server comes with a default volume (the
 
 To do this, look in the server's folder and find the `volumes` folder.
 
-Create a new folder there called `newvol`. (The folder name on the PC
-is how you'll refer to it from the BBC.)
+Create a new folder there called `newvol` (the folder name on the PC
+is how you'll refer to it from the BBC), and create a folder inside it
+called `0` (this is where the files for drive 0 will go).
 
 Then on the BBC type `*VOLS` to see the list of available volumes.
 
@@ -81,9 +82,9 @@ Use `*VOL` to load `newvol`.
 	Path: /Users/tom/beeb/beeblink/volumes/newvol
 	>
 
-Creating a new empty folder in the right place is enough to create a
-volume; the server will automatically create folders for the drives on
-demand.
+Creating a new folder in the right place like thisis enough to create
+a volume. The server will automatically create folders for any
+additional drives on demand.
 
 (You can have the server find volumes from multiple folders. See the
 list of [server command line options](./server.md).)
