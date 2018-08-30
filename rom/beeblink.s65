@@ -1,5 +1,4 @@
 ;-------------------------------------------------------------------------
-;-------------------------------------------------------------------------
 ;
 ; BeebLink - BBC Micro file storage system
 ; Copyright (C) 2018 Tom Seddon
@@ -19,19 +18,24 @@
 ; <https://www.gnu.org/licenses/>.
 ;
 ;-------------------------------------------------------------------------
-;-------------------------------------------------------------------------
-
-;-------------------------------------------------------------------------
 ;
 ; BeebLink ROM
-; ------------
 ;
 ;-------------------------------------------------------------------------
 ;
 ; Notes:
 ;
-; . in general, assume routines change their inputs and all registers,
-; unless otherwise stated
+;-------------------------------------------------------------------------
+;
+; In general, assume routines change their inputs and all registers,
+; unless otherwise stated.
+;
+;-------------------------------------------------------------------------
+;
+; Despite the note in http://beebwiki.mdfs.net/FSCV, FSCV A=12 doesn't
+; appear to be used in MOS 3.20 at least. See disassembly at
+; http://mdfs.net/System/ROMs/AcornMOS/Master320/MOS320.zip - at
+; L9F8C, it exits if A>=12.
 ;
 ;-------------------------------------------------------------------------
 
@@ -3129,10 +3133,11 @@ send_name_done:
                 .pend
 
 ;-------------------------------------------------------------------------
-
+;
+    
                 
 blfs_osfsc: .proc
-fsc_routines=[fsc_opt,fsc_eof,fsc_slash,fsc_star,fsc_run,fsc_cat,fsc_shut_down_fs,fsc_get_handle_range,fsc_oscli,fsc_ex,fsc_info]
+fsc_routines=[fsc_opt,fsc_eof,fsc_slash,fsc_star,fsc_run,fsc_cat,fsc_shut_down_fs,fsc_get_handle_range,fsc_oscli,fsc_ex,fsc_info,fsc_lib_run]
                 
                 cmp #len(fsc_routines)
                 bcc +
@@ -3294,6 +3299,14 @@ fsc_ex: .proc
 fsc_info: .proc
                 lda #REQUEST_STAR_INFO
                 jmp communicate_star_command
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; FSC A=11 - *RUN from library FS
+;
+fsc_lib_run: .proc
+                rts
                 .pend
 
 ;-------------------------------------------------------------------------
