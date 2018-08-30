@@ -22,10 +22,10 @@
 //////////////////////////////////////////////////////////////////////////
 
 import * as fs from 'fs';
-import * as path from 'path';
-import * as utils from './utils';
-import { FIRST_FILE_HANDLE, NUM_FILE_HANDLES } from './beeblink';
 import * as os from 'os';
+import * as path from 'path';
+import { FIRST_FILE_HANDLE, NUM_FILE_HANDLES } from './beeblink';
+import * as utils from './utils';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -39,6 +39,9 @@ const LOCKED_ATTR = 8;
 
 // Must be <255, but aside from that it's a completely arbitrary limit.
 const MAX_TITLE_LENGTH = 40;
+
+// 10 is the CFS/CFS/ADFS limit, so it's not pushing the boat out *too* much...
+const MAX_NAME_LENGTH = 10;
 
 const MIN_FILE_HANDLE = 0xa0;
 
@@ -574,6 +577,10 @@ export class BeebFS {
                 }
 
                 name = str.slice(i);
+
+                if (name.length > MAX_NAME_LENGTH) {
+                    BeebFS.throwError(ErrorCode.BadName);
+                }
             }
         }
 
@@ -1439,7 +1446,14 @@ export class BeebFS {
             return undefined;
         }
 
-        return new BeebFile(hostPath, new BeebFQN(drive, name[0], name.slice(2)), load, exec, hostStat.size, attr);
+        const dir = name[0];
+        name = name.slice(2);
+
+        if (name.length > MAX_NAME_LENGTH) {
+            return undefined;
+        }
+
+        return new BeebFile(hostPath, new BeebFQN(drive, dir, name), load, exec, hostStat.size, attr);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1617,7 +1631,6 @@ export class BeebFS {
     //
     // But this will improve...
     private async getBeebFileInternal(fqn: BeebFQN, throwOnError: boolean): Promise<BeebFile | undefined> {
-
         const files = await this.getBeebFiles(this.volumePath, fqn.drive);
 
         for (const file of files) {
