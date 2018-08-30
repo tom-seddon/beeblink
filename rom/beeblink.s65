@@ -507,6 +507,8 @@ svc: .proc
                 beq star
                 cmp #$09
                 beq help
+                cmp #$12
+                beq svc_fs_init
                 cmp #$25
                 beq svc_get_m128_fs_info
 done:
@@ -526,23 +528,21 @@ help:
 ;
 ;
 svc_fs_init: .proc
-                cpy #fs_number
-                beq init_as_blfs
+                cpy #blfs_fs_number
+                beq init
 
-                ; if a DFS ROM is present, it should already have
-                ; caught this.
+                pha
+                lda #sf_act_as_dfs
+                jsr get_rom_status_flag
+                pla
+
+                bcc svc.done
+
                 cpy #dfs_fs_number
-                beq init_as_dfs
+                bne svc.done
 
-                jmp svc.done
-
-as_blfs:
+init:
                 jsr init_blfs
-                lda #0
-                jmp svc.done
-
-as_dfs:
-                jsr init_dfs
                 lda #0
                 jmp svc.done
                 
