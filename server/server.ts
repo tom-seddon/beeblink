@@ -160,7 +160,7 @@ class CommandSyntaxError extends Error {
 
 export class Server {
     private bfs: beebfs.BeebFS;
-    private romPath: string | undefined;
+    private romPath: string;
     private stringBuffer: Buffer | undefined;
     private stringBufferIdx: number;
     private commands: Command[];
@@ -168,7 +168,7 @@ export class Server {
     private log: utils.Log;
     private volumeBrowser: volumebrowser.Browser | undefined;
 
-    public constructor(romPath: string | undefined, bfs: beebfs.BeebFS) {
+    public constructor(romPath: string, bfs: beebfs.BeebFS, verbose: boolean) {
         this.romPath = romPath;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
@@ -210,7 +210,7 @@ export class Server {
         this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('REQUEST_VOLUME_BROWSER', this.handleVolumeBrowser);
 
 
-        this.log = new utils.Log('SERVER', process.stderr, true);
+        this.log = new utils.Log('SERVER', process.stderr, verbose);
     }
 
     public async handleRequest(c: number, p: Buffer): Promise<Packet> {
@@ -256,12 +256,12 @@ export class Server {
     }
 
     private async handleGetROM(handler: Handler, p: Buffer): Promise<Packet> {
-        if (this.romPath !== undefined) {
+        try {
             const rom = await utils.fsReadFile(this.romPath);
             this.log.pn('ROM is ' + rom.length + ' bytes');
             return new Packet(beeblink.RESPONSE_DATA, rom);
-        } else {
-            throw new beebfs.BeebError(beebfs.ErrorCode.FileNotFound, 'No ROM');
+        } catch (error) {
+            return beebfs.BeebFS.throwServerError(error);
         }
     }
 
@@ -748,7 +748,7 @@ export class Server {
 
             this.payloadMustBe(handler, p, 3);
 
-            const result = this.volumeBrowser.handleKey(p[2], p[1] != 0);
+            const result = this.volumeBrowser.handleKey(p[2], p[1] !== 0);
 
             //this.log.pn('done=' + result.done + ', text=' + (result.text === undefined ? 'N/A' : this.getBASICStringExpr(result.text)));
 

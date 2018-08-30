@@ -48,8 +48,9 @@ const DEVICE_RETRY_DELAY_MS = 1000;
 interface ICommandLineOptions {
     verbose: boolean;
     device: number[];
-    rom: string | undefined;
+    rom: string;
     fs_verbose: boolean;
+    server_verbose: boolean;
     mount: string;
     retry_device: boolean;
     send_verbose: boolean;
@@ -245,6 +246,10 @@ async function main(options: ICommandLineOptions) {
         throw new Error('no folders specified');
     }
 
+    if (!await utils.fsExists(options.rom)) {
+        process.stderr.write('ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.rom + '\n');
+    }
+
     log.pn('USB Recv Test');
     log.pn('Device VID/PID: ' + options.device);
 
@@ -260,7 +265,7 @@ async function main(options: ICommandLineOptions) {
         throw new Error('Failed to mount initial volume: ' + mountError);
     }
 
-    const server = new Server(options.rom, bfs);
+    const server = new Server(options.rom, bfs, options.server_verbose);
 
     let hello = false;
 
@@ -389,8 +394,9 @@ function usbVIDOrPID(s: string): number {
 
     parser.addArgument(['-v', '--verbose'], { action: 'storeTrue', defaultValue: false, help: 'extra output' });
     parser.addArgument(['--device'], { nargs: 2, metavar: 'ID', type: usbVIDOrPID, defaultValue: [DEFAULT_USB_VID, DEFAULT_USB_PID], help: 'set USB device VID/PID. Default: 0x' + utils.hex4(DEFAULT_USB_VID) + ' 0x' + utils.hex4(DEFAULT_USB_PID) });
-    parser.addArgument(['--rom'], { metavar: 'FILE', help: 'read BeebLink ROM from %(metavar)s' });
+    parser.addArgument(['--rom'], { metavar: 'FILE', defaultValue: './beeblink.rom', help: 'read BeebLink ROM from %(metavar)s. Default: %(defaultValue)s' });
     parser.addArgument(['--fs-verbose'], { action: 'storeTrue', defaultValue: false, help: 'extra filing system-related output' });
+    parser.addArgument(['--server-verbose'], { action: 'storeTrue', defaultValue: false, help: 'extra request/response output' });
     parser.addArgument(['--mount'], { metavar: 'VOLUME', defaultValue: '65boot', help: 'mount %(metavar)s when starting. Default: %(defaultValue)s' });
     parser.addArgument(['--retry-device'], { action: 'storeTrue', defaultValue: false, help: 'if device not found, try again after a short delay' });
     parser.addArgument(['--send-verbose'], { action: 'storeTrue', defaultValue: false, help: 'dump data sent to device' });
