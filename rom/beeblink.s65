@@ -4602,8 +4602,9 @@ relocator=brkthunk+3            ;where to put the relocating code
                 ldx #1
                 jsr osbyte
                 cpx #3
-                bcc rom_not_writeable ;taken if not M128
-
+                bcs +           
+                jmp rom_not_writeable ;if not M128
++
                 lda #$80
                 sta is_m128
                 sta abr_offset
@@ -4614,8 +4615,9 @@ relocator=brkthunk+3            ;where to put the relocating code
 
                 lda $f4
                 cmp #4
-                bcs rom_not_writeable ;taken if not cartridge ROM slot
-
+                bcc +
+                jmp rom_not_writeable ;if not cartridge ROM slot
++
                 jsr pcprint
                 .text "Attempt ABR unlock (Y/N)? ",255
 
@@ -4634,21 +4636,15 @@ relocator=brkthunk+3            ;where to put the relocating code
                 sta $fe34
                 
                 ; Turn ROM slot index into offset of lock/unlock
-                ; address. Lock=$fcdd+((rom&1)<<1);
-                ; unlock=$fcdc+((rom&1)<<1).
+                ; address. (Lock=$fcdd+((rom&1)<<1);
+                ; unlock=$fcdc+((rom&1)<<1).) But don't actually
+                ; unlock it until it looks like the transfer should
+                ; succeed.
                 lda $f4
                 and #1
                 asl a
                 tax
                 stx abr_offset
-
-                sta $fcdc,x
-
-                jsr is_rom
-                bne rom_writeable
-
-rom_not_writeable:
-                .brk_error 255,"ROM not writeable"
 
 rom_writeable:
                 lda #REQUEST_GET_ROM
@@ -4673,6 +4669,26 @@ rom_writeable:
                 .brk_error 255,"New ROM is too large"
 
 size_ok:
+                bit is_m128
+                bpl recv_rom
+
+                ldx abr_offset
+                bmi recv_rom
+
+                sta $fcdc,x
+
+                jsr is_rom
+                bne recv_rom
+
+                ; ugh, unlock failed.
+                ldx #scratch_p_size
+                jsr discard_remaining_payload
+
+rom_not_writeable:
+                .brk_error 255,"ROM not writeable"
+                
+recv_rom:
+
                 lda #<new_rom
                 sta scratch_load+0
                 lda #>new_rom
