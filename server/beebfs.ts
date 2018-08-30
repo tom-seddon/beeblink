@@ -1298,17 +1298,17 @@ export class BeebFS {
         const newHostPath = this.getHostPath(newFQN);
         await this.mustNotExist(newHostPath);
 
+        const newFile = new BeebFile(newHostPath, newFQN, oldFile.load, oldFile.exec, oldFile.size, oldFile.attr);
+
+        await this.writeMetadata(newFile.hostPath, newFile.name, newFile.load, newFile.exec, newFile.attr);
+
         try {
-            await utils.fsRename(oldFile.hostPath, newHostPath);
+            await utils.fsRename(oldFile.hostPath, newFile.hostPath);
         } catch (error) {
             return BeebFS.throwServerError(error);
         }
 
-        try {
-            await utils.fsRename(oldFile.hostPath + INF_EXT, newHostPath + INF_EXT);
-        } catch (error) {
-            // Answers on a postcard please.
-        }
+        await utils.forceFsUnlink(oldFile.hostPath + INF_EXT);
     }
 
     /////////////////////////////////////////////////////////////////////////
