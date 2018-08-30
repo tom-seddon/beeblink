@@ -365,6 +365,12 @@ export class Server {
                         }
                     }
                 }
+
+                // Special case for emergency use.
+                if (part0UC === 'BLFS_' + command.nameUC) {
+                    matchedCommand = command;
+                    break;
+                }
             }
         }
 
