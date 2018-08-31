@@ -165,16 +165,12 @@ export const REQUEST_OSFIND_OPEN = 0x0c;
 //
 // Response is OSFIND.
 //
-// Server file handles are 1-based.
-//
 // P = file handle
 export const REQUEST_OSFIND_CLOSE = 0x0d;
 
 // Do an OSARGS.
 //
 // Response is OSARGS.
-//
-// Server file handles are 1-based.
 //
 // P = A; Y; 4-byte control block
 export const REQUEST_OSARGS = 0x0e;
@@ -234,7 +230,8 @@ export const REQUEST_BOOT_OPTION = 0x16;
 
 // Make a volume browser-related request.
 //
-// 
+// P = 1 byte, the request sub-type; then additional payload, as described in
+// the comments below.
 export const REQUEST_VOLUME_BROWSER = 0x17;
 
 /////////////////////////////////////////////////////////////////////////
@@ -252,13 +249,14 @@ export const REQUEST_AVR_ERROR = 1;
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// REQUEST_VOLUME_BROWSER types.
+// REQUEST_VOLUME_BROWSER sub-types.
 
 // Request a reset.
 //
 // Response is TEXT.
 //
-// P = 1 byte, display memory type (as per &34f); 1 byte, text display width; 1 byte, text display height
+// P = 1 byte, display memory type (as per &34f); 1 byte, text display width; 1
+// byte, text display height
 export const REQUEST_VOLUME_BROWSER_RESET = 0;
 
 // A key was pressed, so do something.
