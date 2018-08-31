@@ -3961,17 +3961,27 @@ first_pages:
                 jsr delay_36_cycles
                 nop
 
+num_unrolls=4
+                
                 ldy #0
                 lda #$10     ;VIA IFR mask
                 ; inter-byte delay is 10 uS, or 20 cycles
 one_page_loop:
-                ldx $fee5       ;+23 | +0
+
+                .rept num_unrolls
+                
+                ldx $fee5       ;+20 | +0
                 stx via+0       ;+6
 -
                 bit via+13      ;+12
                 beq -           ;+14
 
+                ; There needs to be a 2-cycle delay here anyway, so no
+                ; point dividing the counter by the number of unrolls.
                 iny             ;+16
+
+                .next
+                
                 bne one_page_loop ;+19
 
                 inc scratch_load+1
@@ -5126,7 +5136,7 @@ speed_test_special: .proc
 parasite_oshwm_page=$08              ;you just have to assume...
 time=$a8
 send_time=$ad
-num_iterations=4
+num_iterations=10
                 
                 
                 ldx #<sure
