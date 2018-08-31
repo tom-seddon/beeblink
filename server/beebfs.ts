@@ -26,11 +26,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { FIRST_FILE_HANDLE, NUM_FILE_HANDLES } from './beeblink';
 import * as utils from './utils';
+import { BNL } from './utils';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
-
-const BNL = '\r\n';
 
 const MAX_NUM_DRIVES = 8;
 const MAX_FILE_SIZE = 0xffffff;
