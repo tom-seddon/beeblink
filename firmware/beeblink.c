@@ -137,9 +137,6 @@ static uint8_t g_num_wait_for_CB2_high_loops=0;
 static uint8_t g_last_WUR_result=0;
 static PacketType g_last_request_type={0,};
 
-/* static uint32_t g_num_bytes_sent_host_to_beeb=0; */
-/* static uint32_t g_num_bytes_sent_beeb_to_host=0; */
-
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
@@ -873,8 +870,8 @@ static void NOINLINE MainLoop(void) {
 void EVENT_USB_Device_ControlRequest(void){
     if((USB_ControlRequest.bmRequestType&(CONTROL_REQTYPE_TYPE|CONTROL_REQTYPE_RECIPIENT))==(REQTYPE_CLASS|REQREC_DEVICE))
     {
-        if((USB_ControlRequest.bmRequestType&CONTROL_REQTYPE_DIRECTION)==REQDIR_DEVICETOHOST)
-        {
+        uint8_t dir=USB_ControlRequest.bmRequestType&CONTROL_REQTYPE_DIRECTION;
+        if(dir==REQDIR_DEVICETOHOST) {
             if(USB_ControlRequest.bRequest==CR_GET_PROTOCOL_VERSION) {
 		Endpoint_ClearSETUP();
 		Endpoint_Write_8(AVR_PROTOCOL_VERSION);
@@ -882,7 +879,21 @@ void EVENT_USB_Device_ControlRequest(void){
 		Endpoint_ClearStatusStage();
 		return;
             }
+        } else if(dir==REQDIR_HOSTTODEVICE) {
+            if(USB_ControlRequest.bRequest==CR_SET_VERBOSE) {
+                if(serial_is_enabled()&&!USB_ControlRequest.wValue) {
+                    SERIAL_PSTR("\n\n>> Serial output disabled <<\n\n");
+                    serial_set_enabled(0);
+                } else if(!serial_is_enabled()&&USB_ControlRequest.wValue) {
+                    serial_set_enabled(1);
+                    SERIAL_PSTR("\n\n>> Serial output enabled <<\n\n");
+                }
+                Endpoint_ClearSETUP();
+                Endpoint_ClearStatusStage();
+                return;
+            }
         }
+        
     }
     
     usb_handle_control_request();

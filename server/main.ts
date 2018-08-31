@@ -56,6 +56,7 @@ interface ICommandLineOptions {
     send_verbose: boolean;
     fatal_verbose: boolean;
     folders: string[];
+    avr_verbose: boolean;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -187,7 +188,7 @@ interface IBeebLinkDevice {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function findBeebLinkDevice(vid: number, pid: number, log: utils.Log): Promise<IBeebLinkDevice | undefined> {
+async function findBeebLinkDevice(vid: number, pid: number, log: utils.Log, verbose: boolean): Promise<IBeebLinkDevice | undefined> {
     const device = usb.findByIds(vid, pid);
     if (device === undefined) {
         gError.pn('Device not found: VID=0x' + utils.hex4(vid) + ' PID=0x' + utils.hex4(pid));
@@ -212,7 +213,12 @@ async function findBeebLinkDevice(vid: number, pid: number, log: utils.Log): Pro
         return undefined;
     }
 
-    const buffer = await deviceControlTransfer(device, usb.LIBUSB_REQUEST_TYPE_CLASS | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_IN, beeblink.CR_GET_PROTOCOL_VERSION, 0, 0, 1);
+    const buffer = await deviceControlTransfer(device,
+        usb.LIBUSB_REQUEST_TYPE_CLASS | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_IN,
+        beeblink.CR_GET_PROTOCOL_VERSION,
+        0,
+        0,
+        1);
 
     log.pn('AVR version: ' + buffer![0]);
 
@@ -220,6 +226,15 @@ async function findBeebLinkDevice(vid: number, pid: number, log: utils.Log): Pro
         gError.pn('Wrong protocol version: ' + utils.hex2(buffer![0]) + ' (want: ' + utils.hex2(beeblink.AVR_PROTOCOL_VERSION));
         return undefined;
     }
+
+    log.pn('Setting AVR verbose: ' + (verbose ? 'yes' : 'no'));
+
+    await deviceControlTransfer(device,
+        usb.LIBUSB_REQUEST_TYPE_CLASS | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_OUT,
+        beeblink.CR_SET_VERBOSE,
+        verbose ? 1 : 0,
+        0,
+        undefined);
 
     return { device, inEndpoint: inEndpoint as usb.InEndpoint, outEndpoint: outEndpoint as usb.OutEndpoint };
 }
@@ -273,7 +288,7 @@ async function main(options: ICommandLineOptions) {
         try {
             let message = false;
             while (beebLink === undefined) {
-                beebLink = await findBeebLinkDevice(options.device[0], options.device[1], log);
+                beebLink = await findBeebLinkDevice(options.device[0], options.device[1], log, options.avr_verbose);
                 if (beebLink !== undefined) {
                     break;
                 }
@@ -392,15 +407,16 @@ function usbVIDOrPID(s: string): number {
         description: 'BeebLink server',
     });
 
-    parser.addArgument(['-v', '--verbose'], { action: 'storeTrue', defaultValue: false, help: 'extra output' });
+    parser.addArgument(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });
     parser.addArgument(['--device'], { nargs: 2, metavar: 'ID', type: usbVIDOrPID, defaultValue: [DEFAULT_USB_VID, DEFAULT_USB_PID], help: 'set USB device VID/PID. Default: 0x' + utils.hex4(DEFAULT_USB_VID) + ' 0x' + utils.hex4(DEFAULT_USB_PID) });
     parser.addArgument(['--rom'], { metavar: 'FILE', defaultValue: './beeblink.rom', help: 'read BeebLink ROM from %(metavar)s. Default: %(defaultValue)s' });
-    parser.addArgument(['--fs-verbose'], { action: 'storeTrue', defaultValue: false, help: 'extra filing system-related output' });
-    parser.addArgument(['--server-verbose'], { action: 'storeTrue', defaultValue: false, help: 'extra request/response output' });
+    parser.addArgument(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
+    parser.addArgument(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
     parser.addArgument(['--mount'], { metavar: 'VOLUME', defaultValue: '65boot', help: 'mount %(metavar)s when starting. Default: %(defaultValue)s' });
-    parser.addArgument(['--retry-device'], { action: 'storeTrue', defaultValue: false, help: 'if device not found, try again after a short delay' });
-    parser.addArgument(['--send-verbose'], { action: 'storeTrue', defaultValue: false, help: 'dump data sent to device' });
+    parser.addArgument(['--retry-device'], { action: 'storeTrue', help: 'if device not found, try again after a short delay' });
+    parser.addArgument(['--send-verbose'], { action: 'storeTrue', help: 'dump data sent to device' });
     parser.addArgument(['--fatal-verbose'], { action: 'storeTrue', help: 'print debugging info on a fatal error' });
+    parser.addArgument(['--avr-verbose'], { action: 'storeTrue', help: 'enable AVR serial output' });
     parser.addArgument(['folders'], { nargs: '*', metavar: 'FOLDER', help: 'folder to search for volumes' });
 
     const options = parser.parseArgs();

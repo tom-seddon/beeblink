@@ -31,6 +31,9 @@
 #if SERIAL_ENABLED
 
 void serial_init(void);
+uint8_t serial_is_enabled(void);
+void serial_set_enabled(uint8_t enabled);
+
 void serial_ch(char ch);
 void serial_ps(const char *ps);
 void serial_u8(uint8_t u);
@@ -42,9 +45,12 @@ void serial_x16(uint16_t x);
 void serial_x24(uint32_t l);
 void serial_x32(uint32_t l);
 
+
 #else
 
 #define serial_init() ((void)0)
+#define serial_is_enabled() (0)
+#define serial_set_enabled(X) ((void)0)
 #define serial_ps(X) ((void)0)
 #define serial_u16(X) ((void)0)
 #define serial_u32(X) ((void)0)

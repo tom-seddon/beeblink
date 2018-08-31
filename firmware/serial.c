@@ -48,29 +48,40 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+static uint8_t g_enabled=1;
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 void serial_init(void) {
     SERIAL_PORT|=SERIAL_BIT;
     SERIAL_DDR|=SERIAL_BIT;
 
-    /* Doing this seems to massively increase the chance of things
-     * syncing up immediately. */
-    /* for(char c='a';c<='c';++c) { */
-    /*     serial_ch(c); */
-    /* } */
-
     serial_ch('\n');
+}
 
-    /* for(int i=0;i<75;++i) { */
-    /*     serial_ch('*'); */
-    /* } */
-    
-    /* serial_ch('\n'); */
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+uint8_t serial_is_enabled(void) {
+    return g_enabled;
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+void serial_set_enabled(uint8_t enabled) {
+    g_enabled=enabled;
 }
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
 void serial_ch(char ch) {
+    if(!g_enabled) {
+        return;
+    }
+    
     uint8_t set=PORTC|SERIAL_BIT,reset=PORTC&~SERIAL_BIT;
     
     cli();
@@ -95,6 +106,10 @@ void serial_ch(char ch) {
 //////////////////////////////////////////////////////////////////////////
 
 void serial_ps(const char *ps) {
+    if(!g_enabled) {
+        return;
+    }
+    
     char c;
 
     while((c=pgm_read_byte(ps++))) {
@@ -106,6 +121,10 @@ void serial_ps(const char *ps) {
 //////////////////////////////////////////////////////////////////////////
 
 void serial_u8(uint8_t u) {
+    if(!g_enabled) {
+        return;
+    }
+    
     serial_ch('0'+(u/100)%10);
     serial_ch('0'+(u/10)%10);
     serial_ch('0'+(u/1)%10);
@@ -115,6 +134,10 @@ void serial_u8(uint8_t u) {
 //////////////////////////////////////////////////////////////////////////
 
 void serial_u16(uint16_t u) {
+    if(!g_enabled) {
+        return;
+    }
+    
     serial_ch('0'+(u/10000)%10);
     serial_ch('0'+(u/1000)%10);
     serial_ch('0'+(u/100)%10);
@@ -126,6 +149,10 @@ void serial_u16(uint16_t u) {
 //////////////////////////////////////////////////////////////////////////
 
 void serial_u32(uint32_t x) {
+    if(!g_enabled) {
+        return;
+    }
+    
     serial_ch('0'+(x/1000000000L)%10);
     serial_ch('0'+(x/100000000L)%10);
     serial_ch('0'+(x/10000000L)%10);
@@ -142,6 +169,10 @@ void serial_u32(uint32_t x) {
 //////////////////////////////////////////////////////////////////////////
 
 void serial_x4(uint8_t x) {
+    if(!g_enabled) {
+        return;
+    }
+    
     x&=15;
     if(x<10) {
 	serial_ch('0'+x);
