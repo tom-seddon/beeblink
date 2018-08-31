@@ -343,6 +343,16 @@ async function main(options: ICommandLineOptions) {
                 payload = Buffer.alloc(1);
                 payload[0] = await reader.readUInt8();
             } else {
+                if (t === 0xff) {
+                    process.stderr.write('WARNING: BBC and server have gone out of sync. This is almost always due to a bug in the BLFS ROM...\n');
+                    process.stderr.write('CTRL+BREAK the BBC, reset the AVR, restart the server, then CTRL+BREAK the BBC again.');
+
+                    // Probably better: do an AVR soft reset, go back to
+                    // waiting, wait for BBC to be reset.
+
+                    process.exit(1);
+                }
+
                 const payloadSize = await reader.readUInt32LE();
                 payload = await reader.readBytes(payloadSize);
             }
