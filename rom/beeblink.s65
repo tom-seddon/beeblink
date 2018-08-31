@@ -3962,17 +3962,17 @@ first_pages:
                 nop
 
                 ldy #0
+                lda #$10     ;VIA IFR mask
                 ; inter-byte delay is 10 uS, or 20 cycles
 one_page_loop:
-                lda $fee5
-                sta via+0
+                ldx $fee5       ;+23 | +0
+                stx via+0       ;+6
 -
-                lda via+13
-                and #$10
-                beq -
+                bit via+13      ;+12
+                beq -           ;+14
 
-                iny
-                bne one_page_loop
+                iny             ;+16
+                bne one_page_loop ;+19
 
                 inc scratch_load+1
                 bne +
