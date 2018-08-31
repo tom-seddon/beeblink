@@ -957,6 +957,17 @@ int main(void) {
 
     SERIAL_PSTR("-- USB configured\n");
 
+    for(int i=0;i<3;++i) {
+        LEDs_SetAllLEDs(LEDS_RED);
+        _delay_us(50000);
+        LEDs_SetAllLEDs(0);
+        _delay_us(50000);
+        LEDs_SetAllLEDs(LEDS_BLUE);
+        _delay_us(50000);
+        LEDs_SetAllLEDs(0);
+        _delay_us(50000);
+    }
+
     for(;;) {
         /* if(g_need_reset) { */
         /*     ResetLoop(); */
