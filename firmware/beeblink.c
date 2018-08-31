@@ -835,7 +835,7 @@ static void NOINLINE MainLoop(void) {
     PacketHeader response;
 
     if(IsVerboseRequest(&request)) {
-        SERIAL_PSTR(".. Receive request from PC...\n");
+        SERIAL_PSTR(".. Receive response from PC...\n");
     }
 
     err=ReceivePacketHeader(&response,
