@@ -837,7 +837,7 @@ export class Server {
             // 0123456789012345678901234567890123456789
             // $.1234567 L 12345678 12345678 123456
             // x.1234567
-            text += (file.name.dir + '.' + file.name.name).padEnd(10);
+            text += (file.name.dir + '.' + file.name.name).padEnd(12);
             text += ' ' + (file.isLocked() ? 'L' : ' ');
             text += ' ' + utils.hex8(file.load).toUpperCase();
             text += ' ' + utils.hex8(file.exec).toUpperCase();
