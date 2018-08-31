@@ -101,6 +101,9 @@ verbose_file_data=false
 recv_file_data_optimised=true
 send_file_data_optimised=true
 
+; If true, include support for *BLSPEEDTEST command.
+enable_speed_test=true
+                
 ;-------------------------------------------------------------------------
 
 ; ROM status byte flags
@@ -1499,6 +1502,19 @@ print_p: .proc
                 p_bit "C","c",
                 rts
                 
+                .pend
+                
+;-------------------------------------------------------------------------
+
+print_hex_z32: .proc
+                lda 3,x
+                jsr print_hex_byte
+                lda 2,x
+                jsr print_hex_byte
+                lda 1,x
+                jsr print_hex_byte
+                lda 0,x
+                ; fall through
                 .pend
                 
 ;-------------------------------------------------------------------------
@@ -3137,7 +3153,20 @@ send_name_done:
     
                 
 blfs_osfsc: .proc
-fsc_routines=[fsc_opt,fsc_eof,fsc_slash,fsc_star,fsc_run,fsc_cat,fsc_shut_down_fs,fsc_get_handle_range,fsc_oscli,fsc_ex,fsc_info,fsc_lib_run]
+fsc_routines=[
+                fsc_opt,
+                fsc_eof,
+                fsc_slash,
+                fsc_star,
+                fsc_run,
+                fsc_cat,
+                fsc_shut_down_fs,
+                fsc_get_handle_range,
+                fsc_oscli,
+                fsc_ex,
+                fsc_info,
+                fsc_lib_run
+                ]
                 
                 cmp #len(fsc_routines)
                 bcc +
@@ -3426,7 +3455,7 @@ special:
                 bcc bad_response
 
                 cmp #len(special_routines)
-                bcs bad_response
+                bcs not_supported
 
                 tay
                 lda special_routines_l,y
@@ -3437,11 +3466,18 @@ special:
 
                 jmp (private_ptr)
 
-special_routines=[volumes_browser_special]
+special_routines=[
+                volumes_browser_special,
+                enable_speed_test?speed_test_special:not_supported
+                ]
+                
 special_routines_l:
                 .byte <special_routines
 special_routines_h:
                 .byte >special_routines
+
+not_supported:
+                .brk_error 255,"Not supported",0
                 
                 .pend
 
@@ -3490,24 +3526,29 @@ delay_12_cycles:
 is_parasite_address: .proc
                 lda 3,x
                 cmp #$ff
-                bne maybe_parasite
+                bne is_tube_active
                 lda 2,x
                 cmp #$ff
-                bne maybe_parasite
+                bne is_tube_active
 
 host:
                 clc
                 rts
+                .pend
 
-maybe_parasite:
+;-------------------------------------------------------------------------
+;
+; Check if Tube is active.
+;
+; exit: C=0 if Tube inactive; C=1 if Tube active
+;
+is_tube_active: .proc
                 lda #234
                 jsr osbyte_x00_yff
                 cpx #$ff
-                bne host        ;if Tube is inactive, it's got to be
-                                ;host...
                 rts
                 .pend
-                
+
 ;-------------------------------------------------------------------------
 ;
 ; Receive file data: whatever is left of the current payload.
@@ -4584,6 +4625,35 @@ cmp_space_done:
 
 ;-------------------------------------------------------------------------
 ;
+; Ask a question and wait for a Y/N response.
+;
+; entry: YX = prompt
+; exit: C=0 for no, C=1 for yes
+;
+ask_yn_question: .proc
+                jsr printyx
+                jsr pcprint
+                .text " (Y/N)? ",255
+                jsr flush_keyboard_buffer
+                jsr osrdch
+                jsr oswrch
+                pha
+                jsr osnewl
+                pla
+                cmp #"Y"
+                beq yes
+
+                clc
+                rts
+
+yes:
+                sec
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+;
 ; Self-update thing for use when running from sideways RAM.
 ;
 selfupdate_cmd: .proc
@@ -4631,17 +4701,10 @@ relocator=brkthunk+3            ;where to put the relocating code
                 bcc +
                 jmp rom_not_writeable ;if not cartridge ROM slot
 +
-                jsr pcprint
-                .text "Attempt ABR unlock (Y/N)? ",255
-
-                jsr osrdch
-                jsr oswrch
-                pha
-                jsr osnewl
-                pla
-                jsr toupper
-                cmp #"Y"
-                bne rom_not_writeable                
+                ldx #<attempt_abr_unlock
+                ldy #>attempt_abr_unlock
+                jsr ask_yn_question
+                bcc rom_not_writeable
 
                 lda $fe34
                 ora #$20        ;make FRED/JIM access cartridge, not
@@ -4806,10 +4869,15 @@ message_end:
                 .pend
 relocator_end:
                 .cerror relocator_end-relocator_start>80,"relocator too large"
+attempt_abr_unlock:
+                .text "Attempt ABR unlock",255
+                
                 .pend
 
 ;-------------------------------------------------------------------------
-
+;
+; *VOLBROWSER.
+; 
 volumes_browser_special: .proc
                 jsr discard_remaining_payload
 
@@ -4961,12 +5029,16 @@ done:
 
 +
                 jmp boot
+                .pend
 
-flush_keyboard_buffer:
+;-------------------------------------------------------------------------
+;
+; 
+
+flush_keyboard_buffer: .proc
                 lda #21         ;flush buffer
                 ldx #0          ;flush keyboard buffer
                 jmp osbyte
-
                 .pend
                 
 ;-------------------------------------------------------------------------
@@ -5043,6 +5115,308 @@ inactive:
                 
                 .pend
 
+;-------------------------------------------------------------------------
+;
+; *BLSPEEDTEST.
+; 
+                .if enable_speed_test
+                
+speed_test_special: .proc
+
+parasite_oshwm_page=$08              ;you just have to assume...
+time=$a8
+send_time=$ad
+num_iterations=4
+                
+                
+                ldx #<sure
+                ldy #>sure
+                jsr ask_yn_question
+                bcs +
+                rts
+sure:
+                .text "Will erase memory - sure",255
++
+
+                lda #REQUEST_SPEED_TEST
+                ldx #REQUEST_SPEED_TEST_RESET
+                jsr send_request_1_recv_response_1
+
+                jsr is_tube_active
+                bcc test_host
+
+                jsr pcprint
+                .text "Parasite",255
+                
+                sec
+                jsr speed_test
+
+test_host:
+
+                jsr pcprint
+                .text "Host",255
+                
+                clc
+                jsr speed_test
+
+                lda #REQUEST_SPEED_TEST
+                ldx #REQUEST_SPEED_TEST_DONE
+                jsr send_request_1_recv_response_1
+
+                jsr print_server_string
+
+                rts
+
+;
+; do one round of speed tests. C=0 for host<->server, C=1 for
+; parasite<->server.
+; 
+speed_test:
+                php
+
+                ; print some info
+                jsr pcprint
+                .text " transfers: ",255
+                
+                lda #num_iterations
+                jsr print_hex_byte
+
+                jsr pcprint
+                .text " x ",255
+                
+                plp
+                php
+                jsr init_test_size
+
+                lda #"&"
+                jsr oswrch
+                
+                ldx #scratch_p_size
+                jsr print_hex_z32
+
+                jsr pcprint
+                .text " bytes @ &",255
+
+                plp
+                php
+                jsr init_test_address
+                
+                ldx #scratch_load
+                jsr print_hex_z32
+
+                lda #":"
+                jsr oswrch
+                
+start:
+                lda #num_iterations
+                sta private_x   ;# iterations
+
+loop:
+                lda #" "
+                jsr oswrch
+
+                lda private_x
+                jsr print_hex_byte
+                
+                plp
+                php
+                jsr init_test_size
+
+                ; Account for the request sub-type.
+                ldx #scratch_p_size
+                jsr incz32
+
+                ; Initiate request.
+                lda #REQUEST_SPEED_TEST
+                ldx #scratch_p_size
+                jsr send_request_n
+
+                lda #REQUEST_SPEED_TEST_TEST
+                jsr send_payload_byte
+
+                ; Time sending of everything else.
+                plp
+                php
+                jsr init_test_address
+
+                jsr reset_TIME
+                jsr send_file_data
+                jsr get_TIME
+
+                ; Save send time.
+                lda time+0
+                sta send_time+0
+                lda time+1
+                sta send_time+1
+
+                ; Receive response.
+                ldx #scratch_p_size
+                jsr recv_response
+
+                ; The response is an exact echo, sub-type byte
+                ; included, so discard the sub-type bye.
+                jsr recv_payload_byte
+
+                ; Time receiving of everything else.
+                plp
+                php
+                jsr init_test_address
+
+                jsr reset_TIME
+                jsr recv_file_data
+                jsr get_TIME
+
+                ; Account for response.
+                lda #6
+                ldx #scratch_p_size
+                jsr setz32
+
+                ; Tell the server what happened.
+                lda #REQUEST_SPEED_TEST
+                ldx #scratch_p_size
+                jsr send_request_n
+
+                lda #REQUEST_SPEED_TEST_STATS
+                jsr send_payload_byte
+
+                ; Send host/parasite flag.
+                pla
+                pha
+                and #$01
+                jsr send_payload_byte
+
+                ; Send send time.
+                lda send_time+0
+                jsr send_payload_byte
+                lda send_time+1
+                jsr send_payload_byte
+
+                ; Send recv time.
+                lda time+0
+                jsr send_payload_byte
+                lda time+1
+                jsr send_payload_byte
+
+                jsr recv_response_and_discard_payload
+
+                dec private_x
+                beq +
+                jmp loop
++
+                pla             ;discard saved P
+                
+                jsr osnewl
+
+                rts
+;
+; set up scratch_load for send or receive operation. C=0 for host
+; memory or C=1 for parasite memory.
+; 
+init_test_address: .proc
+                ; set up scratch_load. C=0 for host, C=1 for parasite.
+                lda #0
+                ldx #scratch_load
+                jsr setz32
+
+                bcs parasite_address
+
+host_address:
+                lda #131        ;read OSHWM (AUG 155)
+                jsr osbyte
+                stx scratch_load+0
+                sty scratch_load+1
+
+                ; $ffffxxxx
+                dec scratch_load+2
+                dec scratch_load+3
+                
+                rts
+
+parasite_address:
+                lda #parasite_oshwm_page
+                sta scratch_load+1
+                rts
+                .pend
+                
+; 
+; set up scratch_p_size for send operation. C=0 for host memory or C=1
+; for parasite memory.
+; 
+init_test_size: .proc
+
+                jsr init_test_size_2
+
+                ; Subtract 1, so there's a 255-byte range at the end
+                ; to exercise the straggling bytes loop.
+                ldx #scratch_p_size
+                jsr negz32
+                jsr incz32
+                jsr negz32
+                rts
+
+init_test_size_2:
+                lda #0
+                ldx #scratch_p_size
+                jsr setz32
+
+                bcs parasite_size
+
+host_size:
+                lda #131        ;read OSHWM (AUG 155)
+                jsr osbyte
+                
+                stx scratch_p_size+0
+                sty scratch_p_size+1
+                
+                lda #132        ;read HIMEM (AUG 156)
+                jsr osbyte
+
+                sec
+                txa
+                sbc scratch_p_size+0
+                sta scratch_p_size+0
+
+                tya
+                sbc scratch_p_size+1
+                sta scratch_p_size+1
+                rts
+
+parasite_size:
+                lda #$80-parasite_oshwm_page ;another assumption...
+                sta scratch_p_size+1
+                rts
+                .pend
+
+;
+; reset system clock. (A bit rude, I know...)
+; 
+reset_TIME: .proc
+                lda #0
+                sta time+0
+                sta time+1
+                sta time+2
+                sta time+3
+                sta time+4
+                ldx #<time
+                ldy #>time
+                lda #2 
+                jmp osword
+                .pend
+
+;
+; get system clock, effectively counting elapsed time, due to the
+; reset.
+; 
+get_TIME: .proc
+                ldx #<time
+                ldy #>time
+                lda #1          ;read system clock
+                jmp osword
+                .pend
+
+                .pend
+
+                .endif
                 
 ;-------------------------------------------------------------------------
 

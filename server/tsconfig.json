@@ -12,7 +12,7 @@
         "noImplicitReturns": true,
         "noImplicitThis": true,
         "strict": true,
-        "strictNullChecks":true
+        "strictNullChecks": true
     },
     "include": [
         "./main.ts",
@@ -20,6 +20,7 @@
         "./beeblink.ts",
         "./beebfs.ts",
         "./server.ts",
-        "./volumebrowser.ts"
+        "./volumebrowser.ts",
+        "./speedtest.ts"
     ]
 }

@@ -26,10 +26,8 @@ import * as beeblink from './beeblink';
 import * as beebfs from './beebfs';
 import * as path from 'path';
 import * as volumebrowser from './volumebrowser';
-
-//////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////
-
+import * as speedtest from './speedtest';
+import * as crypto from 'crypto';
 import { BNL } from './utils';
 
 //////////////////////////////////////////////////////////////////////////
@@ -167,6 +165,7 @@ export class Server {
     private handlers: (Handler | undefined)[];
     private log: utils.Log;
     private volumeBrowser: volumebrowser.Browser | undefined;
+    private speedTest: speedtest.SpeedTest | undefined;
 
     public constructor(romPath: string, bfs: beebfs.BeebFS, verbose: boolean) {
         this.romPath = romPath;
@@ -181,6 +180,7 @@ export class Server {
             new Command('LIB', '(<dir>)', this.libCommand),
             new Command('LIST', '<fsp>', this.listCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
+            new Command('SPEEDTEST', undefined, this.speedtestCommand),
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
             new Command('VOLBROWSER', undefined, this.volbrowserCommand),
@@ -212,6 +212,7 @@ export class Server {
         this.handlers[beeblink.REQUEST_OPT] = new Handler('OPT', this.handleOPT);
         this.handlers[beeblink.REQUEST_BOOT_OPTION] = new Handler('GET_BOOT_OPTION', this.handleGetBootOption);
         this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('REQUEST_VOLUME_BROWSER', this.handleVolumeBrowser);
+        this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('REQUEST_SPEED_TEST', this.handleSpeedTest);
 
 
         this.log = new utils.Log('SERVER', process.stderr, verbose);
@@ -804,7 +805,47 @@ export class Server {
                 return new Packet(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_KEY_IGNORED);
             }
         } else {
-            return this.internalError('Bad ' + handler.name + ' sub-request');
+            return this.internalError('Bad ' + handler.name + ' request');
+        }
+    }
+
+    private async handleSpeedTest(handler: Handler, p: Buffer): Promise<Packet> {
+        this.payloadMustBeAtLeast(handler, p, 1);
+
+        if (p[0] === beeblink.REQUEST_SPEED_TEST_RESET) {
+            this.log.pn('REQUEST_SPEED_TEST_RESET');
+
+            this.speedTest = new speedtest.SpeedTest();
+
+            return new Packet(beeblink.RESPONSE_YES);
+        } else if (p[0] === beeblink.REQUEST_SPEED_TEST_TEST && this.speedTest !== undefined) {
+            this.log.pn('REQUEST_SPEED_TEST_TEST');
+
+            this.speedTest.gotTestData(p);
+
+            return new Packet(beeblink.RESPONSE_DATA, p);
+        } else if (p[0] === beeblink.REQUEST_SPEED_TEST_STATS && this.speedTest !== undefined) {
+            this.log.pn('REQUEST_SPEED_TEST_STATS');
+
+            this.payloadMustBeAtLeast(handler, p, 6);
+
+            const parasite = p[1] !== 0;
+            const sendTimeSeconds = p.readUInt16LE(2) / 100;
+            const recvTimeSeconds = p.readUInt16LE(4) / 100;
+
+            this.speedTest.addStats(parasite, sendTimeSeconds, recvTimeSeconds);
+
+            return new Packet(beeblink.RESPONSE_YES);
+        } else if (p[0] === beeblink.REQUEST_SPEED_TEST_DONE && this.speedTest !== undefined) {
+            this.log.pn('REQUEST_SPEED_TEST_DONE');
+
+            const s = this.speedTest.getString();
+
+            this.log.withNoIndent(() => this.log.pn(s));
+
+            return this.textResponse(s);
+        } else {
+            return this.internalError('Bad ' + handler.name + ' request');
         }
     }
 
@@ -1115,6 +1156,10 @@ export class Server {
         await this.bfs.rename(oldFQN, newFQN);
 
         return new Packet(beeblink.RESPONSE_YES, 0);
+    }
+
+    private async speedtestCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+        return new Packet(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_SPEED_TEST);
     }
 
     private async titleCommand(commandLine: beebfs.CommandLine): Promise<Packet> {

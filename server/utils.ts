@@ -159,8 +159,7 @@ export class Log {
 
     public in(x: string) {
         this.p(x);
-        this.indentStack.push(this.indent);
-        this.indent = this.column;
+        this.pushAbsoluteIndent(this.column);
     }
 
     public out() {
@@ -183,6 +182,17 @@ export class Log {
     // time `fun' does an await.
     public withIndent<T>(prefix: string, fun: () => T): T {
         this.in(prefix);
+        try {
+            return fun();
+        } finally {
+            this.out();
+        }
+    }
+
+    // Not suitable for promises, as the finally clause will be run the first
+    // time `fun' does an await.
+    public withNoIndent<T>(fun: () => T): T {
+        this.pushAbsoluteIndent(0);
         try {
             return fun();
         } finally {
@@ -315,6 +325,11 @@ export class Log {
         } else {
             ++this.column;
         }
+    }
+
+    private pushAbsoluteIndent(indent: number) {
+        this.indentStack.push(this.indent);
+        this.indent = indent;
     }
 }
 

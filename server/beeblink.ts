@@ -234,6 +234,12 @@ export const REQUEST_BOOT_OPTION = 0x16;
 // the comments below.
 export const REQUEST_VOLUME_BROWSER = 0x17;
 
+// Make a speed test-related request.
+//
+// P = 1 byte, the request sub-type; then additional payload, as described in
+// the comments below.
+export const REQUEST_SPEED_TEST = 0x18;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -271,6 +277,41 @@ export const REQUEST_VOLUME_BROWSER_RESET = 0;
 // P = 1 byte, SHIFT pressed flag (0=no, yes otherwise); 1 byte, the ASCII key
 // value assuming *FX4,1
 export const REQUEST_VOLUME_BROWSER_KEYPRESS = 1;
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// REQUEST_SPEED_TEST sub-types.
+
+// Start speed test.
+//
+// Response is YES.
+//
+// P = none
+export const REQUEST_SPEED_TEST_RESET = 0;
+
+// Run one round of the test. Server should respond with provided data.
+//
+// Response is DATA with the same data.
+//
+// P = whatever
+export const REQUEST_SPEED_TEST_TEST = 1;
+
+// Submit stats for the previous round of the test.
+//
+// Response is YES.
+//
+// P = 1 byte, parasite memory flag (0 = host memory, else = parasite); 2 bytes,
+// transmit centiseconds; 2 bytes, receive centiseconds
+//
+// (65535 centiseconds = ~10 minutes...)
+export const REQUEST_SPEED_TEST_STATS = 2;
+
+// Get server to calculate the stats and fill in the server string with the
+// result.
+//
+// Response is TEXT.
+export const REQUEST_SPEED_TEST_DONE = 3;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -367,6 +408,9 @@ export const RESPONSE_VOLUME_BROWSER = 0x10;
 
 // Do the volume browser.
 export const RESPONSE_SPECIAL_VOLUME_BROWSER = 0;
+
+// Do the speed test.
+export const RESPONSE_SPECIAL_SPEED_TEST = 1;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
