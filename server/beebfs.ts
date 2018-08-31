@@ -647,6 +647,9 @@ export class BeebFS {
         }
 
         this.volumePath = volumePath;
+
+        this.resetDirs();
+
         return undefined;
     }
 
