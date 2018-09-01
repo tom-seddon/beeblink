@@ -290,19 +290,21 @@ export const REQUEST_VOLUME_BROWSER_KEYPRESS = 1;
 // P = none
 export const REQUEST_SPEED_TEST_RESET = 0;
 
-// Run one round of the test. Server should respond with provided data.
+// Run one round of the test.
 //
-// Response is DATA with the same data.
+// Response is DATA with the N bytes of data to send next time.
 //
-// P = whatever
+// P = 1 byte, parasite memory flag (0 = host memory, else = parasite); then N
+// bytes of data.
 export const REQUEST_SPEED_TEST_TEST = 1;
 
 // Submit stats for the previous round of the test.
 //
 // Response is YES.
 //
-// P = 1 byte, parasite memory flag (0 = host memory, else = parasite); 2 bytes,
-// transmit centiseconds; 2 bytes, receive centiseconds
+// P = 1 byte, parasite memory flag (0 = host memory, else = parasite); 4 bytes,
+// number of bytes; 2 bytes, transmit centiseconds; 2 bytes, receive
+// centiseconds
 //
 // (65535 centiseconds = ~10 minutes...)
 export const REQUEST_SPEED_TEST_STATS = 2;

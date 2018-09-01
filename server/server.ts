@@ -820,20 +820,29 @@ export class Server {
             return new Packet(beeblink.RESPONSE_YES);
         } else if (p[0] === beeblink.REQUEST_SPEED_TEST_TEST && this.speedTest !== undefined) {
             this.log.pn('REQUEST_SPEED_TEST_TEST');
+            this.log.pn('payload size = 0x' + p.length.toString(16));
 
-            this.speedTest.gotTestData(p);
+            this.payloadMustBeAtLeast(handler, p, 2);
 
-            return new Packet(beeblink.RESPONSE_DATA, p);
+            const parasite = p[1] !== 0;
+
+            const data = Buffer.alloc(p.length - 2);
+            p.copy(data, 0, 2);
+
+            const responseData = this.speedTest.gotTestData(parasite, data, this.log);
+
+            return new Packet(beeblink.RESPONSE_DATA, responseData);
         } else if (p[0] === beeblink.REQUEST_SPEED_TEST_STATS && this.speedTest !== undefined) {
             this.log.pn('REQUEST_SPEED_TEST_STATS');
 
-            this.payloadMustBeAtLeast(handler, p, 6);
+            this.payloadMustBeAtLeast(handler, p, 10);
 
             const parasite = p[1] !== 0;
-            const sendTimeSeconds = p.readUInt16LE(2) / 100;
-            const recvTimeSeconds = p.readUInt16LE(4) / 100;
+            const numBytes = p.readUInt32LE(2);
+            const sendTimeSeconds = p.readUInt16LE(6) / 100;
+            const recvTimeSeconds = p.readUInt16LE(8) / 100;
 
-            this.speedTest.addStats(parasite, sendTimeSeconds, recvTimeSeconds);
+            this.speedTest.addStats(parasite, numBytes, sendTimeSeconds, recvTimeSeconds);
 
             return new Packet(beeblink.RESPONSE_YES);
         } else if (p[0] === beeblink.REQUEST_SPEED_TEST_DONE && this.speedTest !== undefined) {

@@ -5227,6 +5227,7 @@ parasite_oshwm_page=$08              ;you just have to assume...
 time=$a8
 send_time=$ad
 num_iterations=10
+                .cerror num_iterations%2!=0,"no"
                 
                 
                 ldx #<sure
@@ -5322,17 +5323,36 @@ loop:
                 php
                 jsr init_test_size
 
-                ; Account for the request sub-type.
+                ; Account for the request sub-type and host/parasite
+                ; flag.
                 ldx #scratch_p_size
-                jsr incz32
+                ldy #2
+                jsr addyz32
 
                 ; Initiate request.
                 lda #REQUEST_SPEED_TEST
                 ldx #scratch_p_size
                 jsr send_request_n
 
+                ; Send sub-type.
                 lda #REQUEST_SPEED_TEST_TEST
                 jsr send_payload_byte
+
+                ; Send host/parasite flag.
+                pla
+                pha
+                and #$01
+                jsr send_payload_byte
+
+                ; Save off the payload size.
+                lda scratch_p_size+0
+                sta scratch_exec+0
+                lda scratch_p_size+1
+                sta scratch_exec+1
+                lda scratch_p_size+2
+                sta scratch_exec+2
+                lda scratch_p_size+3
+                sta scratch_exec+3
 
                 ; Time sending of everything else.
                 plp
@@ -5353,9 +5373,9 @@ loop:
                 ldx #scratch_p_size
                 jsr recv_response
 
-                ; The response is an exact echo, sub-type byte
-                ; included, so discard the sub-type bye.
-                jsr recv_payload_byte
+                ; ; The response is an exact echo, sub-type byte
+                ; ; included, so discard the sub-type bye.
+                ; jsr recv_payload_byte
 
                 ; Time receiving of everything else.
                 plp
@@ -5367,7 +5387,7 @@ loop:
                 jsr get_TIME
 
                 ; Account for response.
-                lda #6
+                lda #10
                 ldx #scratch_p_size
                 jsr setz32
 
@@ -5383,6 +5403,18 @@ loop:
                 pla
                 pha
                 and #$01
+                jsr send_payload_byte
+
+                ; Send payload size.
+                ldx #scratch_exec
+                jsr negz32
+                lda scratch_exec+0
+                jsr send_payload_byte
+                lda scratch_exec+1
+                jsr send_payload_byte
+                lda scratch_exec+2
+                jsr send_payload_byte
+                lda scratch_exec+3
                 jsr send_payload_byte
 
                 ; Send send time.
@@ -5470,6 +5502,9 @@ host_size:
                 
                 lda #132        ;read HIMEM (AUG 156)
                 jsr osbyte
+
+                ; ldx #$00        ;temp
+                ; ldy #$80        ;temp
 
                 sec
                 txa
