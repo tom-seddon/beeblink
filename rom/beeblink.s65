@@ -3685,24 +3685,36 @@ first_pages:
                 lda #tube_256_byte_host_to_parasite
                 jsr $406
 
-                ldy #0
+num_unrolls=4
+                .cerror 256%num_unrolls!=0,"no"
+                
+                ; The recv case is naturally slower than the send
+                ; case. It's quicker to divide the loop counter by the
+                ; number of unrolls.
+                
+                ldy #(256/num_unrolls)&$ff
 
                 ; inter-byte delay is 10 uS, or 20 cycles
 
                 lda #$10        ;VIA IFR mask
 
 one_page_loop:
-                stx via+0       ;+6 = 15
+
+                .rept num_unrolls
+                
+                stx via+0       ;+6 = 6
 
 -
-                bit via+13       ;+6 = 21
-                beq -           ;+2 = 23
+                bit via+13       ;+6 = 12
+                beq -           ;+2 = 14
 
-                ldx via+0       ;+6 = 29
-                stx $fee5       ;+4 = 33 | +0
+                ldx via+0       ;+6 = 20
+                stx $fee5       ;+4 = 24 | +0
 
-                iny             ;+2 = 6
-                bne one_page_loop ;+3 = 9
+                .next
+
+                dey
+                bne one_page_loop
 
                 inc scratch_load+1
                 bne +
