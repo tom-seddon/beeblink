@@ -3713,9 +3713,7 @@ recv_file_data_parasite: .proc
                 jsr claim_tube
 
                 jsr fix_up_packet_size_for_pagewise_transfer
-                bcs +
-                jmp last_page
-+
+                .lbcc last_page
 
 first_pages:
                 ldx #<scratch_load
@@ -3723,7 +3721,7 @@ first_pages:
                 lda #tube_256_byte_host_to_parasite
                 jsr $406
 
-num_unrolls=8
+num_unrolls=2
                 .cerror 256%num_unrolls!=0,"no"
                 
                 ; The recv case is naturally slower than the send
@@ -3762,17 +3760,11 @@ one_page_loop:
 +
 
                 inc scratch_p_size+1
-                beq +
-                jmp first_pages
-+
+                .lbne first_pages
                 inc scratch_p_size+2
-                beq +
-                jmp first_pages
-+
+                .lbne first_pages
                 inc scratch_p_size+3
-                beq +
-                jmp  first_pages
-+
+                .lbne first_pages
 
 last_page:
                 lda scratch_p_size+0
@@ -4018,7 +4010,7 @@ first_pages:
                 jsr delay_36_cycles
                 nop
 
-num_unrolls=2
+num_unrolls=4
                 
                 ldy #0
                 lda #$10     ;VIA IFR mask
