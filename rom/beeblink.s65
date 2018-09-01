@@ -3625,11 +3625,16 @@ recv_file_data_host: .proc
                 ; stragglers.
 
                 jsr fix_up_packet_size_for_pagewise_transfer
-                bcc last_page
+                .lbcc last_page
 
+num_unrolls=4
+                .cerror 256%num_unrolls!=0,"no"
+                
 first_pages:
                 ldy #0
 one_page_loop:
+                .rept num_unrolls
+                
                 sta via+0
 
 -
@@ -3641,16 +3646,19 @@ one_page_loop:
                 sta (scratch_load),y
 
                 iny
-                bne one_page_loop
+
+                .next
+                
+                .lbne one_page_loop
 
                 inc scratch_load+1
                 
                 inc scratch_p_size+1
-                bne one_page_loop
+                .lbne one_page_loop
                 inc scratch_p_size+2
-                bne one_page_loop
+                .lbne one_page_loop
                 inc scratch_p_size+3
-                bne one_page_loop
+                .lbne one_page_loop
 
 last_page:
                 ldx scratch_p_size+0

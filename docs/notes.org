@@ -194,8 +194,8 @@ Conclusion: 2x = good.
 
 ** Tweak parasite stragglers recv loop
 
-Make sure it's exactly 48 cycles in the fastest route through.
-Probably needless but it seems to eke out a bit more.
+Make sure it's exactly 48 cycles in the fastest route through. Result
+appears to be noise.
 
 SERVER: Host<->server: 291,840 bytes in 10 tests
 SERVER:   Send: 70.54 KBytes/sec
@@ -236,3 +236,26 @@ SERVER:   Recv: 58.40 KBytes/sec
 Conclusion: 2x = good
 
 ** Tweak host recv pagewise loop
+
+Unroll 2x
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 76.82 KBytes/sec
+SERVER:   Recv: 60.25 KBytes/sec
+
+Unroll 4x
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 76.61 KBytes/sec
+SERVER:   Recv: 61.29 KBytes/sec
+
+Unroll 8x
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 76.82 KBytes/sec
+SERVER:   Recv: 61.29 KBytes/sec
+
+Conclusion: 4x = good
+
+Hardly seems worth bothering with the straggler loops. There's no real
+fat there.
