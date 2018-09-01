@@ -38,6 +38,15 @@
 ; L9F8C, it exits if A>=12.
 ;
 ;-------------------------------------------------------------------------
+;
+; The little handshaking loops that wait for IFR bit 4 to become set
+; only ever seem to run for one iteration - as intended, because the
+; AVR is fast and the 6502 can't do back-to-back reads that quickly.
+;
+; Could probably do the check once every 256 bytes in the pagewise
+; mode...? Not sure I'm brave enough for that though.
+;
+;-------------------------------------------------------------------------
 
                 .include ".build/beeblink_constants.s65"
                 
@@ -4070,18 +4079,24 @@ last_page:
                 
                 ; inter-byte delay is 24 uS, or 48 cycles
 last_page_loop:
-                lda $fee5       ;4
-                sta via+0       ;10
+                lda $fee5       ;48 | 0
+                sta via+0       ;6
 -
-                lda via+13      ;16
-                and #$10        ;18
-                beq -           ;20
+                lda via+13      ;12
+                and #$10        ;14
+                beq -           ;16
 
-                jsr delay_24_cycles ;44
+                jsr delay_12_cycles ;28
 
-                inx             ;46
+                nop             ;30
+                nop             ;32
+                nop             ;34
+                nop             ;36
+                bit $ff         ;39
 
-                bne last_page_loop ;49
+                inx             ;41
+
+                bne last_page_loop ;44
 
 done:
                 jsr release_tube
