@@ -1,0 +1,177 @@
+* Random notes
+
+Brain dump that's on GitHub so I have a backup.
+
+* Speed tests
+
+Back-of-the-envelope calculations to give peak plausible-ish throughput, for actual code that might actually run from a ROM.
+
+Server->BBC:
+
+: lda (ptr),Y   ; +5 = 5   assume no page crossing
+: sta via+0     ; +6 = 11
+: lda #$10      ; +2 = 13
+: -
+: bit via+13    ; +6 = 19
+: beq -         ; +2 = 21  assume branch not taken
+: iny           ; +2 = 23
+
+So 23N+3 for N unrolls, or 2e6/((23*N+3)/N). For 1 page:
+
+1x = 75.12KBytes/sec
+2x = 79.72KBytes/sec
+4x = 82.24KBytes/sec
+8x = 83.56KBytes/sec
+
+BBC->server:
+
+: stx via+0     ; +6 = 6   arbitrary value to set the handshaking off
+: lda #$10      ; +2 = 8
+: -
+: bit via+13    ; +6 = 14
+: beq -         ; +2 = 16  assume branch not taken
+: lda via+0     ; +6 = 22
+: sta (ptr),Y   ; +6 = 28
+: iny           ; +2 = 30
+
+So 30N+3 for N unrolls, or 2e6/((30*N+3)/N). For 1 page:
+
+1x = 59.19KBytes/sec
+2x = 62.00KBytes/sec
+4x = 63.52KBytes/sec
+8x = 64.30KBytes/sec
+
+** Base
+
+as at 3d8d71fef08f9e7c457b5f600f50e98f09ba6fed:
+
+SERVER: Host<->server: 116,736 bytes in 4 tests
+SERVER:   Send: 50.89 KBytes/sec
+SERVER:   Recv: 45.42 KBytes/sec
+SERVER: Parasite<->server: 122,880 bytes in 4 tests
+SERVER:   Send: 54.05 KBytes/sec
+SERVER:   Recv: 47.43 KBytes/sec
+
+** Parasite pagewise send tweak
+
+There are obvious minor inefficiencies here.
+
+Store VIA IFR mask in A, use BIT to test IFR, and X to store the byte.
+Save 2 cycles each time.
+
+SERVER: Host<->server: 112,640 bytes in 4 tests
+SERVER:   Send: 50.93 KBytes/sec
+SERVER:   Recv: 45.45 KBytes/sec
+SERVER: Parasite<->server: 122,880 bytes in 4 tests
+SERVER:   Send: 60.30 KBytes/sec
+SERVER:   Recv: 47.24 KBytes/sec
+
+Conclusion: yes.
+
+** Parasite pagewise send unroll
+
+Unroll 2x (no branch tweaks required)
+
+SERVER: Host<->server: 116,736 bytes in 4 tests
+SERVER:   Send: 50.89 KBytes/sec
+SERVER:   Recv: 45.24 KBytes/sec
+SERVER: Parasite<->server: 122,880 bytes in 4 tests
+SERVER:   Send: 62.18 KBytes/sec
+SERVER:   Recv: 46.88 KBytes/sec
+
+Unroll 4x (no branch tweaks required)
+
+SERVER: Host<->server: 116,736 bytes in 4 tests
+SERVER:   Send: 50.89 KBytes/sec
+SERVER:   Recv: 45.24 KBytes/sec
+SERVER: Parasite<->server: 122,880 bytes in 4 tests
+SERVER:   Send: 63.83 KBytes/sec
+SERVER:   Recv: 47.43 KBytes/sec
+
+Unroll 8x (with branch tweaks)
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 50.80 KBytes/sec
+SERVER:   Recv: 45.24 KBytes/sec
+SERVER: Parasite<->server: 307,200 bytes in 10 tests
+SERVER:   Send: 63.69 KBytes/sec
+SERVER:   Recv: 47.39 KBytes/sec
+
+Unroll 16x (with branch tweaks)
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 50.98 KBytes/sec
+SERVER:   Recv: 45.31 KBytes/sec
+SERVER: Parasite<->server: 307,200 bytes in 10 tests
+SERVER:   Send: 63.56 KBytes/sec
+SERVER:   Recv: 47.39 KBytes/sec
+
+Conclusion: stick with 4x.
+
+** AVR USB_USBTask
+
+Call USB_USBTsask a lot less often when waiting for BBC to become
+ready. (Maintain a uint16_t counter. When it's 0 after incrementing,
+call USB_USBTsask.)
+
+Unroll 4x (no branch tweaks required):
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 70.72 KBytes/sec
+SERVER:   Recv: 58.40 KBytes/sec
+SERVER: Parasite<->server: 307,200 bytes in 10 tests
+SERVER:   Send: 71.43 KBytes/sec
+SERVER:   Recv: 59.76 KBytes/sec
+
+Unroll 8x (with branch tweaks):
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 70.37 KBytes/sec
+SERVER:   Recv: 58.40 KBytes/sec
+SERVER: Parasite<->server: 307,200 bytes in 10 tests
+SERVER:   Send: 70.75 KBytes/sec
+SERVER:   Recv: 59.64 KBytes/sec
+
+Unroll 16x (with branch tweaks):
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 70.72 KBytes/sec
+SERVER:   Recv: 58.40 KBytes/sec
+SERVER: Parasite<->server: 307,200 bytes in 10 tests
+SERVER:   Send: 70.92 KBytes/sec
+SERVER:   Recv: 60.00 KBytes/sec
+
+Conclusion: this is a good change.
+
+** Parasite pagewise recv tweak
+
+Store VIA IFR mask in A, use BIT to test IFR, and X to store the byte.
+Save 2 cycles each time.
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 70.54 KBytes/sec
+SERVER:   Recv: 58.28 KBytes/sec
+SERVER: Parasite<->server: 307,200 bytes in 10 tests
+SERVER:   Send: 71.26 KBytes/sec
+SERVER:   Recv: 63.83 KBytes/sec
+
+** Parasite pagewise recv unroll
+
+Unroll 2x (no branch tweaks required):
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 70.90 KBytes/sec
+SERVER:   Recv: 58.52 KBytes/sec
+SERVER: Parasite<->server: 307,200 bytes in 10 tests
+SERVER:   Send: 71.26 KBytes/sec
+SERVER:   Recv: 67.72 KBytes/sec
+
+Unroll 4x (no branch tweaks required):
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 70.37 KBytes/sec
+SERVER:   Recv: 58.28 KBytes/sec
+SERVER: Parasite<->server: 307,200 bytes in 10 tests
+SERVER:   Send: 70.92 KBytes/sec
+SERVER:   Recv: 66.37 KBytes/sec
+
