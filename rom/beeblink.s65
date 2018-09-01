@@ -5417,15 +5417,21 @@ num_iterations=10
                 bcs +
                 rts
 sure:
-                .text "Will erase memory - sure",255
+                .text "Sure",255
 +
 
                 lda #REQUEST_SPEED_TEST
                 ldx #REQUEST_SPEED_TEST_RESET
                 jsr send_request_1_recv_response_1
 
+                jsr pcprint
+                .text "Host",255
+                
+                clc
+                jsr speed_test
+
                 jsr is_tube_active
-                bcc test_host
+                bcc test_done
 
                 jsr pcprint
                 .text "Parasite",255
@@ -5433,13 +5439,8 @@ sure:
                 sec
                 jsr speed_test
 
-test_host:
+test_done:
 
-                jsr pcprint
-                .text "Host",255
-                
-                clc
-                jsr speed_test
 
                 lda #REQUEST_SPEED_TEST
                 ldx #REQUEST_SPEED_TEST_DONE
@@ -5486,19 +5487,19 @@ speed_test:
                 ldx #scratch_load
                 jsr print_hex_z32
 
-                lda #":"
-                jsr oswrch
+                jsr pcprint
+                .text ": ",255
                 
 start:
                 lda #num_iterations
                 sta private_x   ;# iterations
 
 loop:
-                lda #" "
-                jsr oswrch
-
                 lda private_x
                 jsr print_hex_byte
+
+                jsr pcprint
+                .text 8,8,255
                 
                 plp
                 php
