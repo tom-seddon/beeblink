@@ -3725,8 +3725,9 @@ num_unrolls=2
                 .cerror 256%num_unrolls!=0,"no"
                 
                 ; The recv case is naturally slower than the send
-                ; case. It's quicker to divide the loop counter by the
-                ; number of unrolls.
+                ; case, so there's no gap to put the iny in. It's
+                ; quicker to divide the counter by the number of
+                ; unrolls.
                 
                 ldy #(256/num_unrolls)&$ff
 
@@ -3778,25 +3779,29 @@ last_page:
                 ldx scratch_p_size+0
 
                 ; inter-byte delay is 24 uS, or 48 cycles
-last_page_loop:
-                sta via+0       ;+6
--
-                lda via+13      ;+12
-                and #$10        ;+14
-                beq -           ;+16
 
-                lda via+0       ;+22
-
-                jsr delay_24_cycles ;+46
+                lda #$10        ;IFR mask
                 
-                sta $fee5       ;it's safe, there's another 3 cycles
-                                ;before the write...
+last_page_loop:
+                stx via+0       ;+6 = 11
+-
+                bit via+13      ;+6 = 17
+                beq -           ;+2 = 19
 
-                ; this stuff should be done during the dead time
-                ; above!
-                inx
-                bne last_page_loop
+                ldy via+0       ;+6 = 25
 
+                jsr delay_12_cycles ;+12 = 37
+
+                bit $ff         ;+3 = 40
+
+                nop             ;+2 = 42
+                nop             ;+2 = 44
+
+                sty $fee5       ;+4 = 48 | +0 = 0
+
+                inx                ;+2 = 2
+                bne last_page_loop ;+3 = 5
+                
 done:
                 jsr release_tube
                 
