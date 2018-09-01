@@ -259,3 +259,29 @@ Conclusion: 4x = good
 
 Hardly seems worth bothering with the straggler loops. There's no real
 fat there.
+
+** Parasite pairwise send
+
+Before:
+
+SERVER: Parasite<->server: 307,200 bytes in 10 tests
+SERVER:   Send: 71.09 KBytes/sec
+SERVER:   Recv: 67.87 KBytes/sec
+
+One pair per iteration:
+
+SERVER: Parasite<->server: 309,750 bytes in 10 tests
+SERVER:   Send: 62.63 KBytes/sec
+SERVER:   Recv: 69.06 KBytes/sec
+
+Unroll 2x:
+
+SERVER: Host<->server: 294,390 bytes in 10 tests
+SERVER:   Send: 77.28 KBytes/sec
+SERVER:   Recv: 61.69 KBytes/sec
+SERVER: Parasite<->server: 309,750 bytes in 10 tests
+SERVER:   Send: 62.37 KBytes/sec
+SERVER:   Recv: 68.90 KBytes/sec
+
+Not going to bother doing any more with this. The code is still there,
+just toggled out.

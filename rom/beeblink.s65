@@ -72,6 +72,9 @@ filev=$212
 
 tube_multi_byte_parasite_to_host=0
 tube_multi_byte_host_to_parasite=1
+tube_multi_pairs_parasite_to_host=2
+tube_multi_pairs_host_to_parasite=3
+tube_execute=4
 tube_256_byte_parasite_to_host=6
 tube_256_byte_host_to_parasite=7
                 
@@ -109,6 +112,10 @@ verbose_file_data=false
 ; routines.
 recv_file_data_optimised=true
 send_file_data_optimised=true
+
+; If true, transmit file data over the Tube using the pairs of bytes
+; mode. Otherwise, use the page-at-a-time mode when possible.
+tube_pairwise_transfer=false
 
 ; If true, include support for *BLSPEEDTEST command.
 enable_speed_test=true
@@ -3492,7 +3499,7 @@ exec_parasite:
 
                 ldx #<scratch_exec
                 ldy #>scratch_exec
-                lda #4          ;Execute
+                lda #tube_execute
                 jmp $406
 
 special:
@@ -3596,6 +3603,44 @@ is_tube_active: .proc
 
 ;-------------------------------------------------------------------------
 ;
+; Select appropriate file transfer routines, depending on the config
+; flags. Keep the if/else/endif out of the main code.
+;
+; Each routine is a 64tass proc, so the unused ones don't end up in
+; the ROM.
+;
+
+                .if recv_file_data_optimised
+                
+recv_file_data_parasite=recv_file_data_parasite_pagewise
+recv_file_data_host=recv_file_data_host_pagewise
+
+                .else
+
+recv_file_data_parasite=recv_file_data_parasite_bytewise
+recv_file_data_host=recv_file_data_host_bytewise
+
+                .endif
+
+                .if send_file_data_optimised
+
+                .if tube_pairwise_transfer
+send_file_data_parasite=send_file_data_parasite_pairwise
+                .else
+send_file_data_parasite=send_file_data_parasite_pagewise
+                .endif
+
+send_file_data_host=send_file_data_host_pagewise
+
+                .else
+
+send_file_data_parasite=send_file_data_parasite_bytewise
+send_file_data_host=send_file_data_host_bytewise
+                
+                .endif
+                
+;-------------------------------------------------------------------------
+;
 ; Receive file data: whatever is left of the current payload.
 ;
 ; entry: !scratch_p_size = negated amount of data left
@@ -3615,11 +3660,7 @@ recv_file_data: .proc
 
 ;-------------------------------------------------------------------------
 
-                .if recv_file_data_optimised
-
-;-------------------------------------------------------------------------
-
-recv_file_data_host: .proc
+recv_file_data_host_pagewise: .proc
 
                 ; Receive data in 256-byte chunks, then receive any
                 ; stragglers.
@@ -3689,11 +3730,7 @@ done:
                 
 ;-------------------------------------------------------------------------
 
-                .else
-
-;-------------------------------------------------------------------------
-
-recv_file_data_host: .proc
+recv_file_data_host_bytewise: .proc
 
                 ldx #scratch_p_size
                 ldy #0
@@ -3717,15 +3754,7 @@ done:
 
 ;-------------------------------------------------------------------------
 
-                .endif
-
-;-------------------------------------------------------------------------
-
-                .if recv_file_data_optimised
-
-;-------------------------------------------------------------------------
-
-recv_file_data_parasite: .proc
+recv_file_data_parasite_pagewise: .proc
 
                 jsr claim_tube
 
@@ -3827,11 +3856,7 @@ done:
                 
 ;-------------------------------------------------------------------------
 
-                .else
-
-;-------------------------------------------------------------------------
-
-recv_file_data_parasite: .proc
+recv_file_data_parasite_bytewise: .proc
 
                 jsr claim_tube
 
@@ -3852,10 +3877,6 @@ done:
                 jsr release_tube
                 rts
                 .pend
-
-;-------------------------------------------------------------------------
-
-                .endif
 
 ;-------------------------------------------------------------------------
 ;
@@ -3917,17 +3938,16 @@ send_file_data: .proc
 +
                 ldx #scratch_load
                 jsr is_parasite_address
-                bcc send_file_data_host
+                .lbcc send_file_data_host
                 jmp send_file_data_parasite
                 .pend
 
 ;-------------------------------------------------------------------------
-
-                .if send_file_data_optimised
-
-;-------------------------------------------------------------------------
-
-send_file_data_host: .proc
+;
+; Send file data from host memory, with a faster path for sending
+; 256-byte chunks when possible.
+;
+send_file_data_host_pagewise: .proc
 
                 jsr fix_up_packet_size_for_pagewise_transfer
                 .lbcc last_page
@@ -3986,13 +4006,10 @@ done:
                 .pend
                 
 ;-------------------------------------------------------------------------
-
-                .else
-
-;-------------------------------------------------------------------------
-
-                .debug_print ["Send from host memory\r"],verbose_file_data
-send_file_data_host: .proc
+;
+; Send file data from host memory, byte by byte.
+; 
+send_file_data_host_bytewise: .proc
                 ldy #0
                 ldx #scratch_p_size
 send_host_loop:
@@ -4018,16 +4035,185 @@ send_host_done:
                 .pend
 
 ;-------------------------------------------------------------------------
+;
+; Send file data from parasite memory, using the pairwise Tube
+; transfer mode.
+;
+send_file_data_parasite_pairwise: .proc
 
+                jsr claim_tube
+
+                jsr fix_up_packet_size_for_pagewise_transfer
+                .lbcc last_page
+
+                ; Initialise pairwise transfer.
+                ldx #<scratch_load
+                ldy #>scratch_load
+                lda #tube_multi_pairs_parasite_to_host
+                jsr $406
+
+                ; initial delay = 52 cycles
+                jsr delay_48_cycles
+                nop
+                nop
+
+                ; delay between pairs = 52 cycles.
+
+num_unrolls=1
+                .cerror 128%num_unrolls!=0,"no"
+                
+one_page:
+                lda #$10
+                ldy #128/num_unrolls
+one_page_loop:
+                .for i=0,i<num_unrolls,i+=1
+                
+                ldx $fee5       ;+4 = 4
+                stx via+0       ;+6 = 10
+
+-
+                bit via+13      ;+6 = 16
+                beq -           ;+2 = 18
+
+                ldx $fee5       ;+4 = 22
+                stx via+0       ;+6 = 28
+-
+                bit via+13      ;+6 = 34
+                beq -           ;+2 = 36
+
+                .if i<num_unrolls-1
+
+                jsr delay_12_cycles ;+12 = 48
+                nop                 ;+2 = 50
+                nop                 ;+2 = 52
+
+                .else
+
+                pha             ;+3 = 39
+                pla             ;+4 = 43
+                nop             ;+2 = 45
+                nop             ;+2 = 47
+                dey             ;+2 = 49
+                ; +3 from the bne = 52
+                
                 .endif
 
+                .next
+
+                bne one_page_loop
+
+                inc scratch_load+1
+                bne +
+                inc scratch_load+2
+                bne +
+                inc scratch_load+3
++
+
+                inc scratch_p_size+1
+                .lbne one_page
+                inc scratch_p_size+2
+                .lbne one_page
+                inc scratch_p_size+3
+                .lbne one_page
+
+last_page:
+                lda scratch_p_size+0
+                beq done
+
+                ldx #<scratch_load
+                ldy #>scratch_load
+                lda #tube_multi_byte_parasite_to_host
+                jsr $406
+
+                ; initial delay is 24 uS, or 48 cycles
+                jsr delay_48_cycles
+
+                ldy #0
+                ldx scratch_p_size+0
+                
+                ; inter-byte delay is 24 uS, or 48 cycles
+last_page_loop:
+                lda $fee5       ;48 | 0
+                sta via+0       ;6
+-
+                lda via+13      ;12
+                and #$10        ;14
+                beq -           ;16
+
+                jsr delay_12_cycles ;28
+
+                nop             ;30
+                nop             ;32
+                nop             ;34
+                nop             ;36
+                bit $ff         ;39
+
+                inx             ;41
+
+                bne last_page_loop ;44
+
+done:
+                jsr release_tube
+                rts
+                
+                .pend
+
 ;-------------------------------------------------------------------------
+;
+; Fix up the packet size for a pairwise transfer. The result makes no
+; real sense; it's just convenient for the calling code.
+;
+; entry: !scratch_p_size = negated packet size
+; exit: !scratch_p_size = negated packet size in pairs
+;       C = 1 if there's an odd number of bytes, in which case
+;             !scratch_exec is the address of the last byte.
+; 
+fix_up_packet_size_for_pairwise_transfer: .proc
 
-                .if send_file_data_optimised
+                ldx #scratch_p_size
+                jsr negz32
 
+                lda scratch_p_size+0
+                and #$fe
+                cmp scratch_p_size+0
+                beq calc_pair_count
+
+                ; work out address of straggling byte
+                clc
+                adc scratch_load+0
+                sta scratch_exec+0
+
+                lda scratch_p_size+1
+                adc scratch_load+1
+                sta scratch_exec+1
+                
+                lda scratch_p_size+2
+                adc scratch_load+2
+                sta scratch_exec+2
+
+                lda scratch_p_size+3
+                adc scratch_load+3
+                sta scratch_exec+3
+
+calc_pair_count:
+                lsr scratch_p_size+3
+                ror scratch_p_size+2
+                ror scratch_p_size+1
+                ror scratch_p_size+0
+
+                ldx #scratch_p_size
+                jsr negz32
+                
+                rts
+                
+                .pend
+                
 ;-------------------------------------------------------------------------
-
-send_file_data_parasite: .proc
+;
+; Send file data from parasite memory, using the 256-byte Tube
+; transfer mode when possible.
+; 
+send_file_data_parasite_pagewise: .proc
 
                 jsr claim_tube
 
@@ -4124,12 +4310,11 @@ done:
                 .pend
 
 ;-------------------------------------------------------------------------
-
-                .else
-
-;-------------------------------------------------------------------------
-
-send_file_data_parasite: .proc
+;
+; Send file data from parasite memory, using the byte-by-byte Tube
+; transfer mode.
+;
+send_file_data_parasite_bytewise: .proc
                 .debug_print ["Send from parasite memory\r"],verbose_file_data
 
                 .debug_print ["  claiming tube\r"],verbose_file_data
@@ -4167,10 +4352,6 @@ send_tube_done:
                 
                 .pend
 
-;-------------------------------------------------------------------------
-
-                .endif
-                
 ;-------------------------------------------------------------------------
 ;
 ; Print the server's string.
