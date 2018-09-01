@@ -183,3 +183,8 @@ SERVER:   Recv: 58.52 KBytes/sec
 SERVER: Parasite<->server: 307,200 bytes in 10 tests
 SERVER:   Send: 70.92 KBytes/sec
 SERVER:   Recv: 67.26 KBytes/sec
+
+Unroll 16x not reliably any quicker.
+
+Conclusion: 2x = good.
+

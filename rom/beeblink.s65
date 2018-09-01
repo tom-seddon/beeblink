@@ -156,6 +156,42 @@ server_string_buffer_size=20
                 .cerror server_string_buffer_size>64,"string packet has to fit on the 6502 stack"
 
 ;-------------------------------------------------------------------------
+;
+; General conditional branch.
+;
+
+do_branch .macro branch,opposite_branch,target
+                .if *-\target<-128||*-\target>127
+
+                \opposite_branch +
+                jmp \target
++
+                
+                .else
+
+                \branch \target
+                
+                .endif
+                
+                .endm
+                
+lbne .macro target
+                .do_branch bne,beq,\target
+                .endm
+
+lbeq .macro target
+                .do_branch beq,bne,\target
+                .endm
+
+lbcc .macro target
+                .do_branch bcc,bcs,\target
+                .endm
+
+lbcs .macro target
+                .do_branch bcs,bcc,\target
+                .endm
+
+;-------------------------------------------------------------------------
 ; 
 ; Load word from memory and push onto stack.
 ;
@@ -3970,7 +4006,7 @@ send_file_data_parasite: .proc
                 jsr claim_tube
 
                 jsr fix_up_packet_size_for_pagewise_transfer
-                bcc last_page
+                .lbcc last_page
 
 first_pages:
                 ldx #<scratch_load
@@ -3982,7 +4018,7 @@ first_pages:
                 jsr delay_36_cycles
                 nop
 
-num_unrolls=4
+num_unrolls=2
                 
                 ldy #0
                 lda #$10     ;VIA IFR mask
@@ -4002,8 +4038,9 @@ one_page_loop:
                 iny             ;+16
 
                 .next
-                
-                bne one_page_loop ;+19
+
+                .lbne one_page_loop
+                ;bne one_page_loop ;+19
 
                 inc scratch_load+1
                 bne +
@@ -4013,11 +4050,11 @@ one_page_loop:
 +
 
                 inc scratch_p_size+1
-                bne first_pages
+                .lbne first_pages
                 inc scratch_p_size+2
-                bne first_pages
+                .lbne first_pages
                 inc scratch_p_size+3
-                bne first_pages
+                .lbne first_pages
 
 last_page:
                 lda scratch_p_size+0
