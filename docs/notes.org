@@ -41,6 +41,10 @@ So 30N+3 for N unrolls, or 2e6/((30*N+3)/N). For 1 page:
 4x = 63.52KBytes/sec
 8x = 64.30KBytes/sec
 
+Parasite throughput will be a bit faster in each case since there's no
+need for indexing. But it's 10uS/byte so peak throughput is 100,000
+bytes/sec.
+
 ** Base
 
 as at 3d8d71fef08f9e7c457b5f600f50e98f09ba6fed:
@@ -188,9 +192,10 @@ Unroll 16x not reliably any quicker.
 
 Conclusion: 2x = good.
 
-** Tweak parasite stragglers send loop
+** Tweak parasite stragglers recv loop
 
-As above. Probably needless but it seems to eke out a bit more.
+Make sure it's exactly 48 cycles in the fastest route through.
+Probably needless but it seems to eke out a bit more.
 
 SERVER: Host<->server: 291,840 bytes in 10 tests
 SERVER:   Send: 70.54 KBytes/sec
@@ -199,3 +204,35 @@ SERVER: Parasite<->server: 307,200 bytes in 10 tests
 SERVER:   Send: 70.92 KBytes/sec
 SERVER:   Recv: 68.03 KBytes/sec
 
+** Tweak parasite stragglers send loop
+
+Ditto. Pretty sure this difference is just noise...
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 70.72 KBytes/sec
+SERVER:   Recv: 58.16 KBytes/sec
+SERVER: Parasite<->server: 307,200 bytes in 10 tests
+SERVER:   Send: 71.09 KBytes/sec
+SERVER:   Recv: 67.87 KBytes/sec
+
+** Tweak host send pagewise loop
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 70.90 KBytes/sec
+SERVER:   Recv: 58.40 KBytes/sec
+
+Unroll 2x
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 76.61 KBytes/sec
+SERVER:   Recv: 58.40 KBytes/sec
+
+Unroll 4x
+
+SERVER: Host<->server: 291,840 bytes in 10 tests
+SERVER:   Send: 73.83 KBytes/sec
+SERVER:   Recv: 58.40 KBytes/sec
+
+Conclusion: 2x = good
+
+** Tweak host recv pagewise loop

@@ -3922,26 +3922,38 @@ send_file_data: .proc
 send_file_data_host: .proc
 
                 jsr fix_up_packet_size_for_pagewise_transfer
-                bcc last_page
+                .lbcc last_page
 
+num_unrolls=2
+                .cerror 256%num_unrolls!=0,"no"
+                
 first_pages:
                 ldy #0
+                
 one_page_loop:
+
+                .rept num_unrolls
+                
                 lda (scratch_load),y
                 sta via+0
+
+                lda #$10
 -
-                lda via+13
-                and #$10
+                bit via+13
                 beq -
+                
                 iny
+
+                .next
+                
                 bne one_page_loop
 
                 inc scratch_load+1
 
                 inc scratch_p_size+1
-                bne one_page_loop
+                .lbne one_page_loop
                 inc scratch_p_size+2
-                bne one_page_loop
+                .lbne one_page_loop
                 inc scratch_p_size+2
 
 last_page:
