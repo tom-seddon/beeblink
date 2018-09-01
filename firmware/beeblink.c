@@ -144,10 +144,11 @@ static void WaitForBeebReady(void *context) {
     uint16_t counter=0;
     
     while(PINC&BBC_CB2) {
-        USB_USBTask();
-
         ++counter;
         if(counter==0) {
+            /* This happens at ~250Hz. */
+            USB_USBTask();
+
             if(context) {
                 uint8_t *flag=context;
 
