@@ -1,19 +1,19 @@
-#ifndef RECEIVE_FN
-#error
+#ifndef RECV
+#error RECV must be defined
 #endif
 
 #ifndef RECEIVING_FROM_BEEB
-#error
+#error RECEIVING_FROM_BEEB must be defined
 #endif
 
 #ifndef LEDS_STATE
-#error
+#error LEDS_STATE must be defined
 #endif
 
 {
     Error err;
 
-    err=(RECEIVE_FN)(&ph->t.all);
+    RECV(&ph->t.all);
     if(err!=Error_None) {
         if((RECEIVING_FROM_BEEB)&&err==Error_NoBeebHandshake) {
             /* Minor fudge... */
@@ -34,13 +34,13 @@
 
     if(ph->t.bits.v) {
         for(uint8_t i=0;i<4;++i) {
-            err=(RECEIVE_FN)(&ph->p_size[i]);
+            RECV(&ph->p_size[i]);
             if(err!=Error_None) {
                 return err;
             }
         }
     } else {
-        err=(RECEIVE_FN)(&ph->p);
+        RECV(&ph->p);
         if(err!=Error_None) {
             return err;
         }
@@ -52,6 +52,6 @@
 
 }
 
-#undef RECEIVE_FN
+#undef RECV
 #undef RECEIVING_FROM_BEEB
 #undef LEDS_STATE

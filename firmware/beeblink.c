@@ -133,7 +133,6 @@ static const char wait_for_bbc_msg[] PROGMEM="\n.. Recv request from BBC...\n";
 //////////////////////////////////////////////////////////////////////////
 
 static uint8_t g_num_loops=0;
-//static uint8_t g_num_wait_for_CB2_high_loops=0;
 static uint8_t g_last_WUR_result=0;
 static PacketType g_last_request_type={0,};
 static uint8_t g_printed_wait_for_bbc_msg=0;
@@ -174,10 +173,10 @@ static void BeebDidNotAck(void) {
     }
 }
 
-#define ACK_AND_CHECK_AND_RETURN()              \
+#define ACK_AND_CHECK()                         \
     do {                                        \
         PORTC&=~BBC_CB1;                        \
-        Error err=Error_None;                   \
+        err=Error_None;                         \
                                                 \
         uint8_t counter=0;                      \
         while(!(PINC&BBC_CB2)) {                \
@@ -189,39 +188,36 @@ static void BeebDidNotAck(void) {
         }                                       \
                                                 \
         PORTC|=BBC_CB1;                         \
-                                                \
-        return err;                             \
     } while(0)
     
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-static Error WARN_UNUSED ReceiveByteFromBeeb(uint8_t *value) {
-    /* Things seem a bit unreliable unless DDRB is set somewhat in
-     * advance of the read. */
-    DDRB=0;
+#define RECEIVE_BYTE_FROM_BEEB(VALUE_PTR)       \
+    do {                                        \
+        DDRB=0;                                 \
+                                                \
+        WAIT_FOR_BEEB_READY();                  \
+                                                \
+        *(VALUE_PTR)=PINB;                      \
+                                                \
+        ACK_AND_CHECK();                        \
+    } while(0)
 
-    WAIT_FOR_BEEB_READY();
-
-    *value=PINB;
-
-    ACK_AND_CHECK_AND_RETURN();
-}
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-static Error WARN_UNUSED SendByteToBeeb(uint8_t value) {
-    /* Things seem a bit unreliable unless DDRB is set somewhat in
-     * advance of the write. */
-    DDRB=255;
-
-    WAIT_FOR_BEEB_READY();
-
-    PORTB=value;
-
-    ACK_AND_CHECK_AND_RETURN();
-}
+#define SEND_BYTE_TO_BEEB(VALUE)                \
+    do {                                        \
+        DDRB=255;                               \
+                                                \
+        WAIT_FOR_BEEB_READY();                  \
+                                                \
+        PORTB=(VALUE);                          \
+                                                \
+        ACK_AND_CHECK();                        \
+    } while(0)
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -253,44 +249,40 @@ static Error WARN_UNUSED WaitUntilEndpointReady(void) {
     }
 }
 
-static Error WARN_UNUSED ReceiveByteFromHost(uint8_t *value) {
-    Error err;
-    
-    if(!Endpoint_IsReadWriteAllowed()) {
-        err=WaitUntilEndpointReady();
-        if(err!=Error_None) {
-            return err;
-        }
-    }
-
-    *value=Endpoint_Read_8();
-
-    if(!Endpoint_IsReadWriteAllowed()) {
-        Endpoint_ClearOUT();
-    }
-
-    return Error_None;
-}
+#define RECEIVE_BYTE_FROM_HOST(VALUE_PTR)               \
+    do {                                                \
+        if(Endpoint_IsReadWriteAllowed()) {             \
+            err=Error_None;                             \
+        } else {                                        \
+            err=WaitUntilEndpointReady();               \
+        }                                               \
+                                                        \
+        if(err==Error_None) {                           \
+            *(VALUE_PTR)=Endpoint_Read_8();             \
+                                                        \
+            if(!Endpoint_IsReadWriteAllowed()) {        \
+                Endpoint_ClearOUT();                    \
+            }                                           \
+        }                                               \
+    } while(0)
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-static Error WARN_UNUSED SendByteToHost(uint8_t value) {
-    Error err;
-    
-    if(!Endpoint_IsReadWriteAllowed()) {
-        Endpoint_ClearIN();
-
-        err=WaitUntilEndpointReady();
-        if(err!=Error_None) {
-            return err;
-        }
-    }
-        
-    Endpoint_Write_8(value);
-
-    return Error_None;
-}
+#define SEND_BYTE_TO_HOST(VALUE)                \
+    do {                                        \
+        err=Error_None;                         \
+                                                \
+        if(!Endpoint_IsReadWriteAllowed()) {    \
+            Endpoint_ClearIN();                 \
+                                                \
+            err=WaitUntilEndpointReady();       \
+        }                                       \
+                                                \
+        if(err==Error_None) {                   \
+            Endpoint_Write_8(VALUE);            \
+        }                                       \
+    } while(0)
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -339,14 +331,14 @@ static void serial_PacketHeader(const char *prefix_pstr,
 //////////////////////////////////////////////////////////////////////////
 
 static Error WARN_UNUSED ReceivePacketHeaderFromBeeb(PacketHeader *ph) {
-#define RECEIVE_FN ReceiveByteFromBeeb
+#define RECV RECEIVE_BYTE_FROM_BEEB 
 #define RECEIVING_FROM_BEEB 1
 #define LEDS_STATE LEDS_RED
 #include "ReceivePacketHeader.inl"
 }
 
 static Error WARN_UNUSED ReceivePacketHeaderFromHost(PacketHeader *ph) {
-#define RECEIVE_FN ReceiveByteFromHost
+#define RECV RECEIVE_BYTE_FROM_HOST
 #define RECEIVING_FROM_BEEB 1
 #define LEDS_STATE LEDS_BLUE
 #include "ReceivePacketHeader.inl"
@@ -414,115 +406,27 @@ static int IsVerboseRequest(const PacketHeader *ph) {
 
 const uint16_t toggle_mask=1<<12;
 
-
-
-static Error WARN_UNUSED SendPacketHeaderAndForwardPayload(
+static Error WARN_UNUSED SendPacketHeaderAndForwardPayloadBeebToHost(
     const PacketHeader *request_ph,
-    const PacketHeader *response_ph,
-    Error WARN_UNUSED (*send_fn)(uint8_t),
-        Error WARN_UNUSED (*recv_fn)(uint8_t *),
-    uint8_t led_constant,uint8_t led_flicker)
+    const PacketHeader *response_ph)
 {
-    Error err;
+#define RECV RECEIVE_BYTE_FROM_BEEB
+#define SEND SEND_BYTE_TO_HOST
+#define LED_CONSTANT LEDS_RED
+#define LED_FLICKER LEDS_BLUE
+#include "SendPacketHeaderAndForwardPayload.inl"
+}
 
-    err=(*send_fn)(response_ph->t.all);
-    if(err!=Error_None) {
-        return err;
-    }
-
-    if(response_ph->t.bits.v) {
-        for(uint8_t i=0;i<4;++i) {
-            err=(*send_fn)(response_ph->p_size[i]);
-            if(err!=Error_None) {
-                return err;
-            }
-        }
-
-        uint32_t p_size=GetPayloadSize(response_ph);
-
-#if VERBOSE_FORWARD_PAYLOAD
-        int initially_verbose=IsVerboseRequest(request_ph);
-        int verbose=initially_verbose;
-#endif
-
-#if VERBOSE_FORWARD_PAYLOAD
-        if(verbose) {
-            SERIAL_PSTR("-- p_size=");
-            serial_u32(p_size);
-            serial_ch('\n');
-        }
-#endif
-
-        for(uint32_t i=0;i<p_size;++i) {
-            uint8_t x;
-
-#if VERBOSE_FORWARD_PAYLOAD
-            /* The output usually isn't very interesting past the
-             * first hundred bytes or so... */
-            if(p_size>MAX_NUM_DUMP_BYTES) {
-                if(i==MAX_NUM_DUMP_BYTES/2) {
-                    if(verbose) {
-                        SERIAL_PSTR("-- (eliding transfer)\n");
-                    }
-                    verbose=0;
-                } else if(i==p_size-MAX_NUM_DUMP_BYTES/2) {
-                    verbose=initially_verbose;
-                }
-            }
-                
-            if(verbose) {
-                SERIAL_PSTR("-- ");
-                serial_u32(i);
-                serial_ch('/');
-                serial_u32(p_size);
-                SERIAL_PSTR("; recv ");
-            }
-#endif
-
-            if((led_constant|led_flicker)!=0) {
-                LEDs_SetAllLEDs(led_constant|
-                                (i&LED_FLICKER_MASK?led_flicker:0));
-            }
-            
-            err=(*recv_fn)(&x);
-            if(err!=Error_None) {
-                return err;
-            }
-
-#if VERBOSE_FORWARD_PAYLOAD
-            if(verbose) {
-                serial_x8(x);
-                if(x>=32&&x<127) {
-                    SERIAL_PSTR(" '");
-                    serial_ch(x);
-                    SERIAL_PSTR("', ");
-                } else {
-                    SERIAL_PSTR(",     ");
-                }
-                SERIAL_PSTR(" send ");
-            }
-#endif
-
-            err=(*send_fn)(x);
-            if(err!=Error_None) {
-                return err;
-            }
-
-#if VERBOSE_FORWARD_PAYLOAD
-            if(verbose) {
-                SERIAL_PSTR("done.\n");
-            }
-#endif
-        }
-    } else {
-        err=(*send_fn)(response_ph->p);
-        if(err!=Error_None) {
-            return err;
-        }
-    }
-
-    return Error_None;
-}    
+static Error WARN_UNUSED SendPacketHeaderAndForwardPayloadHostToBeeb(
+    const PacketHeader *request_ph,
+    const PacketHeader *response_ph)
+{
+#define RECV RECEIVE_BYTE_FROM_HOST
+#define SEND SEND_BYTE_TO_BEEB
+#define LED_CONSTANT LEDS_BLUE
+#define LED_FLICKER LEDS_RED
+#include "SendPacketHeaderAndForwardPayload.inl"
+}
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -538,51 +442,61 @@ static Error WARN_UNUSED SendPacketHeaderAndForwardPayload(
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-static uint8_t g_error_code;
-static const char *g_error_text_ps;
-static size_t g_error_index;
+/* static uint8_t g_error_code; */
+/* static const char *g_error_text_ps; */
+/* static size_t g_error_index; */
 
-static Error WARN_UNUSED ReceiveErrorByte(uint8_t *value) {
-    if(g_error_index==0) {
+static void ReceiveErrorByte(Error *err,
+                             uint8_t *value,
+                             size_t *index,
+                             uint8_t code,
+                             const char *text_ps)
+{
+    if(*index==0) {
         *value=0;
-    } else if(g_error_index==1) {
-        *value=g_error_code;
+    } else if(*index==1) {
+        *value=code;
     } else {
-        *value=pgm_read_byte(g_error_text_ps+g_error_index-2);
+        *value=pgm_read_byte(text_ps+*index-2);
     }
 
-    ++g_error_index;
-    
-    return Error_None;
+    ++*index;
+    *err=Error_None;
 }    
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-static Error SendErrorToBeeb(uint8_t code,const char *text_ps) {
-    Error err;
+/* static Error WARN_UNUSED NullReceive(uint8_t *value) { */
+/*     *value=0; */
+/*     return Error_None; */
+/* } */
 
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+static Error WARN_UNUSED SendErrorToBeeb(uint8_t code,const char *text_ps) {
     SERIAL_PSTR("!! AVR ERROR response: ");
     serial_u8(code);
     serial_ch(' ');
     serial_ps(text_ps);
     serial_ch('\n');
 
-    PacketHeader ph;
-    ph.t.bits.v=1;
-    ph.t.bits.c=RESPONSE_ERROR;
-
+    PacketHeader ph={.t={.bits={.v=1,.c=RESPONSE_ERROR}}};
+    
     SetPayloadSize(&ph,1+1+strlen_P(text_ps)+1);
 
-    g_error_code=code;
-    g_error_text_ps=text_ps;
-    g_error_index=0;
-    err=SendPacketHeaderAndForwardPayload(NULL,
-                                          &ph,
-                                          &SendByteToBeeb,
-                                          &ReceiveErrorByte,
-                                          0,0);
-    return err;
+    size_t error_recv_index=0;
+    
+    // for SendPacketHeaderAndForwardPayload
+    PacketHeader *request_ph=NULL;
+    PacketHeader *response_ph=&ph;
+
+#define RECV(VALUE_PTR) (ReceiveErrorByte(&err,(VALUE_PTR),&error_recv_index,code,text_ps))
+#define SEND SEND_BYTE_TO_BEEB
+#define LED_CONSTANT 0
+#define LED_FLICKER 0
+#include "SendPacketHeaderAndForwardPayload.inl"
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -603,7 +517,7 @@ static Error WARN_UNUSED HandleRequestAVR(
                                    PSTR("Bad REQUEST_AVR payload size"));
         }
 
-        err=ReceiveByteFromBeeb(&p);
+        RECEIVE_BYTE_FROM_BEEB(&p);
         if(err!=Error_None) {
             return err;
         }
@@ -651,11 +565,16 @@ static Error WARN_UNUSED HandleRequestAVR(
 
             /* Since the payload is fixed-size, the receive callback
              * won't get called. */
-            return SendPacketHeaderAndForwardPayload(NULL,
-                                                     &ph,
-                                                     &SendByteToBeeb,
-                                                     NULL,
-                                                     0,0);
+
+            // for SendPacketHeaderAndForwardPayload
+            PacketHeader *request_ph=NULL;
+            PacketHeader *response_ph=&ph;
+
+#define RECV(X) ((void)X,err=Error_None,(void)0)
+#define SEND SEND_BYTE_TO_BEEB
+#define LED_CONSTANT 0
+#define LED_FLICKER 0
+#include "SendPacketHeaderAndForwardPayload.inl"
         }
 
     case REQUEST_AVR_ERROR:
@@ -746,11 +665,7 @@ static void NOINLINE MainLoop(void) {
         return;
     }
     
-    err=SendPacketHeaderAndForwardPayload(&request,
-                                          &request,
-                                          &SendByteToHost,
-                                          &ReceiveByteFromBeeb,
-                                          LEDS_RED,LEDS_BLUE);
+    err=SendPacketHeaderAndForwardPayloadBeebToHost(&request,&request);
     if(err!=Error_None) {
         serial_error(err,PSTR("send beeb->host"));
         StallDeviceToHost();
@@ -781,11 +696,7 @@ static void NOINLINE MainLoop(void) {
         SERIAL_PACKET_HEADER("-- PC Response: ",&response);
     }
 
-    err=SendPacketHeaderAndForwardPayload(&request,
-                                          &response,
-                                          &SendByteToBeeb,
-                                          &ReceiveByteFromHost,
-                                          LEDS_BLUE,LEDS_RED);
+    err=SendPacketHeaderAndForwardPayloadHostToBeeb(&request,&response);
     if(err!=Error_None) {
         serial_error(err,PSTR("send host->beeb"));
         StallHostToDevice();

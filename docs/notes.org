@@ -285,3 +285,55 @@ SERVER:   Recv: 68.90 KBytes/sec
 
 Not going to bother doing any more with this. The code is still there,
 just toggled out.
+
+* AVR code tweaks
+
+Before (I think - reconstituted from the above):
+
+SERVER: Host<->server: 294,390 bytes in 10 tests
+SERVER:   Send: 77.28 KBytes/sec
+SERVER:   Recv: 61.69 KBytes/sec
+SERVER: Parasite<->server: 307,200 bytes in 10 tests
+SERVER:   Send: 71.09 KBytes/sec
+SERVER:   Recv: 67.87 KBytes/sec
+
+Macroize various bits.
+
+SERVER: Host<->server: 294,390 bytes in 10 tests
+SERVER:   Send: 74.87 KBytes/sec
+SERVER:   Recv: 61.69 KBytes/sec
+SERVER: Parasite<->server: 309,750 bytes in 10 tests
+SERVER:   Send: 81.31 KBytes/sec
+SERVER:   Recv: 68.90 KBytes/sec
+
+Macroize *everything*. Not sure this does much for the readability,
+but it doesn't hurt the speed...
+
+SERVER: Host<->server: 294,390 bytes in 10 tests
+SERVER:   Send: 78.12 KBytes/sec
+SERVER:   Recv: 61.96 KBytes/sec
+SERVER: Parasite<->server: 309,750 bytes in 10 tests
+SERVER:   Send: 84.26 KBytes/sec
+SERVER:   Recv: 69.22 KBytes/sec
+
+Rough figures:
+
+Host send = 2000000/(78.12*1024) = 25 cycles/bytes
+Host recv = 2000000/(61.96*1024) = 31.5 cycles/byte
+Parasite send = 2000000/(84.26*1024) = 23.2 cycles/byte
+Parasite recv = 2000000/(69.22*1024) = 28.2 cycles/byte
+
+Since the host recv case hardly improved due to the AVR code tweaks,
+the limit is presumably the 6502 code in that case. (Not sure there's
+a vast amount to be squeezed out there, but, maybe...)
+
+The host send/recv cases are now the 6.5 cycles apart you'd expect.
+Recv is always going to be ~6-7 cycles slower, because there's an
+extra 1MHz read, and the (zp),Y write always takes 6 cycles
+(*SPEEDTEST transfers page-aligned data so the send case never hits
+the page boundary crossin when reading).
+
+The fact parasite recv is only 5 cycles slower than send is a bit
+suspicious. Is there a bit more to be squeezed out here?
+
+
