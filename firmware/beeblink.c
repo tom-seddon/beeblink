@@ -338,55 +338,18 @@ static void serial_PacketHeader(const char *prefix_pstr,
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-#define RECEIVE_PACKET_HEADER_BODY(RECEIVE_FN,RECEIVING_FROM_BEEB,LEDS_STATE) \
-    do {                                                                \
-        Error err;                                                      \
-                                                                        \
-        err=(RECEIVE_FN)(&ph->t.all);                                   \
-        if(err!=Error_None) {                                           \
-            if((RECEIVING_FROM_BEEB)&&err==Error_NoBeebHandshake) {     \
-                /* Minor fudge... */                                    \
-                err=Error_Reset;                                        \
-            }                                                           \
-                                                                        \
-            return err;                                                 \
-        }                                                               \
-                                                                        \
-        LEDs_SetAllLEDs(LEDS_STATE);                                    \
-                                                                        \
-        if(RECEIVING_FROM_BEEB) {                                       \
-            if(ph->t.bits.c==REQUEST_AVR_PRESENCE) {                    \
-                /* AVR presence check. Just ignore. */                  \
-                return Error_None;                                      \
-            }                                                           \
-        }                                                               \
-                                                                        \
-        if(ph->t.bits.v) {                                              \
-            for(uint8_t i=0;i<4;++i) {                                  \
-                err=(RECEIVE_FN)(&ph->p_size[i]);                       \
-                if(err!=Error_None) {                                   \
-                    return err;                                         \
-                }                                                       \
-            }                                                           \
-        } else {                                                        \
-            err=(RECEIVE_FN)(&ph->p);                                   \
-            if(err!=Error_None) {                                       \
-                return err;                                             \
-            }                                                           \
-                                                                        \
-            /* set p_size in this case?? */                             \
-        }                                                               \
-                                                                        \
-        return Error_None;                                              \
-                                                                        \
-    } while(0)
-
 static Error WARN_UNUSED ReceivePacketHeaderFromBeeb(PacketHeader *ph) {
-    RECEIVE_PACKET_HEADER_BODY(ReceiveByteFromBeeb,1,LEDS_RED);
+#define RECEIVE_FN ReceiveByteFromBeeb
+#define RECEIVING_FROM_BEEB 1
+#define LEDS_STATE LEDS_RED
+#include "ReceivePacketHeader.inl"
 }
 
 static Error WARN_UNUSED ReceivePacketHeaderFromHost(PacketHeader *ph) {
-    RECEIVE_PACKET_HEADER_BODY(ReceiveByteFromHost,0,LEDS_BLUE);
+#define RECEIVE_FN ReceiveByteFromHost
+#define RECEIVING_FROM_BEEB 1
+#define LEDS_STATE LEDS_BLUE
+#include "ReceivePacketHeader.inl"
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -450,7 +413,9 @@ static int IsVerboseRequest(const PacketHeader *ph) {
 #define LED_FLICKER_MASK (1<<12)
 
 const uint16_t toggle_mask=1<<12;
-        
+
+
+
 static Error WARN_UNUSED SendPacketHeaderAndForwardPayload(
     const PacketHeader *request_ph,
     const PacketHeader *response_ph,
