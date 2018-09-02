@@ -34,7 +34,7 @@ dfu2: $(TARGET).hex $(MAKEFILE_LIST)
 	@echo $(MSG_DFU_CMD) Programming FLASH with dfu-programmer using \"$<\"
 	dfu-programmer $(MCU) erase
 	dfu-programmer $(MCU) flash $<
-#	dfu-programmer $(MCU) reset
+	dfu-programmer $(MCU) reset
 
 include $(LUFA_PATH)/Build/lufa_core.mk
 include $(LUFA_PATH)/Build/lufa_sources.mk
