@@ -351,52 +351,55 @@ static void serial_PacketHeader(const char *prefix_pstr,
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-static Error WARN_UNUSED ReceivePacketHeader(
-    PacketHeader *ph,
-    Error WARN_UNUSED (*recv_fn)(uint8_t *),
-    uint8_t receiving_from_beeb,
-    uint8_t leds_state)
-{
-    Error err;
+#define RECEIVE_PACKET_HEADER_BODY(RECEIVE_FN,RECEIVING_FROM_BEEB,LEDS_STATE) \
+    do {                                                                \
+        Error err;                                                      \
+                                                                        \
+        err=(RECEIVE_FN)(&ph->t.all);                                   \
+        if(err!=Error_None) {                                           \
+            if((RECEIVING_FROM_BEEB)&&err==Error_NoBeebHandshake) {     \
+                /* Minor fudge... */                                    \
+                err=Error_Reset;                                        \
+            }                                                           \
+                                                                        \
+            return err;                                                 \
+        }                                                               \
+                                                                        \
+        LEDs_SetAllLEDs(LEDS_STATE);                                    \
+                                                                        \
+        if(RECEIVING_FROM_BEEB) {                                       \
+            if(ph->t.bits.c==REQUEST_AVR_PRESENCE) {                    \
+                /* AVR presence check. Just ignore. */                  \
+                return Error_None;                                      \
+            }                                                           \
+        }                                                               \
+                                                                        \
+        if(ph->t.bits.v) {                                              \
+            for(uint8_t i=0;i<4;++i) {                                  \
+                err=(RECEIVE_FN)(&ph->p_size[i]);                       \
+                if(err!=Error_None) {                                   \
+                    return err;                                         \
+                }                                                       \
+            }                                                           \
+        } else {                                                        \
+            err=(RECEIVE_FN)(&ph->p);                                   \
+            if(err!=Error_None) {                                       \
+                return err;                                             \
+            }                                                           \
+                                                                        \
+            /* set p_size in this case?? */                             \
+        }                                                               \
+                                                                        \
+        return Error_None;                                              \
+                                                                        \
+    } while(0)
 
-    err=(*recv_fn)(&ph->t.all);
-    if(err!=Error_None) {
-        if(receiving_from_beeb&&
-           err==Error_NoBeebHandshake)
-        {
-            /* Minor fudge... */
-            err=Error_Reset;
-        }
-        
-        return err;
-    }
+static Error WARN_UNUSED ReceivePacketHeaderFromBeeb(PacketHeader *ph) {
+    RECEIVE_PACKET_HEADER_BODY(ReceiveByteFromBeeb,1,LEDS_RED);
+}
 
-    LEDs_SetAllLEDs(leds_state);
-    
-    if(receiving_from_beeb) {
-        if(ph->t.bits.c==REQUEST_AVR_PRESENCE) {
-            /* AVR presence check. Just ignore. */
-            return Error_None;
-        }
-    }
-
-    if(ph->t.bits.v) {
-        for(uint8_t i=0;i<4;++i) {
-            err=(*recv_fn)(&ph->p_size[i]);
-            if(err!=Error_None) {
-                return err;
-            }
-        }
-    } else {
-        err=(*recv_fn)(&ph->p);
-        if(err!=Error_None) {
-            return err;
-        }
-
-        /* set p_size in this case?? */
-    }
-
-    return Error_None;
+static Error WARN_UNUSED ReceivePacketHeaderFromHost(PacketHeader *ph) {
+    RECEIVE_PACKET_HEADER_BODY(ReceiveByteFromHost,0,LEDS_BLUE);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -756,10 +759,7 @@ static void NOINLINE MainLoop(void) {
     }
 
     g_last_request_type.all=0;
-    err=ReceivePacketHeader(&request,
-                            &ReceiveByteFromBeeb,
-                            1,
-                            LEDS_RED);
+    err=ReceivePacketHeaderFromBeeb(&request);
     if(err!=Error_None) {
         if(err==Error_Reset) {
             SERIAL_PSTR("!! BBC requested a reset.\n");
@@ -818,10 +818,7 @@ static void NOINLINE MainLoop(void) {
         SERIAL_PSTR(".. Receive response from PC...\n");
     }
 
-    err=ReceivePacketHeader(&response,
-                            &ReceiveByteFromHost,
-                            0,
-                            LEDS_BLUE);
+    err=ReceivePacketHeaderFromHost(&response);
     if(err!=Error_None) {
         serial_error(err,PSTR("receive header from host"));
         StallHostToDevice();
