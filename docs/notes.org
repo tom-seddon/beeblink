@@ -6,7 +6,7 @@ Brain dump that's on GitHub so I have a backup.
 
 Back-of-the-envelope calculations to give peak plausible-ish throughput, for actual code that might actually run from a ROM.
 
-Server->BBC:
+BBC->server:
 
 : lda (ptr),Y   ; +5 = 5   assume no page crossing
 : sta via+0     ; +6 = 11
@@ -23,7 +23,7 @@ So 23N+3 for N unrolls, or 2e6/((23*N+3)/N). For 1 page:
 4x = 82.24KBytes/sec
 8x = 83.56KBytes/sec
 
-BBC->server:
+Server->BBC:
 
 : stx via+0     ; +6 = 6   arbitrary value to set the handshaking off
 : lda #$10      ; +2 = 8
