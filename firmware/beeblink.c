@@ -141,22 +141,26 @@ static uint8_t g_printed_wait_for_bbc_msg=0;
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-static void WaitForBeebReady(void) {
-    uint16_t counter=0;
-    
-    while(PINC&BBC_CB2) {
-        ++counter;
-        if(counter==0) {
-            /* This happens at ~250Hz. */
-            USB_USBTask();
+static void BeebDidNotBecomeReady(void) {
+    /* This happens at ~250Hz. */
+    USB_USBTask();
 
-            if(!g_printed_wait_for_bbc_msg) {
-                serial_ps(wait_for_bbc_msg);
-                g_printed_wait_for_bbc_msg=1;
-            }
-        }
+    if(!g_printed_wait_for_bbc_msg) {
+        serial_ps(wait_for_bbc_msg);
+        g_printed_wait_for_bbc_msg=1;
     }
 }
+
+#define WAIT_FOR_BEEB_READY()                   \
+    do {                                        \
+        uint16_t counter=0;                     \
+        while(PINC&BBC_CB2) {                   \
+            ++counter;                          \
+            if(counter==0) {                    \
+                BeebDidNotBecomeReady();        \
+            }                                   \
+        }                                       \
+    } while(0)
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -201,8 +205,8 @@ static Error WARN_UNUSED ReceiveByteFromBeeb(uint8_t *value) {
     /* Things seem a bit unreliable unless DDRB is set somewhat in
      * advance of the read. */
     DDRB=0;
-    
-    WaitForBeebReady();
+
+    WAIT_FOR_BEEB_READY();
 
     *value=PINB;
 
@@ -223,8 +227,8 @@ static Error WARN_UNUSED SendByteToBeeb(uint8_t value) {
     /* Things seem a bit unreliable unless DDRB is set somewhat in
      * advance of the write. */
     DDRB=255;
-    
-    WaitForBeebReady();
+
+    WAIT_FOR_BEEB_READY();
 
     PORTB=value;
 
