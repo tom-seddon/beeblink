@@ -133,7 +133,7 @@ static const char wait_for_bbc_msg[] PROGMEM="\n.. Recv request from BBC...\n";
 //////////////////////////////////////////////////////////////////////////
 
 static uint8_t g_num_loops=0;
-static uint8_t g_num_wait_for_CB2_high_loops=0;
+//static uint8_t g_num_wait_for_CB2_high_loops=0;
 static uint8_t g_last_WUR_result=0;
 static PacketType g_last_request_type={0,};
 static uint8_t g_printed_wait_for_bbc_msg=0;
@@ -165,43 +165,38 @@ static void BeebDidNotBecomeReady(void) {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-static Error WARN_UNUSED AckAndCheck(void) {
-    Error result=Error_None;
-    
-    PORTC&=~BBC_CB1;
+static void BeebDidNotAck(void) {
+    SERIAL_PSTR("!! AckAndCheck: CB2 still low.\n");
 
-    /* in handshake mode, CB2 ought to go high within 1-2usec, so
-     * _delay_us(1.0) followed by a check of PINC ought to be enough.
-     * This appeared to be 100% unreliable for me, even with a 10usec
-     * delay, so here's a spin loop instead - that of course always
-     * seems to finish within 1 iteration :-|
-     */
-    g_num_wait_for_CB2_high_loops=0;
+    /* Error. */
     while(!(PINC&BBC_CB2)) {
-        ++g_num_wait_for_CB2_high_loops;
-        if(g_num_wait_for_CB2_high_loops>10) {
-            SERIAL_PSTR("!! AckAndCheck: CB2 still low.\n");
-
-            /* Error. */
-            while(!(PINC&BBC_CB2)) {
-                USB_USBTask();
-            }
-
-            result=Error_NoBeebHandshake;
-        }
+        USB_USBTask();
     }
-    
-    PORTC|=BBC_CB1;
-
-    return result;
 }
 
+#define ACK_AND_CHECK_AND_RETURN()              \
+    do {                                        \
+        PORTC&=~BBC_CB1;                        \
+        Error err=Error_None;                   \
+                                                \
+        uint8_t counter=0;                      \
+        while(!(PINC&BBC_CB2)) {                \
+            ++counter;                          \
+            if(counter==0) {                    \
+                BeebDidNotAck();                \
+                err=Error_NoBeebHandshake;      \
+            }                                   \
+        }                                       \
+                                                \
+        PORTC|=BBC_CB1;                         \
+                                                \
+        return err;                             \
+    } while(0)
+    
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
 static Error WARN_UNUSED ReceiveByteFromBeeb(uint8_t *value) {
-    Error err;
-    
     /* Things seem a bit unreliable unless DDRB is set somewhat in
      * advance of the read. */
     DDRB=0;
@@ -210,20 +205,13 @@ static Error WARN_UNUSED ReceiveByteFromBeeb(uint8_t *value) {
 
     *value=PINB;
 
-    err=AckAndCheck();
-    if(err!=Error_None) {
-        return err;
-    }
-
-    return Error_None;
+    ACK_AND_CHECK_AND_RETURN();
 }
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
 static Error WARN_UNUSED SendByteToBeeb(uint8_t value) {
-    Error err;
-    
     /* Things seem a bit unreliable unless DDRB is set somewhat in
      * advance of the write. */
     DDRB=255;
@@ -232,12 +220,7 @@ static Error WARN_UNUSED SendByteToBeeb(uint8_t value) {
 
     PORTB=value;
 
-    err=AckAndCheck();
-    if(err!=Error_None) {
-        return err;
-    }
-
-    return Error_None;
+    ACK_AND_CHECK_AND_RETURN();
 }
 
 //////////////////////////////////////////////////////////////////////////
