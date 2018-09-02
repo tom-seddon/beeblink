@@ -336,4 +336,16 @@ the page boundary crossin when reading).
 The fact parasite recv is only 5 cycles slower than send is a bit
 suspicious. Is there a bit more to be squeezed out here?
 
+Add fast path for non-verbose large transfers:
 
+SERVER: Host<->server: 294,390 bytes in 10 tests
+SERVER:   Send: 78.55 KBytes/sec
+SERVER:   Recv: 61.83 KBytes/sec
+SERVER: Parasite<->server: 309,750 bytes in 10 tests
+SERVER:   Send: 85.69 KBytes/sec
+SERVER:   Recv: 69.06 KBytes/sec
+
+2000000/(85.69*1024) = 22.8 cycles/byte
+
+Going to keep this change anyway, because it's the right thing to do,
+even if it doesn't make much of a difference...
