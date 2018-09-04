@@ -129,14 +129,12 @@ static uint8_t g_num_loops=0;
 static uint8_t g_last_WUR_result=0;
 static PacketType g_last_request_type={0,};
 static uint8_t g_printed_wait_for_bbc_msg=0;
+static uint16_t g_usb_task_counter=0;
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
 static void BeebDidNotBecomeReady(void) {
-    /* This happens at ~250Hz. */
-    USB_USBTask();
-
     if(!g_printed_wait_for_bbc_msg) {
         serial_ps(wait_for_bbc_msg);
         g_printed_wait_for_bbc_msg=1;
@@ -147,6 +145,10 @@ static void BeebDidNotBecomeReady(void) {
     do {                                        \
         uint16_t counter=0;                     \
         while(PINC&BBC_CB2) {                   \
+            if(g_usb_task_counter++==0) {       \
+                USB_USBTask();                  \
+            }                                   \
+                                                \
             ++counter;                          \
             if(counter==0) {                    \
                 BeebDidNotBecomeReady();        \
