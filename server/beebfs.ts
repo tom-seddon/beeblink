@@ -1465,7 +1465,9 @@ export class BeebFS {
 
             attr = 0;
             if (i < infParts.length) {
-                if (infParts[i] === 'L' || infParts[i] === 'l') {
+                if (infParts[i].startsWith('CRC=')) {
+                    // Ignore the CRC entry.
+                } else if (infParts[i] === 'L' || infParts[i] === 'l') {
                     attr = LOCKED_ATTR;
                 } else {
                     attr = Number('0x' + infParts[i]);
