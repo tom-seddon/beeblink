@@ -453,22 +453,6 @@ export async function tryStat(filePath: string): Promise<fs.Stats | undefined> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export async function loadJSON(filePath: string, logErrors: boolean = true): Promise<any> {
-    try {
-        const data = await fsReadFile(filePath);
-        const str = data.toString('utf-8');
-        return JSON.parse(str);
-    } catch (error) {
-        if (logErrors) {
-            process.stderr.write('WARNING: failed to load JSON from ``' + filePath + '\'\': ' + error + '\n');
-        }
-        return undefined;
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 export async function saveJSON(filePath: string, obj: any): Promise<void> {
     try {
         await fsWriteFile(filePath, JSON.stringify(obj));

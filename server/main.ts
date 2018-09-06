@@ -21,13 +21,10 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-// npm start -- -v --rom ../rom/.build/beeblink.rom --retry-device --mount beeblink ~/beeb/beeblink/bbc_tests ~/beeb/beeb-files/stuff
-// npm start -- -v --rom ../rom/.build/beeblink.rom --retry-device --fs-verbose --mount beeblink c:\tom\github\beeblink\bbc_tests
-
 import * as argparse from 'argparse';
 import * as utils from './utils';
 import * as usb from 'usb';
-import * as util from 'util';
+import * as path from 'path';
 import * as assert from 'assert';
 import * as beeblink from './beeblink';
 import * as beebfs from './beebfs';
@@ -42,6 +39,18 @@ const DEFAULT_USB_PID = 0xbeeb;
 
 const DEVICE_RETRY_DELAY_MS = 1000;
 
+const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
+
+const DEFAULT_VOLUME = '65boot';
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+interface IConfigFile {
+    folders: string[] | undefined;
+    defaultVolume: string | undefined;
+}
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -51,12 +60,14 @@ interface ICommandLineOptions {
     rom: string;
     fs_verbose: boolean;
     server_verbose: boolean;
-    mount: string;
+    default_volume: string | null;
     retry_device: boolean;
     send_verbose: boolean;
     fatal_verbose: boolean;
     folders: string[];
     avr_verbose: boolean;
+    load_config: string | null;
+    save_config: string | null;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -249,9 +260,78 @@ async function delayMS(ms: number) {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+async function loadConfig(options: ICommandLineOptions, filePath: string, mustExist: boolean): Promise<void> {
+    let data;
+    try {
+        data = await utils.fsReadFile(filePath);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            if (!mustExist) {
+                return;
+            }
+        }
+
+        throw error;
+    }
+
+    const str = data.toString('utf-8');
+    const config = JSON.parse(str) as IConfigFile;
+
+    if (config.defaultVolume !== undefined && options.default_volume === null) {
+        options.default_volume = config.defaultVolume;
+    }
+
+    if (config.folders !== undefined) {
+        for (const configFolder of config.folders) {
+            let found = false;
+
+            for (const optionsFolder of options.folders) {
+                if (path.relative(configFolder, optionsFolder) === '') {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                options.folders.push(configFolder);
+            }
+        }
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+async function maybeSaveConfig(options: ICommandLineOptions): Promise<void> {
+    if (options.save_config === null) {
+        return;
+    }
+
+    const config: IConfigFile = {
+        defaultVolume: options.default_volume !== null ? options.default_volume : undefined,
+        folders: options.folders
+    };
+
+    await utils.fsWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 async function main(options: ICommandLineOptions) {
     const log = new utils.Log('', process.stderr, options.verbose);
     //gSendLog.enabled = options.send_verbose;
+
+    log.pn('cwd: ``' + process.cwd() + '\'\'');
+
+    if (options.load_config === null) {
+        await loadConfig(options, DEFAULT_CONFIG_FILE_NAME, false);
+    } else {
+        await loadConfig(options, options.load_config, true);
+    }
+
+    //log.pn('load_config: ``' + options.load_config + '\'\'');
+    log.pn('save_config: ``' + options.save_config + '\'\'');
 
     if (Number.isNaN(options.device[0]) || Number.isNaN(options.device[1])) {
         throw new Error('invalid USB VID/PID specified');
@@ -275,10 +355,12 @@ async function main(options: ICommandLineOptions) {
 
     const bfs = new beebfs.BeebFS(options.fs_verbose, options.folders);
 
-    const mountError = await bfs.mountByName(options.mount);
+    const mountError = await bfs.mountByName(options.default_volume !== null ? options.default_volume : DEFAULT_VOLUME);
     if (mountError !== undefined) {
         throw new Error('Failed to mount initial volume: ' + mountError);
     }
+
+    await maybeSaveConfig(options);
 
     const server = new Server(options.rom, bfs, options.server_verbose);
 
@@ -412,9 +494,15 @@ function usbVIDOrPID(s: string): number {
 }
 
 {
+    const epi =
+        'VOLUME-FOLDER and DEFAULT-VOLUME settings will be loaded from "' + DEFAULT_CONFIG_FILE_NAME + '" if present. ' +
+        'Use --load-config to load from a different file. Use --save-config to save all options (both those loaded from file ' +
+        'and those specified on the command line) to the given file.';
+
     const parser = new argparse.ArgumentParser({
         addHelp: true,
         description: 'BeebLink server',
+        epilog: epi,
     });
 
     parser.addArgument(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });
@@ -422,12 +510,16 @@ function usbVIDOrPID(s: string): number {
     parser.addArgument(['--rom'], { metavar: 'FILE', defaultValue: './beeblink.rom', help: 'read BeebLink ROM from %(metavar)s. Default: %(defaultValue)s' });
     parser.addArgument(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
     parser.addArgument(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
-    parser.addArgument(['--mount'], { metavar: 'VOLUME', defaultValue: '65boot', help: 'mount %(metavar)s when starting. Default: %(defaultValue)s' });
+    // don't use the argparse default mechanism here - this makes it easier to
+    // later detect the absence of --default-volume.
+    parser.addArgument(['--default-volume'], { metavar: 'DEFAULT-VOLUME', help: 'load volume %(metavar)s when starting. Default: ' + DEFAULT_VOLUME });
     parser.addArgument(['--retry-device'], { action: 'storeTrue', help: 'if device not found, try again after a short delay' });
     parser.addArgument(['--send-verbose'], { action: 'storeTrue', help: 'dump data sent to device' });
     parser.addArgument(['--fatal-verbose'], { action: 'storeTrue', help: 'print debugging info on a fatal error' });
     parser.addArgument(['--avr-verbose'], { action: 'storeTrue', help: 'enable AVR serial output' });
-    parser.addArgument(['folders'], { nargs: '*', metavar: 'FOLDER', help: 'folder to search for volumes' });
+    parser.addArgument(['--load-config'], { metavar: 'FILE', help: 'load config from %(metavar)s' });
+    parser.addArgument(['--save-config'], { metavar: 'FILE', nargs: '?', constant: DEFAULT_CONFIG_FILE_NAME, help: 'save config to %(metavar)s (%(constant)s if not specified)' });
+    parser.addArgument(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'folder to search for volumes' });
 
     const options = parser.parseArgs();
 
