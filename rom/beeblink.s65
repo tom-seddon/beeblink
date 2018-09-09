@@ -1722,6 +1722,19 @@ reset2:
                 .pend
 
 ;-------------------------------------------------------------------------
+
+via_deactivate: .proc
+                ;lda #19
+                ;jsr osbyte
+                
+                lda via+12
+                and #$1f
+                ora #$e0        ;CB2=1
+                sta via+12
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
 ;
 ; Configure a prepared VIA for the receive operation. Must have
 ; previously called prepare_via!
@@ -2137,6 +2150,9 @@ recv_payload_byte: .proc
                 jsr ldunionz32
                 bne more
 
+                jsr via_deactivate
+                lda #0
+                
                 clc
                 rts
 
@@ -3654,8 +3670,14 @@ recv_file_data: .proc
 +
                 ldx #scratch_load
                 jsr is_parasite_address
-                bcc recv_file_data_host
-                jmp recv_file_data_parasite
+                bcc +
+                jsr recv_file_data_parasite
+                jmp done
++
+                jsr recv_file_data_host
+done:
+                jsr via_deactivate
+                rts
                 .pend
 
 ;-------------------------------------------------------------------------
