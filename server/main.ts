@@ -49,6 +49,7 @@ const DEFAULT_VOLUME = '65boot';
 interface IConfigFile {
     folders: string[] | undefined;
     defaultVolume: string | undefined;
+    rom: string | undefined;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -297,6 +298,10 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
             }
         }
     }
+
+    if (config.rom !== undefined && options.rom !== null) {
+        options.rom = config.rom;
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -309,7 +314,8 @@ async function maybeSaveConfig(options: ICommandLineOptions): Promise<void> {
 
     const config: IConfigFile = {
         defaultVolume: options.default_volume !== null ? options.default_volume : undefined,
-        folders: options.folders
+        folders: options.folders,
+        rom: options.rom,
     };
 
     await utils.fsWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));

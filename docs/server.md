@@ -25,8 +25,8 @@ on startup each time.
 
 The server can create the config file for you based on the command
 line options you provide. Use the `--save-config` option to do this.
-It will save the options to `beeblink.json`, which is the file it
-tries to load on startup each time.
+It will save the options to `beeblink_config.json`, which is the file
+it tries to load on startup each time.
 
 You can also specify config file names manually if you prefer - see
 the help.
