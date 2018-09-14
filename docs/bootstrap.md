@@ -1,8 +1,8 @@
 # Bootstrap process
 
 If you've got no way of getting files from your PC to your BBC, copy
-the beeblink.rom file to the same place you run the server from, type
-in the following program, and run it to get a copy of the ROM
+the `beeblink.rom` file to the same place you run the server from,
+type in the following program, and run it to get a copy of the ROM
 transferred from the server.
 
 This assumes you've got a disc drive, so it just saves the ROM (max
