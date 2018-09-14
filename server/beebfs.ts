@@ -236,6 +236,25 @@ class OpenFile {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+class BeebDrive {
+    public readonly name: string;
+    public readonly option: number;
+    public readonly title: string;
+
+    public constructor(name: string, option: number, title: string) {
+        this.name = name;
+        this.option = option;
+        this.title = title;
+    }
+
+    public getOptionDescription(): string {
+        return BOOT_OPTION_DESCRIPTIONS[this.option & 3];
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 interface IDriveSettings {
     boot: number;
     title: string;
@@ -735,6 +754,31 @@ export class BeebFS {
 
     public setLibDir(dir: string) {
         this.libDir = this.setDirInternal(dir);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public async findDrives(): Promise<BeebDrive[]> {
+        let names: string[];
+        try {
+            names = await utils.fsReaddir(this.volumePath);
+        } catch (error) {
+            return BeebFS.throwServerError(error);
+        }
+
+        const drives = [];
+
+        for (const name of names) {
+            if (BeebFS.isValidDrive(name)) {
+                const option = await this.loadBootOption(name);
+                const title = await this.loadTitle(name);
+
+                drives.push(new BeebDrive(name, option, title));
+            }
+        }
+
+        return drives;
     }
 
     /////////////////////////////////////////////////////////////////////////

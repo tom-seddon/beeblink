@@ -175,6 +175,7 @@ export class Server {
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
             new Command('DIR', '(<dir>)', this.dirCommand),
             new Command('DRIVE', '(<drive>)', this.driveCommand),
+            new Command('DRIVES', '', this.drivesCommand),
             new Command('DUMP', '<fsp>', this.dumpCommand),
             new Command('FILES', undefined, this.filesCommand),
             new Command('LIB', '(<dir>)', this.libCommand),
@@ -1063,6 +1064,22 @@ export class Server {
         }
 
         return new Packet(beeblink.RESPONSE_YES, 0);
+    }
+
+    private async drivesCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+        const drives = await this.bfs.findDrives();
+
+        let text = '';
+
+        for (const drive of drives) {
+            text += drive.name + ' - ' + drive.getOptionDescription().padEnd(4, ' ');
+            if (drive.title.length > 0) {
+                text += ': ' + drive.title;
+            }
+            text += utils.BNL;
+        }
+
+        return this.textResponse(text);
     }
 
     private async libCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
