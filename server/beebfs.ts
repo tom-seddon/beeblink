@@ -44,8 +44,11 @@ const MAX_NAME_LENGTH = 10;
 
 const MIN_FILE_HANDLE = 0xa0;
 
-const DEFAULT_LOAD = 0xdeaddead;
-const DEFAULT_EXEC = 0xdeaddead;
+export const SHOULDNT_LOAD = 0xffffffff;
+export const SHOULDNT_EXEC = 0xffffffff;
+
+const DEFAULT_LOAD = SHOULDNT_LOAD;
+const DEFAULT_EXEC = SHOULDNT_EXEC;
 const DEFAULT_ATTR = 0;
 
 const BOOT_OPTION_DESCRIPTIONS = ['None', 'LOAD', 'RUN', 'EXEC'];
@@ -127,6 +130,7 @@ export enum ErrorCode {
     BadString = 253,
     BadCommand = 254,
     DataLost = 0xca,
+    Wont = 0x93,
 }
 
 const errorTexts: { [index: number]: string | undefined } = {
@@ -146,6 +150,7 @@ const errorTexts: { [index: number]: string | undefined } = {
     [ErrorCode.BadString]: 'Bad string',
     [ErrorCode.BadCommand]: 'Bad command',
     [ErrorCode.DataLost]: 'Data lost',
+    [ErrorCode.Wont]: 'Won\'t',
 };
 
 /////////////////////////////////////////////////////////////////////////
@@ -1714,6 +1719,10 @@ export class BeebFS {
             dataLoadAddress = load;
         } else {
             dataLoadAddress = file.load;
+
+            if (file.load === SHOULDNT_LOAD) {
+                BeebFS.throwError(ErrorCode.Wont);
+            }
         }
 
         return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, file.size, file.attr), data!, dataLoadAddress);

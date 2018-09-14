@@ -960,6 +960,10 @@ export class Server {
         const fsp = beebfs.BeebFS.parseFileString(commandLine.parts[0]);
         const file = await this.bfs.getFileForRUN(fsp, tryLibDir);
 
+        if (file.load === beebfs.SHOULDNT_LOAD || file.exec === beebfs.SHOULDNT_EXEC) {
+            beebfs.BeebFS.throwError(beebfs.ErrorCode.Wont);
+        }
+
         const data = await this.bfs.readFile(file);
 
         const builder = new utils.BufferBuilder();

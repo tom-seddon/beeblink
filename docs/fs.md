@@ -106,7 +106,12 @@ with the same name, and a `.inf` extension.
 
 For example: `$.!BOOT` and `$.!BOOT.inf`.
 
-The name seen on the BBC will be exactly the name it has on the PC.
+With a 0-byte .inf file, the name seen on the BBC will be exactly the
+name it has on the PC. Its load and execution addresses will be
+&FFFFFFFF (see the `Won't` error below), and it will be unlocked.
+
+The .inf file will be updated automatically if any of its properties
+change.
 
 ## Accessing BBC files on the server
 
@@ -145,7 +150,7 @@ write protection and then forget...
 
 # Command reference
 
-## Commands available with any filing system
+## Commands available in any filing system
 
 ### `BLCONFIG`
 
@@ -305,7 +310,7 @@ message to remind you.)
 # Non-standard errors
 
 Most of the errors you'll see when using the BLFS will be the usual
-BBC ones, but there are a couple of non-standard ones too.
+DFS ones, but there are a couple of non-standard ones too.
 
 ## `Exists on server` (same code as `Exists`)
 
@@ -326,3 +331,12 @@ The server encountered an unexpected error while doing something.
 
 The file is too large, or the requested operation would make it too
 large. There's a (fairly arbitrary) size limit of 16MBytes.
+
+## `Won't` (&93) (as seen on ADFS)
+
+The file has a load address of &FFFFFFFF, and no explicit load address
+was provided; for `*RUN` this may also mean the file's execution
+address is &FFFFFFFF.
+
+(This usually means the file has a 0-byte .inf file, but these
+addresses can also be assigned manually.)
