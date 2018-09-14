@@ -377,6 +377,10 @@ export class Server {
                     break;
                 }
             }
+
+            if (matchedCommand !== undefined) {
+                break;
+            }
         }
 
         if (matchedCommand !== undefined) {
