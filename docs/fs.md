@@ -82,7 +82,7 @@ Use `*VOL` to load `newvol`.
 	Path: /Users/tom/beeb/beeblink/volumes/newvol
 	>
 
-Creating a new folder in the right place like thisis enough to create
+Creating a new folder in the right place like this is enough to create
 a volume. The server will automatically create folders for any
 additional drives on demand.
 
@@ -133,6 +133,16 @@ filing system operation.
 CTRL+BREAK should sort it out. The startup message will say something
 like `BeebLink - no AVR`.
 
+## Running from sideways RAM
+
+If you're running the filing system from writeable sideways RAM, the
+banner will read `BeebLink <SWR>`. There's no problem doing this, but
+the ROM is intended for use from EEPROM or write-protected sideways
+RAM, so it doesn't have to be reloaded each time.
+
+The message is mainly there for my benefit, in case I switch off the
+write protection and then forget...
+
 # Command reference
 
 ## Commands available with any filing system
@@ -147,9 +157,12 @@ Activate BLFS.
 
 ### `BLSELFUPDATE`
 
-Attempt to update the ROM, if it's loaded into sideways RAM or a
-write-protected ABR cartridge. The server must have been started with
-the `--rom` option.
+Attempt to update the ROM, if it's loaded into sideways RAM. If it
+looks like it might be loaded into a write-protected ABR cartridge, it
+will attempt to unlock the ABR and lock it again afterwards.
+
+The server must be able to find the ROM file - see
+[the bootstrap process](./bootstrap.md).
 
 This is mainly for my benefit when working on the ROM code.
 
@@ -273,6 +286,9 @@ filing systems. This can make it a bit hard to select the actual DFS.
 
 (All the above applies to `*DISK` as well.)
 
+(When active, the `BeebLink` startup banner will include an additional
+message to remind you.)
+
 ## `D` - act as DFS
 
 With act as DFS active, the BLFS will report itself to be filing
@@ -282,6 +298,9 @@ system 4 (DFS) when called upon to identify itself via
 On a Master 128 it will also install temporary filing system entries
 for `DISC` and `DISK` (which will just be ignored if the DFS is also
 present).
+
+(When active, the `BeebLink` startup banner will include an additional
+message to remind you.)
 
 # Non-standard errors
 

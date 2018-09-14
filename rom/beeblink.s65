@@ -697,6 +697,12 @@ svc_boot: .proc
 boot_fs:
                 jsr print_rom_name
 
+                jsr is_sideways_ram
+                bcc +
+                jsr pcprint
+                .text " <SWR>",255
++
+
                 lda #sf_act_as_dfs
                 jsr get_rom_status_flag
                 bcc +
@@ -4965,67 +4971,13 @@ selfupdate_cmd: .proc
                 jsr osbyte
 
 new_rom=$a000
-                
-is_m128=brkthunk                ;bit 7 set if M128
-old_fe34_bit5=brkthunk+1        ;if M128, original value of $fe34 bit
-                                ;5
-abr_offset=brkthunk+2           ;if M128, if bit 7 clear, offset from
-                                ;$fcdd to write to after copy
-relocator=brkthunk+3            ;where to put the relocating code
 
-                lda #0
-                sta is_m128
+abr_offset=brkthunk
+relocator=brkthunk+1            ;where to put the relocating code
 
-                jsr is_rom
-                beq +
-                jmp rom_writeable
-+
-                
-                ; Some support for using the Retro Hardware ABR
-                ; cartridge with the Master 128, since I happen to
-                ; have one...
-                lda #0
-                ldx #1
-                jsr osbyte
-                cpx #3
-                bcs +           
-                jmp rom_not_writeable ;if not M128
-+
                 lda #$80
-                sta is_m128
                 sta abr_offset
 
-                lda $fe34
-                and #$20
-                sta old_fe34_bit5
-
-                lda $f4
-                cmp #4
-                bcc +
-                jmp rom_not_writeable ;if not cartridge ROM slot
-+
-                ldx #<attempt_abr_unlock
-                ldy #>attempt_abr_unlock
-                jsr ask_yn_question
-                bcc rom_not_writeable
-
-                lda $fe34
-                ora #$20        ;make FRED/JIM access cartridge, not
-                                ;1MHz bus
-                sta $fe34
-                
-                ; Turn ROM slot index into offset of lock/unlock
-                ; address. (Lock=$fcdd+((rom&1)<<1);
-                ; unlock=$fcdc+((rom&1)<<1).) But don't actually
-                ; unlock it until it looks like the transfer should
-                ; succeed.
-                lda $f4
-                and #1
-                asl a
-                tax
-                stx abr_offset
-
-rom_writeable:
                 lda #REQUEST_GET_ROM
                 ldx #0
                 jsr send_request_1
@@ -5048,26 +5000,17 @@ rom_writeable:
                 .brk_error 255,"New ROM is too large"
 
 size_ok:
-                bit is_m128
-                bpl recv_rom
-
-                ldx abr_offset
-                bmi recv_rom
-
-                sta $fcdc,x
-
-                jsr is_rom
-                bne recv_rom
-
-                ; ugh, unlock failed.
+                jsr unlock_ABR
+                bcs recv_rom
+                
                 ldx #scratch_p_size
                 jsr discard_remaining_payload
 
-rom_not_writeable:
                 .brk_error 255,"ROM not writeable"
                 
 recv_rom:
-
+                sty abr_offset
+                
                 lda #<new_rom
                 sta scratch_load+0
                 lda #>new_rom
@@ -5148,19 +5091,19 @@ print_loop:
                 cpx #message_end-message
                 bne print_loop
 print_done:
-                bit is_m128
-                bpl hang
+                ldy abr_offset
+                bmi hang
 
-                ldx abr_offset
-                bmi reset_fe34
-                sta $fcdd,x
-
-reset_fe34:                
                 lda $fe34
-                and #(~$20)&$ff
-                ora old_fe34_bit5
+                pha
+                ora #$20        ;access cartridge
                 sta $fe34
 
+                sta $fcdd,y
+
+                pla
+                sta $fe34
+                
 hang:
                 jmp hang
                 
@@ -5756,7 +5699,112 @@ get_TIME: .proc
                 .pend
 
                 .endif
+
+;-------------------------------------------------------------------------
+;
+; Check if code is running from sideways RAM.
+;
+; exit: C=1 if apparently running from RAM
+;       C=0 if apparently running from ROM
+; preserves: Y
+is_sideways_ram: .proc
+                php
+                sei
+                lda $8000
+                tax
+                inx
+                stx $8000
+                cmp $8000
+                beq rom
+ram:
+                sta $8000
+                plp
+                sec
+                rts
                 
+rom:
+                plp
+                clc
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Try to unlock ABR.
+;
+; exit: C=0 if ROM not writeable, C=1 if writeable
+;       Y>=$80 if ABR not unlocked (for whatever reason)
+;       Y<$80 if ABR unlocked - value is offset from $FCDD of unlock address
+; 
+unlock_ABR: .proc
+                jsr is_sideways_ram
+                bcs not_unlocked ;taken if sideways RAM - i.e., not
+                                 ;ABR, or already unlocked
+
+                lda #$81
+                ldx #$0
+                ldy #$ff
+                jsr osbyte
+
+                cpx #1
+                beq try_unlock  ;taken if Electron
+
+                cpx #$fd
+                beq try_unlock  ;taken if Master 128
+
+                cpx #$f7
+                beq try_unlock  ;taken if Master ET
+
+not_unlocked:
+                ldy #$80
+                rts
+
+try_unlock:
+                lda $f4
+                cmp #4
+                bcs not_unlocked ;taken if not in a M128 cartridge
+                                 ;slot
+
+                lda $f4
+                and #1
+                asl a
+                tay
+
+                lda $fe34
+                pha
+                ora #$20        ;access cartridge
+                sta $fe34
+
+                sta $fcdc,y     ;unlock
+
+                pla
+                sta $fe34
+
+                jsr is_sideways_ram
+                bcc not_unlocked
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+access_ABR: .proc
+                cpy #$80
+                bcs done
+
+                lda $fe34
+                pha
+                ora #$20 ;make FRED/JIM access cartridge, not 1MHz bus
+                sta $fe34
+
+                sta $fcdc,y
+
+                pla
+                sta $fe34
+
+done:
+                rts
+                .pend
+
 ;-------------------------------------------------------------------------
 
                 ; If the ROM goes over 8K, I'll just have to do
