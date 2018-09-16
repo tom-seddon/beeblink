@@ -178,6 +178,7 @@ export class Server {
             new Command('DRIVES', '', this.drivesCommand),
             new Command('DUMP', '<fsp>', this.dumpCommand),
             new Command('FILES', undefined, this.filesCommand),
+            new Command('INFO', '<afsp>', this.infoCommand),
             new Command('LIB', '(<dir>)', this.libCommand),
             new Command('LIST', '<fsp>', this.listCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
@@ -1009,6 +1010,16 @@ export class Server {
 
     private async filesCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
         return this.textResponse(this.bfs.getOpenFilesOutput());
+    }
+
+    private async infoCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+        if (commandLine.parts.length < 2) {
+            throw new CommandSyntaxError();
+        }
+
+        const fsp = this.bfs.parseFileStringWithDefaults(commandLine.parts[1]);
+
+        return await this.filesInfoResponse(fsp);
     }
 
     private async accessCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
