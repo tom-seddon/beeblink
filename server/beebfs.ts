@@ -156,6 +156,10 @@ const errorTexts: { [index: number]: string | undefined } = {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+// Fully-qualified name of a Beeb file that may or may not exist. Drive and dir
+// are as supplied on command line, or filled in from defaults, as appropriate.
+//
+// This was a slightly late addition and isn't used everywhere it should be...
 export class BeebFQN {
     public readonly drive: string;
     public readonly dir: string;
@@ -255,14 +259,8 @@ class BeebDrive {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-interface IDriveSettings {
-    boot: number;
-    title: string;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
+// Name of Beeb file or dir, that may or may not exist, as entered on the
+// command line. Components not supplied are set to undefined.
 export class BeebFSP {
     public readonly drive: string | undefined;
     public readonly dir: string | undefined;
@@ -1373,6 +1371,15 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    public async delete(fqn: BeebFQN): Promise<void> {
+        const file = await this.getBeebFile(fqn);
+
+        await this.deleteFile(file);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     public async rename(oldFQN: BeebFQN, newFQN: BeebFQN): Promise<void> {
         this.log.pn('oldFQN: ' + oldFQN);
         this.log.pn('newFQN: ' + newFQN);
@@ -1849,17 +1856,24 @@ export class BeebFS {
         if (file === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         } else {
-            this.mustNotBeOpen(file);
-            this.mustBeWriteable(file);
-
-            try {
-                await utils.forceFsUnlink(file.hostPath + INF_EXT);
-                await utils.forceFsUnlink(file.hostPath);
-            } catch (error) {
-                BeebFS.throwServerError(error as NodeJS.ErrnoException);
-            }
+            await this.deleteFile(file);
 
             return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, file.size, file.attr), undefined, undefined);
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private async deleteFile(file: BeebFile): Promise<void> {
+        this.mustNotBeOpen(file);
+        this.mustBeWriteable(file);
+
+        try {
+            await utils.forceFsUnlink(file.hostPath + INF_EXT);
+            await utils.forceFsUnlink(file.hostPath);
+        } catch (error) {
+            BeebFS.throwServerError(error as NodeJS.ErrnoException);
         }
     }
 

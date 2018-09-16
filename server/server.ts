@@ -173,6 +173,7 @@ export class Server {
         this.stringBufferIdx = 0;
         this.commands = [
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
+            new Command('DELETE', '<fsp>', this.deleteCommand),
             new Command('DIR', '(<dir>)', this.dirCommand),
             new Command('DRIVE', '(<drive>)', this.driveCommand),
             new Command('DRIVES', '', this.drivesCommand),
@@ -1039,6 +1040,18 @@ export class Server {
             const newAttr = this.bfs.getModifiedAttributes(attrString, beebFile.attr);
             await this.bfs.writeMetadata(beebFile.hostPath, beebFile.name, beebFile.load, beebFile.exec, newAttr);
         }
+
+        return new Packet(beeblink.RESPONSE_YES, 0);
+    }
+
+    private async deleteCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+        if (commandLine.parts.length < 2) {
+            throw new CommandSyntaxError();
+        }
+
+        const fqn = this.bfs.parseFQN(commandLine.parts[1]);
+
+        await this.bfs.delete(fqn);
 
         return new Packet(beeblink.RESPONSE_YES, 0);
     }
