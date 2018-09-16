@@ -64,6 +64,8 @@ oswrch=$ffee
 osword=$fff1
 osbyte=$fff4
 oscli=$fff7
+osfind=$ffce
+osbput=$ffd4
 
 cliv=$208
 filev=$212
@@ -448,8 +450,15 @@ print_ptr .fill 0
 cmd_ptr .fill 0
 brk_ptr .fill 0
                 .fill 2
-                
-                .cerror *>$b0,"MOS command workspace overflow"
+                .cerror *>$b0,"Temp workspace overflow"
+
+; *BUILD workspace
+*=$a8
+build_handle .fill 1
+build_line .fill 2
+build_osword0_block .fill 5
+                .cerror *>$b0,"*BUILD workspace overflow"
+
                 
 ; Filing system scratch space
 *=$b0
@@ -510,6 +519,7 @@ utils_commands:
                 .command "BLCONFIG",blconfig_syntax-syntaxes,blconfig_cmd
                 .command "BLFS",0,init_blfs
                 .command "BLSELFUPDATE",0,selfupdate_cmd
+                .command "BUILD",build_syntax-syntaxes,build_cmd
                 .command "DISC",0,init_blfs
                 .command "DISK",0,init_blfs
                 .byte 255
@@ -532,6 +542,8 @@ pn_syntax:
                 .text "<T> <start> <end>",255
 blconfig_syntax:
                 .text "([V*D][+-]...)",255
+build_syntax:
+                .text "<fsp>",255
 
 ;-------------------------------------------------------------------------
 
@@ -5796,7 +5808,121 @@ done:
                 .pend
 
 ;-------------------------------------------------------------------------
+;
+; *BUILD
+;
+; This is only for OS 1.20/OS 2.00. I didn't bother being
+; super-careful about the MOS command workspace.
+;
+build_cmd: .proc
+buf_size=50
+                clc
+                tya
+                adc $f2
+                tax
 
-                ; If the ROM goes over 8K, I'll just have to do
-                ; something else.
-                .cerror *>$a000,"ROM too large for self-update"
+                lda $f3
+                adc #0
+                tay
+
+                lda #$80        ;open for write (AUG 343)
+                jsr osfind
+
+                cmp #0
+                bne +
+
+                .brk_error 255,"Couldn't open"
+
++
+                sta build_handle
+
+                lda #1
+                sta build_line+0
+                
+                lda #0
+                sta build_line+1
+
+                ; reserve space on stack
+                tsx
+                txa
+                sec
+                sbc #buf_size
+                tax
+                txs
+                ; $101+S = buffer address
+
+                ; build OSWORD 0 parameter block
+                inx             ;buffer LSB
+                stx build_osword0_block+0
+                
+                lda #$01        ;buffer MSB
+                sta build_osword0_block+1
+
+                lda #buf_size-1 ;max line length, excluding CR
+                sta build_osword0_block+2
+
+                lda #32                   ;min char
+                sta build_osword0_block+3 ;
+
+                lda #126
+                sta build_osword0_block+4
+
+read_lines_loop:
+                lda build_line+1
+                jsr print_hex_byte
+                lda build_line+0
+                jsr print_hex_byte
+
+                lda #' '
+                jsr oswrch
+
+                ldx #<build_osword0_block
+                ldy #>build_osword0_block
+                lda #0
+                jsr osword
+
+                bcs done
+
+                tsx
+write_line_loop:
+                ldy build_handle
+                lda $101,x
+                jsr osbput
+                cmp #13
+                beq wrote_line
+                inx
+                jmp write_line_loop
+
+wrote_line:
+                clc
+                sed
+                lda build_line+0
+                adc #$01
+                sta build_line+0
+                lda build_line+1
+                adc #$00
+                sta build_line+1
+                cld
+                jmp read_lines_loop
+
+done:
+                ; restore old S
+                tsx
+                txa
+                clc
+                adc #buf_size
+                tax
+                txs
+                
+                lda #0          ;close file (AUG 342)
+                ldy build_handle
+                jsr osfind
+
+                lda #$7e        ;acknowledge ESCAPE (AUG 149)
+                jsr osbyte
+
+                jsr osnewl
+
+                rts
+                
+                .pend
