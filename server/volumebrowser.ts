@@ -532,7 +532,7 @@ export class Browser {
         const oldRowIdx = this.rowIdx;
 
         let col = this.colIdx + dcol;
-        if (col < 0 || col > this.columns.length) {
+        if (col < 0 || col >= this.columns.length) {
             return undefined;
         }
 
