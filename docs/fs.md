@@ -162,6 +162,8 @@ Activate BLFS.
 
 ### `BLSELFUPDATE`
 
+**This overwrites memory from &3000 onwards, and doesn't ask first**
+
 Attempt to update the ROM, if it's loaded into sideways RAM. If it
 looks like it might be loaded into a write-protected ABR cartridge, it
 will attempt to unlock the ABR and lock it again afterwards.
@@ -170,6 +172,11 @@ The server must be able to find the ROM file - see
 [the bootstrap process](./bootstrap.md).
 
 This is mainly for my benefit when working on the ROM code.
+
+### `BUILD <fsp>`
+
+Create a text file line by line. Designed for creating `!BOOT`, but
+not much else...
 
 ### `DISC`, `DISK`
 
@@ -187,10 +194,18 @@ if you prefer. See the `BLCONFIG options` section.)
 If another ROM is stealing a command, you can also access it by
 spelling it out in full with a `BLFS_` prefix, e.g., `*BLFS_FILES`.
 
+Commands marked *B/B+* only get used on model B or B+ - on the Master,
+the built-in OS command of the same name is used instead. This
+shouldn't make a difference.
+
 ### `ACCESS <afsp> (<mode>)`
 
 Lock or unlock file(s). `<mode>` can be blank to unlock, or `L` to
 lock.
+
+### `DELETE <fsp>` (*B/B+*)
+
+Delete a file.
 
 ### `DIR (<dir>)`
 
@@ -200,21 +215,45 @@ Change directory and/or drive.
 
 Change drive.
 
+### `DRIVES`
+
+Shows the list of drives in the current volume.
+
+### `DUMP <fsp>` (*B/B+*)
+
+Produce hex dump of file.
+
 ### `FILES`
 
 Show the list of currently open files.
+
+### `*INFO <afsp>` (*B/B+*)
+
+Show info about the 
 
 ### `LIB (<dir>)`
 
 Change library drive and directory.
 
+### `LIST <fsp>` (*B/B+*)
+
+Show contents of text file, with lines numbered.
+
 ### `RENAME <old fsp> <new fsp>`
 
 Rename file.
 
+### `SPEEDTEST`
+
+Performs a benchmark.
+
 ### `TITLE <title>`
 
 Set drive's title.
+
+### `TYPE <fsp>` (*B/B+*) ###
+
+Show contents of text file.
 
 ### `VOL (<avsp>)`
 
@@ -227,15 +266,6 @@ first matching volume found will be selected.
 
 Show a list of available volumes. Use wildcards to narrow the list
 down.
-
-### `DUMP <fsp>`, `LIST <fsp>`, `TYPE <fsp>`, `WDUMP <fsp>`
-
-As per the standard DFS UTILS commands, along with the new `WDUMP`,
-which produces `*DUMP`-style output but in 80 columns.
-
-Note that unlike the UTILS commands in the DFS, these only operate
-when the BLFS is active; and on the Master, the built-in MOS `DUMP`,
-`LIST` and `TYPE` will always be used.
 
 ### `VOLBROWSER`
 
@@ -260,6 +290,17 @@ ESCAPE to remove the filters.
 down each time.)
 
 The volume browser isn't recommended in 20-column modes.
+
+### `WDUMP <fsp>`
+
+Produce wide hex dump of file, for use in 80 column modes.
+
+As per the standard DFS UTILS commands, along with the new `WDUMP`,
+which produces `*DUMP`-style output but in 80 columns.
+
+Note that unlike the UTILS commands in the DFS, these only operate
+when the BLFS is active; and on the Master, the built-in MOS `DUMP`,
+`LIST` and `TYPE` will always be used.
 
 # `BLCONFIG` options
 
