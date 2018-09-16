@@ -5743,6 +5743,8 @@ unlock_ABR: .proc
                 cpx #$f7
                 beq try_unlock  ;taken if Master ET
 
+                clc             ;not writeable, and no fix
+
 not_unlocked:
                 ldy #$80
                 rts
