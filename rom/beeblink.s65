@@ -4970,7 +4970,7 @@ selfupdate_cmd: .proc
                 lda #$77        ;close *SPOOL/*EXEC handles (AUG 141)
                 jsr osbyte
 
-new_rom=$a000
+new_rom=$3f00
 
 abr_offset=brkthunk
 relocator=brkthunk+1            ;where to put the relocating code
@@ -4985,20 +4985,6 @@ relocator=brkthunk+1            ;where to put the relocating code
                 ldx #scratch_p_size
                 jsr recv_response
 
-                clc
-                lda scratch_p_size+1
-                adc #>new_rom
-                lda scratch_p_size+2
-                adc #0
-                lda scratch_p_size+3
-                adc #0
-                beq size_ok
-                bmi size_ok
-
-                jsr discard_remaining_payload
-                
-                .brk_error 255,"New ROM is too large"
-
 size_ok:
                 jsr unlock_ABR
                 bcs recv_rom
@@ -5009,6 +4995,11 @@ size_ok:
                 .brk_error 255,"ROM not writeable"
                 
 recv_rom:
+                jsr pcprint
+                .text 22,1      ;mode 1
+                .text 28,0,5,39,0 ;keep out of the way of $3f00
+                .text 255
+                
                 sty abr_offset
                 
                 lda #<new_rom
@@ -5070,7 +5061,7 @@ is_rom:
 relocator_start: .proc
                 .logical relocator
                 ldx #0
-                ldy #$20        ;just copy all 8K...
+                ldy #$40        ;just copy all 16K...
 copy_loop:
 read:
                 lda new_rom,x
@@ -5115,9 +5106,6 @@ message_end:
                 .pend
 relocator_end:
                 .cerror relocator_end-relocator_start>80,"relocator too large"
-attempt_abr_unlock:
-                .text "Attempt ABR unlock",255
-                
                 .pend
 
 ;-------------------------------------------------------------------------
