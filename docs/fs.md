@@ -194,9 +194,15 @@ if you prefer. See the `BLCONFIG options` section.)
 If another ROM is stealing a command, you can also access it by
 spelling it out in full with a `BLFS_` prefix, e.g., `*BLFS_FILES`.
 
-Commands marked *B/B+* only get used on model B or B+ - on the Master,
-the built-in OS command of the same name is used instead. This
-shouldn't make a difference.
+It's usual for BBC DFSs to make `*DUMP`, `*TYPE*` and `*LIST`
+available in all filing systems, but the BLFS versions of these
+commands are handled on the server, and so are only available when the
+BLFS is selected.
+
+(Commands marked *B/B+* only get used on model B or B+ - on the
+Master, the built-in OS command of the same name is used instead. This
+isn't supposed to make a meaningful difference, but it's possible the
+output could be slightly different.)
 
 ### `ACCESS <afsp> (<mode>)`
 
@@ -229,7 +235,8 @@ Show the list of currently open files.
 
 ### `*INFO <afsp>` (*B/B+*)
 
-Show info about the 
+Show metadata of the file(s) specified - lock status, load address,
+execution address and size.
 
 ### `LIB (<dir>)`
 
@@ -295,13 +302,6 @@ The volume browser isn't recommended in 20-column modes.
 
 Produce wide hex dump of file, for use in 80 column modes.
 
-As per the standard DFS UTILS commands, along with the new `WDUMP`,
-which produces `*DUMP`-style output but in 80 columns.
-
-Note that unlike the UTILS commands in the DFS, these only operate
-when the BLFS is active; and on the Master, the built-in MOS `DUMP`,
-`LIST` and `TYPE` will always be used.
-
 # `BLCONFIG` options
 
 To switch an option on, use `*BLCONFIG X+`, where `X` is that option's
@@ -366,7 +366,8 @@ or pick a different name...)
 ## `POSIX error: XXX` (same code as `Disc fault`)
 
 The server encountered an unexpected error while doing something.
-`XXX` is the POSIX error codes.
+`XXX` is one of the
+[POSIX error codes](http://pubs.opengroup.org/onlinepubs/000095399/basedefs/errno.h.html).
 
 ## `Too big` (same code as `Disc full`)
 
