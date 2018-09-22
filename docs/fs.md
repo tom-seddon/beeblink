@@ -148,6 +148,32 @@ RAM, so it doesn't have to be reloaded each time.
 The message is mainly there for my benefit, in case I switch off the
 write protection and then forget...
 
+## Accessing other volumes
+
+A volume is roughly analogous to a disc, so by default file names
+refer to files in drives on the current volume.
+
+You can use the new `::` syntax to access other volumes.
+
+To get a catalogue of another volume, use `::VOLUME:DRIVE`:
+
+    *.::OTHERVOLUME:0
+	
+To access a file on another volume, use `::VOLUME:DRIVE:DIR.FILE`:
+
+    CH."::65BOOT:0.$.STARTUP"
+
+With this syntax, the drive and directory are mandatory (the current
+drive and directory only apply to the current volume). You may use
+wildcards in the volume name, but it's an error if it matches more
+than one volume.
+
+This syntax is not supported as widely as maybe it should be. (For
+example, you can't change volume using `*DRIVE`.) But apart from that,
+files on other volumes are treated the same as files on the current
+volume. Aside from the inconvenient, verbose names there should be
+nothing particular to bear in mind when accessing them.
+
 # Command reference
 
 ## Commands available in any filing system
@@ -215,11 +241,11 @@ Delete a file.
 
 ### `DIR (<dir>)`
 
-Change directory and/or drive.
+Change directory and/or drive on the current volume.
 
 ### `DRIVE (<drive>)`
 
-Change drive.
+Change drive on the current volume.
 
 ### `DRIVES`
 
@@ -240,7 +266,7 @@ execution address and size.
 
 ### `LIB (<dir>)`
 
-Change library drive and directory.
+Change library drive and directory on the current volume.
 
 ### `LIST <fsp>` (*B/B+*)
 
@@ -256,7 +282,7 @@ Performs a benchmark.
 
 ### `TITLE <title>`
 
-Set drive's title.
+Set current drive's title.
 
 ### `TYPE <fsp>` (*B/B+*) ###
 
@@ -266,8 +292,9 @@ Show contents of text file.
 
 With no argument, prints the name and path of the current volume.
 
-With argument, change to that volume. Wildcards are acceptable - the
-first matching volume found will be selected.
+With argument, change to that volume. Wildcards are acceptable, as are
+names that match more than one volume - the first matching volume
+found will be selected.
 
 ### `VOLS (<avsp>)`
 
@@ -382,3 +409,9 @@ address is &FFFFFFFF.
 
 (This usually means the file has a 0-byte .inf file, but these
 addresses can also be assigned manually.)
+
+## `Ambiguous volume` (same code as `Bad name`)
+
+The volume name supplied when using the `::` syntax is ambiguous.
+Supply the same name to the `*VOLS` command to see which volumes it
+matches.

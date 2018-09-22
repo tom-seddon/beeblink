@@ -459,17 +459,6 @@ export class Server {
 
         p.copy(data, 0, i);
 
-        // // The OSFILE file name is not actually a file name, but a command line
-        // // string, the first arg of which is the file name. (When doing a *LOAD
-        // // or *SAVE, for example, the OS just hands the whole command line to
-        // // OSFILE.)
-        // const commandLine = this.initCommandLine(commandLineString);
-        // if (commandLine.parts.length === 0) {
-        //     beebfs.BeebFS.throwError(beebfs.ErrorCode.BadName);
-        // }
-
-        //const fsp = this.bfs.parseFileStringWithDefaults(commandLine.parts[0]);
-
         this.log.pn('Name: ``' + nameString + '\'\'');
         this.log.pn('Input: A=0x' + utils.hex2(a) + ', , ' + data.length + ' data byte(s)');
 
@@ -593,22 +582,22 @@ export class Server {
             return beebfs.BeebFS.throwError(beebfs.ErrorCode.BadName);
         }
 
-        const fsp = this.bfs.parseFileStringWithDefaults(commandLine.parts[0]);
+        const fqn = await this.bfs.parseFQN(commandLine.parts[0]);
 
-        return await this.filesInfoResponse(fsp);
+        return await this.filesInfoResponse(fqn);
     }
 
     private async handleStarEx(handler: Handler, p: Buffer): Promise<Packet> {
         const commandLine = this.initCommandLine(p.toString('binary'));
 
-        let fsp: beebfs.BeebFSP;
+        let fqn;
         if (commandLine.parts.length === 0) {
-            fsp = new beebfs.BeebFSP(this.bfs.getDrive(), this.bfs.getDir(), '*');
+            fqn = await this.bfs.parseFQN('*');
         } else {
-            fsp = this.bfs.parseFileStringWithDefaults(commandLine.parts[0]);
+            fqn = await this.bfs.parseFQN(commandLine.parts[0]);
         }
 
-        return await this.filesInfoResponse(fsp);
+        return await this.filesInfoResponse(fqn);
     }
 
     private async handleOSGBPB(handler: Handler, p: Buffer): Promise<Packet> {
@@ -693,7 +682,7 @@ export class Server {
     }
 
     private async handleGetBootOption(handler: Handler, p: Buffer): Promise<Packet> {
-        const option = await this.bfs.loadBootOption(this.bfs.getDrive());
+        const option = await this.bfs.loadBootOption(this.bfs.getVolumePath(), this.bfs.getDrive());
 
         return new Packet(beeblink.RESPONSE_BOOT_OPTION, option);
     }
@@ -881,7 +870,7 @@ export class Server {
         }
     }
 
-    private async filesInfoResponse(afsp: beebfs.BeebFSP): Promise<Packet> {
+    private async filesInfoResponse(afsp: beebfs.BeebFQN): Promise<Packet> {
         const files = await this.bfs.getBeebFilesForAFSP(afsp);
 
         if (files.length === 0) {
@@ -1018,9 +1007,8 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const fsp = this.bfs.parseFileStringWithDefaults(commandLine.parts[1]);
-
-        return await this.filesInfoResponse(fsp);
+        const fqn = await this.bfs.parseFQN(commandLine.parts[1]);
+        return await this.filesInfoResponse(fqn);
     }
 
     private async accessCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
@@ -1033,7 +1021,7 @@ export class Server {
             attrString = commandLine.parts[2];
         }
 
-        const beebFiles = await this.bfs.getBeebFilesForAFSP(this.bfs.parseFileStringWithDefaults(commandLine.parts[1]));
+        const beebFiles = await this.bfs.getBeebFilesForAFSP(await this.bfs.parseFQN(commandLine.parts[1]));
         for (const beebFile of beebFiles) {
             // the validity of `attrString' will be checked over and over again,
             // which is kind of stupid.
@@ -1049,7 +1037,7 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const fqn = this.bfs.parseFQN(commandLine.parts[1]);
+        const fqn = await this.bfs.parseFQN(commandLine.parts[1]);
 
         await this.bfs.delete(fqn);
 
@@ -1081,7 +1069,7 @@ export class Server {
             this.bfs.setDrive(commandLine.parts[1]);
         } else {
             const fsp = beebfs.BeebFS.parseFileString(commandLine.parts[1]);
-            if (fsp.drive === undefined || fsp.dir !== undefined || fsp.name !== undefined) {
+            if (fsp.volumeName !== undefined || fsp.drive === undefined || fsp.dir !== undefined || fsp.name !== undefined) {
                 beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDrive);
             }
             this.bfs.setDrive(fsp.drive!);
@@ -1126,7 +1114,7 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const lines = await this.bfs.readTextFile(await this.bfs.getBeebFile(this.bfs.parseFQN(commandLine.parts[1])));
+        const lines = await this.bfs.readTextFile(await this.bfs.getBeebFile(await this.bfs.parseFQN(commandLine.parts[1])));
 
         return this.textResponse(lines.join(BNL) + BNL);
     }
@@ -1136,7 +1124,7 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const lines = await this.bfs.readTextFile(await this.bfs.getBeebFile(this.bfs.parseFQN(commandLine.parts[1])));
+        const lines = await this.bfs.readTextFile(await this.bfs.getBeebFile(await this.bfs.parseFQN(commandLine.parts[1])));
 
         let text = '';
 
@@ -1160,7 +1148,7 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const data = await this.bfs.readFile(await this.bfs.getBeebFile(this.bfs.parseFQN(commandLine.parts[1])));
+        const data = await this.bfs.readFile(await this.bfs.getBeebFile(await this.bfs.parseFQN(commandLine.parts[1])));
 
         let text = '';
 
@@ -1208,8 +1196,8 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const oldFQN = this.bfs.parseFQN(commandLine.parts[1]);
-        const newFQN = this.bfs.parseFQN(commandLine.parts[2]);
+        const oldFQN = await this.bfs.parseFQN(commandLine.parts[1]);
+        const newFQN = await this.bfs.parseFQN(commandLine.parts[2]);
 
         await this.bfs.rename(oldFQN, newFQN);
 
