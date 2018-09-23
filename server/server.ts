@@ -168,7 +168,7 @@ export class Server {
     private volumeBrowser: volumebrowser.Browser | undefined;
     private speedTest: speedtest.SpeedTest | undefined;
 
-    public constructor(romPath: string, bfs: beebfs.BeebFS, verbose: boolean, colours: Chalk | undefined) {
+    public constructor(romPath: string, bfs: beebfs.BeebFS, logPrefix: string | undefined, colours: Chalk | undefined) {
         this.romPath = romPath;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
@@ -218,8 +218,7 @@ export class Server {
         this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('REQUEST_VOLUME_BROWSER', this.handleVolumeBrowser);
         this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('REQUEST_SPEED_TEST', this.handleSpeedTest);
 
-
-        this.log = new utils.Log('SERVER', process.stderr, verbose);
+        this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stderr, logPrefix !== undefined);
         this.log.colours = colours;
     }
 

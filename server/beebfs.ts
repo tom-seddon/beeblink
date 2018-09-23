@@ -654,8 +654,8 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public constructor(verbose: boolean, folders: string[], colours: Chalk | undefined) {
-        this.log = new utils.Log('FS', process.stdout, verbose);
+    public constructor(logPrefix: string | undefined, folders: string[], colours: Chalk | undefined) {
+        this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stdout, logPrefix !== undefined);
         this.log.colours = colours;
 
         this.folders = folders.slice();

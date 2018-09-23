@@ -274,8 +274,6 @@ export class Log {
     }
 
     private putchar(c: string, translateCR: boolean) {
-        let print = true;
-
         if (translateCR) {
             if (c === '\r') {
                 c = '\n';
