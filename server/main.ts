@@ -62,7 +62,7 @@ interface ICommandLineOptions {
     fs_verbose: boolean;
     server_verbose: boolean;
     default_volume: string | null;
-    retry_device: boolean;
+    no_retry_device: boolean;
     send_verbose: boolean;
     fatal_verbose: boolean;
     folders: string[];
@@ -366,7 +366,7 @@ async function main(options: ICommandLineOptions) {
                     break;
                 }
 
-                if (!options.retry_device) {
+                if (options.no_retry_device) {
                     throw new Error('No device found');
                 }
 
@@ -452,7 +452,7 @@ async function main(options: ICommandLineOptions) {
             if (error.message === 'LIBUSB_TRANSFER_STALL') {
                 gError.pn('endpoint stalled');
                 stalled = true;
-            } else if (error.message === 'LIBUSB_ERROR_PIPE' && options.retry_device) {
+            } else if (error.message === 'LIBUSB_ERROR_PIPE' && !options.no_retry_device) {
                 gError.pn('device went away - will try to find it again...');
                 beebLink = undefined;
 
@@ -504,7 +504,7 @@ function usbVIDOrPID(s: string): number {
     // don't use the argparse default mechanism here - this makes it easier to
     // later detect the absence of --default-volume.
     parser.addArgument(['--default-volume'], { metavar: 'DEFAULT-VOLUME', help: 'load volume %(metavar)s when starting. Default: ' + DEFAULT_VOLUME });
-    parser.addArgument(['--retry-device'], { action: 'storeTrue', help: 'if device not found, try again after a short delay' });
+    parser.addArgument(['--no-retry-device'], { action: 'storeTrue', help: 'don\'t try to rediscover device if it goes away' });
     parser.addArgument(['--send-verbose'], { action: 'storeTrue', help: 'dump data sent to device' });
     parser.addArgument(['--fatal-verbose'], { action: 'storeTrue', help: 'print debugging info on a fatal error' });
     parser.addArgument(['--avr-verbose'], { action: 'storeTrue', help: 'enable AVR serial output' });
