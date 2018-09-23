@@ -1312,39 +1312,6 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    // public async tryGetBeebFileForFSP(fsp: BeebFileSpec): Promise<BeebFile | undefined> {
-    //     return await this.getBeebFileForFSPInternal(fsp, false);
-    // }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // public async getBeebFileForFSP(fsp: BeebFileSpec): Promise<BeebFile> {
-    //     return (await this.getBeebFileForFSPInternal(fsp, true))!;
-    // }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // private async getBeebFileForFSPInternal(fsp: BeebFileSpec, throwOnError: boolean): Promise<BeebFile | undefined> {
-    //     this.mustBeFullyQualified(fsp);
-
-    //     let hostName = '';
-
-    //     hostName += this.getHostPartFromBeebChar(fsp.dir!);
-
-    //     for (const c of fsp.name!) {
-    //         hostName += this.getHostPartFromBeebChar(c);
-    //     }
-
-    //     const hostPath = path.join(this.volumePath, fsp.drive!, hostName);
-
-    //     return await this.getBeebFileInternal(new BeebFileName(hostPath, fsp.dir!, fsp.name!), throwOnError);
-    // }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     public async OPT(x: number, y: number): Promise<void> {
         if (x === 4) {
             await this.saveBootOption(this.drive, y & 3);

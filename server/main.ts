@@ -169,21 +169,6 @@ async function deviceControlTransfer(device: usb.Device, bmRequestType: number, 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// async function inEndpointTransfer(endpoint: usb.InEndpoint, numBytes: number): Promise<Buffer> {
-//     return await new Promise<Buffer>((resolve, reject) => {
-//         endpoint.transfer(numBytes, (error, data) => {
-//             if (error !== undefined) {
-//                 reject(error);
-//             } else {
-//                 resolve(data);
-//             }
-//         });
-//     });
-// }
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 function getEndpointDescription(endpoint: usb.Endpoint): string {
     return 'bEndpointAddress=' + utils.hexdec(endpoint.descriptor.bEndpointAddress) + ', wMaxPacketSize=' + endpoint.descriptor.wMaxPacketSize;
 }
