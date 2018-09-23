@@ -72,6 +72,7 @@ interface ICommandLineOptions {
     load_config: string | null;
     save_config: string | null;
     usb_verbose: boolean;
+    set_serial: number | undefined;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -520,7 +521,44 @@ class Connection {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+async function setDeviceSerialNumber(serial: number): Promise<void> {
+    if (serial < 0 || serial >= 65536) {
+        throw new Error('serial number must be between 0 and 65535 inclusive');
+    }
+
+    const devices = findBeebLinkUSBDevices();
+
+    if (devices.length === 0) {
+        throw new Error('no BeebLink devices found');
+    } else if (devices.length > 1) {
+        throw new Error('multiple BeebLink devices found - serial number can only be set when a single device is plugged in');
+    }
+
+    devices[0].open(false);
+
+    await new Promise((resolve, reject) => devices[0].setConfiguration(1, (error) => error !== undefined ? reject(error) : resolve()));
+
+    devices[0].interface(0).claim();
+
+    await deviceControlTransfer(devices[0],
+        usb.LIBUSB_REQUEST_TYPE_CLASS | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_OUT,
+        beeblink.CR_SET_SERIAL,
+        serial,
+        0,
+        undefined);
+
+    process.stderr.write('Serial number set. Please remove and reinsert the device.');
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 async function main(options: ICommandLineOptions) {
+    if (options.set_serial !== undefined) {
+        await setDeviceSerialNumber(options.set_serial);
+        return;
+    }
+
     const log = new utils.Log('', process.stderr, options.verbose);
     //gSendLog.enabled = options.send_verbose;
 
@@ -641,6 +679,7 @@ function usbVIDOrPID(s: string): number {
     parser.addArgument(['--avr-verbose'], { action: 'storeTrue', help: 'enable AVR serial output' });
     parser.addArgument(['--load-config'], { metavar: 'FILE', help: 'load config from %(metavar)s' });
     parser.addArgument(['--save-config'], { metavar: 'FILE', nargs: '?', constant: DEFAULT_CONFIG_FILE_NAME, help: 'save config to %(metavar)s (%(constant)s if not specified)' });
+    parser.addArgument(['--set-serial'], { metavar: 'SERIAL', type: 'int', help: 'set device\'s USB serial number to %(metavar)s and exit' });
     parser.addArgument(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'folder to search for volumes' });
 
     const options = parser.parseArgs();

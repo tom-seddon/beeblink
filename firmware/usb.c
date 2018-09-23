@@ -27,15 +27,10 @@
 #include <setjmp.h>
 #include "usb.h"
 
-#ifndef USB_PRODUCT_STRING
-#error must define USB_PRODUCT_STRING
-#endif
-
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-enum
-{
+enum {
     NUM_DPRAM_BYTES=FIXED_CONTROL_ENDPOINT_SIZE+EA_INPUT_PACKET_SIZE*EA_INPUT_NUM_BUFFERS+EA_OUTPUT_PACKET_SIZE*EA_OUTPUT_NUM_BUFFERS,
 };
 typedef char CheckDPRAMUsage[NUM_DPRAM_BYTES<=176?1:-NUM_DPRAM_BYTES];
@@ -43,8 +38,7 @@ typedef char CheckDPRAMUsage[NUM_DPRAM_BYTES<=176?1:-NUM_DPRAM_BYTES];
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-enum StringDescriptorIndex
-{
+enum StringDescriptorIndex {
     SDI_LANGUAGE,
     SDI_MANUFACTURER,
     SDI_PRODUCT,
@@ -54,12 +48,7 @@ enum StringDescriptorIndex
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-#define USB_STRING(NAME,STR) const USB_Descriptor_String_t PROGMEM NAME={.Header={.Size=USB_STRING_LEN(sizeof STR/2-1),.Type=DTYPE_String},.UnicodeString={STR}};
-
-//////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////
-
-static const USB_Descriptor_String_t PROGMEM LANGUAGE_STRING={
+static const USB_Descriptor_String_t PROGMEM LANGUAGE_STRING_PS={
     .Header={
 	.Size=USB_STRING_LEN(1),
 	.Type=DTYPE_String,
@@ -72,24 +61,18 @@ static const USB_Descriptor_String_t PROGMEM LANGUAGE_STRING={
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-#define WC(X) WC2(X)
-#define WC2(X) L##X
+static const USB_Descriptor_String_t PROGMEM MANUFACTURER_STRING_PS=USB_STRING_DESCRIPTOR(L"Tom Seddon");
 
-static const USB_STRING(MANUFACTURER_STRING,L"Tom Seddon");
-static const USB_STRING(PRODUCT_STRING,WC(USB_PRODUCT_STRING));
-static const USB_STRING(SERIAL_STRING,WC(__DATE__) L" at " WC(__TIME__));
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
-static const USB_Descriptor_String_t *const STRINGS[] PROGMEM={
-    [SDI_LANGUAGE]=&LANGUAGE_STRING,
-    [SDI_MANUFACTURER]=&MANUFACTURER_STRING,
-    [SDI_PRODUCT]=&PRODUCT_STRING,
-    [SDI_SERIAL]=&SERIAL_STRING,
-};
+static const USB_Descriptor_String_t PROGMEM PRODUCT_STRING_PS=USB_STRING_DESCRIPTOR(L"BeebLink");
 
-enum
-{
-    NUM_STRINGS=sizeof STRINGS/sizeof STRINGS[0],
-};
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+/* Not program memory! It's modified at runtime from the EEPROM byte. */
+static USB_Descriptor_String_t g_serial_string=USB_STRING_DESCRIPTOR(L"0000");
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -132,8 +115,8 @@ static const USB_StdDescriptor_Device_t PROGMEM DEVICE_DESCRIPTOR={
     .bDeviceSubClass=0xFF,
     .bDeviceProtocol=0xFF,
     .bMaxPacketSize0=FIXED_CONTROL_ENDPOINT_SIZE,
-    .idVendor=USB_VID,
-    .idProduct=USB_PID,
+    .idVendor=0x1209,
+    .idProduct=0xbeeb,
     .bcdDevice=VERSION_BCD(1,0,0),
     .iManufacturer=SDI_MANUFACTURER,
     .iProduct=SDI_PRODUCT,
@@ -144,8 +127,7 @@ static const USB_StdDescriptor_Device_t PROGMEM DEVICE_DESCRIPTOR={
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-struct Descriptor
-{
+struct Descriptor {
     USB_StdDescriptor_Configuration_Header_t header;
     USB_StdDescriptor_Interface_t interface;
     USB_StdDescriptor_Endpoint_t data_in,data_out;
@@ -201,6 +183,15 @@ static const struct Descriptor PROGMEM CONFIGURATION_DESCRIPTOR={
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+static uint16_t GetDescriptorPS(const void **const DescriptorAddress,
+                                uint8_t *const DescriptorMemorySpace,
+                                const void *descriptor_ps)
+{
+    *DescriptorAddress=descriptor_ps;
+    *DescriptorMemorySpace=MEMSPACE_FLASH;
+    return pgm_read_byte(descriptor_ps);
+}
+
 uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 				    const uint16_t wIndex,
 				    const void **const DescriptorAddress,
@@ -208,30 +199,34 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 {
     uint8_t type=wValue>>8,index=wValue&0xFF;
 
-    if(type==DTYPE_String)
-    {
-	if(index<NUM_STRINGS)
-	{
-	    *DescriptorAddress=(void *)pgm_read_word(&STRINGS[index]);
-	    *DescriptorMemorySpace=MEMSPACE_FLASH;
-	    return pgm_read_byte(*DescriptorAddress);
-	}
-	else if(index==0xEE)
-	{
+    if(type==DTYPE_String) {
+        if(index==SDI_LANGUAGE) {
+            return GetDescriptorPS(DescriptorAddress,
+                                   DescriptorMemorySpace,
+                                   &LANGUAGE_STRING_PS);
+        } else if(index==SDI_MANUFACTURER) {
+            return GetDescriptorPS(DescriptorAddress,
+                                   DescriptorMemorySpace,
+                                   &MANUFACTURER_STRING_PS);
+        } else if(index==SDI_PRODUCT) {
+            return GetDescriptorPS(DescriptorAddress,
+                                   DescriptorMemorySpace,
+                                   &PRODUCT_STRING_PS);
+        } else if(index==SDI_SERIAL) {
+            *DescriptorAddress=&g_serial_string;
+            *DescriptorMemorySpace=MEMSPACE_RAM;
+            return g_serial_string.Header.Size;
+	} else if(index==0xEE) {
 	    // WCID.
 	    *DescriptorAddress=(void *)WCID_STRING_DESCRIPTOR;
 	    *DescriptorMemorySpace=MEMSPACE_FLASH;
 	    return pgm_read_byte(WCID_STRING_DESCRIPTOR);
 	}
-    }
-    else if(type==DTYPE_Device)
-    {
+    } else if(type==DTYPE_Device) {
 	*DescriptorAddress=&DEVICE_DESCRIPTOR;
 	*DescriptorMemorySpace=MEMSPACE_FLASH;
 	return sizeof DEVICE_DESCRIPTOR;
-    }
-    else if(type==DTYPE_Configuration)
-    {
+    } else if(type==DTYPE_Configuration) {
 	*DescriptorAddress=&CONFIGURATION_DESCRIPTOR;
 	*DescriptorMemorySpace=MEMSPACE_FLASH;
 	return sizeof CONFIGURATION_DESCRIPTOR;
@@ -243,31 +238,64 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-void EVENT_USB_Device_ConfigurationChanged(void)
-{
-    Endpoint_ConfigureEndpoint(EA_INPUT,EP_TYPE_BULK,EA_INPUT_PACKET_SIZE,EA_INPUT_NUM_BUFFERS);
-    Endpoint_ConfigureEndpoint(EA_OUTPUT,EP_TYPE_BULK,EA_OUTPUT_PACKET_SIZE,EA_OUTPUT_NUM_BUFFERS);
+void EVENT_USB_Device_ConfigurationChanged(void) {
+    Endpoint_ConfigureEndpoint(EA_INPUT,
+                               EP_TYPE_BULK,
+                               EA_INPUT_PACKET_SIZE,
+                               EA_INPUT_NUM_BUFFERS);
+    
+    Endpoint_ConfigureEndpoint(EA_OUTPUT,
+                               EP_TYPE_BULK,
+                               EA_OUTPUT_PACKET_SIZE,
+                               EA_OUTPUT_NUM_BUFFERS);
 }
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-void usb_init(void)
-{
+void usb_init(void) {
     USB_Init(USB_DEVICE_OPT_FULLSPEED);
 }
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-void usb_handle_control_request(void)
-{
-    if((USB_ControlRequest.bmRequestType&(CONTROL_REQTYPE_TYPE|CONTROL_REQTYPE_RECIPIENT|CONTROL_REQTYPE_DIRECTION))==(REQTYPE_VENDOR|REQREC_DEVICE|REQDIR_DEVICETOHOST))
+static const uint16_t get_nybble_char(uint8_t x) {
+    x&=0xf;
+
+    if(x<10) {
+        return L'0'+x;
+    } else {
+        return L'A'+x-10;
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+void usb_set_serial_number(uint16_t serial) {
+    g_serial_string.UnicodeString[0]=get_nybble_char(serial>>12);
+    g_serial_string.UnicodeString[1]=get_nybble_char(serial>>8);
+    g_serial_string.UnicodeString[2]=get_nybble_char(serial>>4);
+    g_serial_string.UnicodeString[3]=get_nybble_char(serial>>0);
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+void usb_handle_control_request(void) {
+    if((USB_ControlRequest.bmRequestType&(CONTROL_REQTYPE_TYPE|
+                                          CONTROL_REQTYPE_RECIPIENT|
+                                          CONTROL_REQTYPE_DIRECTION))
+       ==
+       (REQTYPE_VENDOR|REQREC_DEVICE|REQDIR_DEVICETOHOST))
     {
-	if(USB_ControlRequest.bRequest==WCID_VENDOR_ID&&USB_ControlRequest.wIndex==0x0004)
-	{
+	if(USB_ControlRequest.bRequest==WCID_VENDOR_ID&&
+           USB_ControlRequest.wIndex==0x0004)
+        {
 	    Endpoint_ClearSETUP();
-	    Endpoint_Write_Control_PStream_LE(WCID_FEATURE_DESCRIPTOR,sizeof WCID_FEATURE_DESCRIPTOR);
+	    Endpoint_Write_Control_PStream_LE(WCID_FEATURE_DESCRIPTOR,
+                                              sizeof WCID_FEATURE_DESCRIPTOR);
 	    Endpoint_ClearStatusStage();
 	    return;
 	}

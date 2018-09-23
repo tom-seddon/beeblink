@@ -9,7 +9,7 @@ OPTIMIZATION:=s
 TARGET:=beeblink
 SRC=beeblink.c usb.c serial.c $(LUFA_SRC_USB)
 LUFA_PATH:=$(WC)/submodules/lufa/LUFA/
-CC_FLAGS:=-Wall -std=c99 -DFIXED_CONTROL_ENDPOINT_SIZE=32 -DUSB_DEVICE_ONLY '-DUSB_PRODUCT_STRING="BeebLink"' -DUSB_VID=0x1209 -DUSB_PID=0xbeeb -Werror=implicit-function-declaration -DUSB_TIMEOUT_MS=500
+CC_FLAGS:=-Wall -std=c99 -DFIXED_CONTROL_ENDPOINT_SIZE=32 -DUSB_DEVICE_ONLY -DUSB_VID=0x1209 -DUSB_PID=0xbeeb -Werror=implicit-function-declaration -DUSB_TIMEOUT_MS=500
 # CC_FLAGS:=$(CC_FLAGS) -DEA_INPUT_PACKET_SIZE=8 -DEA_OUTPUT_PACKET_SIZE=8
 LD_FLAGS:=
 CTAGS:=exuberant-ctags
@@ -22,7 +22,7 @@ C_CONSTANTS:=$(OBJDIR)/beeblink_constants.h
 # own, which if made phony adds a bunch of (rather verbose) stuff to
 # the build.
 .PHONY:beeblink_all
-beeblink_all: lss tags dfu2
+beeblink_all: hex lss tags dfu2
 
 $(OBJDIR)/beeblink.o : $(C_CONSTANTS)
 
@@ -34,7 +34,7 @@ dfu2: $(TARGET).hex $(MAKEFILE_LIST)
 	@echo $(MSG_DFU_CMD) Programming FLASH with dfu-programmer using \"$<\"
 	dfu-programmer $(MCU) erase
 	dfu-programmer $(MCU) flash $<
-	dfu-programmer $(MCU) reset
+	-dfu-programmer $(MCU) reset
 
 include $(LUFA_PATH)/Build/lufa_core.mk
 include $(LUFA_PATH)/Build/lufa_sources.mk

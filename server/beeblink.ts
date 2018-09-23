@@ -60,6 +60,9 @@ export const CR_GET_PROTOCOL_VERSION = 1;
 // wValue is the verbose flag: 0 = not verbose, other = verbose.
 export const CR_SET_VERBOSE = 2;
 
+// Serial number is the bottom 8 bits of wValue.
+export const CR_SET_SERIAL = 3;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 

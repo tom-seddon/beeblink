@@ -34,8 +34,16 @@
 #include <avr/cpufunc.h>
 #include <setjmp.h>
 #include "serial.h"
+#include <avr/eeprom.h>
 
 #include ".build/beeblink_constants.h"
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+/* There's no default value for this. All serial numbers are equally
+ * valid. */
+static uint16_t EEMEM g_serial_number_nv;
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -702,6 +710,13 @@ static void NOINLINE MainLoop(void) {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+static void UpdateUSBSerialNumber(void) {
+    usb_set_serial_number(eeprom_read_word(&g_serial_number_nv));
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 void EVENT_USB_Device_ControlRequest(void){
     if((USB_ControlRequest.bmRequestType&(CONTROL_REQTYPE_TYPE|CONTROL_REQTYPE_RECIPIENT))==(REQTYPE_CLASS|REQREC_DEVICE))
     {
@@ -723,6 +738,13 @@ void EVENT_USB_Device_ControlRequest(void){
                     serial_set_enabled(1);
                     SERIAL_PSTR("\n\n>> Serial output enabled <<\n\n");
                 }
+                Endpoint_ClearSETUP();
+                Endpoint_ClearStatusStage();
+                return;
+            } else if(USB_ControlRequest.bRequest==CR_SET_SERIAL) {
+                eeprom_write_word(&g_serial_number_nv,
+                                  USB_ControlRequest.wValue);
+                UpdateUSBSerialNumber();
                 Endpoint_ClearSETUP();
                 Endpoint_ClearStatusStage();
                 return;
@@ -783,6 +805,7 @@ int main(void) {
     serial_init();
     
     usb_init();
+    UpdateUSBSerialNumber();
 
     DDRB=0b00000000;
     PORTB=0b11111111;
