@@ -26,6 +26,7 @@ import * as util from 'util';
 import * as os from 'os';
 import { WriteStream } from 'tty';
 import * as path from 'path';
+import { Chalk } from 'chalk';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -140,21 +141,26 @@ export class BufferBuilder {
 export class Log {
     public enabled: boolean;
     public f: { write(buffer: Buffer | string, cb?: () => void): boolean } | undefined;
+    public colours: Chalk | undefined;
 
     private prefix: string;
     private indent: number;
     private indentStack: number[];
-    private bol: boolean;
+    //private bol: boolean;
     private column: number;
+    private blankPrefix: boolean;
+    private buffer: string;
 
     public constructor(prefix: string, f: { write(buffer: Buffer | string, cb?: () => void): boolean } | undefined, enabled: boolean = true) {
         this.f = f;
         this.prefix = prefix;
         this.indentStack = [];
         this.indent = 0;
-        this.bol = true;
+        //this.bol = true;
         this.column = 0;
         this.enabled = enabled;
+        this.buffer = '';
+        this.blankPrefix = false;
     }
 
     public in(x: string) {
@@ -201,7 +207,7 @@ export class Log {
     }
 
     public ensureBOL() {
-        if (!this.bol) {
+        if (!this.isAtBOL()) {
             this.p('\n');
         }
     }
@@ -270,61 +276,56 @@ export class Log {
     private putchar(c: string, translateCR: boolean) {
         let print = true;
 
-        if (this.bol) {
-            if (c === '\t') {
-                if (this.prefix.length > 0) {
-                    for (const ch of this.prefix) {
-                        this.putraw(' ');
-                    }
-
-                    this.putraw(' ');
-                    this.putraw(' ');
-                }
-                print = false;
-            } else {
-                if (this.prefix.length > 0) {
-                    for (const ch of this.prefix) {
-                        this.putraw(ch);
-                    }
-
-                    this.putraw(':');
-                    this.putraw(' ');
-                }
-            }
-
-            // columns spent printing the prefix don't count.
-            this.column = 0;
-
-            for (let i = 0; i < this.indent; ++i) {
-                this.putraw(' ');
-            }
-        }
-
-        if (print) {
-            if (translateCR) {
-                if (c === '\r') {
-                    c = '\n';
-                }
-            }
-
-            this.putraw(c);
-        }
-
-        this.bol = c === '\n' || c === '\r';
-    }
-
-    private putraw(c: string) {
-        if (this.enabled) {
-            if (this.f !== undefined) {
-                this.f.write(c);
+        if (translateCR) {
+            if (c === '\r') {
+                c = '\n';
             }
         }
 
         if (c === '\n' || c === '\r') {
-            this.column = 0;
+            this.flushBuffer(c);
         } else {
-            ++this.column;
+            if (c === '\t' && this.buffer.length === 0) {
+                this.blankPrefix = true;
+            } else {
+                this.buffer += c;
+                ++this.column;
+            }
         }
+    }
+
+    private isAtBOL() {
+        return this.column === 0;
+    }
+
+    private resetBuffer() {
+        this.buffer = '';
+        this.blankPrefix = false;
+        this.column = 0;
+    }
+
+    private flushBuffer(nl: string) {
+        if (this.enabled && this.f !== undefined) {
+            let output = '';
+
+            if (this.blankPrefix) {
+                output += ''.padStart(this.prefix.length + 2, ' ');
+            } else if (this.prefix.length > 0) {
+                output += this.prefix + ': ';
+            }
+
+            if (this.colours === undefined) {
+                output += this.buffer;
+            } else {
+                output += this.colours(this.buffer);
+            }
+
+            output += nl;
+
+            this.f.write(output);
+        }
+
+        this.resetBuffer();
     }
 
     private pushAbsoluteIndent(indent: number) {

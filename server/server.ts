@@ -29,6 +29,7 @@ import * as volumebrowser from './volumebrowser';
 import * as speedtest from './speedtest';
 import * as crypto from 'crypto';
 import { BNL } from './utils';
+import { Chalk } from 'chalk';
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -167,7 +168,7 @@ export class Server {
     private volumeBrowser: volumebrowser.Browser | undefined;
     private speedTest: speedtest.SpeedTest | undefined;
 
-    public constructor(romPath: string, bfs: beebfs.BeebFS, verbose: boolean) {
+    public constructor(romPath: string, bfs: beebfs.BeebFS, verbose: boolean, colours: Chalk | undefined) {
         this.romPath = romPath;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
@@ -219,6 +220,7 @@ export class Server {
 
 
         this.log = new utils.Log('SERVER', process.stderr, verbose);
+        this.log.colours = colours;
     }
 
     public async handleRequest(c: number, p: Buffer): Promise<Packet> {

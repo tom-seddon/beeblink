@@ -27,6 +27,7 @@ import * as path from 'path';
 import { FIRST_FILE_HANDLE, NUM_FILE_HANDLES } from './beeblink';
 import * as utils from './utils';
 import { BNL } from './utils';
+import { Chalk } from 'chalk';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -653,8 +654,9 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public constructor(verbose: boolean, folders: string[]) {
+    public constructor(verbose: boolean, folders: string[], colours: Chalk | undefined) {
         this.log = new utils.Log('FS', process.stdout, verbose);
+        this.log.colours = colours;
 
         this.folders = folders.slice();
 

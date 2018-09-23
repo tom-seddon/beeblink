@@ -29,6 +29,8 @@ import * as assert from 'assert';
 import * as beeblink from './beeblink';
 import * as beebfs from './beebfs';
 import { Server } from './server';
+import { Chalk } from 'chalk';
+import chalk from 'chalk';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -344,7 +346,7 @@ async function main(options: ICommandLineOptions) {
     let done = false;
     let stalled = false;
 
-    const bfs = new beebfs.BeebFS(options.fs_verbose, options.folders);
+    const bfs = new beebfs.BeebFS(options.fs_verbose, options.folders, chalk.blue);
 
     const mountError = await bfs.mountByName(options.default_volume !== null ? options.default_volume : DEFAULT_VOLUME);
     if (mountError !== undefined) {
@@ -353,7 +355,7 @@ async function main(options: ICommandLineOptions) {
 
     await maybeSaveConfig(options);
 
-    const server = new Server(options.rom, bfs, options.server_verbose);
+    const server = new Server(options.rom, bfs, options.server_verbose, chalk.red);
 
     let hello = false;
 
