@@ -6,8 +6,8 @@ more swapping discs, no more noisy drives, no more 31 file limit.
 
 ["Action" screen grabs](./docs/screens.md)
 
-I use this as the default filing system for my BBC Master, and will be
-improving it over time...
+I use this as the default filing system for my BBC Master and my BBC
+B, and will be improving it over time...
 
 # Requirements
 
@@ -16,7 +16,7 @@ Some self-assembly is required.
 * Minimus AVR 32K microcontroller board (used to connect BBC's user
   port and PC's USB port)
 * PC running OS X, Windows or Linux
-* BBC Micro with some good way of loading the ROM image (i.e., with
+* BBC Micro(s) with some good way of loading the ROM image (i.e., with
   something like EEPROM or write-protected battery-backed sideways
   RAM... it's no fun having to reload it on each boot and/or have it
   zapped by careless programs)
@@ -33,6 +33,8 @@ The [filing system docs](./docs/fs.md) give some notes about running
 the server and using the filing system.
 
 [Useful server command line options](./docs/server.md).
+
+[Got multiple BBCs? No problem](./docs/multi.md). 
 
 # Building it yourself
 

@@ -72,7 +72,7 @@ interface ICommandLineOptions {
     load_config: string | null;
     save_config: string | null;
     usb_verbose: boolean;
-    set_serial: number | undefined;
+    set_serial: number | null;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -181,9 +181,8 @@ function getEndpointDescription(endpoint: usb.Endpoint): string {
 /////////////////////////////////////////////////////////////////////////
 
 interface IBeebLinkDevice {
-    device: usb.Device;
-    inEndpoint: usb.InEndpoint;
-    outEndpoint: usb.OutEndpoint;
+    usbDevice: usb.Device;
+    usbSerial: string;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -192,10 +191,46 @@ interface IBeebLinkDevice {
 let gBeebLinkDeviceVID = DEFAULT_USB_VID;
 let gBeebLinkDevicePID = DEFAULT_USB_PID;
 
-function findBeebLinkUSBDevices(): usb.Device[] {
-    const devices = usb.getDeviceList().filter((device) => {
+async function findBeebLinkUSBDevices(): Promise<IBeebLinkDevice[]> {
+    const usbDevices = usb.getDeviceList().filter((device) => {
         return device.deviceDescriptor.idVendor === gBeebLinkDeviceVID && device.deviceDescriptor.idProduct === gBeebLinkDevicePID;
     });
+
+    const devices: IBeebLinkDevice[] = [];
+    for (const usbDevice of usbDevices) {
+        try {
+            usbDevice.open(false);
+        } catch (error) {
+            continue;
+        }
+
+        let buffer: Buffer | undefined;
+        try {
+            buffer = await new Promise<Buffer | undefined>((resolve, reject) => {
+                usbDevice.getStringDescriptor(usbDevice.deviceDescriptor.iSerialNumber,
+                    (error, buf) => {
+                        if (error !== undefined) {
+                            reject(error);
+                        } else {
+                            resolve(buf);
+                        }
+                    });
+            });
+        } catch (error) {
+            usbDevice.close();
+            continue;
+        }
+
+        if (buffer === undefined) {
+            continue;
+        }
+
+        devices.push({
+            usbDevice,
+            usbSerial: buffer.toString('utf16le'),
+        });
+    }
+
     return devices;
 }
 
@@ -273,7 +308,7 @@ async function maybeSaveConfig(options: ICommandLineOptions): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 
 class Connection {
-    public static async create(options: ICommandLineOptions, connectionId: number, usbDeviceAddress: number, colours: Chalk): Promise<Connection> {
+    public static async create(options: ICommandLineOptions, connectionId: number, usbSerial: string, colours: Chalk): Promise<Connection> {
         const bfs = new beebfs.BeebFS(options.fs_verbose ? 'FS' + connectionId : undefined, options.folders, colours);
 
         const mountError = await bfs.mountByName(options.default_volume !== null ? options.default_volume : DEFAULT_VOLUME);
@@ -283,22 +318,21 @@ class Connection {
 
         const server = new Server(options.rom, bfs, options.server_verbose ? 'SRV' + connectionId : undefined, colours);
 
-        return new Connection(usbDeviceAddress, connectionId, server, bfs, options.avr_verbose, options.usb_verbose, colours);
+        return new Connection(usbSerial, connectionId, server, bfs, options.avr_verbose, options.usb_verbose, colours);
     }
 
-    public readonly usbDeviceAddress: number;
+    public readonly usbSerial: string;
     public readonly connectionId: number;
     private usbDevice: usb.Device | undefined;
     private usbInEndpoint: usb.InEndpoint | undefined;
     private usbOutEndpoint: usb.OutEndpoint | undefined;
-    private device: IBeebLinkDevice | undefined;
     private server: Server;
     private bfs: beebfs.BeebFS;
     private log: utils.Log;
     private avrVerbose: boolean;
 
-    private constructor(usbDeviceAddress: number, connectionId: number, server: Server, bfs: beebfs.BeebFS, avrVerbose: boolean, verbose: boolean, colours: Chalk) {
-        this.usbDeviceAddress = usbDeviceAddress;
+    private constructor(usbSerial: string, connectionId: number, server: Server, bfs: beebfs.BeebFS, avrVerbose: boolean, verbose: boolean, colours: Chalk) {
+        this.usbSerial = usbSerial;
         this.connectionId = connectionId;
 
         this.server = server;
@@ -419,7 +453,7 @@ class Connection {
 
         let numAttempts = 0;
 
-        this.log.pn('Waiting for device at address 0x' + this.usbDeviceAddress.toString(16));
+        this.log.pn('Waiting for device with serial: ' + this.usbSerial);
 
         // freaky loop.
         for (; ;) {
@@ -435,7 +469,13 @@ class Connection {
             this.usbInEndpoint = undefined;
             this.usbOutEndpoint = undefined;
 
-            this.usbDevice = findBeebLinkUSBDevices().find((device) => device.deviceAddress === this.usbDeviceAddress);
+            this.usbDevice = undefined;
+            for (const device of await findBeebLinkUSBDevices()) {
+                if (device.usbSerial === this.usbSerial) {
+                    this.usbDevice = device.usbDevice;
+                    break;
+                }
+            }
 
             if (this.usbDevice === undefined) {
                 continue;
@@ -522,11 +562,14 @@ class Connection {
 /////////////////////////////////////////////////////////////////////////
 
 async function setDeviceSerialNumber(serial: number): Promise<void> {
+    // This is a 16-bit number, i.e., 4 hex digits. This is entirely because
+    // LUFA makes it a bit of a faff to have variable-length strings... the USB
+    // serial number is just a string, and you can put anything in it.
     if (serial < 0 || serial >= 65536) {
         throw new Error('serial number must be between 0 and 65535 inclusive');
     }
 
-    const devices = findBeebLinkUSBDevices();
+    const devices = await findBeebLinkUSBDevices();
 
     if (devices.length === 0) {
         throw new Error('no BeebLink devices found');
@@ -534,13 +577,15 @@ async function setDeviceSerialNumber(serial: number): Promise<void> {
         throw new Error('multiple BeebLink devices found - serial number can only be set when a single device is plugged in');
     }
 
-    devices[0].open(false);
+    const usbDevice = devices[0].usbDevice;
 
-    await new Promise((resolve, reject) => devices[0].setConfiguration(1, (error) => error !== undefined ? reject(error) : resolve()));
+    usbDevice.open(false);
 
-    devices[0].interface(0).claim();
+    await new Promise((resolve, reject) => usbDevice.setConfiguration(1, (error) => error !== undefined ? reject(error) : resolve()));
 
-    await deviceControlTransfer(devices[0],
+    usbDevice.interface(0).claim();
+
+    await deviceControlTransfer(usbDevice,
         usb.LIBUSB_REQUEST_TYPE_CLASS | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_OUT,
         beeblink.CR_SET_SERIAL,
         serial,
@@ -554,7 +599,7 @@ async function setDeviceSerialNumber(serial: number): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 
 async function main(options: ICommandLineOptions) {
-    if (options.set_serial !== undefined) {
+    if (options.set_serial !== null) {
         await setDeviceSerialNumber(options.set_serial);
         return;
     }
@@ -590,7 +635,7 @@ async function main(options: ICommandLineOptions) {
         process.stderr.write('ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.rom + '\n');
     }
 
-    if (findBeebLinkUSBDevices().length === 0) {
+    if ((await findBeebLinkUSBDevices()).length === 0) {
         throw new Error('no BeebLink devices found');
     }
 
@@ -618,11 +663,11 @@ async function main(options: ICommandLineOptions) {
     // Keep polling for new devices, while watching for all existing connections
     // going away. This is not super clever, but there you go.
     do {
-        const usbDevices = findBeebLinkUSBDevices();
-        for (const usbDevice of usbDevices) {
-            if (connections.find((connection) => connection.usbDeviceAddress === usbDevice.deviceAddress) === undefined) {
+        const devices = await findBeebLinkUSBDevices();
+        for (const device of devices) {
+            if (connections.find((connection) => connection.usbSerial === device.usbSerial) === undefined) {
                 const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
-                const connection = await Connection.create(options, connectionId++, usbDevice.deviceAddress, colours);
+                const connection = await Connection.create(options, connectionId++, device.usbSerial, colours);
                 connections.push(connection);
                 connection.run().then(() => {
                     removeConnection(connection);
