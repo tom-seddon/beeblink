@@ -335,6 +335,9 @@ To switch an option on, use `*BLCONFIG X+`, where `X` is that option's
 code (see below). Use `-` to switch it off. You can specify multiple
 options on the command line.
 
+If any options are active, their codes will be displayed in the ROM
+startup banner.
+
 The current ROM options are as follows.
 
 ## `V` - debug verbosity
@@ -348,7 +351,8 @@ if you're trying to run from the BLFS.
 
 If you don't have a DFS installed, or your DFS is installed in a
 lower-priority ROM, there should be no problem. The BLFS ROM responds
-to `*DISC` by activating itself.
+to `*DISC` by activating itself. (You can configure this using the
+`ignore *DISC` option mentioned below.)
 
 If you have a DFS installed in a higher-priority ROM slot, normally
 the DFS will get the `*DISC`. Use the trap *DISC option in this case
@@ -359,8 +363,13 @@ filing systems. This can make it a bit hard to select the actual DFS.
 
 (All the above applies to `*DISK` as well.)
 
-(When active, the `BeebLink` startup banner will include an additional
-message to remind you.)
+## `I` - ignore *DISC
+
+If set, the ROM will ignore `*DISC`/`*DISK`. Use this when the BLFS is
+in a higher-priority ROM slot and you want to be able to select DFS
+too.
+
+The trap *DISC option takes priority.
 
 ## `D` - act as DFS
 
@@ -371,9 +380,6 @@ system 4 (DFS) when called upon to identify itself via
 On a Master 128 it will also install temporary filing system entries
 for `DISC` and `DISK` (which will just be ignored if the DFS is also
 present).
-
-(When active, the `BeebLink` startup banner will include an additional
-message to remind you.)
 
 # Non-standard errors
 

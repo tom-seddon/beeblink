@@ -128,12 +128,19 @@ enable_speed_test=true
 
 ; if set, *VON.
 sf_von=$80
+von_char='V'
 
 ; if set, pretend to be DFS.
 sf_act_as_dfs=$40
+act_as_dfs_char='D'
 
-; if set, (try to) trap *DISC and *DISK.
+; if set, (try to) trap *DISC/*DISK.
 sf_trap_disc=$20
+trap_disc_char='*'
+                
+; if set, ignore *DISC/*DISK.
+sf_ignore_disc=$10
+ignore_disc_char='I'
                 
 ;-------------------------------------------------------------------------
 
@@ -520,14 +527,12 @@ utils_commands:
                 .command "BLFS",0,init_blfs
                 .command "BLSELFUPDATE",0,selfupdate_cmd
                 .command "BUILD",build_syntax-syntaxes,build_cmd
-                .command "DISC",0,init_blfs
-                .command "DISK",0,init_blfs
                 .byte 255
 
 fs_trap_commands:
-                .command "TAPE",0,0
-                .command "DISC",0,0
-                .command "DISK",0,0
+disc_commands:
+                .command "DISC",0,init_blfs
+                .command "DISK",0,init_blfs
                 .byte 255
 
 ;-------------------------------------------------------------------------
@@ -679,7 +684,7 @@ svc_claim_private_workspace: .proc
                 
                 ldx $f4
                 lda roms_table,x
-                and #~(sf_act_as_dfs|sf_trap_disc)&$ff
+                and #~(sf_act_as_dfs|sf_trap_disc|sf_ignore_disc)&$ff
                 sta roms_table,x
 
 done:
@@ -703,7 +708,7 @@ svc_boot: .proc
                 beq boot_fs     ;taken if no key pressed
                 
                 cpx #boot_key
-                bne pass_on     ;taken if something other than the
+                .lbne pass_on   ;taken if something other than the
                                 ;special key was held down
 
 boot_fs:
@@ -715,19 +720,31 @@ boot_fs:
                 .text " <SWR>",255
 +
 
-                lda #sf_act_as_dfs
+                lda #(sf_von|sf_act_as_dfs|sf_trap_disc|sf_ignore_disc)
                 jsr get_rom_status_flag
-                bcc +
+                bcc show_avr_status
+                
                 jsr pcprint
-                .text " (DFS)",255
-+
+                .text " (",255
+
+                lda #sf_von
+                ldy #von_char
+                jsr print_rom_status_flag
+                
+                lda #sf_act_as_dfs
+                ldy #act_as_dfs_char
+                jsr print_rom_status_flag
 
                 lda #sf_trap_disc
-                jsr get_rom_status_flag
-                bcc +
+                ldy #trap_disc_char
+                jsr print_rom_status_flag
+
+                lda #sf_ignore_disc
+                ldy #ignore_disc_char
+                jsr print_rom_status_flag
+
                 jsr pcprint
-                .text " (*DISC)",255
-+
+                .text ")",255
 
 show_avr_status:
 
@@ -782,6 +799,14 @@ pass_on:
                 lda #3
                 jmp svc.done
 
+print_rom_status_flag:
+                jsr get_rom_status_flag
+                bcc +
+                tya
+                jsr oswrch
++
+                rts
+
                 .pend
 
 ;-------------------------------------------------------------------------
@@ -822,6 +847,15 @@ svc_star: .proc
                 jsr find_cmd
                 bcs found
 
+                lda #sf_ignore_disc
+                jsr get_rom_status_flag
+                bcs done
+
+                jsr select_disc_commands
+                jsr find_cmd
+                bcs found
+
+done:
                 ldx #4
                 jmp svc_help_or_star_done
 
@@ -852,10 +886,19 @@ check_for_subject:
                 jmp cmd_call_pointer
 
 utils:
-                jsr select_utils_commands
-                print_table
                 jsr print_rom_banner
+                
+                jsr select_utils_commands
                 jsr print_cmds
+
+                lda #sf_ignore_disc
+                jsr get_rom_status_flag
+                bcs +
+                jsr select_disc_commands
+print_table:
+                jsr print_cmds
++
+                
                 jmp done
 
 blfs:
@@ -896,6 +939,18 @@ select_utils_commands: .proc
                 lda #>utils_commands
                 sta cmd_ptr+1
                 rts                
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Point cmd_ptr at the *DISC commands table.
+;
+select_disc_commands: .proc
+                lda #<disc_commands
+                sta cmd_ptr+0
+                lda #>disc_commands
+                sta cmd_ptr+1
+                rts
                 .pend
 
 ;-------------------------------------------------------------------------
@@ -2349,17 +2404,24 @@ loop:
                 iny
                 jsr toupper
 
-                cmp #"*"
+                cmp #trap_disc_char
                 beq trap_disc
 
-                cmp #"V"
+                cmp #von_char
                 beq von
 
-                cmp #"D"
+                cmp #act_as_dfs_char
                 beq act_as_dfs
+
+                cmp #ignore_disc_char
+                beq ignore_disc
 
                 jmp syntax_brk
 
+ignore_disc:
+                lda #sf_ignore_disc
+                jmp parse_setting
+                
 trap_disc:
                 lda #sf_trap_disc
                 jmp parse_setting
@@ -2419,6 +2481,11 @@ done:
                 lda #sf_act_as_dfs
                 jsr print_flag_status
 
+                ldx #<ignore_disc_text
+                ldy #>ignore_disc_text
+                lda #sf_ignore_disc
+                jsr print_flag_status
+
                 ldx $f4                
                 lda $a8
                 eor roms_table,x
@@ -2440,11 +2507,13 @@ print_flag_status:
 
                 
 von_text:
-                .text "V - debug verbosity: ",255
+                .text von_char," - debug verbosity: ",255
 trap_disc_text:
-                .text "* - trap *DISC: ",255
+                .text trap_disc_char," - trap *DISC/*DISK/: ",255
 act_as_dfs_text:
-                .text "D - act as DFS: ",255
+                .text act_as_dfs_char," - act as DFS: ",255
+ignore_disc_text:
+                .text ignore_disc_char," - ignore *DISC/*DISK: ",255
                 
                 .pend
 
