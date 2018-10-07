@@ -879,7 +879,13 @@ svc_help: .proc
                 sta cmd_ptr+1
                 lda ($f2),y
                 cmp #13
-                beq print_table
+                bne check_for_subject
+
+print_subjects:
+                jsr print_rom_banner
+                jsr print_cmds
+                jmp done
+                
 check_for_subject:
                 jsr find_cmd
                 bcc done
@@ -895,7 +901,6 @@ utils:
                 jsr get_rom_status_flag
                 bcs +
                 jsr select_disc_commands
-print_table:
                 jsr print_cmds
 +
                 
