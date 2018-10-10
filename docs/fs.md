@@ -188,7 +188,8 @@ Activate BLFS.
 
 ### `BLSELFUPDATE`
 
-**This overwrites memory from &3000 onwards, and doesn't ask first**
+**If you answer `Y` to the prompt, it will overwrite I/O processor
+memory from &3000 onwards!**
 
 Attempt to update the ROM, if it's loaded into sideways RAM. If it
 looks like it might be loaded into a write-protected ABR cartridge, it

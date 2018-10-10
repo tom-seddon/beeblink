@@ -5024,21 +5024,21 @@ cmp_space_done:
 
 ;-------------------------------------------------------------------------
 ;
-; Ask a question and wait for a Y/N response.
+; Ask "Sure (Y/N)?" and wait for response.
 ;
 ; entry: YX = prompt
 ; exit: C=0 for no, C=1 for yes
 ;
-ask_yn_question: .proc
-                jsr printyx
+sure: .proc
                 jsr pcprint
-                .text " (Y/N)? ",255
+                .text "Sure (Y/N)? ",255
                 jsr flush_keyboard_buffer
                 jsr osrdch
                 jsr oswrch
                 pha
                 jsr osnewl
                 pla
+                jsr toupper
                 cmp #"Y"
                 beq yes
 
@@ -5059,6 +5059,12 @@ selfupdate_cmd: .proc
                 
                 lda #$77        ;close *SPOOL/*EXEC handles (AUG 141)
                 jsr osbyte
+
+                jsr sure
+                bcs +
+                rts
+                
++
 
 new_rom=$3f00
 
@@ -5453,15 +5459,8 @@ send_time=$ad
 num_iterations=10
                 .cerror num_iterations%2!=0,"no"
                 
-                
-                ldx #<sure
-                ldy #>sure
-                jsr ask_yn_question
-                bcs +
-                rts
-sure:
-                .text "Sure",255
-+
+                jsr sure
+                bcc done
 
                 lda #REQUEST_SPEED_TEST
                 ldx #REQUEST_SPEED_TEST_RESET
@@ -5484,13 +5483,13 @@ sure:
 
 test_done:
 
-
                 lda #REQUEST_SPEED_TEST
                 ldx #REQUEST_SPEED_TEST_DONE
                 jsr send_request_1_recv_response_1
 
                 jsr print_server_string
 
+done:
                 rts
 
 ;
