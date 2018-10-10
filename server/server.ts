@@ -489,7 +489,7 @@ export class Server {
     }
 
     private async handleOSFINDOpen(handler: Handler, p: Buffer): Promise<Packet> {
-        this.payloadMustBeAtLeast(handler, p, 2);
+        this.payloadMustBeAtLeast(handler, p, 1);
 
         const mode = p[0];
 
@@ -861,13 +861,17 @@ export class Server {
 
     private payloadMustBeAtLeast(handler: Handler, p: Buffer, minSize: number) {
         if (p.length < minSize) {
-            this.internalError('Bad ' + handler.name + ' request');
+            const message = 'Bad ' + handler.name + ' request';
+            this.log.pn('Payload length = ' + p.length + ', but must be at least ' + minSize + ': ' + message);
+            this.internalError(message);
         }
     }
 
     private payloadMustBe(handler: Handler, p: Buffer, size: number) {
         if (p.length !== size) {
-            this.internalError('Bad ' + handler.name + ' request');
+            const message = 'Bad ' + handler.name + ' request';
+            this.log.pn('Payload length = ' + p.length + ', but must be ' + size + ': ' + message);
+            this.internalError(message);
         }
     }
 
