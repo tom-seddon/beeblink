@@ -2514,7 +2514,7 @@ print_flag_status:
 von_text:
                 .text von_char," - debug verbosity: ",255
 trap_disc_text:
-                .text trap_disc_char," - trap *DISC/*DISK/: ",255
+                .text trap_disc_char," - trap *DISC/*DISK: ",255
 act_as_dfs_text:
                 .text act_as_dfs_char," - act as DFS: ",255
 ignore_disc_text:
