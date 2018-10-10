@@ -141,6 +141,8 @@ trap_disc_char='*'
 ; if set, ignore *DISC/*DISK.
 sf_ignore_disc=$10
 ignore_disc_char='I'
+
+sf_power_on_defaults=0
                 
 ;-------------------------------------------------------------------------
 
@@ -664,34 +666,36 @@ svc_claim_private_workspace: .proc
                 tya
                 pha
 
-                ; this isn't actually a private workspace claim, but
+                ; This isn't actually a private workspace claim, but
                 ; it uses the same table, so...
 
                 lda #253
                 jsr osbyte_x00_yff ;check BREAK type
+                
                 cpx #0
                 beq done        ;taken if it was a soft BREAK
 
+                cpx #1
+                bne hard        ;taken if it was a hard BREAK
+
+                ; Power-on reset.
+                ldx $f4
+                lda #sf_power_on_defaults
+                sta roms_table,x
+
+                ; Fall through to set the VON flag.
+
+hard:
                 .if default_von
                 sec
                 jsr set_vstatus
                 .endif
-
-                cpx #1
-                bne done        ;taken if it was a hard BREAK
-
-                ; Power-on reset.
-                
-                ldx $f4
-                lda roms_table,x
-                and #~(sf_act_as_dfs|sf_trap_disc|sf_ignore_disc)&$ff
-                sta roms_table,x
-
 done:
                 pla
                 tay
                 lda #2
                 jmp svc.done
+
                 .pend
 
 ;-------------------------------------------------------------------------
@@ -720,7 +724,7 @@ boot_fs:
                 .text " <SWR>",255
 +
 
-                lda #(sf_von|sf_act_as_dfs|sf_trap_disc|sf_ignore_disc)
+                lda #$ff
                 jsr get_rom_status_flag
                 bcc show_avr_status
                 
