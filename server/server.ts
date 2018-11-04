@@ -316,7 +316,7 @@ export class Server {
             this.log.pn('sending ' + n + ' byte(s) out of ' + p[0] + ' requested');
 
             // still can't figure out how the Buffer API works from TypeScript.
-            const result = new Buffer(n);
+            const result = Buffer.alloc(n);
             for (let i = 0; i < n; ++i) {
                 result[i] = this.stringBuffer[this.stringBufferIdx + i];
             }
