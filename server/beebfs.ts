@@ -525,14 +525,6 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private static isValidFileNameChar(char: string) {
-        const c = char.charCodeAt(0);
-        return c >= 32 && c < 127;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     // Valid volume names are 7-bit ASCII, no spaces. If you want £, use `.
     private static isValidVolumeName(name: string): boolean {
         // Ignore dot folders.
@@ -549,6 +541,14 @@ export class BeebFS {
         }
 
         return true;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private static isValidFileNameChar(char: string) {
+        const c = char.charCodeAt(0);
+        return c >= 32 && c < 127;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -837,6 +837,41 @@ export class BeebFS {
         }
 
         return volumePaths;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public async createVolume(name: string): Promise<string> {
+        if (!BeebFS.isValidVolumeName(name)) {
+            BeebFS.throwError(ErrorCode.BadName);
+        }
+
+        const volumePath = path.join(this.folders[0], name);
+        if (await this.isVolume(volumePath)) {
+            BeebFS.throwError(ErrorCode.Exists);
+        }
+
+        try {
+            await utils.fsMkdir(volumePath);
+        } catch (error) {
+            if (error.code !== 'EEXIST') {
+                BeebFS.throwServerError(error);
+            }
+        }
+
+        try {
+            await utils.fsMkdir(path.join(volumePath, '0'));
+        } catch (error) {
+            BeebFS.throwServerError(error);
+        }
+
+        let result = await this.mountByPath(volumePath);
+        if (result === undefined) {
+            result = 'Created: ' + volumePath;
+        }
+
+        return result;
     }
 
     /////////////////////////////////////////////////////////////////////////

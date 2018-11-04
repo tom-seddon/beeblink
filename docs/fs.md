@@ -63,23 +63,34 @@ The BLFS stores files in volumes, which are groups of drives, each
 drive containing files. The server comes with a default volume (the
 `beeblink` one shown above), but you can easily create more.
 
-To do this, look in the server's folder and find the `volumes` folder.
+Create new volumes from the BBC using the `*NEWVOL` command.
 
-Create a new folder there called `newvol` (the folder name on the PC
-is how you'll refer to it from the BBC), and create a folder inside it
-called `0` (this is where the files for drive 0 will go).
-
-Then on the BBC type `*VOLS` to see the list of available volumes.
-
-    >*VOLS
-	Matching volumes: beeblink newvol
+    >*NEWVOL newvol
+	Created: /Users/tom/beeb/beeblink/volumes/newvol
 	>
 	
-Use `*VOL` to load `newvol`.
+The new volume is automatically loaded, so you can start using it
+straight away.
 
-    >*VOL newvol
-	Volume: newvol
-	Path: /Users/tom/beeb/beeblink/volumes/newvol
+You can also create volumes on the server. Look in the server's
+folder, and find the `volumes` folder. Create a new folder there
+called `newvol2` (the folder name on the PC is how you'll refer to it
+from the BBC), and create a folder inside it called `0` (this is where
+the files for drive 0 will go, and it's how the server distingushes a
+volume from just an ordinary folder).
+
+On the BBC, type `*VOLS` to see the list of available volumes. The new
+volume will be included.
+
+    >*VOLS
+	Matching volumes: beeblink newvol newvol2
+	>
+	
+Use `*VOL` to load `newvol2`.
+
+    >*VOL newvol2
+	Volume: newvol2
+	Path: /Users/tom/beeb/beeblink/volumes/newvol2
 	>
 
 Creating a new folder in the right place like this is enough to create
@@ -272,6 +283,10 @@ Change library drive and directory on the current volume.
 ### `LIST <fsp>` (*B/B+*)
 
 Show contents of text file, with lines numbered.
+
+### `NEWVOL <vsp>`
+
+Create a new volume.
 
 ### `RENAME <old fsp> <new fsp>`
 

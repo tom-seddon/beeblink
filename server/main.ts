@@ -631,6 +631,10 @@ async function main(options: ICommandLineOptions) {
         throw new Error('no folders specified');
     }
 
+    if (options.folders.length > 1) {
+        process.stderr.write('Note: new volumes will be created in: ' + options.folders[0] + '\n');
+    }
+
     if (!await utils.fsExists(options.rom)) {
         process.stderr.write('ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.rom + '\n');
     }

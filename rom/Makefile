@@ -1,5 +1,5 @@
 DEST:=.build
-TASS:=64tass --m65xx --nostart -Wall -Wno-implied-reg -C
+TASS:=64tass --m65xx --nostart -Wall -Wno-implied-reg -C --line-numbers
 VER?=$(shell date '+%Y-%m-%d %H:%M:%S')
 
 .PHONY:build

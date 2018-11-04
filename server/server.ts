@@ -183,6 +183,7 @@ export class Server {
             new Command('INFO', '<afsp>', this.infoCommand),
             new Command('LIB', '(<dir>)', this.libCommand),
             new Command('LIST', '<fsp>', this.listCommand),
+            new Command('NEWVOL', '<vsp>', this.newvolCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
             new Command('SPEEDTEST', undefined, this.speedtestCommand),
             new Command('TITLE', '<title>', this.titleCommand),
@@ -1225,6 +1226,15 @@ export class Server {
 
     private async volbrowserCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
         return new Packet(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_VOLUME_BROWSER);
+    }
+
+    private async newvolCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+        if (commandLine.parts.length < 2) {
+            throw new CommandSyntaxError();
+        }
+
+        const result = await this.bfs.createVolume(commandLine.parts[1]);
+        return this.textResponse(result + BNL);
     }
 
     private async volCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
