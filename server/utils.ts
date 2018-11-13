@@ -54,7 +54,7 @@ export const fsWriteFile = util.promisify(fs.writeFile);
 
 export async function fsMkdirAndWriteFile(name: string, data: any): Promise<void> {
     try {
-        await fsMkdir(path.dirname(name));
+        await fsMkdir(path.dirname(name), { recursive: true });
     } catch (error) {
         // just ignore... if it's a problem, fsWriteFile will throw.
     }

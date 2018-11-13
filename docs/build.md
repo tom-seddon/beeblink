@@ -35,7 +35,7 @@ The ROM is built to `rom/.build/beeblink.rom`.
 
 Prerequisites:
 
-* [node.js](https://nodejs.org/en/download/)
+* [node.js 10.13.0 or later](https://nodejs.org/en/download/)
 
 Steps:
 
