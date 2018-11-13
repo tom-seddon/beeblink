@@ -11,12 +11,11 @@ find any that appear to be part of a git repo (i.e., that have a
 volume's drive folders contain a `.gitattributes` file with `* -text`
 in them. This will ensure all the Beeb files have the text flag unset.
 
-<!-- Additional similar `.gitattribute` files will also be created for any -->
-<!-- new folders created when saving files or using `*NEWVOL`, and for any -->
-<!-- folders newly discovered when using `*VOL`. -->
+Additional similar `.gitattribute` files will also be created when
+saving files, loading a volume with `*VOL` or the volume browser, or
+creating a volume with `*NEWVOL`.
 
-Note that this functionality is not super-clever: it pays no attention
-to `.gitignore`, and it will blithely add additional `.gitattributes`
-files to folders that are already covered by a perfectly good
-`.gitattributes` file elsewhere.
-
+(Note that this functionality is not super-clever: it pays no
+attention to `.gitignore`, and it will blithely add additional
+`.gitattributes` files to folders that are already covered by a
+perfectly good `.gitattributes` file elsewhere.)

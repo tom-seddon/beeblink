@@ -47,20 +47,19 @@ export const fsRead = util.promisify(fs.read);
 export const fsRename = util.promisify(fs.rename);
 export const fsMkdir = util.promisify(fs.mkdir);
 export const fsExists = util.promisify(fs.exists);
-
-const fsWriteFileInternal = util.promisify(fs.writeFile);
+export const fsWriteFile = util.promisify(fs.writeFile);
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export async function fsWriteFile(name: string, data: any): Promise<void> {
+export async function fsMkdirAndWriteFile(name: string, data: any): Promise<void> {
     try {
         await fsMkdir(path.dirname(name));
     } catch (error) {
-        // just ignore... if it's a problem, fsWriteFileInternal will throw.
+        // just ignore... if it's a problem, fsWriteFile will throw.
     }
 
-    await fsWriteFileInternal(name, data);
+    await fsWriteFile(name, data);
 }
 
 /////////////////////////////////////////////////////////////////////////

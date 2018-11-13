@@ -312,15 +312,15 @@ async function maybeSaveConfig(options: ICommandLineOptions): Promise<void> {
         rom: options.rom,
     };
 
-    await utils.fsWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
+    await utils.fsMkdirAndWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
 }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
 class Connection {
-    public static async create(options: ICommandLineOptions, connectionId: number, usbSerial: string, colours: Chalk): Promise<Connection> {
-        const bfs = new beebfs.BeebFS(options.fs_verbose ? 'FS' + connectionId : undefined, options.folders, colours);
+    public static async create(options: ICommandLineOptions, connectionId: number, usbSerial: string, colours: Chalk, gaManipulator: gitattributes.Manipulator | undefined): Promise<Connection> {
+        const bfs = new beebfs.BeebFS(options.fs_verbose ? 'FS' + connectionId : undefined, options.folders, colours, gaManipulator);
 
         const mountError = await bfs.mountByName(options.default_volume !== null ? options.default_volume : DEFAULT_VOLUME);
         if (mountError !== undefined) {
@@ -682,11 +682,19 @@ async function main(options: ICommandLineOptions) {
         throw new Error('no BeebLink devices found');
     }
 
-    const gaManipulator = new gitattributes.Manipulator(options.git_verbose);
+    let gaManipulator: gitattributes.Manipulator | undefined;
 
     if (options.git) {
+        gaManipulator = new gitattributes.Manipulator(options.git_verbose);
+
         process.stderr.write('Checking for .gitattributes...\n');
         const volumePaths = await beebfs.BeebFS.findAllVolumePaths(options.folders, log);
+
+        // Find all the paths first, then set the gitattributes manipulator
+        // going once they've all been collected, in the interests of doing one
+        // thing at a time. (Noticeably faster startup on OS X with lots of
+        // volumes, even on an SSD.)
+
         const drivePaths: string[] = [];
         let numFolders = 0;
         let numGitFolders = 0;
@@ -736,7 +744,7 @@ async function main(options: ICommandLineOptions) {
         for (const device of devices) {
             if (connections.find((connection) => connection.usbSerial === device.usbSerial) === undefined) {
                 const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
-                const connection = await Connection.create(options, connectionId++, device.usbSerial, colours);
+                const connection = await Connection.create(options, connectionId++, device.usbSerial, colours, gaManipulator);
                 connections.push(connection);
                 connection.run().then(() => {
                     removeConnection(connection);

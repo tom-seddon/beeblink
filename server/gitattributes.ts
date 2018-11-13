@@ -33,26 +33,30 @@ class Change {
     private remove: string | undefined;
     private add: string | undefined;
     private log: utils.Log;
+    private extraVerbose: boolean;
 
     public constructor(filePath: string, remove: string | undefined, add: string | undefined, log: utils.Log) {
         this.filePath = filePath;
         this.remove = remove;
         this.add = add;
         this.log = log;
+        this.extraVerbose = false;
     }
 
     public async do(): Promise<void> {
-        this.log.p('Change.do: filePath=``' + this.filePath + '\'\': ');
+        if (this.extraVerbose) {
+            this.log.p('Change.do: filePath=``' + this.filePath + '\'\': ');
 
-        if (this.remove !== undefined) {
-            this.log.p(' remove ``' + this.remove + '\'\'');
+            if (this.remove !== undefined) {
+                this.log.p(' remove ``' + this.remove + '\'\'');
+            }
+
+            if (this.add !== undefined) {
+                this.log.p(' add ``' + this.add + '\'\'');
+            }
+
+            this.log.p('\n');
         }
-
-        if (this.add !== undefined) {
-            this.log.p(' add ``' + this.add + '\'\'');
-        }
-
-        this.log.p('\n');
 
         const gaPath = path.join(path.dirname(this.filePath), '.gitattributes');
         const basename = path.basename(this.filePath);
@@ -72,11 +76,15 @@ class Change {
         const spacesRE = new RegExp('\\s+');
 
         let added = false;
+        let removed = false;
+        let fileChanged = false;
+
         let lineIdx = 0;
+
         while (lineIdx < gaLines.length) {
             const parts = gaLines[lineIdx].split(spacesRE);
 
-            let changed = false;
+            let lineChanged = false;
 
             if (parts.length >= 1) {
                 if (parts[0] === basename) {
@@ -85,7 +93,8 @@ class Change {
                         while (i < parts.length) {
                             if (parts[i] === this.remove) {
                                 parts.splice(i, 1);
-                                changed = true;
+                                lineChanged = true;
+                                removed = true;
                             } else {
                                 ++i;
                             }
@@ -103,7 +112,7 @@ class Change {
 
                         if (!found) {
                             parts.push(this.add);
-                            changed = true;
+                            lineChanged = true;
                         }
 
                         added = true;
@@ -111,7 +120,9 @@ class Change {
                 }
             }
 
-            if (changed) {
+            if (lineChanged) {
+                fileChanged = true;
+
                 if (parts.length === 1) {
                     // can remove this line now.
                     gaLines.splice(lineIdx, 1);
@@ -129,18 +140,30 @@ class Change {
             if (!added) {
                 gaLines.push(basename + ' ' + this.add);
                 added = true;
+                fileChanged = true;
             }
         }
 
         if (gaLines.length === 0) {
+            this.log.pn('Deleting: ' + gaPath);
             try {
                 await utils.forceFsUnlink(gaPath);
             } catch (error) {
                 this.log.pn('Failed to delete ``' + gaPath + '\'\': ' + error);
             }
-        } else {
+        } else if (fileChanged) {
+            this.log.pn('Updating: ' + gaPath);
+
+            if (this.remove !== undefined) {
+                this.log.pn('    (Removing: ' + basename + ' ' + this.remove + ')');
+            }
+
+            if (this.add !== undefined && added) {
+                this.log.pn('    (Adding: ' + basename + ' ' + this.add + ')');
+            }
+
             try {
-                const gaNewData = Buffer.from(gaLines.join('\n'), 'utf-8');
+                const gaNewData = Buffer.from(gaLines.join('\n'), 'utf-8') + '\n';
                 await utils.fsWriteFile(gaPath, gaNewData);
             } catch (error) {
                 this.log.pn('Failed to write to ``' + gaPath + '\'\': ' + error);

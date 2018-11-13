@@ -28,6 +28,7 @@ import { FIRST_FILE_HANDLE, NUM_FILE_HANDLES } from './beeblink';
 import * as utils from './utils';
 import { BNL } from './utils';
 import { Chalk } from 'chalk';
+import * as gitattributes from './gitattributes';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -801,11 +802,12 @@ export class BeebFS {
     private dir!: string;
     private libDrive!: string;
     private libDir!: string;
+    private gaManipulator: gitattributes.Manipulator | undefined;
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public constructor(logPrefix: string | undefined, folders: string[], colours: Chalk | undefined) {
+    public constructor(logPrefix: string | undefined, folders: string[], colours: Chalk | undefined, gaManipulator: gitattributes.Manipulator | undefined) {
         this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stdout, logPrefix !== undefined);
         this.log.colours = colours;
 
@@ -821,6 +823,8 @@ export class BeebFS {
         for (let i = 0; i < NUM_FILE_HANDLES; ++i) {
             this.openFiles.push(undefined);
         }
+
+        this.gaManipulator = gaManipulator;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -844,6 +848,13 @@ export class BeebFS {
     public async mountByPath(volumePath: string): Promise<string | undefined> {
         if (!await BeebFS.isVolume(volumePath)) {
             return 'Volume not valid: ' + volumePath;
+        }
+
+        if (this.gaManipulator !== undefined) {
+            const drives = await BeebFS.findDrivesForVolume(volumePath);
+            for (const drive of drives) {
+                this.gaManipulator.makeFolderNotText(path.join(volumePath, drive.name));
+            }
         }
 
         this.volumePath = volumePath;
@@ -1447,7 +1458,7 @@ export class BeebFS {
 
     public async setTitle(drive: string, title: string): Promise<void> {
         const buffer = Buffer.from(title.substr(0, MAX_TITLE_LENGTH) + os.EOL, 'binary');
-        await this.writeFile(path.join(this.volumePath, drive, TITLE_FILE_NAME), buffer);
+        await this.writeHostFile(path.join(this.volumePath, drive, TITLE_FILE_NAME), buffer);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1455,7 +1466,7 @@ export class BeebFS {
 
     public async saveBootOption(drive: string, option: number): Promise<void> {
         const str = (option & 3).toString() + os.EOL;
-        await this.writeFile(path.join(this.volumePath, drive, OPT4_FILE_NAME), Buffer.from(str, 'binary'));
+        await this.writeHostFile(path.join(this.volumePath, drive, OPT4_FILE_NAME), Buffer.from(str, 'binary'));
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1468,11 +1479,7 @@ export class BeebFS {
         }
         inf += os.EOL;//stop git moaning.
 
-        try {
-            await utils.fsWriteFile(hostPath + INF_EXT, Buffer.from(inf, 'binary'));
-        } catch (error) {
-            return BeebFS.throwServerError(error);
-        }
+        await this.writeHostFile(hostPath + INF_EXT, Buffer.from(inf, 'binary'));
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1861,7 +1868,7 @@ export class BeebFS {
         }
 
         await this.writeMetadata(hostPath, fqn, load, exec, DEFAULT_ATTR);
-        await this.writeFile(hostPath, data);
+        await this.writeBeebFile(hostPath, data);
 
         return new OSFILEResult(1, undefined, undefined, undefined);
     }
@@ -2059,11 +2066,63 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async writeFile(hostPath: string, data: Buffer): Promise<void> {
+    // Unlike *VOL, .gitattributes isn't blindly updated when saving a file.
+    // This is supposed to be a bit more efficient - though will it really be an
+    // issue?
+    private async writeHostFile(hostPath: string, data: Buffer): Promise<void> {
+        const hostFolderPath = path.dirname(hostPath);
+
+        let update = false;
+
+        try {
+            await utils.fsStat(hostFolderPath);
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                try {
+                    await utils.fsMkdir(hostFolderPath);
+                } catch (error) {
+                    // Just ignore. If it's actually a problem, the write will throw.
+                }
+
+                // Folder was newly created, so update .gitattributes.
+                update = true;
+            }
+        }
+
+        if (!update) {
+            if (this.gaManipulator !== undefined) {
+                try {
+                    await utils.fsStat(path.join(hostFolderPath, '.gitattributes'));
+                } catch (error) {
+                    if (error.code === 'ENOENT') {
+                        // No .gitattributes present, so update .gitattributes.
+                        update = true;
+                    }
+                }
+            }
+        }
+
+        if (update) {
+            if (this.gaManipulator !== undefined) {
+                this.gaManipulator.makeFolderNotText(hostFolderPath);
+            }
+        }
+
         try {
             await utils.fsWriteFile(hostPath, data);
         } catch (error) {
             return BeebFS.throwServerError(error);
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private async writeBeebFile(hostPath: string, data: Buffer): Promise<void> {
+        await this.writeHostFile(hostPath, data);
+
+        if (this.gaManipulator !== undefined) {
+            // TODO - check for BASIC file.
         }
     }
 
@@ -2098,7 +2157,8 @@ export class BeebFS {
     private async flushOpenFile(openFile: OpenFile): Promise<void> {
         if (openFile.dirty) {
             const data = Buffer.from(openFile.contents);
-            await this.writeFile(openFile.hostPath, data);
+
+            await this.writeBeebFile(openFile.hostPath, data);
 
             openFile.dirty = false;
         }
