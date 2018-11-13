@@ -393,15 +393,71 @@ export function getTildeExpanded(pathString: string): string {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export function isalnum(c: string) {
-    return c >= '0' && c <= '9' || isalpha(c);
+const CHAR0 = '0'.charCodeAt(0);
+const CHAR9 = '9'.charCodeAt(0);
+const CHARA = 'A'.charCodeAt(0);
+const CHARZ = 'Z'.charCodeAt(0);
+const CHARa = 'a'.charCodeAt(0);
+const CHARz = 'z'.charCodeAt(0);
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+function isdigitchar(char: number): boolean {
+    return char >= CHAR0 && char <= CHAR9;
 }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export function isalpha(c: string) {
-    return c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z';
+function isalphachar(char: number): boolean {
+    return char >= CHARA && char <= CHARZ || char >= CHARa && char <= CHARz;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+function isalnumchar(char: number): boolean {
+    return isdigitchar(char) || isalphachar(char);
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export function isdigit(c: string): boolean {
+    for (let i = 0; i < c.length; ++i) {
+        if (!isdigitchar(c.charCodeAt(i))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export function isalpha(c: string): boolean {
+    for (let i = 0; i < c.length; ++i) {
+        if (!isalphachar(c.charCodeAt(i))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export function isalnum(c: string): boolean {
+    for (let i = 0; i < c.length; ++i) {
+        if (!isalnumchar(c.charCodeAt(i))) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -441,6 +497,26 @@ export async function tryReadFile(filePath: string): Promise<Buffer | undefined>
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+// export async function tryReadTextFile(filePath: string): Promise<string[] | undefined> {
+//     try {
+//         const buf = await tryReadFile(filePath);
+
+//         if (buf === undefined) {
+//             return undefined;
+//         }
+
+//         const str = buf.toString('utf-8');
+
+//         const lines = [];
+//         for (
+//     } catch (error) {
+//         return undefined;
+//     }
+// }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 export async function tryStat(filePath: string): Promise<fs.Stats | undefined> {
     try {
         return await fsStat(filePath);
@@ -458,6 +534,35 @@ export async function saveJSON(filePath: string, obj: any): Promise<void> {
     } catch (error) {
         process.stderr.write('WARNING: failed to save JSON to ``' + filePath + '\'\': ' + error + '\n');
     }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export function splitTextFileLines(b: Buffer, encoding: string): string[] {
+    const lines = [];
+    let i = 0;
+    let j = 0;
+    while (j < b.length) {
+        if (b[j] === 10 || b[j] === 13) {
+            lines.push(b.toString(encoding, i, j));
+
+            ++j;
+            if (j < b.length && (b[j] === 10 || b[j] === 13) && b[j] !== b[j - 1]) {
+                ++j;
+            }
+
+            i = j;
+        } else {
+            j++;
+        }
+    }
+
+    if (i !== j) {
+        lines.push(b.toString(encoding, i, j));
+    }
+
+    return lines;
 }
 
 /////////////////////////////////////////////////////////////////////////

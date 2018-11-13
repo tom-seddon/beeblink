@@ -684,7 +684,7 @@ export class Server {
     }
 
     private async handleGetBootOption(handler: Handler, p: Buffer): Promise<Packet> {
-        const option = await this.bfs.loadBootOption(this.bfs.getVolumePath(), this.bfs.getDrive());
+        const option = await beebfs.BeebFS.loadBootOption(this.bfs.getVolumePath(), this.bfs.getDrive());
 
         return new Packet(beeblink.RESPONSE_BOOT_OPTION, option);
     }

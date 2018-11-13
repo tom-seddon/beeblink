@@ -31,6 +31,7 @@ import * as beebfs from './beebfs';
 import { Server } from './server';
 import { Chalk } from 'chalk';
 import chalk from 'chalk';
+import * as gitattributes from './gitattributes';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -73,6 +74,8 @@ interface ICommandLineOptions {
     save_config: string | null;
     usb_verbose: boolean;
     set_serial: number | null;
+    git: boolean;
+    git_verbose: boolean;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -265,20 +268,28 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
         options.default_volume = config.defaultVolume;
     }
 
+    // Keep config folders first.
     if (config.folders !== undefined) {
-        for (const configFolder of config.folders) {
-            let found = false;
+        for (let i = 0; i < config.folders.length; ++i) {
+            options.folders.splice(i, 0, config.folders[i]);
+        }
+    }
 
-            for (const optionsFolder of options.folders) {
-                if (path.relative(configFolder, optionsFolder) === '') {
-                    found = true;
-                    break;
+    // Eliminate duplicate folders.
+    {
+        let i = 0;
+        while (i < options.folders.length) {
+            let j = i + 1;
+
+            while (j < options.folders.length) {
+                if (path.relative(options.folders[i], options.folders[j]) === '') {
+                    options.folders.splice(j, 1);
+                } else {
+                    ++j;
                 }
             }
 
-            if (!found) {
-                options.folders.push(configFolder);
-            }
+            ++i;
         }
     }
 
@@ -598,6 +609,34 @@ async function setDeviceSerialNumber(serial: number): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+async function isGit(folderPath: string): Promise<boolean> {
+    for (; ;) {
+        const gitPath = path.join(folderPath, '.git');
+
+        const stat = await utils.tryStat(gitPath);
+        if (stat !== undefined) {
+            if (stat.isDirectory()) {
+                return true;
+            }
+        }
+
+        const newFolderPath = path.normalize(path.join(folderPath, '..'));
+
+        // > path.posix.normalize('/..')
+        // '/'
+        // > path.win32.normalize('C:\\..')
+        // 'C:\\'
+
+        if (newFolderPath === folderPath) {
+            break;
+        }
+
+        folderPath = newFolderPath;
+    }
+
+    return false;
+}
+
 async function main(options: ICommandLineOptions) {
     if (options.set_serial !== null) {
         await setDeviceSerialNumber(options.set_serial);
@@ -641,6 +680,32 @@ async function main(options: ICommandLineOptions) {
 
     if ((await findBeebLinkUSBDevices()).length === 0) {
         throw new Error('no BeebLink devices found');
+    }
+
+    const gaManipulator = new gitattributes.Manipulator(options.git_verbose);
+
+    if (options.git) {
+        process.stderr.write('Checking for .gitattributes...\n');
+        const volumePaths = await beebfs.BeebFS.findAllVolumePaths(options.folders, log);
+        const drivePaths: string[] = [];
+        let numFolders = 0;
+        let numGitFolders = 0;
+        for (const volumePath of volumePaths) {
+            const drives = await beebfs.BeebFS.findDrivesForVolume(volumePath);
+            for (const drive of drives) {
+                ++numFolders;
+                const drivePath = path.join(volumePath, drive.name);
+                if (await isGit(drivePath)) {
+                    drivePaths.push(drivePath);
+                    ++numGitFolders;
+                }
+            }
+        }
+        process.stderr.write('found ' + numGitFolders + '/' + numFolders + ' git drive(s) in ' + volumePaths.length + ' volume(s)\n');
+
+        for (const drivePath of drivePaths) {
+            gaManipulator.makeFolderNotText(drivePath);
+        }
     }
 
     // 
@@ -730,6 +795,8 @@ function usbVIDOrPID(s: string): number {
     parser.addArgument(['--save-config'], { metavar: 'FILE', nargs: '?', constant: DEFAULT_CONFIG_FILE_NAME, help: 'save config to %(metavar)s (%(constant)s if not specified)' });
     parser.addArgument(['--set-serial'], { metavar: 'SERIAL', type: 'int', help: 'set device\'s USB serial number to %(metavar)s and exit' });
     parser.addArgument(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'folder to search for volumes' });
+    parser.addArgument(['--git'], { action: 'storeTrue', help: 'enable git-related functionality' });
+    parser.addArgument(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output' });
 
     const options = parser.parseArgs();
 

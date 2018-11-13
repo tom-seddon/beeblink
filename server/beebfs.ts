@@ -519,7 +519,157 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     public static isValidDrive(drive: string) {
-        return drive >= '0' && drive <= '9';
+        return drive.length === 1 && utils.isdigit(drive);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public static async isVolume(volumePath: string): Promise<boolean> {
+        if (!BeebFS.isValidVolumeName(path.basename(volumePath))) {
+            return false;
+        }
+
+        try {
+            const stat0 = await utils.fsStat(path.join(volumePath, '0'));
+            if (!stat0.isDirectory()) {
+                return false;
+            }
+        } catch (error) {
+            // Whatever the problem is, it's not going to get any better.
+            return false;
+        }
+
+        return true;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public static async findAllVolumePaths(folders: string[], log: utils.Log): Promise<string[]> {
+        return await BeebFS.findVolumePaths('*', folders, log);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public static async findDrivesForVolume(volumePath: string): Promise<BeebDrive[]> {
+        let names: string[];
+        try {
+            names = await utils.fsReaddir(volumePath);
+        } catch (error) {
+            return BeebFS.throwServerError(error);
+        }
+
+        const drives = [];
+
+        for (const name of names) {
+            if (BeebFS.isValidDrive(name)) {
+                const option = await BeebFS.loadBootOption(volumePath, name);
+                const title = await BeebFS.loadTitle(volumePath, name);
+
+                drives.push(new BeebDrive(name, option, title));
+            }
+        }
+
+        return drives;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public static async loadTitle(volumePath: string, drive: string): Promise<string> {
+        const buffer = await utils.tryReadFile(path.join(volumePath, drive, TITLE_FILE_NAME));
+        if (buffer === undefined) {
+            return DEFAULT_TITLE;
+        }
+
+        return BeebFS.getFirstLine(buffer).substr(0, MAX_TITLE_LENGTH);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public static async loadBootOption(volumePath: string, drive: string): Promise<number> {
+        const buffer = await utils.tryReadFile(path.join(volumePath, drive, OPT4_FILE_NAME));
+        if (buffer === undefined || buffer.length === 0) {
+            return DEFAULT_BOOT_OPTION;
+        }
+
+        return buffer[0] & 3;//ugh.
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private static getFirstLine(b: Buffer): string {
+        let i;
+
+        for (i = 0; i < b.length; ++i) {
+            const x = b[i];
+            if (x === 10 || x === 13 || x === 26) {
+                break;
+            }
+        }
+
+        return b.toString('binary', 0, i).trim();
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private static async findVolumePaths(afsp: string, folders: string[], log: utils.Log): Promise<string[]> {
+        const volumePaths = [];
+
+        const re = BeebFS.getRegExpFromAFSP(afsp);
+
+        for (const folder of folders) {
+            let names: string[];
+            try {
+                names = await utils.fsReaddir(folder);
+            } catch (error) {
+                process.stderr.write('WARNING: failed to read files in folder: ' + folder + '\n');
+                log.pn('Error was: ' + error);
+                continue;
+            }
+
+            for (const name of names) {
+                if (re.exec(name) !== null) {
+                    const volumePath = path.join(folder, name);
+                    if (await BeebFS.isVolume(volumePath)) {
+                        volumePaths.push(volumePath);
+                    }
+                }
+            }
+        }
+
+        return volumePaths;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    // The regexp is actually a bit cleverer than the afsp, at least compared to
+    // how DFS does it, in that a * will match chars in the middle of a string,
+    // not just at the end.
+    private static getRegExpFromAFSP(afsp: string): RegExp {
+        let r = '^';
+
+        for (const c of afsp) {
+            if (c === '*') {
+                r += '.*';
+            } else if (c === '#') {
+                r += '.';
+            } else if (utils.isalnum(c)) {
+                r += c;
+            } else {
+                r += '\\' + c;
+            }
+        }
+
+        r += '$';
+
+        return new RegExp(r, 'i');
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -692,7 +842,7 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     public async mountByPath(volumePath: string): Promise<string | undefined> {
-        if (!await this.isVolume(volumePath)) {
+        if (!await BeebFS.isVolume(volumePath)) {
             return 'Volume not valid: ' + volumePath;
         }
 
@@ -787,56 +937,14 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     public async findDrives(): Promise<BeebDrive[]> {
-        let names: string[];
-        try {
-            names = await utils.fsReaddir(this.volumePath);
-        } catch (error) {
-            return BeebFS.throwServerError(error);
-        }
-
-        const drives = [];
-
-        for (const name of names) {
-            if (BeebFS.isValidDrive(name)) {
-                const option = await this.loadBootOption(this.volumePath, name);
-                const title = await this.loadTitle(this.volumePath, name);
-
-                drives.push(new BeebDrive(name, option, title));
-            }
-        }
-
-        return drives;
+        return await BeebFS.findDrivesForVolume(this.volumePath);
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
     public async findPathsOfVolumesMatching(afsp: string): Promise<string[]> {
-        const volumePaths = [];
-
-        const re = this.getRegExpFromAFSP(afsp);
-
-        for (const folder of this.folders) {
-            let names: string[];
-            try {
-                names = await utils.fsReaddir(folder);
-            } catch (error) {
-                process.stderr.write('WARNING: failed to read files in folder: ' + folder + '\n');
-                this.log.pn('Error was: ' + error);
-                continue;
-            }
-
-            for (const name of names) {
-                if (re.exec(name) !== null) {
-                    const volumePath = path.join(folder, name);
-                    if (await this.isVolume(volumePath)) {
-                        volumePaths.push(volumePath);
-                    }
-                }
-            }
-        }
-
-        return volumePaths;
+        return await BeebFS.findVolumePaths(afsp, this.folders, this.log);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -848,7 +956,7 @@ export class BeebFS {
         }
 
         const volumePath = path.join(this.folders[0], name);
-        if (await this.isVolume(volumePath)) {
+        if (await BeebFS.isVolume(volumePath)) {
             BeebFS.throwError(ErrorCode.Exists);
         }
 
@@ -983,14 +1091,14 @@ export class BeebFS {
 
         let text = '';
 
-        const title = await this.loadTitle(volumePath, drive);
+        const title = await BeebFS.loadTitle(volumePath, drive);
         if (title !== '') {
             text += title + BNL;
         }
 
         text += 'Volume: ' + path.basename(volumePath) + BNL;
 
-        const boot = await this.loadBootOption(volumePath, drive);
+        const boot = await BeebFS.loadBootOption(volumePath, drive);
         text += ('Drive ' + drive + ' (' + boot + ' - ' + BOOT_OPTION_DESCRIPTIONS[boot] + ')').padEnd(20);
 
         text += ('Dir :' + this.drive + '.' + this.dir).padEnd(10);
@@ -1289,29 +1397,7 @@ export class BeebFS {
     public async readTextFile(file: BeebFile): Promise<string[]> {
         const b = await this.readFile(file);
 
-        const lines = [];
-        let i = 0;
-        let j = 0;
-        while (j < b.length) {
-            if (b[j] === 10 || b[j] === 13) {
-                lines.push(b.toString('binary', i, j));
-
-                ++j;
-                if (j < b.length && (b[j] === 10 || b[j] === 13) && b[j] !== b[j - 1]) {
-                    ++j;
-                }
-
-                i = j;
-            } else {
-                j++;
-            }
-        }
-
-        if (i !== j) {
-            lines.push(b.toString('binary', i, j));
-        }
-
-        return lines;
+        return utils.splitTextFileLines(b, 'binary');
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1336,8 +1422,8 @@ export class BeebFS {
 
         let files = await this.getBeebFiles(this.volumePath, afsp.drive!);
 
-        const dirRegExp = this.getRegExpFromAFSP(afsp.dir!);
-        const nameRegExp = this.getRegExpFromAFSP(afsp.name!);
+        const dirRegExp = BeebFS.getRegExpFromAFSP(afsp.dir!);
+        const nameRegExp = BeebFS.getRegExpFromAFSP(afsp.name!);
 
         this.log.pn('    dirRegExp: ``' + dirRegExp.source + '\'\'');
         this.log.pn('    nameRegExp: ``' + nameRegExp.source + '\'\'');
@@ -1359,33 +1445,9 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async loadTitle(volumePath: string, drive: string): Promise<string> {
-        const buffer = await utils.tryReadFile(path.join(volumePath, drive, TITLE_FILE_NAME));
-        if (buffer === undefined) {
-            return DEFAULT_TITLE;
-        }
-
-        return this.getFirstLine(buffer).substr(0, MAX_TITLE_LENGTH);
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     public async setTitle(drive: string, title: string): Promise<void> {
         const buffer = Buffer.from(title.substr(0, MAX_TITLE_LENGTH) + os.EOL, 'binary');
         await this.writeFile(path.join(this.volumePath, drive, TITLE_FILE_NAME), buffer);
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public async loadBootOption(volumePath: string, drive: string): Promise<number> {
-        const buffer = await utils.tryReadFile(path.join(volumePath, drive, OPT4_FILE_NAME));
-        if (buffer === undefined || buffer.length === 0) {
-            return DEFAULT_BOOT_OPTION;
-        }
-
-        return buffer[0] & 3;//ugh.
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1526,22 +1588,6 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private getFirstLine(b: Buffer): string {
-        let i;
-
-        for (i = 0; i < b.length; ++i) {
-            const x = b[i];
-            if (x === 10 || x === 13 || x === 26) {
-                break;
-            }
-        }
-
-        return b.toString('binary', 0, i).trim();
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     private tryGetINFAddress(addressString: string): number | undefined {
         let address = Number('0x' + addressString);
         if (Number.isNaN(address)) {
@@ -1575,7 +1621,7 @@ export class BeebFS {
             exec = DEFAULT_EXEC;
             attr = DEFAULT_ATTR;
         } else {
-            const infString = this.getFirstLine(infBuffer);
+            const infString = BeebFS.getFirstLine(infBuffer);
             this.log.p(' - ``' + infString + '\'\'');
 
             const infParts = infString.split(new RegExp('\\s+'));
@@ -1704,53 +1750,6 @@ export class BeebFS {
         }
 
         return dir;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // The regexp is actually a bit cleverer than the afsp, at least compared to
-    // how DFS does it, in that a * will match chars in the middle of a string,
-    // not just at the end.
-    private getRegExpFromAFSP(afsp: string): RegExp {
-        let r = '^';
-
-        for (const c of afsp) {
-            if (c === '*') {
-                r += '.*';
-            } else if (c === '#') {
-                r += '.';
-            } else if (utils.isalnum(c)) {
-                r += c;
-            } else {
-                r += '\\' + c;
-            }
-        }
-
-        r += '$';
-
-        return new RegExp(r, 'i');
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    private async isVolume(volumePath: string): Promise<boolean> {
-        if (!BeebFS.isValidVolumeName(path.basename(volumePath))) {
-            return false;
-        }
-
-        try {
-            const stat0 = await utils.fsStat(path.join(volumePath, '0'));
-            if (!stat0.isDirectory()) {
-                return false;
-            }
-        } catch (error) {
-            // Whatever the problem is, it's not going to get any better.
-            return false;
-        }
-
-        return true;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2236,8 +2235,8 @@ export class BeebFS {
     private async OSGBPBGetTitleAndBootOption(): Promise<OSGBPBResult> {
         const builder = new utils.BufferBuilder();
 
-        builder.writePascalString(await this.loadTitle(this.volumePath, this.drive));
-        builder.writeUInt8(await this.loadBootOption(this.volumePath, this.drive));
+        builder.writePascalString(await BeebFS.loadTitle(this.volumePath, this.drive));
+        builder.writeUInt8(await BeebFS.loadBootOption(this.volumePath, this.drive));
 
         // What are you supposed to return for count and pointer in this case?
         return new OSGBPBResult(false, undefined, undefined, builder.createBuffer());

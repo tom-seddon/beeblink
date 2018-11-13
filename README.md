@@ -36,6 +36,8 @@ the server and using the filing system.
 
 [Got multiple BBCs? No problem](./docs/multi.md). 
 
+[If you use git, some notes on git interop](./docs/git.md).
+
 # Building it yourself
 
 **This repo has submodules** - if you're going to build it, clone it
