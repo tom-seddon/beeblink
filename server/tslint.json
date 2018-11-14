@@ -29,6 +29,7 @@
         "trailing-comma": false,
         "max-classes-per-file": false,
         "promise-function-async": true,
-        "strict-boolean-expressions": true
+        "strict-boolean-expressions": true,
+        "object-literal-sort-keys": false
     }
 }
