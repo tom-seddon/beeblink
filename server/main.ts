@@ -42,6 +42,8 @@ const DEFAULT_USB_PID = 0xbeeb;
 
 const DEVICE_RETRY_DELAY_MS = 1000;
 
+const DEFAULT_BEEBLINK_ROM = './beeblink.rom';
+
 const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
 
 const DEFAULT_VOLUME = '65boot';
@@ -61,7 +63,7 @@ interface IConfigFile {
 interface ICommandLineOptions {
     verbose: boolean;
     device: number[];
-    rom: string;
+    rom: string | null;
     fs_verbose: boolean;
     server_verbose: boolean;
     default_volume: string | null;
@@ -293,8 +295,12 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
         }
     }
 
-    if (config.rom !== undefined && options.rom !== null) {
-        options.rom = config.rom;
+    if (options.rom === null) {
+        if (config.rom !== undefined) {
+            options.rom = config.rom;
+        } else {
+            options.rom = DEFAULT_BEEBLINK_ROM;
+        }
     }
 }
 
@@ -309,7 +315,7 @@ async function maybeSaveConfig(options: ICommandLineOptions): Promise<void> {
     const config: IConfigFile = {
         defaultVolume: options.default_volume !== null ? options.default_volume : undefined,
         folders: options.folders,
-        rom: options.rom,
+        rom: options.rom !== null ? options.rom : undefined,
     };
 
     await utils.fsMkdirAndWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
@@ -327,7 +333,7 @@ class Connection {
             throw new Error('Failed to mount initial volume: ' + mountError);
         }
 
-        const server = new Server(options.rom, bfs, options.server_verbose ? 'SRV' + connectionId : undefined, colours);
+        const server = new Server(options.rom!, bfs, options.server_verbose ? 'SRV' + connectionId : undefined, colours);
 
         return new Connection(usbSerial, connectionId, server, bfs, options.avr_verbose, options.usb_verbose, colours);
     }
@@ -674,7 +680,7 @@ async function main(options: ICommandLineOptions) {
         process.stderr.write('Note: new volumes will be created in: ' + options.folders[0] + '\n');
     }
 
-    if (!await utils.fsExists(options.rom)) {
+    if (!await utils.fsExists(options.rom!)) {
         process.stderr.write('ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.rom + '\n');
     }
 
@@ -792,7 +798,7 @@ function usbVIDOrPID(s: string): number {
 
     parser.addArgument(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });
     parser.addArgument(['--device'], { nargs: 2, metavar: 'ID', type: usbVIDOrPID, defaultValue: [DEFAULT_USB_VID, DEFAULT_USB_PID], help: 'set USB device VID/PID. Default: 0x' + utils.hex4(DEFAULT_USB_VID) + ' 0x' + utils.hex4(DEFAULT_USB_PID) });
-    parser.addArgument(['--rom'], { metavar: 'FILE', defaultValue: './beeblink.rom', help: 'read BeebLink ROM from %(metavar)s. Default: %(defaultValue)s' });
+    parser.addArgument(['--rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_ROM });
     parser.addArgument(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
     parser.addArgument(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
     parser.addArgument(['--usb-verbose'], { action: 'storeTrue', help: 'extra USB-related output' });
