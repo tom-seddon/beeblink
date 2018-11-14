@@ -55,6 +55,7 @@ interface IConfigFile {
     folders: string[] | undefined;
     defaultVolume: string | undefined;
     rom: string | undefined;
+    git: boolean | undefined;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -302,6 +303,8 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
             options.rom = DEFAULT_BEEBLINK_ROM;
         }
     }
+
+    options.git = options.git || config.git === true;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -316,6 +319,7 @@ async function maybeSaveConfig(options: ICommandLineOptions): Promise<void> {
         defaultVolume: options.default_volume !== null ? options.default_volume : undefined,
         folders: options.folders,
         rom: options.rom !== null ? options.rom : undefined,
+        git: options.git !== null ? options.git : undefined,
     };
 
     await utils.fsMkdirAndWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
@@ -690,7 +694,7 @@ async function main(options: ICommandLineOptions) {
 
     let gaManipulator: gitattributes.Manipulator | undefined;
 
-    if (options.git) {
+    if (options.git === true) {
         gaManipulator = new gitattributes.Manipulator(options.git_verbose);
 
         process.stderr.write('Checking for .gitattributes...\n');
