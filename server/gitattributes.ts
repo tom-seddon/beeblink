@@ -29,23 +29,6 @@ import * as path from 'path';
 import * as utils from './utils';
 import * as beebfs from './beebfs';
 
-// class Change {
-//     private filePath: string;
-//     private remove: string | undefined;
-//     private add: string | undefined;
-//     private log: utils.Log;
-//     private extraVerbose: boolean;
-
-//     public constructor(filePath: string, remove: string | undefined, add: string | undefined, log: utils.Log) {
-//         this.filePath = filePath;
-//         this.remove = remove;
-//         this.add = add;
-//         this.log = log;
-//         this.extraVerbose = false;
-//     }
-
-// }
-
 export class Manipulator {
     private queue: (() => Promise<void>)[];
     private log: utils.Log;
