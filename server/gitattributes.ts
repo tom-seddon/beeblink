@@ -59,7 +59,17 @@ class Change {
         }
 
         const gaPath = path.join(path.dirname(this.filePath), '.gitattributes');
-        const basename = path.basename(this.filePath);
+
+        let basename = path.basename(this.filePath);
+
+        if (basename.length === 0) {
+            return;
+        }
+
+        // https://git-scm.com/docs/gitignore
+        if (basename[0] === '#' || basename[0] === '!') {
+            basename = '\\' + basename;
+        }
 
         let gaData = await utils.tryReadFile(gaPath);
         if (gaData === undefined) {
@@ -190,12 +200,14 @@ export class Manipulator {
         this.change(path.join(folderPath, '*'), undefined, '-text');
     }
 
-    public makeFileBASIC(filePath: string): void {
-        this.change(filePath, undefined, 'diff=bbcbasic');
-    }
+    public makeFileBASIC(filePath: string, basic: boolean): void {
+        const diff = 'diff=bbcbasic';
 
-    public makeFileNotBASIC(filePath: string): void {
-        this.change(filePath, 'diff=bbcbasic', undefined);
+        if (basic) {
+            this.change(filePath, undefined, diff);
+        } else {
+            this.change(filePath, diff, undefined);
+        }
     }
 
     private change(filePath: string, remove: string | undefined, add: string | undefined): void {

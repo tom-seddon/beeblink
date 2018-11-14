@@ -496,26 +496,6 @@ export async function tryReadFile(filePath: string): Promise<Buffer | undefined>
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// export async function tryReadTextFile(filePath: string): Promise<string[] | undefined> {
-//     try {
-//         const buf = await tryReadFile(filePath);
-
-//         if (buf === undefined) {
-//             return undefined;
-//         }
-
-//         const str = buf.toString('utf-8');
-
-//         const lines = [];
-//         for (
-//     } catch (error) {
-//         return undefined;
-//     }
-// }
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 export async function tryStat(filePath: string): Promise<fs.Stats | undefined> {
     try {
         return await fsStat(filePath);
@@ -562,6 +542,48 @@ export function splitTextFileLines(b: Buffer, encoding: string): string[] {
     }
 
     return lines;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export function isBASIC(b: Buffer): boolean {
+    let i = 0;
+
+    while (true) {
+        if (i >= b.length) {
+            // Hit EOF before end of program marker.
+            return false;
+        }
+
+        if (b[i] != 0x0d) {
+            // Invalid program structure.
+            return false;
+        }
+
+        if (i + 1 >= b.length) {
+            // Line past EOF.
+            return false;
+        }
+
+        if (b[i + 1] == 0xff) {
+            // End of program marker - program is valid.
+            return true;
+        }
+
+        if (i + 3 >= b.length) {
+            // Line header past EOF.
+            return false;
+        }
+
+        if (b[i + 3] == 0) {
+            // Invalid line length.
+            return false;
+        }
+
+        // Skip line.
+        i += b[i + 3];
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////

@@ -2066,52 +2066,15 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    // Unlike *VOL, .gitattributes isn't blindly updated when saving a file.
-    // This is supposed to be a bit more efficient - though will it really be an
-    // issue?
     private async writeHostFile(hostPath: string, data: Buffer): Promise<void> {
-        const hostFolderPath = path.dirname(hostPath);
-
-        let update = false;
-
         try {
-            await utils.fsStat(hostFolderPath);
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                try {
-                    await utils.fsMkdir(hostFolderPath);
-                } catch (error) {
-                    // Just ignore. If it's actually a problem, the write will throw.
-                }
-
-                // Folder was newly created, so update .gitattributes.
-                update = true;
-            }
-        }
-
-        if (!update) {
-            if (this.gaManipulator !== undefined) {
-                try {
-                    await utils.fsStat(path.join(hostFolderPath, '.gitattributes'));
-                } catch (error) {
-                    if (error.code === 'ENOENT') {
-                        // No .gitattributes present, so update .gitattributes.
-                        update = true;
-                    }
-                }
-            }
-        }
-
-        if (update) {
-            if (this.gaManipulator !== undefined) {
-                this.gaManipulator.makeFolderNotText(hostFolderPath);
-            }
-        }
-
-        try {
-            await utils.fsWriteFile(hostPath, data);
+            await utils.fsMkdirAndWriteFile(hostPath, data);
         } catch (error) {
             return BeebFS.throwServerError(error);
+        }
+
+        if (this.gaManipulator !== undefined) {
+            this.gaManipulator.makeFolderNotText(path.dirname(hostPath));
         }
     }
 
@@ -2122,7 +2085,7 @@ export class BeebFS {
         await this.writeHostFile(hostPath, data);
 
         if (this.gaManipulator !== undefined) {
-            // TODO - check for BASIC file.
+            this.gaManipulator.makeFileBASIC(hostPath, utils.isBASIC(data));
         }
     }
 
