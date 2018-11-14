@@ -695,25 +695,29 @@ async function main(options: ICommandLineOptions) {
         // thing at a time. (Noticeably faster startup on OS X with lots of
         // volumes, even on an SSD.)
 
-        const drivePaths: string[] = [];
+        const allDrives: beebfs.BeebDrive[] = [];
         let numFolders = 0;
-        let numGitFolders = 0;
         for (const volumePath of volumePaths) {
             const drives = await beebfs.BeebFS.findDrivesForVolume(volumePath);
             for (const drive of drives) {
                 ++numFolders;
-                const drivePath = path.join(volumePath, drive.name);
-                if (await isGit(drivePath)) {
-                    drivePaths.push(drivePath);
-                    ++numGitFolders;
+                if (await isGit(path.join(drive.volumePath, drive.name))) {
+                    allDrives.push(drive);
                 }
             }
         }
-        process.stderr.write('found ' + numGitFolders + '/' + numFolders + ' git drive(s) in ' + volumePaths.length + ' volume(s)\n');
+        process.stderr.write('Found ' + allDrives.length + '/' + numFolders + ' git drive(s) in ' + volumePaths.length + ' volume(s)\n');
 
-        for (const drivePath of drivePaths) {
+        for (const drive of allDrives) {
+            const drivePath = path.join(drive.volumePath, drive.name);
+
             gaManipulator.makeFolderNotText(drivePath);
+            gaManipulator.scanForBASIC(drive);
         }
+
+        gaManipulator.whenQuiescent(() => {
+            process.stderr.write('Finished scanning for BASIC files.\n');
+        });
     }
 
     // 

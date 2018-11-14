@@ -1,21 +1,50 @@
 # [Git](https://git-scm.com/) interop
 
-If using Git to track your BeebLink volumes, you probably want to set
-up a [`.gitattributes` file](https://git-scm.com/docs/gitattributes)
-that unsets the text flag on all your Beeb files.
-
 Specify `--git` when launching the server to have BeebLink look after
-this for you. The server will scan the available volumes on startup,
-find any that appear to be part of a git repo (i.e., that have a
-`.git` folder in one of their parent folders), and make sure each
-volume's drive folders contain a `.gitattributes` file with `* -text`
-in them. This will ensure all the Beeb files have the text flag unset.
+your Beeb files' `.gitattribute` settings. The server will try to
+ensure that your Git-controlled Beeb files have their text flag reset
+(inhibiting newline conversion), and will also try to add a
+`diff=bbcbasic` attribute to any BBC BASIC files (see below).
 
-Additional similar `.gitattribute` files will also be created when
-saving files, loading a volume with `*VOL` or the volume browser, or
-creating a volume with `*NEWVOL`.
+This applies to any Beeb files in a volume that appears to be part of
+a Git repo - i.e., any volume that has a `.git` folder in one of its
+parent folders. 
 
-(Note that this functionality is not super-clever: it pays no
-attention to `.gitignore`, and it will blithely add additional
-`.gitattributes` files to folders that are already covered by a
-perfectly good `.gitattributes` file elsewhere.)
+The `.gitattributes` files are updated at the following times:
+
+* on startup (reset text flag, find BASIC files)
+* when saving files from the Beeb (reset text flag, find BASIC files)
+* when loading a volume with `*VOL` (reset text flag)
+* when creating a new volume with `*NEWVOL` (reset text flag)
+
+Notes:
+
+* the server only spots changes based on Beeb activity - changing
+  files on the PC won't get noticed until it does an exhaustive scan
+  on the next startup
+* the server pays no attention to `.gitignore`, and always updates
+  `.gitattributes` even if the files are already covered by a
+  perfectly good `.gitattributes` file elsewhere
+
+## `diff=bbcbasic`
+
+The `diff=bbcbasic` flag lets you use a git diff driver to get text
+diffs of tokenized BBC BASIC files. It's designed for use with
+BBCBasicToText, as described here:
+https://github.com/tom-seddon/beeb/#bbcbasictotext
+
+Example output once it's up and running:
+
+    % git diff -p
+    diff --git a/stuff/65boot/0/$.RESETCMOS b/stuff/65boot/0/$.RESETCMOS
+    index b60d5083..f9c869c3 100644
+    --- a/stuff/65boot/0/$.RESETCMOS
+    +++ b/stuff/65boot/0/$.RESETCMOS
+    @@ -1,4 +1,5 @@
+     REM>RESETCMOS
+    +REM TEST
+     MODE7
+     FORI%=0TO15
+     PROCO("INSERT "+STR$I%)
+	
+Strongly recommended!

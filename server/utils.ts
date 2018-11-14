@@ -556,7 +556,7 @@ export function isBASIC(b: Buffer): boolean {
             return false;
         }
 
-        if (b[i] != 0x0d) {
+        if (b[i] !== 0x0d) {
             // Invalid program structure.
             return false;
         }
@@ -566,7 +566,7 @@ export function isBASIC(b: Buffer): boolean {
             return false;
         }
 
-        if (b[i + 1] == 0xff) {
+        if (b[i + 1] === 0xff) {
             // End of program marker - program is valid.
             return true;
         }
@@ -576,7 +576,7 @@ export function isBASIC(b: Buffer): boolean {
             return false;
         }
 
-        if (b[i + 3] == 0) {
+        if (b[i + 3] === 0) {
             // Invalid line length.
             return false;
         }

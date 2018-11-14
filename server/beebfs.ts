@@ -244,12 +244,14 @@ class OpenFile {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-class BeebDrive {
+export class BeebDrive {
+    public readonly volumePath: string;
     public readonly name: string;
     public readonly option: number;
     public readonly title: string;
 
-    public constructor(name: string, option: number, title: string) {
+    public constructor(volumePath: string, name: string, option: number, title: string) {
+        this.volumePath = volumePath;
         this.name = name;
         this.option = option;
         this.title = title;
@@ -569,7 +571,7 @@ export class BeebFS {
                 const option = await BeebFS.loadBootOption(volumePath, name);
                 const title = await BeebFS.loadTitle(volumePath, name);
 
-                drives.push(new BeebDrive(name, option, title));
+                drives.push(new BeebDrive(volumePath, name, option, title));
             }
         }
 
@@ -598,6 +600,76 @@ export class BeebFS {
         }
 
         return buffer[0] & 3;//ugh.
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    // Find all Beeb files in a drive in a volume.
+    public static async getBeebFiles(volumePath: string, drive: string, log: utils.Log | undefined): Promise<BeebFile[]> {
+        let hostNames: string[];
+        try {
+            hostNames = await utils.fsReaddir(path.join(volumePath, drive));
+        } catch (error) {
+            return [];
+        }
+
+        const beebFiles: BeebFile[] = [];
+
+        const infExtRegExp = new RegExp('\.inf$', 'i');
+
+        if (log !== undefined) {
+            log.in('getBeebFiles: ');
+        }
+
+        for (const infHostName of hostNames) {
+            if (infExtRegExp.exec(infHostName) === null) {
+                continue;
+            }
+
+            if (log !== undefined) {
+                log.p(infHostName);
+            }
+
+            const hostName = infHostName.substr(0, infHostName.length - 4);
+            const hostPath = path.join(volumePath, drive, hostName);
+            const hostStat = await utils.tryStat(hostPath);
+            if (hostStat === undefined) {
+                if (log !== undefined) {
+                    log.pn(' - failed to stat');
+                }
+                continue;
+            }
+
+            const infPath = path.join(volumePath, drive, infHostName);
+            const infBuffer = await utils.tryReadFile(infPath);
+            if (infBuffer === undefined) {
+                if (log !== undefined) {
+                    log.pn(' - failed to load .inf');
+                }
+                continue;
+            }
+
+            const file = BeebFS.tryCreateBeebFileFromINF(infBuffer, hostPath, volumePath, drive, hostName, hostStat, log);
+            if (file === undefined) {
+                if (log !== undefined) {
+                    log.pn(' - failed to interpret .inf');
+                }
+                continue;
+            }
+
+            if (log !== undefined) {
+                log.pn(' - ok');
+            }
+
+            beebFiles.push(file);
+        }
+
+        if (log !== undefined) {
+            log.out();
+        }
+
+        return beebFiles;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -785,6 +857,98 @@ export class BeebFS {
         }
 
         return new BeebFSP(volumeName, drive, dir, name);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private static tryCreateBeebFileFromINF(infBuffer: Buffer, hostPath: string, volumePath: string, drive: string, hostName: string, hostStat: fs.Stats, log: utils.Log | undefined): BeebFile | undefined {
+        let name;
+        let load;
+        let exec;
+        let attr;
+
+        if (infBuffer.length === 0) {
+            name = hostName;
+            load = DEFAULT_LOAD;
+            exec = DEFAULT_EXEC;
+            attr = DEFAULT_ATTR;
+        } else {
+            const infString = BeebFS.getFirstLine(infBuffer);
+
+            if (log !== undefined) {
+                log.p(' - ``' + infString + '\'\'');
+            }
+
+            const infParts = infString.split(new RegExp('\\s+'));
+            if (infParts.length < 3) {
+                return undefined;
+            }
+
+            let i = 0;
+
+            name = infParts[i++];
+
+            load = BeebFS.tryGetINFAddress(infParts[i++]);
+            if (load === undefined) {
+                return undefined;
+            }
+
+            exec = BeebFS.tryGetINFAddress(infParts[i++]);
+            if (exec === undefined) {
+                return undefined;
+            }
+
+            attr = 0;
+            if (i < infParts.length) {
+                if (infParts[i].startsWith('CRC=')) {
+                    // Ignore the CRC entry.
+                } else if (infParts[i] === 'L' || infParts[i] === 'l') {
+                    attr = LOCKED_ATTR;
+                } else {
+                    attr = Number('0x' + infParts[i]);
+                    if (Number.isNaN(attr)) {
+                        return undefined;
+                    }
+                }
+
+                ++i;
+            }
+        }
+
+        if (name.length < 2 || name[1] !== '.') {
+            return undefined;
+        }
+
+        const dir = name[0];
+        name = name.slice(2);
+
+        if (name.length > MAX_NAME_LENGTH) {
+            return undefined;
+        }
+
+        return new BeebFile(hostPath, new BeebFQN(volumePath, drive, dir, name), load, exec, hostStat.size, attr);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private static tryGetINFAddress(addressString: string): number | undefined {
+        let address = Number('0x' + addressString);
+        if (Number.isNaN(address)) {
+            return undefined;
+        }
+
+        // Try to work around 6-digit DFS addresses.
+        if (addressString.length === 6) {
+            if ((address & 0xff0000) === 0xff0000) {
+                // Javascript bitwise operators work with 32-bit signed values,
+                // so |=0xff000000 makes a negative mess.
+                address += 0xff000000;
+            }
+        }
+
+        return address;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1118,7 +1282,7 @@ export class BeebFS {
 
         text += BNL + BNL;
 
-        const beebFiles = await this.getBeebFiles(volumePath, drive); path.join(volumePath, drive);
+        const beebFiles = await BeebFS.getBeebFiles(volumePath, drive, this.log);
 
         beebFiles.sort((a, b) => {
             if (a.name.dir === this.dir && b.name.dir !== this.dir) {
@@ -1431,7 +1595,7 @@ export class BeebFS {
     public async getBeebFilesForAFSP(afsp: BeebFQN): Promise<BeebFile[]> {
         this.log.pn('getBeebFilesForAFSP: ' + afsp);
 
-        let files = await this.getBeebFiles(this.volumePath, afsp.drive!);
+        let files = await BeebFS.getBeebFiles(this.volumePath, afsp.drive!, this.log);
 
         const dirRegExp = BeebFS.getRegExpFromAFSP(afsp.dir!);
         const nameRegExp = BeebFS.getRegExpFromAFSP(afsp.name!);
@@ -1595,151 +1759,6 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private tryGetINFAddress(addressString: string): number | undefined {
-        let address = Number('0x' + addressString);
-        if (Number.isNaN(address)) {
-            return undefined;
-        }
-
-        // Try to work around 6-digit DFS addresses.
-        if (addressString.length === 6) {
-            if ((address & 0xff0000) === 0xff0000) {
-                // Javascript bitwise operators work with 32-bit signed values,
-                // so |=0xff000000 makes a negative mess.
-                address += 0xff000000;
-            }
-        }
-
-        return address;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    private tryCreateBeebFileFromINF(infBuffer: Buffer, hostPath: string, volumePath: string, drive: string, hostName: string, hostStat: fs.Stats): BeebFile | undefined {
-        let name;
-        let load;
-        let exec;
-        let attr;
-
-        if (infBuffer.length === 0) {
-            name = hostName;
-            load = DEFAULT_LOAD;
-            exec = DEFAULT_EXEC;
-            attr = DEFAULT_ATTR;
-        } else {
-            const infString = BeebFS.getFirstLine(infBuffer);
-            this.log.p(' - ``' + infString + '\'\'');
-
-            const infParts = infString.split(new RegExp('\\s+'));
-            if (infParts.length < 3) {
-                return undefined;
-            }
-
-            let i = 0;
-
-            name = infParts[i++];
-
-            load = this.tryGetINFAddress(infParts[i++]);
-            if (load === undefined) {
-                return undefined;
-            }
-
-            exec = this.tryGetINFAddress(infParts[i++]);
-            if (exec === undefined) {
-                return undefined;
-            }
-
-            attr = 0;
-            if (i < infParts.length) {
-                if (infParts[i].startsWith('CRC=')) {
-                    // Ignore the CRC entry.
-                } else if (infParts[i] === 'L' || infParts[i] === 'l') {
-                    attr = LOCKED_ATTR;
-                } else {
-                    attr = Number('0x' + infParts[i]);
-                    if (Number.isNaN(attr)) {
-                        return undefined;
-                    }
-                }
-
-                ++i;
-            }
-        }
-
-        if (name.length < 2 || name[1] !== '.') {
-            return undefined;
-        }
-
-        const dir = name[0];
-        name = name.slice(2);
-
-        if (name.length > MAX_NAME_LENGTH) {
-            return undefined;
-        }
-
-        return new BeebFile(hostPath, new BeebFQN(volumePath, drive, dir, name), load, exec, hostStat.size, attr);
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // Find all Beeb files in a drive in a volume.
-    private async getBeebFiles(volumePath: string, drive: string): Promise<BeebFile[]> {
-        let hostNames: string[];
-        try {
-            hostNames = await utils.fsReaddir(path.join(volumePath, drive));
-        } catch (error) {
-            return [];
-        }
-
-        const beebFiles: BeebFile[] = [];
-
-        const infExtRegExp = new RegExp('\.inf$', 'i');
-
-        this.log.in('getBeebFiles: ');
-
-        for (const infHostName of hostNames) {
-            if (infExtRegExp.exec(infHostName) === null) {
-                continue;
-            }
-
-            this.log.p(infHostName);
-
-            const hostName = infHostName.substr(0, infHostName.length - 4);
-            const hostPath = path.join(volumePath, drive, hostName);
-            const hostStat = await utils.tryStat(hostPath);
-            if (hostStat === undefined) {
-                this.log.pn(' - failed to stat');
-                continue;
-            }
-
-            const infPath = path.join(volumePath, drive, infHostName);
-            const infBuffer = await utils.tryReadFile(infPath);
-            if (infBuffer === undefined) {
-                this.log.pn(' - failed to load .inf');
-                continue;
-            }
-
-            const file = this.tryCreateBeebFileFromINF(infBuffer, hostPath, volumePath, drive, hostName, hostStat);
-            if (file === undefined) {
-                this.log.pn(' - failed to interpret .inf');
-                continue;
-            }
-
-            this.log.pn(' - ok');
-
-            beebFiles.push(file);
-        }
-
-        this.log.out();
-
-        return beebFiles;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     private setDriveInternal(drive: string): string {
         if (drive < '0' || drive > '9') {
             BeebFS.throwError(ErrorCode.BadDrive);
@@ -1793,7 +1812,7 @@ export class BeebFS {
     //
     // But this will improve...
     private async getBeebFileInternal(fqn: BeebFQN, throwOnError: boolean): Promise<BeebFile | undefined> {
-        const files = await this.getBeebFiles(fqn.volumePath, fqn.drive);
+        const files = await BeebFS.getBeebFiles(fqn.volumePath, fqn.drive, this.log);
 
         for (const file of files) {
             if (file.name.equals(fqn)) {
