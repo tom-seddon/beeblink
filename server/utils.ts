@@ -588,3 +588,27 @@ export function isBASIC(b: Buffer): boolean {
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
+
+// The regexp is actually a bit cleverer than the afsp, at least compared to
+// how DFS does it, in that a * will match chars in the middle of a string,
+// not just at the end.
+export function getRegExpFromAFSP(afsp: string): RegExp {
+    let r = '^';
+
+    for (const c of afsp) {
+        if (c === '*') {
+            r += '.*';
+        } else if (c === '#') {
+            r += '.';
+        } else if (isalnum(c)) {
+            r += c;
+        } else {
+            r += '\\' + c;
+        }
+    }
+
+    r += '$';
+
+    return new RegExp(r, 'i');
+}
+

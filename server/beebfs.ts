@@ -694,7 +694,7 @@ export class BeebFS {
     private static async findVolumePaths(afsp: string, folders: string[], log: utils.Log): Promise<string[]> {
         const volumePaths = [];
 
-        const re = BeebFS.getRegExpFromAFSP(afsp);
+        const re = utils.getRegExpFromAFSP(afsp);
 
         for (const folder of folders) {
             let names: string[];
@@ -717,32 +717,6 @@ export class BeebFS {
         }
 
         return volumePaths;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // The regexp is actually a bit cleverer than the afsp, at least compared to
-    // how DFS does it, in that a * will match chars in the middle of a string,
-    // not just at the end.
-    private static getRegExpFromAFSP(afsp: string): RegExp {
-        let r = '^';
-
-        for (const c of afsp) {
-            if (c === '*') {
-                r += '.*';
-            } else if (c === '#') {
-                r += '.';
-            } else if (utils.isalnum(c)) {
-                r += c;
-            } else {
-                r += '\\' + c;
-            }
-        }
-
-        r += '$';
-
-        return new RegExp(r, 'i');
     }
 
     /////////////////////////////////////////////////////////////////////////

@@ -183,6 +183,7 @@ export class Server {
             new Command('INFO', '<afsp>', this.infoCommand),
             new Command('LIB', '(<dir>)', this.libCommand),
             new Command('LIST', '<fsp>', this.listCommand),
+            new Command('LOCATE', '<afsp>', this.locateCommand),
             new Command('NEWVOL', '<vsp>', this.newvolCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
             new Command('SPEEDTEST', undefined, this.speedtestCommand),
@@ -1136,6 +1137,50 @@ export class Server {
 
         for (let i = 0; i < lines.length; ++i) {
             text += ((i + 1) % 10000).toString().padStart(4, ' ') + ' ' + lines[i] + BNL;
+        }
+
+        return this.textResponse(text);
+    }
+
+    private async locateCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+        if (commandLine.parts.length < 2) {
+            throw new CommandSyntaxError();
+        }
+
+        const afsp = beebfs.BeebFS.parseFileString(commandLine.parts[1]);
+
+        if (afsp.volumeName !== undefined || afsp.drive !== undefined || afsp.name === undefined) {
+            return beebfs.BeebFS.throwError(beebfs.ErrorCode.BadName);
+        }
+
+        const dirRegExp = afsp.dir !== undefined ? utils.getRegExpFromAFSP(afsp.dir) : undefined;
+        const nameRegExp = utils.getRegExpFromAFSP(afsp.name);
+
+        const volumePaths = await this.bfs.findPathsOfVolumesMatching('*');
+        const foundFiles = [];
+
+        // This is almost, but not quite, what BeebFS.getBeebFilesForAFSP does.
+        // Should probably tidy that up.
+
+        for (const volumePath of volumePaths) {
+            const drives = await beebfs.BeebFS.findDrivesForVolume(volumePath);
+            for (const drive of drives) {
+                const files = await beebfs.BeebFS.getBeebFiles(volumePath, drive.name, undefined);
+                for (const file of files) {
+                    if ((dirRegExp === undefined || dirRegExp.exec(file.name.dir) !== null) && nameRegExp.exec(file.name.name) !== null) {
+                        foundFiles.push(file);
+                    }
+                }
+            }
+        }
+
+        let text = '';
+        if (foundFiles.length === 0) {
+            text += 'No files found.' + utils.BNL;
+        } else {
+            for (const foundFile of foundFiles) {
+                text += '::' + path.basename(foundFile.name.volumePath) + ':' + foundFile.name.drive + '.' + foundFile.name.dir + '.' + foundFile.name.name + utils.BNL;
+            }
         }
 
         return this.textResponse(text);

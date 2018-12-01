@@ -284,6 +284,11 @@ Change library drive and directory on the current volume.
 
 Show contents of text file, with lines numbered.
 
+### `LOCATE <afsp>`
+
+Print names of any file(s) in any volumes matching `<afsp>`. (`<afsp>`
+may not contain volume or drive specifiers.)
+
 ### `NEWVOL <vsp>`
 
 Create a new volume.
