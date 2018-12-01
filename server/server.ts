@@ -986,7 +986,7 @@ export class Server {
         let text = 'Matching volumes:';
 
         if (volumeNames.length === 0) {
-            text += 'None';
+            text += ' None';
         } else {
             for (let i = 0; i < volumeNames.length; ++i) {
                 volumeNames[i] = path.basename(volumeNames[i]);
