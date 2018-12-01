@@ -953,7 +953,7 @@ export class Server {
             this.log.pn('[' + i + ']: ' + JSON.stringify(commandLine.parts[i]));
         }
 
-        return commandLine!;
+        return commandLine;
     }
 
     private async handleRun(commandLine: beebfs.CommandLine, tryLibDir: boolean): Promise<Packet> {

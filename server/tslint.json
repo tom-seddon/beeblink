@@ -30,6 +30,7 @@
         "max-classes-per-file": false,
         "promise-function-async": true,
         "strict-boolean-expressions": true,
-        "object-literal-sort-keys": false
+        "object-literal-sort-keys": false,
+        "no-unnecessary-type-assertion": true
     }
 }

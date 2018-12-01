@@ -24,7 +24,6 @@ class Stats {
 export class SpeedTest {
     private hostStats: Stats;
     private parasiteStats: Stats;
-    private lastData: Buffer | undefined;
 
     public constructor() {
         this.hostStats = new Stats();
@@ -63,7 +62,7 @@ export class SpeedTest {
 
         // Send back alternating random junk or original data.
         if (stats.numTests++ % 2 === 0) {
-            stats.expectedData = crypto.randomBytes(stats.originalData!.length);
+            stats.expectedData = crypto.randomBytes(stats.originalData.length);
         } else {
             stats.expectedData = stats.originalData;
         }

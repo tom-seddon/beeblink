@@ -1595,10 +1595,10 @@ export class BeebFS {
     public async getBeebFilesForAFSP(afsp: BeebFQN): Promise<BeebFile[]> {
         this.log.pn('getBeebFilesForAFSP: ' + afsp);
 
-        let files = await BeebFS.getBeebFiles(this.volumePath, afsp.drive!, this.log);
+        let files = await BeebFS.getBeebFiles(this.volumePath, afsp.drive, this.log);
 
-        const dirRegExp = BeebFS.getRegExpFromAFSP(afsp.dir!);
-        const nameRegExp = BeebFS.getRegExpFromAFSP(afsp.name!);
+        const dirRegExp = utils.getRegExpFromAFSP(afsp.dir);
+        const nameRegExp = utils.getRegExpFromAFSP(afsp.name);
 
         this.log.pn('    dirRegExp: ``' + dirRegExp.source + '\'\'');
         this.log.pn('    nameRegExp: ``' + nameRegExp.source + '\'\'');
@@ -1863,7 +1863,7 @@ export class BeebFS {
             }
         }
 
-        return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, file.size, file.attr), data!, dataLoadAddress);
+        return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, file.size, file.attr), data, dataLoadAddress);
     }
 
     /////////////////////////////////////////////////////////////////////////
