@@ -260,7 +260,7 @@ export class Browser {
     }
 
     private updateColumns(oldVolume: Volume | undefined) {
-        this.log.pn(this.rowIdx + ' ' + this.colIdx + ' ' + this.columns.length);
+        //this.log.pn(this.rowIdx + ' ' + this.colIdx + ' ' + this.columns.length);
         // let oldVolume: Volume | undefined;
         // if (this.rowIdx >= 0 && this.colIdx >= 0) {
         //     oldVolume = this.columns[this.colIdx].rows[this.rowIdx];
