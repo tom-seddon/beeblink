@@ -129,6 +129,7 @@ export enum ErrorCode {
     FileNotFound = 214,
     Syntax = 220,//no generic text for this
     Channel = 222,
+    EOF = 223,
     BadString = 253,
     BadCommand = 254,
     DataLost = 0xca,
@@ -149,6 +150,7 @@ const errorTexts: { [index: number]: string | undefined } = {
     [ErrorCode.BadAttribute]: 'Bad attribute',
     [ErrorCode.FileNotFound]: 'File not found',
     [ErrorCode.Channel]: 'Channel',
+    [ErrorCode.EOF]: 'EOF',
     [ErrorCode.BadString]: 'Bad string',
     [ErrorCode.BadCommand]: 'Bad command',
     [ErrorCode.DataLost]: 'Data lost',
@@ -1314,7 +1316,7 @@ export class BeebFS {
             return openFile.contents[openFile.ptr++];
         } else {
             if (openFile.eofError) {
-                return BeebFS.throwError(ErrorCode.Channel);
+                return BeebFS.throwError(ErrorCode.EOF);
             } else {
                 openFile.eofError = true;
                 return undefined;

@@ -3275,7 +3275,12 @@ close:
                 pha
                 tya
                 pha
-                
+
+                lda #$77        ;close SPOOL/EXEC files (AUG 141)
+                jsr osbyte
+
+                pla             ;A = file handle
+                pha
                 tax
                 lda #REQUEST_OSFIND_CLOSE
                 jsr send_request_1
