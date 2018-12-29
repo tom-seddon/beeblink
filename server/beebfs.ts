@@ -272,8 +272,8 @@ export class BeebVolume {
     public readonly path: string;
     public readonly name: string;
 
-    public constructor(path: string, name: string) {
-        this.path = path;
+    public constructor(volumePath: string, name: string) {
+        this.path = volumePath;
         this.name = name;
     }
 
@@ -699,48 +699,65 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     private static async findVolumes(afsp: string, folders: string[], log: utils.Log): Promise<BeebVolume[]> {
-        const volumes = [];
+        const volumes: BeebVolume[] = [];
 
         const re = utils.getRegExpFromAFSP(afsp);
 
-        for (const folder of folders) {
+        const findVolumesMatchingRecursive = async (folderPath: string, indent: string): Promise<void> => {
+            log.pn(indent + 'Looking in: ' + folderPath + '...');
+
             let names: string[];
             try {
-                names = await utils.fsReaddir(folder);
+                names = await utils.fsReaddir(folderPath);
             } catch (error) {
-                process.stderr.write('WARNING: failed to read files in folder: ' + folder + '\n');
+                process.stderr.write('WARNING: failed to read files in folder: ' + folderPath + '\n');
                 log.pn('Error was: ' + error);
-                continue;
+                return;
             }
 
+            const folderPaths: string[] = [];
+
             for (const name of names) {
-                if (re.exec(name) !== null) {
-                    const volumePath = path.join(folder, name);
+                if (name[0] === '.') {
+                    continue;
+                }
 
-                    try {
-                        const stat0 = await utils.fsStat(path.join(volumePath, '0'));
-                        if (stat0.isDirectory()) {
-                            let volumeName: string | undefined;
-                            const buffer = await utils.tryReadFile(path.join(folder, VOLUME_FILE_NAME));
-                            if (buffer !== undefined) {
-                                volumeName = BeebFS.getFirstLine(buffer);
-                            } else {
-                                const basename = path.basename(volumePath);
+                const fullName = path.join(folderPath, name);
 
-                                if (BeebFS.isValidVolumeName(basename)) {
-                                    volumeName = basename;
-                                }
-                            }
+                const stat = await utils.tryStat(fullName);
+                if (stat !== undefined && stat.isDirectory()) {
+                    const stat0 = await utils.tryStat(path.join(fullName, '0'));
+                    if (stat0 === undefined) {
+                        // obviously not a BeebLink volume, so save for later.
+                        folderPaths.push(fullName);
+                    } else if (stat0.isDirectory()) {
+                        let volumeName: string;
+                        const buffer = await utils.tryReadFile(path.join(fullName, VOLUME_FILE_NAME));
+                        if (buffer !== undefined) {
+                            volumeName = BeebFS.getFirstLine(buffer);
+                        } else {
+                            volumeName = name;
+                        }
 
-                            if (volumeName !== undefined) {
-                                volumes.push(new BeebVolume(volumePath, volumeName));
+                        if (BeebFS.isValidVolumeName(volumeName)) {
+                            const volume = new BeebVolume(fullName, volumeName);
+                            log.pn('Found volume ' + volume.path + ': ' + volume.name);
+
+                            if (re.exec(volume.name) !== null) {
+                                volumes.push(volume);
                             }
                         }
-                    } catch (error) {
-                        // Whatever it is, it's probably bad.
                     }
                 }
             }
+
+            for (const folderPath of folderPaths) {
+                await findVolumesMatchingRecursive(folderPath, indent + '    ');
+            }
+        };
+
+        for (const folder of folders) {
+            await findVolumesMatchingRecursive(folder, '');
         }
 
         return volumes;
@@ -751,6 +768,11 @@ export class BeebFS {
 
     // Valid volume names are 7-bit ASCII, no spaces. If you want £, use `.
     private static isValidVolumeName(name: string): boolean {
+        // Ignore empty string, as might be found in a .volume file.
+        if (name.length === 0) {
+            return false;
+        }
+
         // Ignore dot folders.
         if (name[0] === '.') {
             return false;
