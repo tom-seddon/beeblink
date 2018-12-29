@@ -420,7 +420,13 @@ present).
 # Non-standard errors
 
 Most of the errors you'll see when using the BLFS will be the usual
-DFS ones, but there are a couple of non-standard ones too.
+DFS ones, but there are some non-standard ones too.
+
+## `Ambiguous volume` (same code as `Bad name`)
+
+The volume name supplied when using the `::` syntax is ambiguous.
+Supply the same name to the `*VOLS` command to see which volumes it
+matches.
 
 ## `Exists on server` (same code as `Exists`)
 
@@ -431,6 +437,11 @@ the server, that the BBC can't see because it has no corresponding
 There's not much you can do about this at the BBC end. You'll need to
 move the offending file out of the folder on the server. (Well, that
 or pick a different name...)
+
+## `No volume` (same code as `Disc fault`)
+
+The default volume was not found, so there is no volume currently
+loaded. Use `*VOL` to load one.
 
 ## `POSIX error: XXX` (same code as `Disc fault`)
 
@@ -443,6 +454,10 @@ The server encountered an unexpected error while doing something.
 The file is too large, or the requested operation would make it too
 large. There's a (fairly arbitrary) size limit of 16MBytes.
 
+## `Volume not found` (same code as `File not found`)
+
+The name supplied to `*VOL` didn't match any volumes.
+
 ## `Won't` (&93) (as seen on ADFS)
 
 The file has a load address of &FFFFFFFF, and no explicit load address
@@ -452,8 +467,3 @@ address is &FFFFFFFF.
 (This usually means the file has a 0-byte .inf file, but these
 addresses can also be assigned manually.)
 
-## `Ambiguous volume` (same code as `Bad name`)
-
-The volume name supplied when using the `::` syntax is ambiguous.
-Supply the same name to the `*VOLS` command to see which volumes it
-matches.

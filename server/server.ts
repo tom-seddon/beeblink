@@ -1273,16 +1273,19 @@ export class Server {
     }
 
     private async volCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
-        let result: string | beebfs.BeebVolume;
+        let volume: beebfs.BeebVolume;
         if (commandLine.parts.length >= 2) {
-            result = await this.bfs.mountByName(commandLine.parts[1]);
-            if (typeof (result) === 'string') {
-                return this.textResponse(result + BNL);
+            const volumes = await this.bfs.findVolumesMatching(commandLine.parts[1]);
+            if (volumes.length === 0) {
+                throw new beebfs.BeebError(beebfs.ErrorCode.FileNotFound, 'Volume not found');
             }
+
+            await this.bfs.mount(volumes[0]);
+            volume = volumes[0];
         } else {
-            result = this.bfs.getVolume();
+            volume = this.bfs.getVolume();
         }
 
-        return this.textResponse('Volume: ' + result.name + BNL + 'Path: ' + result.path + BNL);
+        return this.textResponse('Volume: ' + volume.name + BNL + 'Path: ' + volume.path + BNL);
     }
 }

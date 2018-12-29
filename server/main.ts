@@ -46,8 +46,6 @@ const DEFAULT_BEEBLINK_ROM = './beeblink.rom';
 
 const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
 
-const DEFAULT_VOLUME = '65boot';
-
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -329,12 +327,17 @@ async function maybeSaveConfig(options: ICommandLineOptions): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 
 class Connection {
-    public static async create(options: ICommandLineOptions, connectionId: number, usbSerial: string, colours: Chalk, gaManipulator: gitattributes.Manipulator | undefined): Promise<Connection> {
+    public static async create(
+        options: ICommandLineOptions,
+        defaultVolume: beebfs.BeebVolume | undefined,
+        connectionId: number,
+        usbSerial: string,
+        colours: Chalk,
+        gaManipulator: gitattributes.Manipulator | undefined): Promise<Connection> {
         const bfs = new beebfs.BeebFS(options.fs_verbose ? 'FS' + connectionId : undefined, options.folders, colours, gaManipulator);
 
-        const mountResult = await bfs.mountByName(options.default_volume !== null ? options.default_volume : DEFAULT_VOLUME);
-        if (typeof (mountResult) === 'string') {
-            throw new Error('Failed to load initial volume: ' + mountResult);
+        if (defaultVolume !== undefined) {
+            await bfs.mount(defaultVolume);
         }
 
         const server = new Server(options.rom!, bfs, options.server_verbose ? 'SRV' + connectionId : undefined, colours);
@@ -694,11 +697,12 @@ async function main(options: ICommandLineOptions) {
 
     let gaManipulator: gitattributes.Manipulator | undefined;
 
+    const volumes = await beebfs.BeebFS.findAllVolumes(options.folders, log);
+
     if (options.git === true) {
         gaManipulator = new gitattributes.Manipulator(options.git_verbose);
 
         process.stderr.write('Checking for .gitattributes...\n');
-        const volumes = await beebfs.BeebFS.findAllVolumes(options.folders, log);
 
         // Find all the paths first, then set the gitattributes manipulator
         // going once they've all been collected, in the interests of doing one
@@ -730,6 +734,20 @@ async function main(options: ICommandLineOptions) {
         });
     }
 
+    let defaultVolume: beebfs.BeebVolume | undefined;
+    if (options.default_volume !== null) {
+        for (const volume of volumes) {
+            if (volume.name === options.default_volume) {
+                defaultVolume = volume;
+                break;
+            }
+        }
+
+        if (defaultVolume === undefined) {
+            process.stderr.write('Default volume not found: ' + options.default_volume);
+        }
+    }
+
     // 
     const logPalette = [
         chalk.red,
@@ -758,7 +776,7 @@ async function main(options: ICommandLineOptions) {
         for (const device of devices) {
             if (connections.find((connection) => connection.usbSerial === device.usbSerial) === undefined) {
                 const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
-                const connection = await Connection.create(options, connectionId++, device.usbSerial, colours, gaManipulator);
+                const connection = await Connection.create(options, defaultVolume, connectionId++, device.usbSerial, colours, gaManipulator);
                 connections.push(connection);
                 connection.run().then(() => {
                     removeConnection(connection);
@@ -808,7 +826,7 @@ function usbVIDOrPID(s: string): number {
     parser.addArgument(['--usb-verbose'], { action: 'storeTrue', help: 'extra USB-related output' });
     // don't use the argparse default mechanism here - this makes it easier to
     // later detect the absence of --default-volume.
-    parser.addArgument(['--default-volume'], { metavar: 'DEFAULT-VOLUME', help: 'load volume %(metavar)s when starting. Default: ' + DEFAULT_VOLUME });
+    parser.addArgument(['--default-volume'], { metavar: 'DEFAULT-VOLUME', help: 'load volume %(metavar)s on startup' });
     parser.addArgument(['--no-retry-device'], { action: 'storeTrue', help: 'don\'t try to rediscover device if it goes away' });
     parser.addArgument(['--send-verbose'], { action: 'storeTrue', help: 'dump data sent to device' });
     parser.addArgument(['--fatal-verbose'], { action: 'storeTrue', help: 'print debugging info on a fatal error' });

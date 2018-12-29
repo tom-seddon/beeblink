@@ -715,7 +715,7 @@ export class BeebFS {
                 return;
             }
 
-            const folderPaths: string[] = [];
+            const subfolderPaths: string[] = [];
 
             for (const name of names) {
                 if (name[0] === '.') {
@@ -729,7 +729,7 @@ export class BeebFS {
                     const stat0 = await utils.tryStat(path.join(fullName, '0'));
                     if (stat0 === undefined) {
                         // obviously not a BeebLink volume, so save for later.
-                        folderPaths.push(fullName);
+                        subfolderPaths.push(fullName);
                     } else if (stat0.isDirectory()) {
                         let volumeName: string;
                         const buffer = await utils.tryReadFile(path.join(fullName, VOLUME_FILE_NAME));
@@ -751,8 +751,8 @@ export class BeebFS {
                 }
             }
 
-            for (const folderPath of folderPaths) {
-                await findVolumesMatchingRecursive(folderPath, indent + '    ');
+            for (const subfolderPath of subfolderPaths) {
+                await findVolumesMatchingRecursive(subfolderPath, indent + '    ');
             }
         };
 
@@ -1013,22 +1013,7 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    // Returns string to print on error, or undefined on success (yes this is
-    // weird).
-    public async mountByName(volumeAFSP: string): Promise<BeebVolume | string> {
-        const volumes = await this.findVolumesMatching(volumeAFSP);
-
-        if (volumes.length === 0) {
-            return 'No volumes match: ' + volumeAFSP;
-        }
-
-        return await this.mount(volumes[0]);
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public async mount(volume: BeebVolume): Promise<BeebVolume> {
+    public async mount(volume: BeebVolume): Promise<void> {
         if (this.gaManipulator !== undefined) {
             const drives = await BeebFS.findDrivesForVolume(volume);
             for (const drive of drives) {
@@ -1039,8 +1024,6 @@ export class BeebFS {
         this.volume = volume;
 
         this.resetDirs();
-
-        return this.volume;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1178,7 +1161,10 @@ export class BeebFS {
             BeebFS.throwServerError(error);
         }
 
-        return await this.mount(new BeebVolume(volumePath, name));
+        const newVolume = new BeebVolume(volumePath, name);
+        await this.mount(newVolume);
+
+        return newVolume;
     }
 
     /////////////////////////////////////////////////////////////////////////
