@@ -6,7 +6,7 @@ type in the following program, and run it to get a copy of the ROM
 transferred from the server.
 
 This assumes you've got a disc drive, so it just saves the ROM (max
-8K) to a file for use with your usual ROM tools.
+16K) to a file for use with your usual ROM tools.
 
     10REM>L.BSTRAP2
     20MODE7
