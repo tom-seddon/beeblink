@@ -332,9 +332,9 @@ class Connection {
     public static async create(options: ICommandLineOptions, connectionId: number, usbSerial: string, colours: Chalk, gaManipulator: gitattributes.Manipulator | undefined): Promise<Connection> {
         const bfs = new beebfs.BeebFS(options.fs_verbose ? 'FS' + connectionId : undefined, options.folders, colours, gaManipulator);
 
-        const mountError = await bfs.mountByName(options.default_volume !== null ? options.default_volume : DEFAULT_VOLUME);
-        if (mountError !== undefined) {
-            throw new Error('Failed to mount initial volume: ' + mountError);
+        const mountResult = await bfs.mountByName(options.default_volume !== null ? options.default_volume : DEFAULT_VOLUME);
+        if (typeof (mountResult) === 'string') {
+            throw new Error('Failed to load initial volume: ' + mountResult);
         }
 
         const server = new Server(options.rom!, bfs, options.server_verbose ? 'SRV' + connectionId : undefined, colours);
@@ -698,7 +698,7 @@ async function main(options: ICommandLineOptions) {
         gaManipulator = new gitattributes.Manipulator(options.git_verbose);
 
         process.stderr.write('Checking for .gitattributes...\n');
-        const volumePaths = await beebfs.BeebFS.findAllVolumePaths(options.folders, log);
+        const volumes = await beebfs.BeebFS.findAllVolumes(options.folders, log);
 
         // Find all the paths first, then set the gitattributes manipulator
         // going once they've all been collected, in the interests of doing one
@@ -707,19 +707,19 @@ async function main(options: ICommandLineOptions) {
 
         const allDrives: beebfs.BeebDrive[] = [];
         let numFolders = 0;
-        for (const volumePath of volumePaths) {
-            const drives = await beebfs.BeebFS.findDrivesForVolume(volumePath);
+        for (const volume of volumes) {
+            const drives = await beebfs.BeebFS.findDrivesForVolume(volume);
             for (const drive of drives) {
                 ++numFolders;
-                if (await isGit(path.join(drive.volumePath, drive.name))) {
+                if (await isGit(path.join(drive.volume.path, drive.name))) {
                     allDrives.push(drive);
                 }
             }
         }
-        process.stderr.write('Found ' + allDrives.length + '/' + numFolders + ' git drive(s) in ' + volumePaths.length + ' volume(s)\n');
+        process.stderr.write('Found ' + allDrives.length + '/' + numFolders + ' git drive(s) in ' + volumes.length + ' volume(s)\n');
 
         for (const drive of allDrives) {
-            const drivePath = path.join(drive.volumePath, drive.name);
+            const drivePath = path.join(drive.volume.path, drive.name);
 
             gaManipulator.makeFolderNotText(drivePath);
             gaManipulator.scanForBASIC(drive);

@@ -685,7 +685,7 @@ export class Server {
     }
 
     private async handleGetBootOption(handler: Handler, p: Buffer): Promise<Packet> {
-        const option = await beebfs.BeebFS.loadBootOption(this.bfs.getVolumePath(), this.bfs.getDrive());
+        const option = await beebfs.BeebFS.loadBootOption(this.bfs.getVolume(), this.bfs.getDrive());
 
         return new Packet(beeblink.RESPONSE_BOOT_OPTION, option);
     }
@@ -744,7 +744,7 @@ export class Server {
             const height = p[3];
             const m128 = p[4] >= 3;
 
-            const volumePaths = await this.bfs.findPathsOfVolumesMatching('*');
+            const volumePaths = await this.bfs.findVolumesMatching('*');
 
             this.volumeBrowser = new volumebrowser.Browser(charSizeBytes, width, height, m128, volumePaths);
 
@@ -772,15 +772,9 @@ export class Server {
                     builder.writeBuffer(result.text);
                 }
 
-                if (result.volumePath !== undefined) {
-                    const message = await this.bfs.mountByPath(result.volumePath);
-                    if (message === undefined) {
-                        builder.writeString('New volume: ' + this.bfs.getVolumeName());
-                    } else {
-                        builder.writeString(message);
-                    }
-
-                    builder.writeString(BNL);
+                if (result.volume !== undefined) {
+                    const volume = await this.bfs.mount(result.volume);
+                    builder.writeString('New volume: ' + result.volume.name + BNL);
 
                     if (result.boot) {
                         responseType = beeblink.RESPONSE_VOLUME_BROWSER_BOOT;
@@ -982,21 +976,17 @@ export class Server {
     private async volsCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : '*';
 
-        const volumeNames = await this.bfs.findPathsOfVolumesMatching(arg);
+        const volumes = await this.bfs.findVolumesMatching(arg);
 
         let text = 'Matching volumes:';
 
-        if (volumeNames.length === 0) {
+        if (volumes.length === 0) {
             text += ' None';
         } else {
-            for (let i = 0; i < volumeNames.length; ++i) {
-                volumeNames[i] = path.basename(volumeNames[i]);
-            }
+            volumes.sort((a, b) => utils.stricmp(a.name, b.name));
 
-            volumeNames.sort(utils.stricmp);
-
-            for (const volumeName of volumeNames) {
-                text += ' ' + volumeName;
+            for (const volume of volumes) {
+                text += ' ' + volume.name;
             }
 
         }
@@ -1156,16 +1146,16 @@ export class Server {
         const dirRegExp = afsp.dir !== undefined ? utils.getRegExpFromAFSP(afsp.dir) : undefined;
         const nameRegExp = utils.getRegExpFromAFSP(afsp.name);
 
-        const volumePaths = await this.bfs.findPathsOfVolumesMatching('*');
+        const volumes = await this.bfs.findVolumesMatching('*');
         const foundFiles = [];
 
         // This is almost, but not quite, what BeebFS.getBeebFilesForAFSP does.
         // Should probably tidy that up.
 
-        for (const volumePath of volumePaths) {
-            const drives = await beebfs.BeebFS.findDrivesForVolume(volumePath);
+        for (const volume of volumes) {
+            const drives = await beebfs.BeebFS.findDrivesForVolume(volume);
             for (const drive of drives) {
-                const files = await beebfs.BeebFS.getBeebFiles(volumePath, drive.name, undefined);
+                const files = await beebfs.BeebFS.getBeebFiles(volume, drive.name, undefined);
                 for (const file of files) {
                     if ((dirRegExp === undefined || dirRegExp.exec(file.name.dir) !== null) && nameRegExp.exec(file.name.name) !== null) {
                         foundFiles.push(file);
@@ -1179,7 +1169,7 @@ export class Server {
             text += 'No files found.' + utils.BNL;
         } else {
             for (const foundFile of foundFiles) {
-                text += '::' + path.basename(foundFile.name.volumePath) + ':' + foundFile.name.drive + '.' + foundFile.name.dir + '.' + foundFile.name.name + utils.BNL;
+                text += '::' + foundFile.name.volume.name + ':' + foundFile.name.drive + '.' + foundFile.name.dir + '.' + foundFile.name.name + utils.BNL;
             }
         }
 
@@ -1283,13 +1273,16 @@ export class Server {
     }
 
     private async volCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+        let result: string | beebfs.BeebVolume;
         if (commandLine.parts.length >= 2) {
-            const message = await this.bfs.mountByName(commandLine.parts[1]);
-            if (message !== undefined) {
-                return this.textResponse(message + BNL);
+            result = await this.bfs.mountByName(commandLine.parts[1]);
+            if (typeof (result) === 'string') {
+                return this.textResponse(result + BNL);
             }
+        } else {
+            result = this.bfs.getVolume();
         }
 
-        return this.textResponse('Volume: ' + this.bfs.getVolumeName() + BNL + 'Path: ' + this.bfs.getVolumePath() + BNL);
+        return this.textResponse('Volume: ' + result.name + BNL + 'Path: ' + result.path + BNL);
     }
 }

@@ -22,25 +22,13 @@
 
 import * as path from 'path';
 import * as utils from './utils';
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-class Volume {
-    public readonly volumePath: string;
-    public readonly displayName: string;
-
-    public constructor(volumePath: string) {
-        this.volumePath = volumePath;
-        this.displayName = path.basename(this.volumePath);
-    }
-}
+import * as beebfs from './beebfs';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
 class Column {
-    public rows: Volume[] = [];
+    public rows: beebfs.BeebVolume[] = [];
     public width: number = 0;
     public x: number = 0;
 }
@@ -51,21 +39,15 @@ class Column {
 export class Result {
     public readonly done: boolean;
     public readonly text: Buffer;
-    public readonly volumePath: string | undefined;
+    public readonly volume: beebfs.BeebVolume | undefined;
     public readonly boot: boolean;
     public readonly flushKeyboardBuffer: boolean;
 
-    public constructor(done: boolean, text: Buffer, volume: Volume | undefined, boot: boolean, flushKeyboardBuffer: boolean) {
+    public constructor(done: boolean, text: Buffer, volume: beebfs.BeebVolume | undefined, boot: boolean, flushKeyboardBuffer: boolean) {
         this.done = done;
-
         this.text = text;
-
-        if (volume !== undefined) {
-            this.volumePath = volume.volumePath;
-        }
-
+        this.volume = volume;
         this.boot = boot;
-
         this.flushKeyboardBuffer = flushKeyboardBuffer;
     }
 }
@@ -91,7 +73,7 @@ export class Browser {
     private highlight: string;
     private columns: Column[];
     private numFilteredVolumes: number;
-    private volumes: Volume[];
+    private volumes: beebfs.BeebVolume[];
     private x: number;
     private rowIdx: number;
     private colIdx: number;
@@ -112,24 +94,20 @@ export class Browser {
     private flushKeyboardBuffer!: boolean;
     private prints: utils.BufferBuilder;
     private done: boolean;
-    private selectedVolume: Volume | undefined;
+    private selectedVolume: beebfs.BeebVolume | undefined;
     private boot: boolean;
 
     // used in filter edit mode
     private filterEditY: number;
 
-    public constructor(charSizeBytes: number, width: number, height: number, m128: boolean, volumePaths: string[]) {
+    public constructor(charSizeBytes: number, width: number, height: number, m128: boolean, volumes: beebfs.BeebVolume[]) {
         this.log = new utils.Log('BROWSER', process.stderr, true);
 
         this.width = width;
         this.height = height;
 
-        this.volumes = [];
-        for (const volumePath of volumePaths) {
-            this.volumes.push(new Volume(volumePath));
-        }
-
-        this.volumes.sort((a, b) => utils.stricmp(a.displayName, b.displayName));
+        this.volumes = volumes;
+        this.volumes.sort((a, b) => utils.stricmp(a.name, b.name));
 
         if (charSizeBytes === 32) {
             this.normal = this.createString(17, 128, 17, 7);
@@ -249,7 +227,7 @@ export class Browser {
         return buffer;
     }
 
-    private getSelectedVolume(): Volume | undefined {
+    private getSelectedVolume(): beebfs.BeebVolume | undefined {
         if (this.colIdx >= 0 && this.colIdx < this.columns.length) {
             if (this.rowIdx >= 0 && this.rowIdx < this.columns[this.colIdx].rows.length) {
                 return this.columns[this.colIdx].rows[this.rowIdx];
@@ -259,7 +237,7 @@ export class Browser {
         return undefined;
     }
 
-    private updateColumns(oldVolume: Volume | undefined) {
+    private updateColumns(oldVolume: beebfs.BeebVolume | undefined) {
         //this.log.pn(this.rowIdx + ' ' + this.colIdx + ' ' + this.columns.length);
         // let oldVolume: Volume | undefined;
         // if (this.rowIdx >= 0 && this.colIdx >= 0) {
@@ -272,7 +250,7 @@ export class Browser {
         let x = 0;
         this.columns = [];
         for (const volume of this.volumes) {
-            const displayNameLC = volume.displayName.toLowerCase();
+            const displayNameLC = volume.name.toLowerCase();
 
             let match = true;
             for (const filterLC of this.filterLCs) {
@@ -289,7 +267,7 @@ export class Browser {
                     newColumn.x = x;
                 }
 
-                newColumn.width = Math.max(newColumn.width, volume.displayName.length + this.offset);
+                newColumn.width = Math.max(newColumn.width, volume.name.length + this.offset);
 
                 newColumn.rows.push(volume);
                 ++this.numFilteredVolumes;
@@ -429,7 +407,7 @@ export class Browser {
     }
 
     private printFullPath() {
-        const volumePath = this.columns[this.colIdx].rows[this.rowIdx].volumePath;
+        const volumePath = this.columns[this.colIdx].rows[this.rowIdx].path;
 
         const width = this.width - 4;
         const lines = [];
@@ -477,7 +455,7 @@ export class Browser {
     private printPath(colIdx: number, rowIdx: number, highlight: boolean | undefined): void {
         const column = this.columns[colIdx];
 
-        let text = column.rows[rowIdx].displayName;
+        let text = column.rows[rowIdx].name;
 
         let offset = 0;
         if (this.teletext) {

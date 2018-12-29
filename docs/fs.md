@@ -97,8 +97,23 @@ Creating a new folder in the right place like this is enough to create
 a volume. The server will automatically create folders for any
 additional drives on demand.
 
+Volume names may only contain non-space printable ASCII characters
+(i.e., >=33 and <=126). `*NEWVOL` will produce an error if invalid
+characters are used; or, if you create a volume on the server with an
+invalid name, it will just be ignored.
+
 (You can have the server find volumes from multiple folders. See the
 list of [server command line options](./server.md).)
+
+## Naming volumes
+
+By default, a volume is named after the folder that contains it.
+
+Add a file called `.volume` to the volume folder to give it some other
+name. The first line of this file should be the name to use.
+
+If the `.volume` name is invalid, the volume will be ignored, just as
+if the volume's folder name were itself invalid.
 
 ## Using existing BBC files with BLFS
 
