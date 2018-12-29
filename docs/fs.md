@@ -12,9 +12,9 @@ limitations.
 Unzip the server zip file somewhere on your PC. There are various
 options, but for starters run it like this from the command line:
 
-OS X/Linux: `./beeblink_server --mount beeblink ./volumes`
+OS X/Linux: `./beeblink_server --default-volume beeblink ./volumes`
 
-Windows: `beeblink_server --mount beeblink ./volumes`
+Windows: `beeblink_server --default-volume beeblink ./volumes`
 
 After a moment you should get a `Server running...` message.
 
