@@ -311,8 +311,6 @@ pop32zx: .macro
 ;
 ; DP_A, DP_X, DP_Y - print hex value of that register
 ;
-; DP_ZPn_X - print X?n (as per 0,x addressing mode)
-;
 ; print - always prints using osasci
 ; preserves: A; X; Y: p
 ;
@@ -323,11 +321,6 @@ DP_A=-1
 DP_X=-2
 DP_Y=-3
 DP_P=-4
-DP_ZP0_X=-1000
-DP_ZP1_X=DP_ZP0_X+1
-DP_ZP2_X=DP_ZP0_X+2
-DP_ZP3_X=DP_ZP0_X+3
-DP_ZP255_X=DP_ZP0_X+255
 
 print: .macro items
                 php             ;103=p
@@ -366,12 +359,6 @@ print: .macro items
                 .elsif \items[i]==DP_P
                 lda $103,x
                 jsr print_p
-                .elsif \items[i]>=DP_ZP0_X&&\items[i]<=DP_ZP255_X
-                lda $101,x
-                tax
-                lda \items[i]-DP_ZP0_X,x
-                jsr print_hex_byte
-                tsx
                 .else
                 .cerror true,"bad debug_print integer"
                 .endif
@@ -471,7 +458,7 @@ build_osword0_block .fill 5
                 
 ; Filing system scratch space
 *=$b0
-scratch_p_size .fill 4
+scratch_payload_size .fill 4
 scratch_ptr .fill 2
                 
 scratch_run_metadata:
@@ -774,7 +761,6 @@ show_avr_status:
                 lda #REQUEST_RESET
                 jsr send_request_1
 
-                ldx #scratch_p_size
                 jsr recv_response
 
                 ; whatever it was, I'm sure it was fine...
@@ -1369,41 +1355,23 @@ done:
                 
 ;-------------------------------------------------------------------------
 ;
-; Set a 16-bit value in zero page to 0.
-;
-; entry: X = zero page address of 16-bit value
-; exit: 
-; preserves: A; X; Y; C
-;
-clrz16: .proc
-                pha
-                lda #0
-                sta 0,x
-                sta 1,x
-                pla
-                rts
-                .pend
-                
-                
-;-------------------------------------------------------------------------
-;
 ; Add a small constant value to a 16-bit value in zero page.
 ;
 ; entry: X = zero page address of 16-bit value
 ; exit: Z set if value became zero
 ; preserves: A; X; Y; C
 ;
-add3z16:
+add3z16: .proc
                 jsr add1z16
-add2z16:
                 jsr add1z16
-add1z16: .proc
+                .pend
+add1z16: .block
                 inc 0,x
                 bne done
                 inc 1,x
 done:
                 rts
-                .pend
+                .bend
 
 ;-------------------------------------------------------------------------
 ;
@@ -1430,184 +1398,103 @@ addyz16_done:
 
 ;-------------------------------------------------------------------------
 ;
-; Fetch a value via a pointer in zero page, with post-increment.
-;
-; entry: X = zero page address of 16-bit pointer
-; exit: A = value fetched
-;       pointer incremented
-;       N,Z set as per new value of A
-; preserves: X,Y
-fetch_add1z16: .proc
-                lda (0,x)
-                php
-                jsr add1z16
-                plp
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
-; Set a 32-bit value in zero page to a zero-extended 8-bit value.
+; Set payload size.
 ;
 ; entry: A = 8-bit value to set
-;        X = zero page address of 32-bit value
 ; exit: 
-; preserves: A; X; Y; C
-setz32: .proc
-                pha
-                sta 0,x
+; preserves: X; Y; C
+set_payload_size: .proc
+                sta scratch_payload_size
                 lda #0
-                sta 1,x
-                sta 2,x
-                sta 3,x
-                pla
+                sta scratch_payload_size+1
+                sta scratch_payload_size+2
+                sta scratch_payload_size+3
                 rts
                 .pend
 
 ;-------------------------------------------------------------------------
 ;
-; Add Y to a 32-bit value in zero page.
+; Add Y to the payload size.
 ;
-; entry: X = zero page address of 32-bit value
-;        Y = value to add
-; preserves: A; X; Y
+; entry: Y = value to add
+; preserves: X; Y
 ;
-addyz32: .proc
-                pha
+add_y_to_payload_size: .proc
                 clc
                 tya
-                adc 0,x
-                sta 0,x
+                adc scratch_payload_size+0
+                sta scratch_payload_size+0
                 bcc done
-                inc 1,x
+                inc scratch_payload_size+1
                 bne done
-                inc 2,x
+                inc scratch_payload_size+2
                 bne done
-                inc 3,x
+                inc scratch_payload_size+3
 done:
-                pla
                 rts
                 .pend
 ;-------------------------------------------------------------------------
 ;
-; ORs all 4 bytes of a 32-bit zero page value into the accumulator.
+; ORs all 4 bytes of the payload size into the accumulator.
 ;
-; entry: X = zero page address of 32-bitvalue
 ; exit: A = a|b|c|d
 ; takes: 22 cycles
 ;
-ldunionz32: .proc
-                lda 0,x
-                ora 1,x
-                ora 2,x
-                ora 3,x
+test_payload_size: .proc
+                lda scratch_payload_size+0
+                ora scratch_payload_size+1
+                ora scratch_payload_size+2
+                ora scratch_payload_size+3
                 rts
                 .pend
 
+;-------------------------------------------------------------------------
+;
+; Negate the payload size.
+;
+; exit: Z set as per new value
+; preserves: A; Y
+;
+negate_payload_size: .proc
+                lda scratch_payload_size+0
+                eor #$ff
+                sta scratch_payload_size+0
+                
+                lda scratch_payload_size+1
+                eor #$ff
+                sta scratch_payload_size+1
+
+                lda scratch_payload_size+2
+                eor #$ff
+                sta scratch_payload_size+2
+
+                lda scratch_payload_size+3
+                eor #$ff
+                sta scratch_payload_size+3
+
+                ; fall through to inc_payload_size
+                .cerror *!=inc_payload_size,"oops"
+                .pend
+                
 ;-------------------------------------------------------------------------
 ;
 ; Increment a 32-bit value in zero page.
 ;
-; entry: X = zero page address of 32-bit value
 ; exit: Z set as per new value
 ; preserves: A; X; Y; C
 ;
-incz32: .proc
-                inc 0,x
+inc_payload_size: .block
+                inc scratch_payload_size+0
                 bne done
-                inc 1,x
+                inc scratch_payload_size+1
                 bne done
-                inc 2,x
+                inc scratch_payload_size+2
                 bne done
-                inc 3,x
+                inc scratch_payload_size+3
 done:
                 rts
-                .pend
+                .bend
                 
-;-------------------------------------------------------------------------
-;
-; Does a few INXs.
-;
-; inx3 exists to keep the calling code looking short...
-; 
-inx4:
-                inx
-inx3:
-                inx
-                inx
-                inx
-                rts
-
-;-------------------------------------------------------------------------
-;
-; Does a few DEXs. (See comment about inx3)
-; 
-dex4:
-                dex
-dex3:
-                dex
-                dex
-                dex
-                rts
-                
-;-------------------------------------------------------------------------
-;
-; Shift a 32-bit value in zero page left.
-;
-; entry: X = zero page address of 32-bit value
-; exit: C set as per last bit shifted out
-; preserves: A; X; Y
-
-asl4z32:
-                jsr asl1z32
-                jsr asl1z32
-                jsr asl1z32
-asl1z32:
-                asl 0,x
-                rol 1,x
-                rol 2,x
-                rol 3,x
-                rts
-
-;-------------------------------------------------------------------------
-;
-; Invert a 32-bit value in zero page.
-;
-; entry: X = zero page address of 32-bit value
-; preserves: A; X; Y; C
-;
-notz32: .proc
-                pha
-                jsr not
-                jsr not
-                jsr not
-                jsr not
-                pla
-                jsr dex4
-                rts
-
-not:
-                lda 0,x
-                eor #$ff
-                sta 0,x
-                inx
-                rts
-                .pend
-                
-;-------------------------------------------------------------------------
-;
-; Negate a 32-bit value in zero page.
-;
-; entry: X = zero page address of 32-bit value
-; exit: Z set as per new value
-; preserves: A; X; Y
-;
-negz32: .proc
-                jsr notz32
-                jsr incz32
-                rts
-                .pend
-
 ;-------------------------------------------------------------------------
 
 p_bit: .macro set,reset
@@ -1965,14 +1852,13 @@ done:
 ; 4. Call recv_response
 ;
 ; entry: A = packet T (bit 7 must be clear)
-;        X = ZP address of the request payload size (32 bits)
 ; exit: Request payload size negated
 ; preserves: X; Y
 ;
 send_request_n: .proc
                 jsr via_prepare
 
-                .debug_print ["send_request_n: Request: T=&",DP_A," p_size=&",DP_ZP3_X,DP_ZP2_X,DP_ZP1_X,DP_ZP0_X,"\r"]
+                .debug_print ["send_request_n: Request: T=&",DP_A," payload_size=&",scratch_payload_size+3,scratch_payload_size+2,scratch_payload_size+1,scratch_payload_size+0,"\r"]
 
                 ; If payload size is 1, it could just do a 2-byte
                 ; send. But it's so annoying to check for.
@@ -1980,19 +1866,20 @@ send_request_n: .proc
 
                 jsr send_byte
 
-                lda 0,x
+                lda scratch_payload_size+0
                 jsr send_byte
 
-                lda 1,x
+                lda scratch_payload_size+1
                 jsr send_byte
                 
-                lda 2,x
+                lda scratch_payload_size+2
                 jsr send_byte
 
-                lda 3,x
+                lda scratch_payload_size+3
                 jsr send_byte
 
-                jsr negz32
+                jsr negate_payload_size
+
                 rts
 
                 .pend
@@ -2001,15 +1888,13 @@ send_request_n: .proc
 ;
 ; Send payload byte.
 ;
-; entry: X = zero-page address of negated request payload size
-;            (as initialised by send_request_n)
 ; exit: C = 1: byte sent
 ;       C = 0: payload overflow
 ; preserves: X; Y
 ;
 send_payload_byte: .proc
                 pha
-                jsr ldunionz32
+                jsr test_payload_size
                 bne more
 
                 pla
@@ -2019,7 +1904,7 @@ send_payload_byte: .proc
 more:
                 pla
                 jsr send_byte
-                jsr incz32
+                jsr inc_payload_size
                 sec
                 rts
                 .pend
@@ -2083,8 +1968,7 @@ without_prepare:
                 rts
 
 got_n:
-                .push32 scratch_p_size
-                ldx #scratch_p_size
+                .push32 scratch_payload_size
                 jsr recv_response.got_n
                 pha             ;response C
                 jsr recv_payload_byte
@@ -2094,7 +1978,7 @@ got_n:
                 tay             ;response P
                 pla
                 tax             ;response C
-                .pop32 scratch_p_size
+                .pop32 scratch_payload_size
                 tya             ;response P
                 rts
                 .bend
@@ -2127,9 +2011,7 @@ send_request_1_with_timeout_recv_response_1: .proc
 ; preserves: Y
 ;
 recv_response_and_discard_payload: .proc
-                .push32 scratch_p_size
-                
-                ldx #scratch_p_size
+                .push32 scratch_payload_size
                 
                 .via_prepare_for_recv
 
@@ -2139,7 +2021,7 @@ recv_response_and_discard_payload: .proc
 
                 tax
                 
-                .pop32 scratch_p_size
+                .pop32 scratch_payload_size
                 
                 rts
                 .pend
@@ -2152,8 +2034,6 @@ recv_response_and_discard_payload: .proc
 ; doing the usual BRK thing. Otherwise, things will be set up so that
 ; calling recv_payload_byte will receive the payload bytes in turn.
 ;
-; entry: X = zero-page address of where to put negated 4-byte packet
-;            size.
 ; exit: A = response C (bit 7 clear)
 ;       C = 1: payload is 1 byte
 ;       C = 0: payload might not be 1 byte
@@ -2167,10 +2047,10 @@ recv_response: .proc
 got_1:
                 pha
                 lda #$ff
-                sta 0,x
-                sta 1,x
-                sta 2,x
-                sta 3,x
+                sta scratch_payload_size+0
+                sta scratch_payload_size+1
+                sta scratch_payload_size+2
+                sta scratch_payload_size+3
                 pla
                 .debug_print ["recv_response: T=&",DP_A," p_size=1\r"]
                 cmp #RESPONSE_ERROR
@@ -2181,14 +2061,14 @@ got_1:
 got_n:
                 pha
                 jsr recv_byte
-                sta 0,x
+                sta scratch_payload_size+0
                 jsr recv_byte
-                sta 1,x
+                sta scratch_payload_size+1
                 jsr recv_byte
-                sta 2,x
+                sta scratch_payload_size+2
                 jsr recv_byte
-                sta 3,x
-                jsr negz32
+                sta scratch_payload_size+3
+                jsr negate_payload_size
                 pla
                 and #$7f
                 jsr got_n_debug_print
@@ -2233,7 +2113,7 @@ got_error_done:
 
 got_n_debug_print:
                 ; this is too many bytes to put inlined :(
-                .debug_print ["recv_response: T=&",DP_A," p_size=&",DP_ZP3_X,DP_ZP2_X,DP_ZP1_X,DP_ZP0_X,"\r"]
+                .debug_print ["recv_response: T=&",DP_A," payload_size=&",scratch_payload_size+3,scratch_payload_size+2,scratch_payload_size+1,scratch_payload_size+0,"\r"]
                 rts
 
 dummy_error:
@@ -2245,12 +2125,11 @@ dummy_error_end:
 ;
 ; Receive one byte of payload.
 ;
-; entry: X = ZP address of negated count of bytes remaining
 ; exit: C = 0: no more bytes in payload, A=0, Z=1
 ;       C = 1: A = byte read from payload
 ; 
 recv_payload_byte: .proc
-                jsr ldunionz32
+                jsr test_payload_size
                 bne more
 
                 jsr via_deactivate
@@ -2261,7 +2140,7 @@ recv_payload_byte: .proc
 
 more:
                 jsr recv_byte
-                jsr incz32
+                jsr inc_payload_size
                 sec
                 rts
                 .pend
@@ -2270,7 +2149,6 @@ more:
 ;
 ; Discard rest of payload, if any.
 ; 
-; entry: X = ZP address of negated count of bytes remaining
 ; preserves: A; X; Y
 
 discard_remaining_payload: .proc
@@ -2319,7 +2197,6 @@ check_avr_ready:
                 ldx #REQUEST_AVR_READY
                 jsr send_request_1
 
-                ldx #scratch_p_size
                 jsr recv_response
 
                 tay                   ;Y = response
@@ -2811,8 +2688,7 @@ blfs_osfile: .proc
 
                 ; Packet size starts out at 0.
                 lda #0
-                ldx #scratch_p_size
-                jsr setz32
+                jsr set_payload_size
 
                 ; If the request was $00, the size of the data to save
                 ; needs to be handled.
@@ -2827,8 +2703,8 @@ blfs_osfile: .proc
 add_end_loop:
                 plp
                 lda (private_ptr),y
-                adc scratch_p_size,x
-                sta scratch_p_size,x
+                adc scratch_payload_size,x
+                sta scratch_payload_size,x
                 php
                 iny
                 inx
@@ -2844,9 +2720,9 @@ add_end_loop:
                 php
 subtract_start_loop:
                 plp
-                lda scratch_p_size,x
+                lda scratch_payload_size,x
                 sbc (private_ptr),y
-                sta scratch_p_size,x
+                sta scratch_payload_size,x
                 php
                 
                 lda (private_ptr),y
@@ -2858,14 +2734,13 @@ subtract_start_loop:
                 bne subtract_start_loop
                 pla
                 
-                lda scratch_p_size+3
+                lda scratch_payload_size+3
                 jsr check_size_msbyte
 
 not_save:
                 ; Account for parameter block and A value.
-                ldx #scratch_p_size
                 ldy #17
-                jsr addyz32
+                jsr add_y_to_payload_size
 
                 ; Add length of file name.
                 ldy #0
@@ -2880,15 +2755,13 @@ not_save:
                 
                 sty private_y
 
-                ldx #scratch_p_size
-                jsr addyz32
+                jsr add_y_to_payload_size
 
                 ; Account for the terminating CR.
-                jsr incz32
+                jsr inc_payload_size
 
                 ; Send the request.
                 lda #REQUEST_OSFILE
-                ldx #scratch_p_size
                 jsr send_request_n
 
                 lda private_request
@@ -2920,7 +2793,6 @@ send_name_done:
                 jsr send_file_data
 
                 ; Receive response.
-                ldx #scratch_p_size
                 jsr recv_response
 
                 ; Get result A.
@@ -2957,10 +2829,9 @@ recv_data:
                 sta scratch_load+3
 
                 .if enable_debug_print
-                ldx #scratch_p_size
-                jsr negz32
-                .debug_print ["Receive &",scratch_p_size+3,scratch_p_size+2,scratch_p_size+1,scratch_p_size+0," @ &",scratch_load+3,scratch_load+2,scratch_load+1,scratch_load+0,"\r"]
-                jsr negz32
+                jsr negate_payload_size
+                .debug_print ["Receive &",scratch_payload_size+3,scratch_payload_size+2,scratch_payload_size+1,scratch_payload_size+0," @ &",scratch_load+3,scratch_load+2,scratch_load+1,scratch_load+0,"\r"]
+                jsr negate_payload_size
                 .endif
 
                 ; Get the file data.
@@ -3030,11 +2901,9 @@ handle:
 
                 ; Account for A, Y, and the 4-byte control block.
                 lda #6
-                ldx #scratch_p_size
-                jsr setz32
+                jsr set_payload_size
 
                 lda #REQUEST_OSARGS
-                ldx #scratch_p_size
                 jsr send_request_n
 
                 lda private_request
@@ -3050,7 +2919,6 @@ send_value_loop:
                 dey
                 bne send_value_loop
 
-                ldx #scratch_p_size
                 jsr recv_response
 
                 ldy #4
@@ -3097,7 +2965,6 @@ blfs_osbget: .proc
                 ldx private_y   ;handle
                 jsr send_request_1
 
-                ldx #scratch_p_size
                 jsr recv_response
 
                 tay
@@ -3129,8 +2996,7 @@ blfs_osbput: .proc
 
                 ; Ugh. A 2-byte payload is the worst possible case.
                 lda #2
-                ldx #scratch_p_size
-                jsr setz32
+                jsr set_payload_size
 
                 lda #REQUEST_OSBPUT
                 jsr send_request_n
@@ -3163,8 +3029,7 @@ blfs_osgbpb: .proc
 
                 ; Account for reason code and parameter block.
                 lda #14
-                ldx #scratch_p_size
-                jsr setz32
+                jsr set_payload_size
 
                 ; Account for any file data.
                 lda private_request
@@ -3179,25 +3044,24 @@ write:
                 ldy #5
                 clc
                 lda (private_ptr),y
-                adc scratch_p_size+0
-                sta scratch_p_size+0
+                adc scratch_payload_size+0
+                sta scratch_payload_size+0
                 iny
                 lda (private_ptr),y
-                adc scratch_p_size+1
-                sta scratch_p_size+1
+                adc scratch_payload_size+1
+                sta scratch_payload_size+1
                 iny
                 lda (private_ptr),y
-                adc scratch_p_size+2
-                sta scratch_p_size+2
+                adc scratch_payload_size+2
+                sta scratch_payload_size+2
                 iny
                 lda (private_ptr),y
-                adc scratch_p_size+3
-                sta scratch_p_size+3
+                adc scratch_payload_size+3
+                sta scratch_payload_size+3
 
 read_or_write:
                 
                 lda #REQUEST_OSGBPB
-                ldx #scratch_p_size
                 jsr send_request_n
 
                 ; Send reason code.
@@ -3217,7 +3081,6 @@ send_block_loop:
 
                 jsr send_file_data ;no-op if a read operation
 
-                ldx #scratch_p_size
                 jsr recv_response
 
                 jsr recv_payload_byte
@@ -3302,15 +3165,13 @@ open:
 
                 ; Account for the open mode.
                 lda #1
-                ldx #scratch_p_size
-                jsr setz32
+                jsr set_payload_size
 
                 ; Account for the file name.                
                 ldx #scratch_ptr
                 jsr strlen_cr
 
-                ldx #scratch_p_size
-                jsr addyz32
+                jsr add_y_to_payload_size
 
                 lda #REQUEST_OSFIND_OPEN
                 jsr send_request_n
@@ -3395,10 +3256,8 @@ fsc_opt: .proc
                 txa
                 pha
 
-                ldx #scratch_p_size
-                
                 lda #2
-                jsr setz32
+                jsr set_payload_size
 
                 lda #REQUEST_OPT
                 jsr send_request_n
@@ -3422,7 +3281,6 @@ fsc_eof: .proc
                 lda #REQUEST_EOF
                 jsr send_request_1
 
-                ldx #scratch_p_size
                 jsr recv_response
 
                 jsr recv_payload_byte
@@ -3551,8 +3409,7 @@ communicate_star_command: .proc
                 sty scratch_ptr+1
 
                 lda #0
-                ldx #scratch_p_size
-                jsr setz32
+                jsr set_payload_size
 
                 .debug_print ["scratch_ptr=&",scratch_ptr+1,scratch_ptr+0,"\r"]
 
@@ -3561,10 +3418,9 @@ communicate_star_command: .proc
 
                 .debug_print ["scratch_ptr=&",scratch_ptr+1,scratch_ptr+0,", len=",DP_Y,"\r"]
 
-                sty scratch_p_size+0
+                sty scratch_payload_size+0
 
                 pla
-                ldx #scratch_p_size
                 jsr send_request_n
 
                 ldy #0
@@ -3785,8 +3641,7 @@ send_file_data_host=send_file_data_host_bytewise
 ;        !scratch_load = where to write the data to
 ;
 recv_file_data: .proc
-                ldx #scratch_p_size
-                jsr ldunionz32
+                jsr test_payload_size
                 bne +
                 rts
 +
@@ -3838,15 +3693,15 @@ one_page_loop:
 
                 inc scratch_load+1
                 
-                inc scratch_p_size+1
+                inc scratch_payload_size+1
                 .lbne one_page_loop
-                inc scratch_p_size+2
+                inc scratch_payload_size+2
                 .lbne one_page_loop
-                inc scratch_p_size+3
+                inc scratch_payload_size+3
                 .lbne one_page_loop
 
 last_page:
-                ldx scratch_p_size+0
+                ldx scratch_payload_size+0
                 beq done
                 
                 ldy #0
@@ -3950,15 +3805,15 @@ one_page_loop:
                 inc scratch_load+3
 +
 
-                inc scratch_p_size+1
+                inc scratch_payload_size+1
                 .lbne first_pages
-                inc scratch_p_size+2
+                inc scratch_payload_size+2
                 .lbne first_pages
-                inc scratch_p_size+3
+                inc scratch_payload_size+3
                 .lbne first_pages
 
 last_page:
-                lda scratch_p_size+0
+                lda scratch_payload_size+0
                 beq done
 
                 ldx #<scratch_load
@@ -3966,7 +3821,7 @@ last_page:
                 lda #tube_multi_byte_host_to_parasite
                 jsr $406
 
-                ldx scratch_p_size+0
+                ldx scratch_payload_size+0
 
                 ; inter-byte delay is 24 uS, or 48 cycles
 
@@ -4036,32 +3891,31 @@ done:
 ;
                 .if recv_file_data_optimised
 fix_up_packet_size_for_pagewise_transfer: .proc
-                ldy scratch_p_size+0
-                                     
-                ldx #scratch_p_size
-                jsr negz32
+                ldy scratch_payload_size+0
+
+                jsr negate_payload_size
                 
-                lda scratch_p_size+1
-                ora scratch_p_size+2
-                ora scratch_p_size+3
+                lda scratch_payload_size+1
+                ora scratch_payload_size+2
+                ora scratch_payload_size+3
                 beq no_pages
 
 some_pages:
                 lda #0
-                sta scratch_p_size+0
-                jsr negz32
-                sty scratch_p_size+0
+                sta scratch_payload_size+0
+                jsr negate_payload_size
+                sty scratch_payload_size+0
                 sec
                 rts
 
 no_pages:
-                sty scratch_p_size+0
+                sty scratch_payload_size+0
                 clc
                 rts
 
 
                 
-                jsr negz32
+                jsr negate_payload_size
                 pla
                 rts
                 .pend
@@ -4075,8 +3929,7 @@ no_pages:
 ;        !scratch_load = where to read the data from
 ;
 send_file_data: .proc
-                ldx #scratch_p_size
-                jsr ldunionz32
+                jsr test_payload_size
                 bne +
                 rts
 +
@@ -4122,14 +3975,14 @@ one_page_loop:
 
                 inc scratch_load+1
 
-                inc scratch_p_size+1
+                inc scratch_payload_size+1
                 .lbne one_page_loop
-                inc scratch_p_size+2
+                inc scratch_payload_size+2
                 .lbne one_page_loop
-                inc scratch_p_size+2
+                inc scratch_payload_size+2
 
 last_page:
-                ldx scratch_p_size+0
+                ldx scratch_payload_size+0
                 beq done
 
                 ldy #0
@@ -4253,15 +4106,15 @@ one_page_loop:
                 inc scratch_load+3
 +
 
-                inc scratch_p_size+1
+                inc scratch_payload_size+1
                 .lbne one_page
-                inc scratch_p_size+2
+                inc scratch_payload_size+2
                 .lbne one_page
-                inc scratch_p_size+3
+                inc scratch_payload_size+3
                 .lbne one_page
 
 last_page:
-                lda scratch_p_size+0
+                lda scratch_payload_size+0
                 beq done
 
                 ldx #<scratch_load
@@ -4405,15 +4258,15 @@ one_page_loop:
                 inc scratch_load+3
 +
 
-                inc scratch_p_size+1
+                inc scratch_payload_size+1
                 .lbne first_pages
-                inc scratch_p_size+2
+                inc scratch_payload_size+2
                 .lbne first_pages
-                inc scratch_p_size+3
+                inc scratch_payload_size+3
                 .lbne first_pages
 
 last_page:
-                lda scratch_p_size+0
+                lda scratch_payload_size+0
                 beq done
 
                 ldx #<scratch_load
@@ -4425,7 +4278,7 @@ last_page:
                 jsr delay_48_cycles
 
                 ldy #0
-                ldx scratch_p_size+0
+                ldx scratch_payload_size+0
                 
                 ; inter-byte delay is 24 uS, or 48 cycles
 last_page_loop:
@@ -4579,11 +4432,10 @@ loop:
                 jsr send_request_1
 
                 push8 scratch_ptr
-                push32 scratch_p_size
+                push32 scratch_payload_size
                 
                 sty scratch_ptr
 
-                ldx #scratch_p_size
                 jsr recv_response
 
                 cmp #RESPONSE_DATA
@@ -4616,7 +4468,7 @@ print_chars_loop:
 print_chars_done:
                 ldy scratch_ptr
                 
-                pop32 scratch_p_size
+                pop32 scratch_payload_size
                 pop8 scratch_ptr
 
                 bit $ff
@@ -4626,10 +4478,9 @@ print_chars_done:
 
 done:
                 ; the packet is still incoming - discard it.
-                ldx #scratch_p_size
                 jsr discard_remaining_payload
 
-                pop32 scratch_p_size ;restore
+                pop32 scratch_payload_size ;restore
                 pop8 scratch_ptr     ;restore
 
 done2:
@@ -4650,347 +4501,6 @@ pop_stack_loop:
                 
                 rts
 
-                .pend
-
-;-------------------------------------------------------------------------
-; 
-; 
-;
-
-
-; dump_row:
-;                 ldx #p_size
-;                 jsr ldunionz32
-;                 beq dump_done
-                
-;                 lda pp_offset+1
-;                 jsr print_hex_byte
-                
-;                 lda pp_offset+0
-;                 jsr print_hex_byte
-
-;                 lda #":"
-;                 jsr osasci
-
-;                 ldy #num_columns
-
-; hex_loop:
-;                 jsr print_1_space
-                
-;                 ldx #p_size
-;                 jsr recv_payload_byte
-;                 bcc hex_out_of_range
-
-;                 php
-;                 pha
-;                 jsr print_hex_byte
-;                 jmp hex_next
-
-; hex_out_of_range:
-;                 php
-;                 pha             ;ignored
-;                 lda #"*"
-;                 jsr osasci
-;                 jsr osasci
-                
-; hex_next:
-;                 dey
-;                 bne hex_loop
-
-;                 jsr print_1_space
-
-;                 ; the data is on the stack in reverse order, so PLA
-;                 ; isn't really the thing...
-;                 tsx
-;                 ; $101+x*2 = A, $101+x*2+1 = P
-
-;                 txa
-;                 clc
-;                 adc #(num_columns-1)*2
-;                 tax
-                
-;                 ldy #num_columns
-; ascii_loop:
-;                 lda $102,x         ;get P
-;                 and #1             ;check carry flag
-;                 bne ascii_in_range ;taken if C was set for this byte
-
-;                 lda #" "
-;                 bne ascii_print
-
-; ascii_in_range:
-;                 lda $101,x      ;get byte for this column
-;                 cmp #" "
-;                 bcc ascii_nonprint
-;                 cmp #127
-;                 bcc ascii_print
-
-; ascii_nonprint:
-;                 lda #"."
-                
-; ascii_print:
-;                 jsr osasci
-
-;                 dex
-;                 dex
-;                 dey
-;                 bne ascii_loop
-
-;                 tsx
-;                 txa
-;                 clc
-;                 adc #num_columns*2
-;                 tax
-;                 txs
-
-;                 ldy #num_columns
-;                 ldx #pp_offset
-;                 jsr addyz16
-
-;                 jsr osnewl
-;                 jmp dump_row
-
-; dump_done:
-;                 rts
-;                 .pend
-;                 .endif
-
-;-------------------------------------------------------------------------
-;
-; Read a range ("<begin> <end>" or "<begin>+<size>").
-;
-; Does a BRK if there's a problem.
-;
-; entry: X = zero page address of where to store values (8 bytes)
-;        ($f2),y points to input char
-; exit: ($f2),y points to following char
-;       C=1: the range was found
-;            X!0 = begin address
-;            X!4 = size
-;       C=0: the range was not found
-;      
-; preserves: X
-cl_parse_optional_range: .proc
-                jsr cl_skip_spaces
-
-                cmp #13
-                beq not_found
-
-                jsr cl_parse_required_range
-                sec
-                rts
-
-not_found:
-                clc
-                rts
-                .pend
-
-cl_parse_required_range: .proc
-                jsr cl_parse_required_x32
-
-                jsr cl_skip_spaces
-
-                jsr inx4
-
-                cmp #"+"
-                bne begin_and_end
-
-begin_and_size:
-                iny             ;skip +
-                
-                jsr cl_parse_required_x32
-
-                jmp done
-
-begin_and_end:
-                jsr cl_parse_required_x32
-
-                sec
-                lda 0,x
-                sbc -4&$ff,x
-                sta 0,x
-
-                lda 1,x
-                sbc -3&$ff,x
-                sta 1,x
-
-                lda 2,x
-                sbc -2&$ff,x
-                sta 2,x
-
-                lda 3,x
-                sbc -1&$ff,x
-                sta 3,x
-
-                bmi bad_address_brk
-
-done:
-                jsr dex4
-                rts
-
-                .pend
-
-;-------------------------------------------------------------------------
-;
-;
-bad_address_brk: .proc
-                brkerror 252,"Bad address"
-                .pend
-
-;-------------------------------------------------------------------------
-;                
-; Read an optional 32-bit hex value from ($f2),y
-;
-; Does a BRK if there's a problem.
-;
-; entry: X = zero page address of where to store value (4 bytes)
-;        ($f2),y points to input char
-; exit:  ($f2),y points to following char
-;        C=1 if the hex value was found
-;        C=0 if the hex value wasn't found
-; preserves: X
-
-cl_parse_optional_x32: .proc
-                jsr cl_skip_spaces
-
-                cmp #13
-                beq not_found
-
-                jsr cl_parse_required_x32
-                sec
-                rts
-
-not_found:
-                clc
-                rts
-                .pend
-                
-; 
-;-------------------------------------------------------------------------
-;  
-; Read a required 32-bit hex value from ($f2),y.
-;
-; Does a BRK if there's a problem.
-;
-; entry: X = zero page address of where to store value (4 bytes)
-;        ($f2),y points to input char
-; exit:  ($f2),y points to following char
-; preserves: X
-
-cl_parse_required_x32: .proc
-                jsr clrz32
-
-                jsr cl_skip_spaces
-
-                ; Bad syntax if end of string.
-                cmp #13
-                beq syntax
-
-                ; Check first digit is valid hex.
-                lda ($f2),y
-                jsr xtoi
-                bcs parse
-
-                jmp bad_hex_brk
-
-parse:
-
-                ; Consume up to 8 digits.
-                .rept 8
-                jsr x4
-                bcc done
-                .next
-
-                ; 8 digits were consumed. Success if there are no
-                ; more.
-                lda ($f2),y
-                jsr xtoi
-                bcs done
-
-syntax:
-                ; Syntax error.
-                jmp syntax_brk
-                
-done:
-                rts
-
-x4:
-                ; Check Nth digit. Keep going until the first invalid
-                ; hex char; this is a bit slack, but it then handles
-                ; everything (CR, spaces, +, and so on).
-                lda ($f2),y
-                jsr xtoi
-                bcc x4_done
-
-                ; Consume and store.
-                iny
-                jsr asl4z32
-                ora 0,x
-                sta 0,x
-
-                ; This digit was valid.
-                sec
-x4_done:
-                rts
-
-                .pend                
-                
-; 
-;-------------------------------------------------------------------------
-;
-; Read a required 8-bit hex value from ($f2),y
-;
-; Does a BRK if there's a problem.
-;
-; X = zero page address of where to store value
-                
-cl_parse_required_x8: .proc
-                lda #0
-                sta 0,x
-
-                jsr cl_skip_spaces
-
-                ; Bad syntax if end of string.
-                cmp #13
-                beq syntax_brk
-
-                ; Translate first digit. Bad hex if invalid.
-                lda ($f2),y
-                jsr xtoi
-                bcc bad_hex_brk
-
-                ; Consume and store.
-                iny
-                sta 0,x
-
-                ; Check second digit. Success if end of string or
-                ; space.
-                lda ($f2),y
-                jsr cmp_cr_or_space
-                beq done
-
-                ; Translate second digit. Bad hex if invalid.
-                jsr xtoi
-                bcc bad_hex_brk
-
-                ; Consume and store
-                iny
-                asl 0,x
-                asl 0,x
-                asl 0,x
-                asl 0,x
-                ora 0,x
-                sta 0,x
-
-                ; Check next char. Success if end of string or space.
-                lda ($f2),y
-                jsr cmp_cr_or_space
-                beq done
-
-                ; Syntax error otherwise.
-                jmp syntax_brk
-done:
-                rts
                 .pend
 
 ;-------------------------------------------------------------------------
@@ -5104,14 +4614,12 @@ relocator=brkthunk+1            ;where to put the relocating code
                 ldx #0
                 jsr send_request_1
 
-                ldx #scratch_p_size
                 jsr recv_response
 
 size_ok:
                 jsr unlock_ABR
                 bcs recv_rom
                 
-                ldx #scratch_p_size
                 jsr discard_remaining_payload
 
                 .brk_error 255,"ROM not writeable"
@@ -5246,9 +4754,8 @@ volumes_browser_special: .proc
                 lda #26         ;restore default text + graphics windows
                 jsr oswrch
 
-                ldx #scratch_p_size
                 lda #5
-                jsr setz32
+                jsr set_payload_size
 
                 lda #REQUEST_VOLUME_BROWSER
                 jsr send_request_n
@@ -5273,7 +4780,6 @@ volumes_browser_special: .proc
                 ldx #1
                 jsr osbyte
                 txa
-                ldx #scratch_p_size
                 jsr send_payload_byte
                 
                 ldy #3
@@ -5321,9 +4827,8 @@ getch:
                 txa
                 pha             ;non-0 if SHIFT pressed
 
-                ldx #scratch_p_size
                 lda #3
-                jsr setz32
+                jsr set_payload_size
 
                 lda #REQUEST_VOLUME_BROWSER
                 jsr send_request_n
@@ -5542,7 +5047,7 @@ speed_test:
                 lda #"&"
                 jsr oswrch
                 
-                ldx #scratch_p_size
+                ldx #scratch_payload_size
                 jsr print_hex_z32
 
                 jsr pcprint
@@ -5575,13 +5080,11 @@ loop:
 
                 ; Account for the request sub-type and host/parasite
                 ; flag.
-                ldx #scratch_p_size
                 ldy #2
-                jsr addyz32
+                jsr add_y_to_payload_size
 
                 ; Initiate request.
                 lda #REQUEST_SPEED_TEST
-                ldx #scratch_p_size
                 jsr send_request_n
 
                 ; Send sub-type.
@@ -5594,15 +5097,17 @@ loop:
                 and #$01
                 jsr send_payload_byte
 
-                ; Save off the payload size.
-                lda scratch_p_size+0
+                ; Save off the (positive) payload size.
+                jsr negate_payload_size
+                lda scratch_payload_size+0
                 sta scratch_exec+0
-                lda scratch_p_size+1
+                lda scratch_payload_size+1
                 sta scratch_exec+1
-                lda scratch_p_size+2
+                lda scratch_payload_size+2
                 sta scratch_exec+2
-                lda scratch_p_size+3
+                lda scratch_payload_size+3
                 sta scratch_exec+3
+                jsr negate_payload_size
 
                 ; Time sending of everything else.
                 plp
@@ -5620,7 +5125,6 @@ loop:
                 sta send_time+1
 
                 ; Receive response.
-                ldx #scratch_p_size
                 jsr recv_response
 
                 ; ; The response is an exact echo, sub-type byte
@@ -5638,12 +5142,10 @@ loop:
 
                 ; Account for response.
                 lda #10
-                ldx #scratch_p_size
-                jsr setz32
+                jsr set_payload_size
 
                 ; Tell the server what happened.
                 lda #REQUEST_SPEED_TEST
-                ldx #scratch_p_size
                 jsr send_request_n
 
                 lda #REQUEST_SPEED_TEST_STATS
@@ -5656,8 +5158,6 @@ loop:
                 jsr send_payload_byte
 
                 ; Send payload size.
-                ldx #scratch_exec
-                jsr negz32
                 lda scratch_exec+0
                 jsr send_payload_byte
                 lda scratch_exec+1
@@ -5697,8 +5197,10 @@ loop:
 init_test_address: .proc
                 ; set up scratch_load. C=0 for host, C=1 for parasite.
                 lda #0
-                ldx #scratch_load
-                jsr setz32
+                sta scratch_load+0
+                sta scratch_load+1
+                sta scratch_load+2
+                sta scratch_load+3
 
                 bcs parasite_address
 
@@ -5730,16 +5232,14 @@ init_test_size: .proc
 
                 ; Subtract 1, so there's a 255-byte range at the end
                 ; to exercise the straggling bytes loop.
-                ldx #scratch_p_size
-                jsr negz32
-                jsr incz32
-                jsr negz32
+                jsr negate_payload_size
+                jsr inc_payload_size
+                jsr negate_payload_size
                 rts
 
 init_test_size_2:
                 lda #0
-                ldx #scratch_p_size
-                jsr setz32
+                jsr set_payload_size
 
                 bcs parasite_size
 
@@ -5747,8 +5247,8 @@ host_size:
                 lda #131        ;read OSHWM (AUG 155)
                 jsr osbyte
                 
-                stx scratch_p_size+0
-                sty scratch_p_size+1
+                stx scratch_payload_size+0
+                sty scratch_payload_size+1
                 
                 lda #132        ;read HIMEM (AUG 156)
                 jsr osbyte
@@ -5758,17 +5258,17 @@ host_size:
 
                 sec
                 txa
-                sbc scratch_p_size+0
-                sta scratch_p_size+0
+                sbc scratch_payload_size+0
+                sta scratch_payload_size+0
 
                 tya
-                sbc scratch_p_size+1
-                sta scratch_p_size+1
+                sbc scratch_payload_size+1
+                sta scratch_payload_size+1
                 rts
 
 parasite_size:
                 lda #$80-parasite_oshwm_page ;another assumption...
-                sta scratch_p_size+1
+                sta scratch_payload_size+1
                 rts
                 .pend
 
