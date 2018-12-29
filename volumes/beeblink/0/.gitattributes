@@ -1,0 +1,6 @@
+* -text
+$.BOOTSTRAP diff=bbcbasic
+$.BOOTSTRAP2 diff=bbcbasic
+$.FS-TEST diff=bbcbasic
+$.HELLO diff=bbcbasic
+$.ROMS diff=bbcbasic
