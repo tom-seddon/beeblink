@@ -467,6 +467,8 @@ scratch_load .fill 4
 scratch_exec .fill 4
                 .cerror scratch_load!=scratch_command_line_tail_offset+1,"Scratch space load must follow command line tail offset"
                 .cerror scratch_exec!=scratch_load+4,"Scratch space exec must follow load"
+scratch_old_acr: .fill 1
+                
                 .cerror *>$c0,"Filing system scratch space overflow"
 
 ; Filing system private space
@@ -1693,13 +1695,14 @@ reset2:
 ;-------------------------------------------------------------------------
 
 via_deactivate: .proc
-                ;lda #19
-                ;jsr osbyte
-                
                 lda via+12
                 and #$1f
                 ora #$e0        ;CB2=1
                 sta via+12
+
+                lda scratch_old_acr
+                sta via+11
+                
                 rts
                 .pend
 
@@ -1736,25 +1739,11 @@ via_prepare_for_send: .macro
 via_prepare: .proc
                 pha
 
-                ; Disable port B input latching.
-                ;
-                ; Also disable T1-controlled PB7 output (which makes a
-                ; fine old mess...), as activated by at least Superman
-                ; and Beverly Hills Cop.
-                ;
-                ; (Doesn't seem much point in doing much more than
-                ; just trying not to step on T1 basic mode/T2
-                ; mode/port A. No point restoring the old value,
-                ; whatever it was - it can't be doing anything useful.
-                ; Even if code is genuinely trying to communicate with
-                ; something on the user port, whatever it is, it won't
-                ; find it, because the BeebLink widget is plugged
-                ; in...)
-                ;
-                ; TODO - maybe disable shift register as well?
-                
                 lda via+11
-                and #%01111101
+                sta scratch_old_acr
+                and #%01100001  ;TxxSSSLx - T = disable PB7 toggle, S
+                                ;= disable shift register, L = disable
+                                ;port B latching
                 sta via+11
                 
                 lda #$18
