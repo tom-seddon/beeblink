@@ -1823,7 +1823,7 @@ via_deactivate: .proc
 ;
 ; preserves: X; Y; C
 ;
-prepare_via_for_recv: .macro
+via_prepare_for_recv: .macro
                 lda #0
                 sta via+2
                 .endm
@@ -1835,7 +1835,7 @@ prepare_via_for_recv: .macro
 ;
 ; preserves: X; Y; C
 ;
-prepare_via_for_send: .macro
+via_prepare_for_send: .macro
                 lda #255
                 sta via+2
                 .endm
@@ -1846,7 +1846,7 @@ prepare_via_for_send: .macro
 ;
 ; preserves: A; X; Y; C
 
-prepare_via: .proc
+via_prepare: .proc
                 pha
 
                 ; Disable port B input latching.
@@ -1878,7 +1878,7 @@ prepare_via: .proc
                 ora #2          ;enable port B input latching
                 sta via+11
 
-                .prepare_via_for_send
+                .via_prepare_for_send
 
                 lda via+12
                 and #$0f
@@ -1970,7 +1970,7 @@ done:
 ; preserves: X; Y
 ;
 send_request_n: .proc
-                jsr prepare_via
+                jsr via_prepare
 
                 .debug_print ["send_request_n: Request: T=&",DP_A," p_size=&",DP_ZP3_X,DP_ZP2_X,DP_ZP1_X,DP_ZP0_X,"\r"]
 
@@ -2035,7 +2035,7 @@ more:
 ;        X = packet P
 ;
 send_request_1: .proc
-                jsr prepare_via
+                jsr via_prepare
                 
 without_prepare:
                 .debug_print ["send_request_1: T=&",DP_A," P=&",DP_X,"\r"]
@@ -2060,7 +2060,7 @@ without_prepare:
 ;       X = response C (*not* P!)
 
 send_request_1_recv_response_1: .block
-                jsr prepare_via
+                jsr via_prepare
 
 without_prepare:
                 jsr send_byte
@@ -2071,7 +2071,7 @@ send_payload:
                 .bend
 
 recv_response_1: .block
-                .prepare_via_for_recv
+                .via_prepare_for_recv
 
 without_prepare:
                 jsr recv_byte
@@ -2131,7 +2131,7 @@ recv_response_and_discard_payload: .proc
                 
                 ldx #scratch_p_size
                 
-                .prepare_via_for_recv
+                .via_prepare_for_recv
 
                 jsr recv_response
 
@@ -2160,7 +2160,7 @@ recv_response_and_discard_payload: .proc
 ; preserves: X; Y
                 
 recv_response: .proc
-                .prepare_via_for_recv
+                .via_prepare_for_recv
 
                 jsr recv_byte
                 bmi got_n
@@ -2303,7 +2303,7 @@ beeblink_status_strings: strings_list ["no AVR","protocol not "..format("%02X",A
 get_beeblink_status: .proc
 
                 jsr via_reset
-                jsr prepare_via
+                jsr via_prepare
                 
                 lda #REQUEST_AVR_PRESENCE
                 jsr send_byte_with_timeout
@@ -4568,7 +4568,7 @@ push_stack_loop:
                 ; $101,y is the string buffer.
 
 loop:
-                .prepare_via_for_send
+                .via_prepare_for_send
 
                 lda #REQUEST_READ_STRING
                 jsr get_vstatus
