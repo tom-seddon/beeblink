@@ -52,32 +52,6 @@ class Packet {
             this.data = Buffer.alloc(0);
         }
     }
-
-    public getData(): Buffer {
-        let data: Buffer;
-
-        if (this.data.length === 1) {
-            data = Buffer.alloc(2);
-
-            data[0] = this.c;
-            data[1] = this.data[0];
-        } else {
-            data = Buffer.alloc(1 + 4 + this.data.length);
-            let i = 0;
-
-            data[i++] = this.c | 0x80;
-
-            data.writeUInt32LE(this.data.length, i);
-            i += 4;
-
-            for (const byte of this.data) {
-                data[i++] = byte;
-            }
-
-        }
-
-        return data;
-    }
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -167,8 +141,9 @@ export class Server {
     private log: utils.Log;
     private volumeBrowser: volumebrowser.Browser | undefined;
     private speedTest: speedtest.SpeedTest | undefined;
+    private dumpPackets: boolean;
 
-    public constructor(romPath: string, bfs: beebfs.BeebFS, logPrefix: string | undefined, colours: Chalk | undefined) {
+    public constructor(romPath: string, bfs: beebfs.BeebFS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
         this.romPath = romPath;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
@@ -222,13 +197,33 @@ export class Server {
 
         this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stderr, logPrefix !== undefined);
         this.log.colours = colours;
+        this.dumpPackets = dumpPackets;
     }
 
     public async handleRequest(c: number, p: Buffer): Promise<Packet> {
+        this.dumpPacket('Request', c, p);
+
+        const packet = await this.handleRequestInternal(c, p);
+
+        this.dumpPacket('Response', packet.c, packet.data);
+
+        return packet;
+    }
+
+    private dumpPacket(type: string, c: number, p: Buffer): void {
+        if (this.dumpPackets) {
+            this.log.withIndent(type + ': ', () => {
+                this.log.pn('Type: ' + c + ' (0x' + utils.hex2(c) + ')');
+                this.log.dumpBuffer(p, 10);
+            });
+        }
+    }
+
+    private async handleRequestInternal(c: number, p: Buffer): Promise<Packet> {
         try {
             const handler = this.handlers[c];
             if (handler === undefined) {
-                return this.internalError('Unsupported request: &');
+                return this.internalError('Unsupported request: &' + utils.hex2(c));
             } else {
                 const logWasEnabled = this.log.enabled;
                 if (handler.shouldLog()) {

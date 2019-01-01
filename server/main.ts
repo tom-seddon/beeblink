@@ -32,6 +32,7 @@ import { Server } from './server';
 import { Chalk } from 'chalk';
 import chalk from 'chalk';
 import * as gitattributes from './gitattributes';
+import * as http from 'http';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -45,6 +46,10 @@ const DEVICE_RETRY_DELAY_MS = 1000;
 const DEFAULT_BEEBLINK_ROM = './beeblink.rom';
 
 const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
+
+const HTTP_LISTEN_PORT = 48875;//0xbeeb;
+
+const BEEBLINK_SENDER_ID = 'beeblink-sender-id';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -77,6 +82,8 @@ interface ICommandLineOptions {
     set_serial: number | null;
     git: boolean;
     git_verbose: boolean;
+    http: boolean;
+    packet_verbose: boolean;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -326,6 +333,29 @@ async function maybeSaveConfig(options: ICommandLineOptions): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+async function createServer(
+    options: ICommandLineOptions,
+    connectionId: number,
+    defaultVolume: beebfs.BeebVolume | undefined,
+    colours: Chalk,
+    gaManipulator: gitattributes.Manipulator | undefined): Promise<Server> {
+
+    const bfsLogPrefix = options.fs_verbose ? 'FS' + connectionId : undefined;
+    const serverLogPrefix = options.server_verbose ? 'SRV' + connectionId : undefined;
+
+    const bfs = new beebfs.BeebFS(bfsLogPrefix, options.folders, colours, gaManipulator);
+
+    if (defaultVolume !== undefined) {
+        await bfs.mount(defaultVolume);
+    }
+
+    const server = new Server(options.rom!, bfs, serverLogPrefix, colours, options.packet_verbose);
+    return server;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 class Connection {
     public static async create(
         options: ICommandLineOptions,
@@ -334,15 +364,10 @@ class Connection {
         usbSerial: string,
         colours: Chalk,
         gaManipulator: gitattributes.Manipulator | undefined): Promise<Connection> {
-        const bfs = new beebfs.BeebFS(options.fs_verbose ? 'FS' + connectionId : undefined, options.folders, colours, gaManipulator);
 
-        if (defaultVolume !== undefined) {
-            await bfs.mount(defaultVolume);
-        }
+        const server = await createServer(options, connectionId, defaultVolume, colours, gaManipulator);
 
-        const server = new Server(options.rom!, bfs, options.server_verbose ? 'SRV' + connectionId : undefined, colours);
-
-        return new Connection(usbSerial, connectionId, server, bfs, options.avr_verbose, options.usb_verbose, colours);
+        return new Connection(usbSerial, connectionId, server, options.avr_verbose, options.usb_verbose, colours);
     }
 
     public readonly usbSerial: string;
@@ -351,20 +376,17 @@ class Connection {
     private usbInEndpoint: usb.InEndpoint | undefined;
     private usbOutEndpoint: usb.OutEndpoint | undefined;
     private server: Server;
-    private bfs: beebfs.BeebFS;
     private log: utils.Log;
     private avrVerbose: boolean;
 
-    private constructor(usbSerial: string, connectionId: number, server: Server, bfs: beebfs.BeebFS, avrVerbose: boolean, verbose: boolean, colours: Chalk) {
+    private constructor(usbSerial: string, connectionId: number, server: Server, avrVerbose: boolean, verbose: boolean, colours: Chalk) {
         this.usbSerial = usbSerial;
         this.connectionId = connectionId;
 
         this.server = server;
 
-        this.bfs = bfs;
-
         this.avrVerbose = avrVerbose;
-        this.log = new utils.Log('CONN', process.stdout, verbose);
+        this.log = new utils.Log('USBCONN', process.stdout, verbose);
         this.log.colours = colours;
     }
 
@@ -437,8 +459,28 @@ class Connection {
 
                 const response = await this.server.handleRequest(t & 0x7f, payload);
 
+                let data: Buffer;
+                if (response.data.length === 1) {
+                    data = Buffer.alloc(2);
+
+                    data[0] = response.c;
+                    data[1] = response.data[0];
+                } else {
+                    data = Buffer.alloc(1 + 4 + response.data.length);
+                    let i = 0;
+
+                    data[i++] = response.c | 0x80;
+
+                    data.writeUInt32LE(response.data.length, i);
+                    i += 4;
+
+                    for (const byte of response.data) {
+                        data[i++] = byte;
+                    }
+                }
+
                 await new Promise((resolve, reject) => {
-                    this.usbOutEndpoint!.transfer(response.getData(), (error) => error !== undefined ? reject(error) : resolve());
+                    this.usbOutEndpoint!.transfer(data, (error) => error !== undefined ? reject(error) : resolve());
                 });
 
                 // if (!writer.wasEverWritten()) {
@@ -691,8 +733,10 @@ async function main(options: ICommandLineOptions) {
         process.stderr.write('ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.rom + '\n');
     }
 
-    if ((await findBeebLinkUSBDevices()).length === 0) {
-        throw new Error('no BeebLink devices found');
+    if (!options.http) {
+        if ((await findBeebLinkUSBDevices()).length === 0) {
+            throw new Error('no BeebLink devices found');
+        }
     }
 
     let gaManipulator: gitattributes.Manipulator | undefined;
@@ -757,13 +801,86 @@ async function main(options: ICommandLineOptions) {
         chalk.black,
     ];
 
+    // The USB connections and the HTTP connections just don't work in anything
+    // like the same ways, so there's been no attempt at all made to unify them.
     let connectionId = 1;
-    const connections: Connection[] = [];
+    const usbConnections: Connection[] = [];
+    const serverBySenderId = new Map<string, Server>();
 
-    function removeConnection(connection: Connection): void {
-        for (let i = 0; i < connections.length; ++i) {
-            if (connections[i] === connection) {
-                connections.splice(i, 1);
+    let httpServer: http.Server | undefined;
+    if (options.http) {
+        function errorResponse(response: http.ServerResponse, statusCode: number, message: string | undefined): void {
+            response.statusCode = statusCode;
+        }
+
+        httpServer = http.createServer(async (request, response): Promise<void> => {
+            if (request.method !== 'POST') {
+                return errorResponse(response, 405, undefined);
+            }
+
+            // const packetTypeString = request.headers[BEEBLINK_PACKET_TYPE];
+            // if (packetTypeString === undefined || packetTypeString === null || typeof (packetTypeString) !== 'string' || packetTypeString.length === 0) {
+            //     return errorResponse(response, 400, 'missing header: ' + BEEBLINK_PACKET_TYPE);
+            // }
+
+            // const packetType = Number(packetTypeString);
+            // if (!isFinite(packetType)) {
+            //     return errorResponse(response, 400, 'invalid ' + BEEBLINK_PACKET_TYPE + ': ' + packetTypeString);
+            // }
+
+            const senderId = request.headers[BEEBLINK_SENDER_ID];
+            if (senderId === undefined || senderId === null || senderId.length === 0 || typeof (senderId) !== 'string') {
+                return errorResponse(response, 400, 'missing header: ' + BEEBLINK_SENDER_ID);
+            }
+
+            const body = await new Promise<Buffer>((resolve, reject) => {
+                const bodyChunks: Buffer[] = [];
+                request.on('data', (chunk: Buffer) => {
+                    bodyChunks.push(chunk);
+                }).on('end', () => {
+                    resolve(Buffer.concat(bodyChunks));
+                }).on('error', (error: Error) => {
+                    reject(error);
+                });
+            });
+
+            if (body.length === 0) {
+                return errorResponse(response, 400, 'missing body: ' + BEEBLINK_SENDER_ID);
+            }
+
+            // Find the Server for this sender id.
+            let server = serverBySenderId.get(senderId);
+            if (server === undefined) {
+                const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
+                server = await createServer(options, connectionId++, defaultVolume, colours, gaManipulator);
+                serverBySenderId.set(senderId, server);
+            }
+
+            const packet = await server.handleRequest(body[0] & 0x7f, body.slice(1));
+
+            response.setHeader('Content-Type', 'application/binary');
+
+            async function writeData(data: Buffer): Promise<void> {
+                await new Promise<void>((resolve, reject) => {
+                    response.write(data, 'binary', (error) => error === undefined ? resolve() : reject(error));
+                });
+            }
+
+            await writeData(Buffer.alloc(1, packet.c));
+            await writeData(packet.data);
+
+            await new Promise((resolve, reject) => {
+                response.end(() => resolve());
+            });
+        });
+        httpServer.listen(HTTP_LISTEN_PORT, '127.0.0.1');
+        process.stderr.write('HTTP server listening on port ' + HTTP_LISTEN_PORT + '\n');
+    }
+
+    function removeConnection(usbConnection: Connection): void {
+        for (let i = 0; i < usbConnections.length; ++i) {
+            if (usbConnections[i] === usbConnection) {
+                usbConnections.splice(i, 1);
                 break;
             }
         }
@@ -774,12 +891,12 @@ async function main(options: ICommandLineOptions) {
     do {
         const devices = await findBeebLinkUSBDevices();
         for (const device of devices) {
-            if (connections.find((connection) => connection.usbSerial === device.usbSerial) === undefined) {
+            if (usbConnections.find((usbConnection) => usbConnection.usbSerial === device.usbSerial) === undefined) {
                 const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
-                const connection = await Connection.create(options, defaultVolume, connectionId++, device.usbSerial, colours, gaManipulator);
-                connections.push(connection);
-                connection.run().then(() => {
-                    removeConnection(connection);
+                const usbConnection = await Connection.create(options, defaultVolume, connectionId++, device.usbSerial, colours, gaManipulator);
+                usbConnections.push(usbConnection);
+                usbConnection.run().then(() => {
+                    removeConnection(usbConnection);
                 }).catch((error) => {
                     throw error;
                 });
@@ -787,7 +904,7 @@ async function main(options: ICommandLineOptions) {
         }
 
         await delayMS(1000);
-    } while (connections.length > 0);
+    } while (options.http || usbConnections.length > 0);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -823,6 +940,7 @@ function usbVIDOrPID(s: string): number {
     parser.addArgument(['--rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_ROM });
     parser.addArgument(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
     parser.addArgument(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
+    parser.addArgument(['--packet-verbose'], { action: 'storeTrue', help: 'dump incoming/outgoing request data' });
     parser.addArgument(['--usb-verbose'], { action: 'storeTrue', help: 'extra USB-related output' });
     // don't use the argparse default mechanism here - this makes it easier to
     // later detect the absence of --default-volume.
@@ -837,6 +955,8 @@ function usbVIDOrPID(s: string): number {
     parser.addArgument(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'folder to search for volumes' });
     parser.addArgument(['--git'], { action: 'storeTrue', help: 'enable git-related functionality' });
     parser.addArgument(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output' });
+    parser.addArgument(['--http'], { action: 'storeTrue', help: 'enable HTTP server' });
+    //parser.addArgument(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
 
     const options = parser.parseArgs();
 
