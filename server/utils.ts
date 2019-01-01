@@ -233,43 +233,59 @@ export class Log {
         this.p('\n');
     }
 
-    public dumpBuffer(data: Buffer) {
+    public dumpBuffer(data: Buffer, maxNumLines?: number) {
         const numColumns = 16;
 
         if (data.length === 0) {
-            this.p('no data');
+            this.pn('00000000: (no data)');
         } else {
-            for (let i = 0; i < data.length; i += numColumns) {
-                this.p(hex8(i));
-                this.p(':');
-
-                for (let j = 0; j < numColumns; ++j) {
-                    this.p(' ');
-                    if (i + j < data.length) {
-                        this.p(hex2(data[i + j]));
-                    } else {
-                        this.p('**');
-                    }
+            const numLines = Math.floor((data.length + numColumns - 1) / numColumns);
+            if (maxNumLines !== undefined && numLines > maxNumLines) {
+                const n = Math.floor(maxNumLines) / 2;
+                for (let i = 0; i < n; ++i) {
+                    this.dumpBufferLine(data, i * numColumns, numColumns);
                 }
-
-                this.p('  ');
-
-                for (let j = 0; j < numColumns; ++j) {
-                    if (i + j < data.length) {
-                        const c = data[i + j];
-                        if (c >= 32 && c < 127) {
-                            this.p(String.fromCharCode(c));
-                        } else {
-                            this.p('.');
-                        }
-                    } else {
-                        this.p(' ');
-                    }
+                this.pn('   (...' + (data.length - (numLines - n * 2) * numColumns) + ' bytes elided...)');
+                for (let i = numLines - n; i < numLines; ++i) {
+                    this.dumpBufferLine(data, i * numColumns, numColumns);
                 }
-
-                this.p('\n');
+            } else {
+                for (let i = 0; i < numLines; ++i) {
+                    this.dumpBufferLine(data, i * numColumns, numColumns);
+                }
             }
         }
+    }
+
+    private dumpBufferLine(data: Buffer, i: number, numColumns: number): void {
+        this.p(hex8(i));
+        this.p(':');
+
+        for (let j = 0; j < numColumns; ++j) {
+            this.p(' ');
+            if (i + j < data.length) {
+                this.p(hex2(data[i + j]));
+            } else {
+                this.p('**');
+            }
+        }
+
+        this.p('  ');
+
+        for (let j = 0; j < numColumns; ++j) {
+            if (i + j < data.length) {
+                const c = data[i + j];
+                if (c >= 32 && c < 127) {
+                    this.p(String.fromCharCode(c));
+                } else {
+                    this.p('.');
+                }
+            } else {
+                this.p(' ');
+            }
+        }
+
+        this.p('\n');
     }
 
     private putchar(c: string, translateCR: boolean) {
