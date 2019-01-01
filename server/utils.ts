@@ -285,6 +285,14 @@ export class Log {
             if (c === '\t' && this.buffer.length === 0) {
                 this.blankPrefix = true;
             } else {
+                if (this.buffer.length === 0) {
+                    for (let i = 0; i < this.indent; ++i) {
+                        this.buffer += ' ';
+                    }
+
+                    this.column += this.indent;
+                }
+
                 this.buffer += c;
                 ++this.column;
             }
