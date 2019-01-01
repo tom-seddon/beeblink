@@ -245,7 +245,7 @@ export class Log {
                 for (let i = 0; i < n; ++i) {
                     this.dumpBufferLine(data, i * numColumns, numColumns);
                 }
-                this.pn('   (...' + (data.length - (numLines - n * 2) * numColumns) + ' bytes elided...)');
+                this.pn('   (...' + ((numLines - n * 2) * numColumns) + ' bytes elided...)');
                 for (let i = numLines - n; i < numLines; ++i) {
                     this.dumpBufferLine(data, i * numColumns, numColumns);
                 }
