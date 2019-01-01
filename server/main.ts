@@ -867,7 +867,10 @@ async function main(options: ICommandLineOptions) {
             }
 
             await writeData(Buffer.alloc(1, packet.c));
-            await writeData(packet.data);
+
+            if (packet.data.length > 0) {
+                await writeData(packet.data);
+            }
 
             await new Promise((resolve, reject) => {
                 response.end(() => resolve());
