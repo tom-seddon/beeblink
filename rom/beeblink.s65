@@ -1781,7 +1781,7 @@ send_byte: .proc
                 sta via+0       ;set ORB
 loop:
                 lda via+13
-                and #$10        ;wait for CB2 IRQ
+                and #$10        ;wait for CB1 IRQ
                 beq loop
                 rts
                 .pend
