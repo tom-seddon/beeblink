@@ -84,6 +84,7 @@ interface ICommandLineOptions {
     git_verbose: boolean;
     http: boolean;
     packet_verbose: boolean;
+    http_all_interfaces: boolean;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -809,56 +810,12 @@ async function main(options: ICommandLineOptions) {
 
     let httpServer: http.Server | undefined;
     if (options.http) {
-        function errorResponse(response: http.ServerResponse, statusCode: number, message: string | undefined): void {
-            response.statusCode = statusCode;
-        }
-
         httpServer = http.createServer(async (request, response): Promise<void> => {
-            if (request.method !== 'POST') {
-                return errorResponse(response, 405, undefined);
-            }
-
-            // const packetTypeString = request.headers[BEEBLINK_PACKET_TYPE];
-            // if (packetTypeString === undefined || packetTypeString === null || typeof (packetTypeString) !== 'string' || packetTypeString.length === 0) {
-            //     return errorResponse(response, 400, 'missing header: ' + BEEBLINK_PACKET_TYPE);
-            // }
-
-            // const packetType = Number(packetTypeString);
-            // if (!isFinite(packetType)) {
-            //     return errorResponse(response, 400, 'invalid ' + BEEBLINK_PACKET_TYPE + ': ' + packetTypeString);
-            // }
-
-            const senderId = request.headers[BEEBLINK_SENDER_ID];
-            if (senderId === undefined || senderId === null || senderId.length === 0 || typeof (senderId) !== 'string') {
-                return errorResponse(response, 400, 'missing header: ' + BEEBLINK_SENDER_ID);
-            }
-
-            const body = await new Promise<Buffer>((resolve, reject) => {
-                const bodyChunks: Buffer[] = [];
-                request.on('data', (chunk: Buffer) => {
-                    bodyChunks.push(chunk);
-                }).on('end', () => {
-                    resolve(Buffer.concat(bodyChunks));
-                }).on('error', (error: Error) => {
-                    reject(error);
+            async function endResponse(): Promise<void> {
+                await new Promise((resolve, reject) => {
+                    response.end(() => resolve());
                 });
-            });
-
-            if (body.length === 0) {
-                return errorResponse(response, 400, 'missing body: ' + BEEBLINK_SENDER_ID);
             }
-
-            // Find the Server for this sender id.
-            let server = serverBySenderId.get(senderId);
-            if (server === undefined) {
-                const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
-                server = await createServer(options, connectionId++, defaultVolume, colours, gaManipulator);
-                serverBySenderId.set(senderId, server);
-            }
-
-            const packet = await server.handleRequest(body[0] & 0x7f, body.slice(1));
-
-            response.setHeader('Content-Type', 'application/binary');
 
             async function writeData(data: Buffer): Promise<void> {
                 await new Promise<void>((resolve, reject) => {
@@ -866,18 +823,102 @@ async function main(options: ICommandLineOptions) {
                 });
             }
 
-            await writeData(Buffer.alloc(1, packet.c));
-
-            if (packet.data.length > 0) {
-                await writeData(packet.data);
+            async function errorResponse(statusCode: number, message: string | undefined): Promise<void> {
+                response.statusCode = statusCode;
+                response.setHeader('Content-Type', 'text/plain');
+                response.setHeader('Content-Encoding', 'utf-8');
+                if (message !== undefined && message.length > 0) {
+                    await writeData(Buffer.from(message, 'utf-8'));
+                }
+                await endResponse();
             }
 
-            await new Promise((resolve, reject) => {
-                response.end(() => resolve());
-            });
+            if (request.url === '/request') {
+                //process.stderr.write('method: ' + request.method + '\n');
+                if (request.method !== 'POST') {
+                    return await errorResponse(405, 'only POST is permitted');
+                }
+
+                // const packetTypeString = request.headers[BEEBLINK_PACKET_TYPE];
+                // if (packetTypeString === undefined || packetTypeString === null || typeof (packetTypeString) !== 'string' || packetTypeString.length === 0) {
+                //     return errorResponse(response, 400, 'missing header: ' + BEEBLINK_PACKET_TYPE);
+                // }
+
+                // const packetType = Number(packetTypeString);
+                // if (!isFinite(packetType)) {
+                //     return errorResponse(response, 400, 'invalid ' + BEEBLINK_PACKET_TYPE + ': ' + packetTypeString);
+                // }
+
+                const senderId = request.headers[BEEBLINK_SENDER_ID];
+                if (senderId === undefined || senderId === null || senderId.length === 0 || typeof (senderId) !== 'string') {
+                    return await errorResponse(400, 'missing header: ' + BEEBLINK_SENDER_ID);
+                }
+
+                const body = await new Promise<Buffer>((resolve, reject) => {
+                    const bodyChunks: Buffer[] = [];
+                    request.on('data', (chunk: Buffer) => {
+                        bodyChunks.push(chunk);
+                    }).on('end', () => {
+                        resolve(Buffer.concat(bodyChunks));
+                    }).on('error', (error: Error) => {
+                        reject(error);
+                    });
+                });
+
+                if (body.length === 0) {
+                    return await errorResponse(400, 'missing body: ' + BEEBLINK_SENDER_ID);
+                }
+
+                // Find the Server for this sender id.
+                let server = serverBySenderId.get(senderId);
+                if (server === undefined) {
+                    const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
+                    server = await createServer(options, connectionId++, defaultVolume, colours, gaManipulator);
+                    serverBySenderId.set(senderId, server);
+                }
+
+                const packet = await server.handleRequest(body[0] & 0x7f, body.slice(1));
+
+                response.setHeader('Content-Type', 'application/binary');
+
+                await writeData(Buffer.alloc(1, packet.c));
+
+                if (packet.data.length > 0) {
+                    await writeData(packet.data);
+                }
+
+                await endResponse();
+            } else if (request.url === '/beeblink.rom') {
+                if (request.method !== 'GET') {
+                    return await errorResponse(405, 'only GET is permitted');
+                }
+
+                if (options.rom === null) {
+                    return await errorResponse(404, undefined);
+                }
+
+                const rom = await utils.tryReadFile(options.rom);
+                if (rom === undefined) {
+                    return await errorResponse(501, undefined);
+                }
+
+                response.setHeader('Content-Type', 'application/binary');
+
+                await writeData(rom);
+
+                await endResponse();
+            } else {
+                return await errorResponse(404, undefined);
+            }
         });
-        httpServer.listen(HTTP_LISTEN_PORT, '127.0.0.1');
-        process.stderr.write('HTTP server listening on port ' + HTTP_LISTEN_PORT + '\n');
+
+        let listenHost: string | undefined = '127.0.0.1';
+        if (options.http_all_interfaces) {
+            listenHost = undefined;
+        }
+
+        httpServer.listen(HTTP_LISTEN_PORT, listenHost);
+        process.stderr.write('HTTP server listening on ' + (listenHost === undefined ? 'all interfaces' : listenHost) + ', port ' + HTTP_LISTEN_PORT + '\n');
     }
 
     function removeConnection(usbConnection: Connection): void {
@@ -959,6 +1000,7 @@ function usbVIDOrPID(s: string): number {
     parser.addArgument(['--git'], { action: 'storeTrue', help: 'enable git-related functionality' });
     parser.addArgument(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output' });
     parser.addArgument(['--http'], { action: 'storeTrue', help: 'enable HTTP server' });
+    parser.addArgument(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
     //parser.addArgument(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
 
     const options = parser.parseArgs();
