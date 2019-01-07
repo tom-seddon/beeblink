@@ -1137,7 +1137,7 @@ export class BeebFS {
         }
 
         // This check is a bit crude, but should catch obvious problems...
-        const volumePath = path.join(this.folders[0], name, '0');
+        const volumePath = path.join(this.folders[0], name);
         try {
             const stat0 = await utils.fsStat(path.join(volumePath, '0'));
             if (stat0.isDirectory()) {
@@ -1162,8 +1162,6 @@ export class BeebFS {
         }
 
         const newVolume = new BeebVolume(volumePath, name);
-        await this.mount(newVolume);
-
         return newVolume;
     }
 

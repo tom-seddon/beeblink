@@ -1263,8 +1263,11 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const result = await this.bfs.createVolume(commandLine.parts[1]);
-        return this.textResponse(result + BNL);
+        const volume = await this.bfs.createVolume(commandLine.parts[1]);
+
+        await this.bfs.mount(volume);
+
+        return this.textResponse('New volume: ' + volume.name + BNL + 'Path: ' + volume.path + BNL);
     }
 
     private async volCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
