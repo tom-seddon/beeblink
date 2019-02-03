@@ -23,7 +23,6 @@
 
 #include <LUFA/Common/Common.h>
 #include <LUFA/Drivers/Board/LEDs.h>
-#include <LUFA/Drivers/Board/Buttons.h>
 #include <LUFA/Drivers/USB/USB.h>
 #include <avr/wdt.h>
 #include <avr/power.h>
@@ -36,6 +35,7 @@
 #include "serial.h"
 #include <avr/eeprom.h>
 
+#include "board.h"
 #include ".build/beeblink_constants.h"
 
 //////////////////////////////////////////////////////////////////////////
@@ -50,18 +50,6 @@ static uint16_t EEMEM g_serial_number_nv;
 
 #define WARN_UNUSED __attribute__((warn_unused_result))
 #define NOINLINE __attribute__((noinline))
-
-//////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////
-
-#define BBC_CB1 (1<<6)
-#define BBC_CB2 (1<<7)          /* Data Ready from the Beeb */
-
-//////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////
-
-#define LEDS_BLUE (LEDS_LED1)
-#define LEDS_RED (LEDS_LED2)
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -152,7 +140,7 @@ static void BeebDidNotBecomeReady(void) {
 #define WAIT_FOR_BEEB_READY()                   \
     do {                                        \
         uint16_t counter=0;                     \
-        while(PINC&BBC_CB2) {                   \
+        while(CB2_PIN&CB2_MASK) {               \
             if(g_usb_task_counter++==0) {       \
                 USB_USBTask();                  \
             }                                   \
@@ -171,18 +159,18 @@ static void BeebDidNotAck(void) {
     SERIAL_PSTR("!! AckAndCheck: CB2 still low.\n");
 
     /* Error. */
-    while(!(PINC&BBC_CB2)) {
+    while(!(CB2_PIN&CB2_MASK)) {
         USB_USBTask();
     }
 }
 
 #define ACK_AND_CHECK()                         \
     do {                                        \
-        PORTC&=~BBC_CB1;                        \
+        CB1_PORT&=~CB1_MASK;                    \
         err=Error_None;                         \
                                                 \
         uint8_t counter=0;                      \
-        while(!(PINC&BBC_CB2)) {                \
+        while(!(CB2_PIN&CB2_MASK)) {            \
             ++counter;                          \
             if(counter==0) {                    \
                 BeebDidNotAck();                \
@@ -190,7 +178,7 @@ static void BeebDidNotAck(void) {
             }                                   \
         }                                       \
                                                 \
-        PORTC|=BBC_CB1;                         \
+        CB1_PORT|=CB1_MASK;                     \
     } while(0)
     
 //////////////////////////////////////////////////////////////////////////
@@ -198,11 +186,11 @@ static void BeebDidNotAck(void) {
 
 #define RECEIVE_BYTE_FROM_BEEB(VALUE_PTR)       \
     do {                                        \
-        DDRB=0;                                 \
+        DDR_BBC_TO_AVR();                       \
                                                 \
         WAIT_FOR_BEEB_READY();                  \
                                                 \
-        *(VALUE_PTR)=PINB;                      \
+        *(VALUE_PTR)=BBC_TO_AVR();              \
                                                 \
         ACK_AND_CHECK();                        \
     } while(0)
@@ -213,11 +201,11 @@ static void BeebDidNotAck(void) {
 
 #define SEND_BYTE_TO_BEEB(VALUE)                \
     do {                                        \
-        DDRB=255;                               \
+        DDR_AVR_TO_BBC();                       \
                                                 \
         WAIT_FOR_BEEB_READY();                  \
                                                 \
-        PORTB=(VALUE);                          \
+        AVR_TO_BBC(VALUE);                      \
                                                 \
         ACK_AND_CHECK();                        \
     } while(0)
@@ -742,11 +730,24 @@ void EVENT_USB_Device_ControlRequest(void){
                 Endpoint_ClearStatusStage();
                 return;
             } else if(USB_ControlRequest.bRequest==CR_SET_SERIAL) {
+                SERIAL_PSTR(".. Changing serial number to: ");
+                serial_x16(USB_ControlRequest.wValue);
+                serial_ch('\n');
+                
                 eeprom_write_word(&g_serial_number_nv,
                                   USB_ControlRequest.wValue);
+
+                SERIAL_PSTR(".. eeprom_write_word done\n");
+                
                 UpdateUSBSerialNumber();
+                
+                SERIAL_PSTR(".. UpdateUSBSerialNumber done\n");
+                
                 Endpoint_ClearSETUP();
                 Endpoint_ClearStatusStage();
+                
+                SERIAL_PSTR(".. USB stuff done\n");
+                
                 return;
             }
         }
@@ -798,21 +799,22 @@ int main(void) {
     LEDs_Init();
     LEDs_SetAllLEDs(LEDS_RED|LEDS_BLUE);
 
-    Buttons_Init();
-    
     GlobalInterruptEnable();
 
     serial_init();
-    
+    //serial_set_enabled(1);
+
     usb_init();
     UpdateUSBSerialNumber();
 
-    DDRB=0b00000000;
-    PORTB=0b11111111;
+    DDR_BBC_TO_AVR();
+    AVR_TO_BBC(255);
 
-    DDRC=BBC_CB1;               /* CB1 output, CB2 input */
-    PORTC|=BBC_CB2;             /* CB2 pull-up resistor */
-    PORTC|=BBC_CB1;             /* CB1 high */
+    CB1_DDR|=CB1_MASK;          /* CB1 output */
+    CB1_PORT|=CB1_MASK;         /* CB1 high */
+
+    CB2_DDR&=~CB2_MASK;         /* CB2 input */
+    CB2_PORT|=CB2_MASK;         /* CB2 pull-up resistor */
 
     StartupBanner();
 

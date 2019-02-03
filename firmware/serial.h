@@ -45,7 +45,6 @@ void serial_x16(uint16_t x);
 void serial_x24(uint32_t l);
 void serial_x32(uint32_t l);
 
-
 #else
 
 #define serial_init() ((void)0)

@@ -6,4 +6,4 @@
 TAGS
 *.lss
 *.bin
-.build/
+/.build*/

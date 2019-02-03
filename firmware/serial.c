@@ -26,6 +26,7 @@
 #include <avr/pgmspace.h>
 #include <LUFA/Common/Common.h>
 #include <LUFA/Drivers/USB/USB.h>
+#include "board.h"
 
 #if SERIAL_ENABLED
 
@@ -35,10 +36,6 @@
 // screen /dev/cu.wchusbserial14220 115200
 //
 // C-a C-\ to quit
-
-#define SERIAL_DDR DDRC
-#define SERIAL_PORT PORTC
-#define SERIAL_BIT (1<<4)
 
 /* anything faster seems unreliable, at least with the crappy
  * WinChipHead thing I've got... */
@@ -54,8 +51,8 @@ static uint8_t g_enabled=1;
 //////////////////////////////////////////////////////////////////////////
 
 void serial_init(void) {
-    SERIAL_PORT|=SERIAL_BIT;
-    SERIAL_DDR|=SERIAL_BIT;
+    SERIAL_DDR|=SERIAL_MASK;
+    SERIAL_PORT|=SERIAL_MASK;
 
     serial_ch('\n');
 }
@@ -82,11 +79,11 @@ void serial_ch(char ch) {
         return;
     }
     
-    uint8_t set=PORTC|SERIAL_BIT,reset=PORTC&~SERIAL_BIT;
+    uint8_t set=SERIAL_PORT|SERIAL_MASK,reset=SERIAL_PORT&~SERIAL_MASK;
     
     cli();
 
-#define BIT(VALUE) (PORTC=(VALUE)?reset:set);_delay_us(BIT_DELAY_US)
+#define BIT(VALUE) (SERIAL_PORT=(VALUE)?reset:set);_delay_us(BIT_DELAY_US)
     
     BIT(0);
     BIT(ch&0x01);

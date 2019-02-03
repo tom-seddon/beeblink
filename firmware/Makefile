@@ -1,20 +1,39 @@
 # COMPILER_PATH:=@
 WC:=..
-MCU:=atmega32u2
+
+MCU:=atmega32u4
 ARCH:=AVR8
-BOARD:=MINIMUS
+BOARD:=LEONARDO
+AVRDUDE_PROGRAMMER:=avr109
+# Ugh.
+AVRDUDE_PORT:=$(wildcard /dev/cu.usbmodem*)
+ifeq ($(AVRDUDE_PORT),)
+# Ugh x 2. Work around LUFA Makefile system refusing to compile if
+# AVRDUDE_PORT isn't set.
+AVRDUDE_PORT:=/tmp/xyz
+endif
+
+AVRDUDE_BOARD:=57600
+
+# MCU:=atmega32u2
+# ARCH:=AVR8
+# BOARD:=MINIMUS
+
+
+
 F_CPU:=16000000
 F_USB:=$(F_CPU)
 OPTIMIZATION:=s
 TARGET:=beeblink
 SRC=beeblink.c usb.c serial.c $(LUFA_SRC_USB)
 LUFA_PATH:=$(WC)/submodules/lufa/LUFA/
+TYPE:=$(MCU)_$(ARCH)_$(BOARD)
 CC_FLAGS:=-Wall -std=c99 -DFIXED_CONTROL_ENDPOINT_SIZE=32 -DUSB_DEVICE_ONLY -DUSB_VID=0x1209 -DUSB_PID=0xbeeb -Werror=implicit-function-declaration -DUSB_TIMEOUT_MS=500
 # CC_FLAGS:=$(CC_FLAGS) -DEA_INPUT_PACKET_SIZE=8 -DEA_OUTPUT_PACKET_SIZE=8
 LD_FLAGS:=
 CTAGS:=exuberant-ctags
 CTAGS_OPTS:=--C-kinds=+px -e --totals=yes
-OBJDIR:=./.build
+OBJDIR:=./.build-$(TYPE)
 TYPESCRIPT_CONSTANTS:=$(WC)/server/beeblink.ts
 C_CONSTANTS:=$(OBJDIR)/beeblink_constants.h
 
@@ -22,7 +41,7 @@ C_CONSTANTS:=$(OBJDIR)/beeblink_constants.h
 # own, which if made phony adds a bunch of (rather verbose) stuff to
 # the build.
 .PHONY:beeblink_all
-beeblink_all: hex lss tags dfu2
+beeblink_all: hex lss tags avrdude
 
 $(OBJDIR)/beeblink.o : $(C_CONSTANTS)
 
