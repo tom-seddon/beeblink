@@ -967,6 +967,16 @@ function usbVIDOrPID(s: string): number {
     return x;
 }
 
+// argparse calls parseInt with a radix of 10.
+function integer(s: string): number {
+    const x = parseInt(s, undefined);
+    if (Number.isNaN(x)) {
+        throw new Error('invalid number provided: "' + s + '"');
+    }
+
+    return x;
+}
+
 {
     const epi =
         'VOLUME-FOLDER and DEFAULT-VOLUME settings will be loaded from "' + DEFAULT_CONFIG_FILE_NAME + '" if present. ' +
@@ -995,7 +1005,7 @@ function usbVIDOrPID(s: string): number {
     parser.addArgument(['--avr-verbose'], { action: 'storeTrue', help: 'enable AVR serial output' });
     parser.addArgument(['--load-config'], { metavar: 'FILE', help: 'load config from %(metavar)s' });
     parser.addArgument(['--save-config'], { metavar: 'FILE', nargs: '?', constant: DEFAULT_CONFIG_FILE_NAME, help: 'save config to %(metavar)s (%(constant)s if not specified)' });
-    parser.addArgument(['--set-serial'], { metavar: 'SERIAL', type: 'int', help: 'set device\'s USB serial number to %(metavar)s and exit' });
+    parser.addArgument(['--set-serial'], { metavar: 'SERIAL', type: integer, help: 'set device\'s USB serial number to %(metavar)s and exit' });
     parser.addArgument(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'folder to search for volumes' });
     parser.addArgument(['--git'], { action: 'storeTrue', help: 'enable git-related functionality' });
     parser.addArgument(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output' });
