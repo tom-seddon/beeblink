@@ -31,7 +31,7 @@ before_install:
   - (cd ~/tass64-code && make all && make install)
 
 script:
-  - (cd ./firmware && make beeblink.hex)
+  - (cd ./firmware && make)
   - (cd ./rom && make)
   - (cd ./server && npm install)
   - (cd ./server && npm run compile)

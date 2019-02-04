@@ -1,78 +1,59 @@
-# COMPILER_PATH:=@
-WC:=..
+# -*- mode:makefile-gmake; -*-
 
-MCU:=atmega32u4
-ARCH:=AVR8
-BOARD:=LEONARDO
-AVRDUDE_PROGRAMMER:=avr109
-# Ugh.
-AVRDUDE_PORT:=$(wildcard /dev/cu.usbmodem*)
-ifeq ($(AVRDUDE_PORT),)
-# Ugh x 2. Work around LUFA Makefile system refusing to compile if
-# AVRDUDE_PORT isn't set.
-AVRDUDE_PORT:=/tmp/xyz
-endif
+# The LUFA Makefile seems to be set up for building one target
+# platform at a time. So this driver Makefile has phony targets for
+# building and cleaning that call make again on the main Makefile to
+# do whatever for supported target platform in turn.
+#
+# The programming targets also defer to the main Makefile to run the
+# actual commands, because that has all the variables set.
+#
+# There's also a ctags target. This isn't dependent on the target
+# platform, but again, it defers to the main Makefile, because that
+# has all the info to hand. The main Makefile has some error-checking
+# for the target platform variables, so the tags target supplies some
+# arbitrary values for those - though it doesn't make much of a
+# difference.
 
-AVRDUDE_BOARD:=57600
+LEONARDO_VARS=MCU=atmega32u4 ARCH=AVR8 BOARD=LEONARDO
+MINIMUS_VARS=MCU=atmega32u2 ARCH=AVR8 BOARD=MINIMUS
 
-# MCU:=atmega32u2
-# ARCH:=AVR8
-# BOARD:=MINIMUS
-
-
-
-F_CPU:=16000000
-F_USB:=$(F_CPU)
-OPTIMIZATION:=s
-TARGET:=beeblink
-SRC=beeblink.c usb.c serial.c $(LUFA_SRC_USB)
-LUFA_PATH:=$(WC)/submodules/lufa/LUFA/
-TYPE:=$(MCU)_$(ARCH)_$(BOARD)
-CC_FLAGS:=-Wall -std=c99 -DFIXED_CONTROL_ENDPOINT_SIZE=32 -DUSB_DEVICE_ONLY -DUSB_VID=0x1209 -DUSB_PID=0xbeeb -Werror=implicit-function-declaration -DUSB_TIMEOUT_MS=500
-# CC_FLAGS:=$(CC_FLAGS) -DEA_INPUT_PACKET_SIZE=8 -DEA_OUTPUT_PACKET_SIZE=8
-LD_FLAGS:=
-CTAGS:=exuberant-ctags
-CTAGS_OPTS:=--C-kinds=+px -e --totals=yes
-OBJDIR:=./.build-$(TYPE)
-TYPESCRIPT_CONSTANTS:=$(WC)/server/beeblink.ts
-C_CONSTANTS:=$(OBJDIR)/beeblink_constants.h
-
-# Don't call this `all'. LUFA unhelpfully has an `all' target of its
-# own, which if made phony adds a bunch of (rather verbose) stuff to
-# the build.
-.PHONY:beeblink_all
-beeblink_all: hex lss tags avrdude
-
-$(OBJDIR)/beeblink.o : $(C_CONSTANTS)
-
-$(C_CONSTANTS) : $(TYPESCRIPT_CONSTANTS) $(WC)/tools/make_constants.py
-	python $(WC)/tools/make_constants.py -o $@ $(TYPESCRIPT_CONSTANTS) c
-
-# Programs in the target FLASH memory using DFU-PROGRAMMER
-dfu2: $(TARGET).hex $(MAKEFILE_LIST)
-	@echo $(MSG_DFU_CMD) Programming FLASH with dfu-programmer using \"$<\"
-	dfu-programmer $(MCU) erase
-	dfu-programmer $(MCU) flash $<
-	-dfu-programmer $(MCU) reset
-
-include $(LUFA_PATH)/Build/lufa_core.mk
-include $(LUFA_PATH)/Build/lufa_sources.mk
-include $(LUFA_PATH)/Build/lufa_build.mk
-include $(LUFA_PATH)/Build/lufa_cppcheck.mk
-include $(LUFA_PATH)/Build/lufa_doxygen.mk
-include $(LUFA_PATH)/Build/lufa_dfu.mk
-include $(LUFA_PATH)/Build/lufa_hid.mk
-include $(LUFA_PATH)/Build/lufa_avrdude.mk
-include $(LUFA_PATH)/Build/lufa_atprogram.mk
+.PHONY:all
+all:
+	$(MAKE) -f Makefile.beeblink $(LEONARDO_VARS) hex lss
+	$(MAKE) -f Makefile.beeblink $(MINIMUS_VARS) hex lss
 
 .PHONY:tags
 tags:
-	@-$(CTAGS) $(CTAGS_OPTS) -R $(SRC) . /opt/local/avr/include
-	@-$(CTAGS) $(CTAGS_OPTS) -R --append=yes $(LUFA_PATH)Common/*.h $(LUFA_PATH)Drivers/Board/AVR8/MINIMUS/*.h $(LUFA_PATH)CodeTemplates/*.h $(LUFA_PATH)CodeTemplates/DeviceTemplate/*.h $(LUFA_PATH)CodeTemplates/DriverStubs/*.h $(LUFA_PATH)CodeTemplates/HostTemplate/*.h $(LUFA_PATH)Common/*.h $(LUFA_PATH)Drivers/Board/*.h $(LUFA_PATH)Drivers/Board/AVR8/MINIMUS/*.h $(LUFA_PATH)Drivers/Misc/*.h $(LUFA_PATH)Drivers/Peripheral/*.h $(LUFA_PATH)Drivers/Peripheral/AVR8/*.h $(LUFA_PATH)Drivers/USB/*.h $(LUFA_PATH)Drivers/USB/Class/*.h $(LUFA_PATH)Drivers/USB/Class/Common/*.h $(LUFA_PATH)Drivers/USB/Class/Device/*.h $(LUFA_PATH)Drivers/USB/Class/Host/*.h $(LUFA_PATH)Drivers/USB/Core/*.h $(LUFA_PATH)Drivers/USB/Core/AVR8/*.h $(LUFA_PATH)Platform/*.h
+	$(MAKE) -f Makefile.beeblink $(MINIMUS_VARS) tags
 
-clean: beeblink_clean
+.PHONY:clean
+clean:
+	$(MAKE) -f Makefile.beeblink $(LEONARDO_VARS) clean
+	$(MAKE) -f Makefile.beeblink $(MINIMUS_VARS) clean
+	rm -f TAGS
 
-.PHONY:beeblink_clean
-beeblink_clean:
-	@echo $(MSG_REMOVE_CMD) Removing BeebLink constants file
-	rm -f $(C_CONSTANTS)
+.PHONY:program_minimus
+program_minimus:
+	$(MAKE) -f Makefile.beeblink $(MINIMUS_VARS) dfu2
+
+# There doesn't seem to be any good solution to the AVRDUDE_PORT thing
+# :( - this just assumes there's one connected device in the 8 second
+# post-reset programming window, that's named as mine is when plugged
+# into my Macbook Pro, and tries to figure it out on that basis :(
+#
+# If your device doesn't present itself with the same sort of name as
+# mine did, edit the wildcard.
+#
+# (On my Linux PC, it looked like
+# /dev/ttyACM* might be the wildcard to use.)
+#
+# (I couldn't get avrdude working on Windows at all, but the Arduino
+# IDE said the device was COM4, but the best result I got was a
+# different error message with -p COM4 than with -p
+# COM-something-else...)
+
+.PHONY:program_leonardo
+program_leonardo: AVRDUDE_PORT:=$(wildcard /dev/cu.usbmodem*)
+program_leonardo:
+	$(MAKE) -f Makefile.beeblink $(LEONARDO_VARS) AVRDUDE_PROGRAMMER=avr109 AVRDUDE_PORT=$(AVRDUDE_PORT) AVRDUDE_BAUD=57600 dfu2

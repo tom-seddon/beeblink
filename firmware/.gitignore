@@ -7,3 +7,4 @@ TAGS
 *.lss
 *.bin
 /.build*/
+/.dir-locals.el

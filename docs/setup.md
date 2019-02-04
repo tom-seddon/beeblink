@@ -4,7 +4,15 @@ Unzip the firmware release zip. There are .hex files, one for each
 supported type of AVR board (pick the one corresponding to the board
 you have...), and a .rom file for the BBC.
 
+If you have any difficulties with this process,
+[please open a a GitHub issue](https://github.com/tom-seddon/beeblink/issues).
+(If you're using a system I've never tested, though, please do note
+that there's a good chance I'll have no immediate anwser for you -
+just more questions! But, fingers crossed, we'll figure it out.)
+
 # Set up SparkFun Pro Micro/Arduino Leonardo
+
+I've had this process work on OS X.
 
 ## Program AVR
 
@@ -22,12 +30,12 @@ To program the AVR:
 1. Enter the programmer command line, replacing `XXX` with the serial
    port name from the Arduino IDE, but don't press Return just yet:
 
-       avrdude -p atmega32u4 -P XXX -c avr109 -U flash:w:beeblink.hex 
+       avrdude -p atmega32u4 -P XXX -c avr109 -U flash:w:beeblink-atmega32u4_AVR8_LEONARDO.hex
 
 2. Briefly connect GND and RESET to reset the AVR and put it into
    programming mode for the next 8 seconds
 
-3. Press Return on the PC
+3. Press Return on the PC, quick, before the 8 seconds is up
 
 If it works, you should get a bunch of output and a message along
 these lines:
@@ -66,9 +74,11 @@ AVR pin 14.
 
 # Set up Minimus AVR
 
+I've had this process work on OS X and Linux.
+
 ## Program AVR ##
 
-For Windows (untested), try the FLIP tool, but you're on your own:
+For Windows, try the FLIP tool, but you're on your own:
 http://www.microchip.com/developmenttools/ProductDetails/PartNo/flip
 
 On OS X or Linux, get dfu-programmer via the package manager (the
@@ -84,7 +94,7 @@ To program the Minimus:
 2. Erase and program:
 
        dfu-programmer atmega32u2 erase
-       dfu-programmer atmega32u2 flash beeblink.hex
+       dfu-programmer atmega32u2 flash beeblink-atmega32u2_AVR8_MINIMUS.hex
 	
    If it works, you get a message along the lines of `7022 bytes used
    (24.49%)`
