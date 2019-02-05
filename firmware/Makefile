@@ -56,4 +56,4 @@ program_minimus:
 .PHONY:program_leonardo
 program_leonardo: AVRDUDE_PORT:=$(wildcard /dev/cu.usbmodem*)
 program_leonardo:
-	$(MAKE) -f Makefile.beeblink $(LEONARDO_VARS) AVRDUDE_PROGRAMMER=avr109 AVRDUDE_PORT=$(AVRDUDE_PORT) AVRDUDE_BAUD=57600 dfu2
+	$(MAKE) -f Makefile.beeblink $(LEONARDO_VARS) AVRDUDE_PROGRAMMER=avr109 AVRDUDE_PORT=$(AVRDUDE_PORT) AVRDUDE_BAUD=57600 avrdude
