@@ -1241,7 +1241,14 @@ export class Server {
     }
 
     private async speedtestCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
-        return new Packet(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_SPEED_TEST);
+        let payload = beeblink.RESPONSE_SPECIAL_SPEED_TEST;
+        if (commandLine.parts.length > 1) {
+            if (commandLine.parts[1].toLowerCase() === 'y') {
+                payload = beeblink.RESPONSE_SPECIAL_SPEED_TEST_SURE;
+            }
+        }
+
+        return new Packet(beeblink.RESPONSE_SPECIAL, payload);
     }
 
     private async titleCommand(commandLine: beebfs.CommandLine): Promise<Packet> {

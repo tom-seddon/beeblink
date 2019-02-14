@@ -99,6 +99,7 @@ export class SpeedTest {
 
             if (!stats.allMatch) {
                 s += '  ** Not all transfers matched **' + BNL;
+                console.log('not all transfers matched...');
             }
 
             s += '  Send: ' + (stats.numBytes / stats.sendTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;

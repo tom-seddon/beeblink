@@ -3503,7 +3503,8 @@ special:
 
 special_routines=[
                 volumes_browser_special,
-                enable_speed_test?speed_test_special:not_supported
+                enable_speed_test?speed_test_special:not_supported,
+                enable_speed_test?speed_test_special.sure:not_supported,
                 ]
                 
 special_routines_l:
@@ -4554,7 +4555,7 @@ cmp_space_done:
 ; entry: YX = prompt
 ; exit: C=0 for no, C=1 for yes
 ;
-sure: .proc
+check_if_sure: .proc
                 jsr pcprint
                 .text "Sure (Y/N)? ",255
                 jsr flush_keyboard_buffer
@@ -4585,7 +4586,7 @@ selfupdate_cmd: .proc
                 lda #$77        ;close *SPOOL/*EXEC handles (AUG 141)
                 jsr osbyte
 
-                jsr sure
+                jsr check_if_sure
                 bcs +
                 rts
                 
@@ -4978,10 +4979,11 @@ time=$a8
 send_time=$ad
 num_iterations=10
                 .cerror num_iterations%2!=0,"no"
-                
-                jsr sure
+
+                jsr check_if_sure
                 bcc done
 
+sure:
                 lda #REQUEST_SPEED_TEST
                 ldx #REQUEST_SPEED_TEST_RESET
                 jsr send_request_1_recv_response_1
