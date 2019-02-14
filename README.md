@@ -24,14 +24,21 @@ Some self-assembly is required.
 
 # Installation and setup
 
-Download latest release from
+If using OS X or 64-bit Windows, download latest release from
 [the BeebLink releases page](https://github.com/tom-seddon/beeblink/releases) -
 you'll need the firmware ZIP, and a server ZIP for your OS.
+
+(If using Linux or 32-bit Windows, follow the DIY instructions below
+to build firmware and get set up with a version of the server you can
+run. There are no binary releases for these platforms.)
 
 Follow [the setup instructions](./docs/setup.md) to set up the AVR.
 
 (You can optionally get [debug serial output](./docs/serial.md) from
 the AVR.)
+
+If using Linux, you'll need to
+[set up udev rules for the BeebLink device](./docs/udev.md).
 
 The [filing system docs](./docs/fs.md) give some notes about running
 the server and using the filing system.
@@ -47,8 +54,5 @@ the server and using the filing system.
 **This repo has submodules** - if you're going to build it, clone it
 with `git clone --recursive`, or do `git submodule init && git
 submodule update` from the working copy after a normal clone.
-
-(If using Linux or 32-bit Windows, follow the instructions here for
-running the server. There are no binary releases for these systems.)
 
 [Building instructions](./docs/build.md)

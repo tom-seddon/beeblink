@@ -40,13 +40,11 @@ program_minimus:
 # There doesn't seem to be any good solution to the AVRDUDE_PORT thing
 # :( - this just assumes there's one connected device in the 8 second
 # post-reset programming window, that's named as mine is when plugged
-# into my Macbook Pro, and tries to figure it out on that basis :(
+# into my Macbook Pro or my Linux PC, and tries to figure it out on
+# that basis.
 #
 # If your device doesn't present itself with the same sort of name as
 # mine did, edit the wildcard.
-#
-# (On my Linux PC, it looked like
-# /dev/ttyACM* might be the wildcard to use.)
 #
 # (I couldn't get avrdude working on Windows at all, but the Arduino
 # IDE said the device was COM4, but the best result I got was a
@@ -54,6 +52,6 @@ program_minimus:
 # COM-something-else...)
 
 .PHONY:program_leonardo
-program_leonardo: AVRDUDE_PORT:=$(wildcard /dev/cu.usbmodem*)
+program_leonardo: AVRDUDE_PORT:=$(wildcard /dev/cu.usbmodem* /dev/ttyACM*)
 program_leonardo:
 	$(MAKE) -f Makefile.beeblink $(LEONARDO_VARS) AVRDUDE_PROGRAMMER=avr109 AVRDUDE_PORT=$(AVRDUDE_PORT) AVRDUDE_BAUD=57600 avrdude
