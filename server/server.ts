@@ -30,28 +30,26 @@ import * as speedtest from './speedtest';
 import * as crypto from 'crypto';
 import { BNL } from './utils';
 import { Chalk } from 'chalk';
+import { Request } from './request';
+import { Response } from './response';
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-class Packet {
-    public readonly c: number;
-    public readonly data: Buffer;
-
-    public constructor(c: number, payload?: number | Buffer | utils.BufferBuilder) {
-        this.c = c;
-
-        if (typeof (payload) === 'number') {
-            this.data = Buffer.alloc(1);
-            this.data[0] = payload;
-        } else if (payload instanceof Buffer) {
-            this.data = payload;
-        } else if (payload instanceof utils.BufferBuilder) {
-            this.data = payload.createBuffer();
-        } else {
-            this.data = Buffer.alloc(0);
-        }
+function newResponse(c: number, p?: number | Buffer | utils.BufferBuilder) {
+    let data: Buffer;
+    if (typeof (p) === 'number') {
+        data = Buffer.alloc(1);
+        data[0] = p;
+    } else if (p instanceof Buffer) {
+        data = p;
+    } else if (p instanceof utils.BufferBuilder) {
+        data = p.createBuffer();
+    } else {
+        data = Buffer.alloc(0);
     }
+
+    return new Response(c, data);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -61,15 +59,15 @@ class Command {
     public readonly nameUC: string;
     public readonly syntax: string | undefined;
 
-    public readonly fun: (commandLine: beebfs.CommandLine) => Promise<Packet>;// if this signature changes, change Server.handleStarCommand too.
+    public readonly fun: (commandLine: beebfs.CommandLine) => Promise<Response>;// if this signature changes, change Server.handleStarCommand too.
 
-    public constructor(name: string, syntax: string | undefined, fun: (commandLine: beebfs.CommandLine) => Promise<Packet>) {
+    public constructor(name: string, syntax: string | undefined, fun: (commandLine: beebfs.CommandLine) => Promise<Response>) {
         this.nameUC = name.toUpperCase();
         this.syntax = syntax;
         this.fun = fun;
     }
 
-    public async applyFun(thisObject: any, commandLine: beebfs.CommandLine): Promise<Packet> {
+    public async applyFun(thisObject: any, commandLine: beebfs.CommandLine): Promise<Response> {
         return await this.fun.apply(thisObject, [commandLine]);
     }
 }
@@ -79,17 +77,17 @@ class Command {
 
 class Handler {
     public readonly name: string;
-    public readonly fun: (handler: Handler, p: Buffer) => Promise<Packet>;
+    public readonly fun: (handler: Handler, p: Buffer) => Promise<Response>;
     private quiet: boolean;
 
-    public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<Packet>) {
+    public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<Response>) {
         this.name = name;
         this.fun = fun;
         this.quiet = false;
     }
 
     // JS crap that's seemingly impossible to deal with in any non-annoying way.
-    public async applyFun(thisObject: any, p: Buffer): Promise<Packet> {
+    public async applyFun(thisObject: any, p: Buffer): Promise<Response> {
         return await this.fun.apply(thisObject, [this, p]);
     }
 
@@ -200,14 +198,14 @@ export class Server {
         this.dumpPackets = dumpPackets;
     }
 
-    public async handleRequest(c: number, p: Buffer): Promise<Packet> {
-        this.dumpPacket('Request', c, p);
+    public async handleRequest(request: Request): Promise<Response> {
+        this.dumpPacket('Request', request.c, request.p);
 
-        const packet = await this.handleRequestInternal(c, p);
+        const response = await this.handleRequestInternal(request);
 
-        this.dumpPacket('Response', packet.c, packet.data);
+        this.dumpPacket('Response', response.c, response.p);
 
-        return packet;
+        return response;
     }
 
     private dumpPacket(type: string, c: number, p: Buffer): void {
@@ -219,11 +217,11 @@ export class Server {
         }
     }
 
-    private async handleRequestInternal(c: number, p: Buffer): Promise<Packet> {
+    private async handleRequestInternal(request: Request): Promise<Response> {
         try {
-            const handler = this.handlers[c];
+            const handler = this.handlers[request.c];
             if (handler === undefined) {
-                return this.internalError('Unsupported request: &' + utils.hex2(c));
+                return this.internalError('Unsupported request: &' + utils.hex2(request.c));
             } else {
                 const logWasEnabled = this.log.enabled;
                 if (handler.shouldLog()) {
@@ -233,7 +231,7 @@ export class Server {
                 }
 
                 try {
-                    return await handler.applyFun(this, p);
+                    return await handler.applyFun(this, request.p);
                 } finally {
                     if (handler.shouldLog()) {
                         this.log.out();
@@ -254,24 +252,24 @@ export class Server {
                 builder.writeString(error.text);
                 builder.writeUInt8(0);
 
-                return new Packet(beeblink.RESPONSE_ERROR, builder);
+                return newResponse(beeblink.RESPONSE_ERROR, builder);
             } else {
                 throw error;
             }
         }
     }
 
-    private async handleGetROM(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleGetROM(handler: Handler, p: Buffer): Promise<Response> {
         try {
             const rom = await utils.fsReadFile(this.romPath);
             this.log.pn('ROM is ' + rom.length + ' bytes');
-            return new Packet(beeblink.RESPONSE_DATA, rom);
+            return newResponse(beeblink.RESPONSE_DATA, rom);
         } catch (error) {
             return beebfs.BeebFS.throwServerError(error);
         }
     }
 
-    private async handleReset(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleReset(handler: Handler, p: Buffer): Promise<Response> {
         this.log.pn('reset type=' + p[0]);
 
         if (p[0] === 1 || p[0] === 2) {
@@ -287,23 +285,23 @@ export class Server {
             }
         }
 
-        return new Packet(beeblink.RESPONSE_YES, 0);
+        return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async handleEchoData(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleEchoData(handler: Handler, p: Buffer): Promise<Response> {
         this.log.pn('Sending ' + p.length + ' byte(s) back...');
-        return new Packet(beeblink.RESPONSE_DATA, p);
+        return newResponse(beeblink.RESPONSE_DATA, p);
     }
 
-    private async handleReadString(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleReadString(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBe(handler, p, 1);
 
         if (this.stringBuffer === undefined) {
             this.log.pn('string not present.');
-            return new Packet(beeblink.RESPONSE_NO, 0);
+            return newResponse(beeblink.RESPONSE_NO, 0);
         } else if (this.stringBufferIdx >= this.stringBuffer.length) {
             this.log.pn('string exhausted.');
-            return new Packet(beeblink.RESPONSE_NO, 0);
+            return newResponse(beeblink.RESPONSE_NO, 0);
         } else {
             let n = Math.min(this.stringBuffer.length - this.stringBufferIdx, p[0]);
             if (n === 0) {
@@ -322,16 +320,16 @@ export class Server {
 
             this.log.pn('result: ' + JSON.stringify(result.toString('binary')));
 
-            return new Packet(beeblink.RESPONSE_DATA, result);
+            return newResponse(beeblink.RESPONSE_DATA, result);
         }
     }
 
-    private async handleStarCat(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleStarCat(handler: Handler, p: Buffer): Promise<Response> {
         const commandLine = this.initCommandLine(p.toString('binary'));
         return this.textResponse(await this.bfs.getCAT(commandLine.parts.length > 0 ? commandLine.parts[0] : undefined));
     }
 
-    private async handleStarCommand(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleStarCommand(handler: Handler, p: Buffer): Promise<Response> {
         const commandLine = this.initCommandLine(p.toString('binary'));
 
         if (commandLine.parts.length < 1) {
@@ -400,12 +398,12 @@ export class Server {
         }
     }
 
-    private async handleStarRun(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleStarRun(handler: Handler, p: Buffer): Promise<Response> {
         const commandLine = this.initCommandLine(p.toString('binary'));
         return await this.handleRun(commandLine, false);//false = don't check library directory
     }
 
-    private async handleHelpBLFS(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleHelpBLFS(handler: Handler, p: Buffer): Promise<Response> {
         let help = '';
         for (const command of this.commands) {
             help += '  ' + command.nameUC;
@@ -427,7 +425,7 @@ export class Server {
             ']';
     }
 
-    private async handleOSFILE(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleOSFILE(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBeAtLeast(handler, p, 17);
 
         let i = 0;
@@ -482,10 +480,10 @@ export class Server {
             builder.writeBuffer(osfileResult.data);
         }
 
-        return new Packet(beeblink.RESPONSE_OSFILE, builder);
+        return newResponse(beeblink.RESPONSE_OSFILE, builder);
     }
 
-    private async handleOSFINDOpen(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleOSFINDOpen(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBeAtLeast(handler, p, 1);
 
         const mode = p[0];
@@ -498,10 +496,10 @@ export class Server {
 
         this.log.pn('Output: handle=' + utils.hexdec(handle));
 
-        return new Packet(beeblink.RESPONSE_OSFIND, handle);
+        return newResponse(beeblink.RESPONSE_OSFIND, handle);
     }
 
-    private async handleOSFINDClose(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleOSFINDClose(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBe(handler, p, 1);
 
         const handle = p[0];
@@ -510,10 +508,10 @@ export class Server {
 
         await this.bfs.OSFINDClose(handle);
 
-        return new Packet(beeblink.RESPONSE_OSFIND, 0);
+        return newResponse(beeblink.RESPONSE_OSFIND, 0);
     }
 
-    private async handleOSARGS(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleOSARGS(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBe(handler, p, 6);
 
         const a = p[0];
@@ -529,20 +527,20 @@ export class Server {
         const responseData = Buffer.alloc(4);
         responseData.writeUInt32LE(newValue, 0);
 
-        return new Packet(beeblink.RESPONSE_OSARGS, responseData);
+        return newResponse(beeblink.RESPONSE_OSARGS, responseData);
     }
 
-    private async handleEOF(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleEOF(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBe(handler, p, 1);
 
         const handle = p[0];
 
         const eof = this.bfs.eof(handle);
 
-        return new Packet(beeblink.RESPONSE_EOF, eof ? 0xff : 0x00);
+        return newResponse(beeblink.RESPONSE_EOF, eof ? 0xff : 0x00);
     }
 
-    private async handleOSBGET(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleOSBGET(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBe(handler, p, 1);
 
         const handle = p[0];
@@ -553,13 +551,13 @@ export class Server {
 
         if (byte === undefined) {
             // 254 is what the Master 128 DFS returns, and who am I to argue?
-            return new Packet(beeblink.RESPONSE_OSBEGT_EOF, 254);
+            return newResponse(beeblink.RESPONSE_OSBEGT_EOF, 254);
         } else {
-            return new Packet(beeblink.RESPONSE_OSBGET, byte);
+            return newResponse(beeblink.RESPONSE_OSBGET, byte);
         }
     }
 
-    private async handleOSBPUT(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleOSBPUT(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBe(handler, p, 2);
 
         const handle = p[0];
@@ -570,10 +568,10 @@ export class Server {
 
         this.bfs.OSBPUT(handle, byte);
 
-        return new Packet(beeblink.RESPONSE_YES, 0);
+        return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async handleStarInfo(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleStarInfo(handler: Handler, p: Buffer): Promise<Response> {
         const commandLine = this.initCommandLine(p.toString('binary'));
 
         if (commandLine.parts.length === 0) {
@@ -585,7 +583,7 @@ export class Server {
         return await this.filesInfoResponse(fqn);
     }
 
-    private async handleStarEx(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleStarEx(handler: Handler, p: Buffer): Promise<Response> {
         const commandLine = this.initCommandLine(p.toString('binary'));
 
         let fqn;
@@ -598,7 +596,7 @@ export class Server {
         return await this.filesInfoResponse(fqn);
     }
 
-    private async handleOSGBPB(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleOSGBPB(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBeAtLeast(handler, p, 14);
 
         let i = 0;
@@ -663,10 +661,10 @@ export class Server {
             builder.writeBuffer(result.data);
         }
 
-        return new Packet(beeblink.RESPONSE_OSGBPB, builder);
+        return newResponse(beeblink.RESPONSE_OSGBPB, builder);
     }
 
-    private async handleOPT(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleOPT(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBe(handler, p, 2);
 
         const x = p[0];
@@ -676,13 +674,13 @@ export class Server {
 
         await this.bfs.OPT(x, y);
 
-        return new Packet(beeblink.RESPONSE_YES, 0);
+        return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async handleGetBootOption(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleGetBootOption(handler: Handler, p: Buffer): Promise<Response> {
         const option = await beebfs.BeebFS.loadBootOption(this.bfs.getVolume(), this.bfs.getDrive());
 
-        return new Packet(beeblink.RESPONSE_BOOT_OPTION, option);
+        return newResponse(beeblink.RESPONSE_BOOT_OPTION, option);
     }
 
     private getBASICStringExpr(text: Buffer): string {
@@ -726,7 +724,7 @@ export class Server {
         return r;
     }
 
-    private async handleVolumeBrowser(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleVolumeBrowser(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBeAtLeast(handler, p, 1);
 
         if (p[0] === beeblink.REQUEST_VOLUME_BROWSER_RESET) {
@@ -780,24 +778,24 @@ export class Server {
 
                 this.textResponse(builder.createBuffer());
 
-                return new Packet(beeblink.RESPONSE_VOLUME_BROWSER, responseType);
+                return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, responseType);
             } else if (result.text !== undefined) {
                 this.textResponse(result.text);
 
                 if (result.flushKeyboardBuffer) {
-                    return new Packet(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER);
+                    return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER);
                 } else {
-                    return new Packet(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING);
+                    return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING);
                 }
             } else {
-                return new Packet(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_KEY_IGNORED);
+                return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_KEY_IGNORED);
             }
         } else {
             return this.internalError('Bad ' + handler.name + ' request');
         }
     }
 
-    private async handleSpeedTest(handler: Handler, p: Buffer): Promise<Packet> {
+    private async handleSpeedTest(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBeAtLeast(handler, p, 1);
 
         if (p[0] === beeblink.REQUEST_SPEED_TEST_RESET) {
@@ -805,7 +803,7 @@ export class Server {
 
             this.speedTest = new speedtest.SpeedTest();
 
-            return new Packet(beeblink.RESPONSE_YES);
+            return newResponse(beeblink.RESPONSE_YES);
         } else if (p[0] === beeblink.REQUEST_SPEED_TEST_TEST && this.speedTest !== undefined) {
             this.log.pn('REQUEST_SPEED_TEST_TEST');
             this.log.pn('payload size = 0x' + p.length.toString(16));
@@ -819,7 +817,7 @@ export class Server {
 
             const responseData = this.speedTest.gotTestData(parasite, data, this.log);
 
-            return new Packet(beeblink.RESPONSE_DATA, responseData);
+            return newResponse(beeblink.RESPONSE_DATA, responseData);
         } else if (p[0] === beeblink.REQUEST_SPEED_TEST_STATS && this.speedTest !== undefined) {
             this.log.pn('REQUEST_SPEED_TEST_STATS');
 
@@ -832,7 +830,7 @@ export class Server {
 
             this.speedTest.addStats(parasite, numBytes, sendTimeSeconds, recvTimeSeconds);
 
-            return new Packet(beeblink.RESPONSE_YES);
+            return newResponse(beeblink.RESPONSE_YES);
         } else if (p[0] === beeblink.REQUEST_SPEED_TEST_DONE && this.speedTest !== undefined) {
             this.log.pn('REQUEST_SPEED_TEST_DONE');
 
@@ -866,7 +864,7 @@ export class Server {
         }
     }
 
-    private async filesInfoResponse(afsp: beebfs.BeebFQN): Promise<Packet> {
+    private async filesInfoResponse(afsp: beebfs.BeebFQN): Promise<Response> {
         const files = await this.bfs.getBeebFilesForAFSP(afsp);
 
         if (files.length === 0) {
@@ -921,7 +919,7 @@ export class Server {
         // ...args: (number | string)[]) {
         // this.setString(...args);
 
-        return new Packet(beeblink.RESPONSE_TEXT, 0);
+        return newResponse(beeblink.RESPONSE_TEXT, 0);
     }
 
     private initCommandLine(commandLineString: string): beebfs.CommandLine {
@@ -946,7 +944,7 @@ export class Server {
         return commandLine;
     }
 
-    private async handleRun(commandLine: beebfs.CommandLine, tryLibDir: boolean): Promise<Packet> {
+    private async handleRun(commandLine: beebfs.CommandLine, tryLibDir: boolean): Promise<Response> {
         this.log.pn('*RUN: ``' + commandLine.parts[0] + '\'\' (try lib dir: ' + tryLibDir + ')');
 
         const fsp = beebfs.BeebFS.parseFileString(commandLine.parts[0]);
@@ -965,10 +963,10 @@ export class Server {
         builder.writeUInt32LE(file.exec);
         builder.writeBuffer(data);
 
-        return new Packet(beeblink.RESPONSE_RUN, builder);
+        return newResponse(beeblink.RESPONSE_RUN, builder);
     }
 
-    private async volsCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async volsCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : '*';
 
         const volumes = await this.bfs.findVolumesMatching(arg);
@@ -990,11 +988,11 @@ export class Server {
         return this.textResponse(text);
     }
 
-    private async filesCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async filesCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         return this.textResponse(this.bfs.getOpenFilesOutput());
     }
 
-    private async infoCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async infoCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             throw new CommandSyntaxError();
         }
@@ -1003,7 +1001,7 @@ export class Server {
         return await this.filesInfoResponse(fqn);
     }
 
-    private async accessCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async accessCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             throw new CommandSyntaxError();
         }
@@ -1021,10 +1019,10 @@ export class Server {
             await this.bfs.writeMetadata(beebFile.hostPath, beebFile.name, beebFile.load, beebFile.exec, newAttr);
         }
 
-        return new Packet(beeblink.RESPONSE_YES, 0);
+        return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async deleteCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async deleteCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             throw new CommandSyntaxError();
         }
@@ -1033,10 +1031,10 @@ export class Server {
 
         await this.bfs.delete(fqn);
 
-        return new Packet(beeblink.RESPONSE_YES, 0);
+        return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async dirCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async dirCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             this.log.pn('*DIR: using drive 0.');
             this.bfs.setDrive('0');
@@ -1049,10 +1047,10 @@ export class Server {
             this.bfs.setDir(fsp.dir!);
         }
 
-        return new Packet(beeblink.RESPONSE_YES, 0);
+        return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async driveCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async driveCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             throw new CommandSyntaxError();
         }
@@ -1067,10 +1065,10 @@ export class Server {
             this.bfs.setDrive(fsp.drive!);
         }
 
-        return new Packet(beeblink.RESPONSE_YES, 0);
+        return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async drivesCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async drivesCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         const drives = await this.bfs.findDrives();
 
         let text = '';
@@ -1086,7 +1084,7 @@ export class Server {
         return this.textResponse(text);
     }
 
-    private async libCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async libCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             this.log.pn('*LIB: using current dir: :' + this.bfs.getDrive() + '.' + this.bfs.getDir());
         } else {
@@ -1098,10 +1096,10 @@ export class Server {
             this.bfs.setLibDir(fsp.dir!);
         }
 
-        return new Packet(beeblink.RESPONSE_YES, 0);
+        return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async typeCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async typeCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length !== 2) {
             throw new CommandSyntaxError();
         }
@@ -1111,7 +1109,7 @@ export class Server {
         return this.textResponse(lines.join(BNL) + BNL);
     }
 
-    private async listCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async listCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length !== 2) {
             throw new CommandSyntaxError();
         }
@@ -1127,7 +1125,7 @@ export class Server {
         return this.textResponse(text);
     }
 
-    private async locateCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async locateCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             throw new CommandSyntaxError();
         }
@@ -1171,15 +1169,15 @@ export class Server {
         return this.textResponse(text);
     }
 
-    private async dumpCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async dumpCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         return await this.dumpCommandInternal(commandLine, false);
     }
 
-    private async wdumpCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async wdumpCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         return await this.dumpCommandInternal(commandLine, true);
     }
 
-    private async dumpCommandInternal(commandLine: beebfs.CommandLine, wide: boolean): Promise<Packet> {
+    private async dumpCommandInternal(commandLine: beebfs.CommandLine, wide: boolean): Promise<Response> {
         if (commandLine.parts.length !== 2) {
             throw new CommandSyntaxError();
         }
@@ -1227,7 +1225,7 @@ export class Server {
         return this.textResponse(text);
     }
 
-    private async renameCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async renameCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 3) {
             throw new CommandSyntaxError();
         }
@@ -1237,10 +1235,10 @@ export class Server {
 
         await this.bfs.rename(oldFQN, newFQN);
 
-        return new Packet(beeblink.RESPONSE_YES, 0);
+        return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async speedtestCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async speedtestCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         let payload = beeblink.RESPONSE_SPECIAL_SPEED_TEST;
         if (commandLine.parts.length > 1) {
             if (commandLine.parts[1].toLowerCase() === 'y') {
@@ -1248,24 +1246,24 @@ export class Server {
             }
         }
 
-        return new Packet(beeblink.RESPONSE_SPECIAL, payload);
+        return newResponse(beeblink.RESPONSE_SPECIAL, payload);
     }
 
-    private async titleCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async titleCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             throw new CommandSyntaxError();
         }
 
         await this.bfs.setTitle(this.bfs.getDrive(), commandLine.parts[1]);
 
-        return new Packet(beeblink.RESPONSE_YES, 0);
+        return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async volbrowserCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
-        return new Packet(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_VOLUME_BROWSER);
+    private async volbrowserCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+        return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_VOLUME_BROWSER);
     }
 
-    private async newvolCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async newvolCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             throw new CommandSyntaxError();
         }
@@ -1277,7 +1275,7 @@ export class Server {
         return this.textResponse('New volume: ' + volume.name + BNL + 'Path: ' + volume.path + BNL);
     }
 
-    private async volCommand(commandLine: beebfs.CommandLine): Promise<Packet> {
+    private async volCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         let volume: beebfs.BeebVolume;
         if (commandLine.parts.length >= 2) {
             const volumes = await this.bfs.findVolumesMatching(commandLine.parts[1]);

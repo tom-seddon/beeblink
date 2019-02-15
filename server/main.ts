@@ -33,6 +33,8 @@ import { Chalk } from 'chalk';
 import chalk from 'chalk';
 import * as gitattributes from './gitattributes';
 import * as http from 'http';
+import { Request } from './request';
+import { Response } from './response';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -484,24 +486,25 @@ class Connection {
 
                 //const writer = new OutEndpointWriter(beebLink.outEndpoint);
 
-                const response = await this.server.handleRequest(t & 0x7f, payload);
+                // bit pointless to make a new Request, really, but it keeps things regular...
+                const response = await this.server.handleRequest(new Request(t & 0x7f, payload));
 
                 let data: Buffer;
-                if (response.data.length === 1) {
+                if (response.p.length === 1) {
                     data = Buffer.alloc(2);
 
                     data[0] = response.c;
-                    data[1] = response.data[0];
+                    data[1] = response.p[0];
                 } else {
-                    data = Buffer.alloc(1 + 4 + response.data.length);
+                    data = Buffer.alloc(1 + 4 + response.p.length);
                     let i = 0;
 
                     data[i++] = response.c | 0x80;
 
-                    data.writeUInt32LE(response.data.length, i);
+                    data.writeUInt32LE(response.p.length, i);
                     i += 4;
 
-                    for (const byte of response.data) {
+                    for (const byte of response.p) {
                         data[i++] = byte;
                     }
                 }
@@ -849,53 +852,53 @@ async function main(options: ICommandLineOptions) {
 
     let httpServer: http.Server | undefined;
     if (options.http) {
-        httpServer = http.createServer(async (request, response): Promise<void> => {
+        httpServer = http.createServer(async (httpRequest, httpResponse): Promise<void> => {
             async function endResponse(): Promise<void> {
                 await new Promise((resolve, reject) => {
-                    response.end(() => resolve());
+                    httpResponse.end(() => resolve());
                 });
             }
 
             async function writeData(data: Buffer): Promise<void> {
                 await new Promise<void>((resolve, reject) => {
-                    response.write(data, 'binary', (error) => error === undefined ? resolve() : reject(error));
+                    httpResponse.write(data, 'binary', (error) => error === undefined ? resolve() : reject(error));
                 });
             }
 
             async function errorResponse(statusCode: number, message: string | undefined): Promise<void> {
-                response.statusCode = statusCode;
-                response.setHeader('Content-Type', 'text/plain');
-                response.setHeader('Content-Encoding', 'utf-8');
+                httpResponse.statusCode = statusCode;
+                httpResponse.setHeader('Content-Type', 'text/plain');
+                httpResponse.setHeader('Content-Encoding', 'utf-8');
                 if (message !== undefined && message.length > 0) {
                     await writeData(Buffer.from(message, 'utf-8'));
                 }
                 await endResponse();
             }
 
-            if (request.url === '/request') {
-                //process.stderr.write('method: ' + request.method + '\n');
-                if (request.method !== 'POST') {
+            if (httpRequest.url === '/request') {
+                //process.stderr.write('method: ' + httpRequest.method + '\n');
+                if (httpRequest.method !== 'POST') {
                     return await errorResponse(405, 'only POST is permitted');
                 }
 
-                // const packetTypeString = request.headers[BEEBLINK_PACKET_TYPE];
+                // const packetTypeString = httpRequest.headers[BEEBLINK_PACKET_TYPE];
                 // if (packetTypeString === undefined || packetTypeString === null || typeof (packetTypeString) !== 'string' || packetTypeString.length === 0) {
-                //     return errorResponse(response, 400, 'missing header: ' + BEEBLINK_PACKET_TYPE);
+                //     return errorResponse(httpResponse, 400, 'missing header: ' + BEEBLINK_PACKET_TYPE);
                 // }
 
                 // const packetType = Number(packetTypeString);
                 // if (!isFinite(packetType)) {
-                //     return errorResponse(response, 400, 'invalid ' + BEEBLINK_PACKET_TYPE + ': ' + packetTypeString);
+                //     return errorResponse(httpResponse, 400, 'invalid ' + BEEBLINK_PACKET_TYPE + ': ' + packetTypeString);
                 // }
 
-                const senderId = request.headers[BEEBLINK_SENDER_ID];
+                const senderId = httpRequest.headers[BEEBLINK_SENDER_ID];
                 if (senderId === undefined || senderId === null || senderId.length === 0 || typeof (senderId) !== 'string') {
                     return await errorResponse(400, 'missing header: ' + BEEBLINK_SENDER_ID);
                 }
 
                 const body = await new Promise<Buffer>((resolve, reject) => {
                     const bodyChunks: Buffer[] = [];
-                    request.on('data', (chunk: Buffer) => {
+                    httpRequest.on('data', (chunk: Buffer) => {
                         bodyChunks.push(chunk);
                     }).on('end', () => {
                         resolve(Buffer.concat(bodyChunks));
@@ -916,19 +919,19 @@ async function main(options: ICommandLineOptions) {
                     serverBySenderId.set(senderId, server);
                 }
 
-                const packet = await server.handleRequest(body[0] & 0x7f, body.slice(1));
+                const response = await server.handleRequest(new Request(body[0] & 0x7f, body.slice(1)));
 
-                response.setHeader('Content-Type', 'application/binary');
+                httpResponse.setHeader('Content-Type', 'application/binary');
 
-                await writeData(Buffer.alloc(1, packet.c));
+                await writeData(Buffer.alloc(1, response.c));
 
-                if (packet.data.length > 0) {
-                    await writeData(packet.data);
+                if (response.p.length > 0) {
+                    await writeData(response.p);
                 }
 
                 await endResponse();
-            } else if (request.url === '/beeblink.rom') {
-                if (request.method !== 'GET') {
+            } else if (httpRequest.url === '/beeblink.rom') {
+                if (httpRequest.method !== 'GET') {
                     return await errorResponse(405, 'only GET is permitted');
                 }
 
@@ -941,7 +944,7 @@ async function main(options: ICommandLineOptions) {
                     return await errorResponse(501, undefined);
                 }
 
-                response.setHeader('Content-Type', 'application/binary');
+                httpResponse.setHeader('Content-Type', 'application/binary');
 
                 await writeData(rom);
 
