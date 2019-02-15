@@ -530,8 +530,16 @@ class Connection {
             }
 
             if (this.usbDevice !== undefined) {
-                this.usbDevice.close();
-                this.usbDevice = undefined;
+                try {
+                    this.usbDevice.close();
+                    this.usbDevice = undefined;
+                } catch (error) {
+                    // With a bit of luck, this is just the "Can't close device
+                    // with a pending request" error, and the request will
+                    // eventually go away...
+                    this.log.pn('Failed to close device: ' + error);
+                    continue;
+                }
             }
 
             this.usbInEndpoint = undefined;
