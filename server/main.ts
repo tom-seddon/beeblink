@@ -85,6 +85,7 @@ interface ICommandLineOptions {
     http: boolean;
     packet_verbose: boolean;
     http_all_interfaces: boolean;
+    libusb_debug_level: number | null;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -694,13 +695,18 @@ async function isGit(folderPath: string): Promise<boolean> {
 }
 
 async function main(options: ICommandLineOptions) {
+    const log = new utils.Log('', process.stderr, options.verbose);
+    //gSendLog.enabled = options.send_verbose;
+
     if (options.set_serial !== null) {
         await setDeviceSerialNumber(options.set_serial);
         return;
     }
 
-    const log = new utils.Log('', process.stderr, options.verbose);
-    //gSendLog.enabled = options.send_verbose;
+    log.pn('libusb_debug_level: ``' + options.libusb_debug_level + '\'\'');
+    if (options.libusb_debug_level !== null) {
+        usb.setDebugLevel(options.libusb_debug_level);
+    }
 
     log.pn('cwd: ``' + process.cwd() + '\'\'');
 
@@ -996,6 +1002,7 @@ function integer(s: string): number {
     parser.addArgument(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
     parser.addArgument(['--packet-verbose'], { action: 'storeTrue', help: 'dump incoming/outgoing request data' });
     parser.addArgument(['--usb-verbose'], { action: 'storeTrue', help: 'extra USB-related output' });
+    parser.addArgument(['--libusb-debug-level'], { type: integer, metavar: 'LEVEL', help: 'if provided, set libusb debug logging level to %(metavar)s' });
     // don't use the argparse default mechanism here - this makes it easier to
     // later detect the absence of --default-volume.
     parser.addArgument(['--default-volume'], { metavar: 'DEFAULT-VOLUME', help: 'load volume %(metavar)s on startup' });
