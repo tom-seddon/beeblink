@@ -155,6 +155,13 @@ class InEndpointReader {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+async function delayMS(ms: number) {
+    await new Promise((resolve, reject) => setTimeout(() => resolve(), ms));
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 function findSingleEndpoint(interf: usb.Interface, direction: string): usb.Endpoint | undefined {
     const endpoints = interf.endpoints.filter((endpoint) => endpoint.direction === direction);
     if (endpoints.length !== 1) {
@@ -190,6 +197,10 @@ function getEndpointDescription(endpoint: usb.Endpoint): string {
     return 'bEndpointAddress=' + utils.hexdec(endpoint.descriptor.bEndpointAddress) + ', wMaxPacketSize=' + endpoint.descriptor.wMaxPacketSize;
 }
 
+function getDeviceDescription(device: usb.Device): string {
+    return 'Bus ' + device.busNumber.toString().padStart(3, '0') + ' Device ' + device.deviceAddress.toString().padStart(3, '0');
+}
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -204,7 +215,7 @@ interface IBeebLinkDevice {
 let gBeebLinkDeviceVID = DEFAULT_USB_VID;
 let gBeebLinkDevicePID = DEFAULT_USB_PID;
 
-async function findBeebLinkUSBDevices(): Promise<IBeebLinkDevice[]> {
+async function findBeebLinkUSBDevices(log: utils.Log | undefined): Promise<IBeebLinkDevice[]> {
     const usbDevices = usb.getDeviceList().filter((device) => {
         return device.deviceDescriptor.idVendor === gBeebLinkDeviceVID && device.deviceDescriptor.idProduct === gBeebLinkDevicePID;
     });
@@ -214,6 +225,9 @@ async function findBeebLinkUSBDevices(): Promise<IBeebLinkDevice[]> {
         try {
             usbDevice.open(false);
         } catch (error) {
+            if (log !== undefined) {
+                log.pn(getDeviceDescription(usbDevice) + ': failed to open: ' + error);
+            }
             continue;
         }
 
@@ -230,10 +244,27 @@ async function findBeebLinkUSBDevices(): Promise<IBeebLinkDevice[]> {
                     });
             });
         } catch (error) {
-            usbDevice.close();
-            continue;
+            if (log !== undefined) {
+                log.pn(getDeviceDescription(usbDevice) + ': failed to get serial number: ' + error);
+            }
         }
 
+        let open = true;
+        let numCloseAttempts = 0;
+        while (open) {
+            try {
+                ++numCloseAttempts;
+                usbDevice.close();
+                open = false;
+            } catch (error) {
+                if (log !== undefined) {
+                    log.pn(getDeviceDescription(usbDevice) + ': failed to close on attempt ' + numCloseAttempts + ' (will retry): ' + error);
+                }
+
+                // hopefully very transient...
+                await delayMS(10);
+            }
+        }
         if (buffer === undefined) {
             continue;
         }
@@ -245,13 +276,6 @@ async function findBeebLinkUSBDevices(): Promise<IBeebLinkDevice[]> {
     }
 
     return devices;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-async function delayMS(ms: number) {
-    await new Promise((resolve, reject) => setTimeout(() => resolve(), ms));
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -546,7 +570,7 @@ class Connection {
             this.usbOutEndpoint = undefined;
 
             this.usbDevice = undefined;
-            for (const device of await findBeebLinkUSBDevices()) {
+            for (const device of await findBeebLinkUSBDevices(this.log)) {
                 if (device.usbSerial === this.usbSerial) {
                     this.usbDevice = device.usbDevice;
                     break;
@@ -645,7 +669,7 @@ async function setDeviceSerialNumber(serial: number): Promise<void> {
         throw new Error('serial number must be between 0 and 65535 inclusive');
     }
 
-    const devices = await findBeebLinkUSBDevices();
+    const devices = await findBeebLinkUSBDevices(undefined);
 
     if (devices.length === 0) {
         throw new Error('no BeebLink devices found');
@@ -749,7 +773,7 @@ async function main(options: ICommandLineOptions) {
     }
 
     if (!options.http) {
-        if ((await findBeebLinkUSBDevices()).length === 0) {
+        if ((await findBeebLinkUSBDevices(undefined)).length === 0) {
             throw new Error('no BeebLink devices found');
         }
     }
@@ -947,7 +971,7 @@ async function main(options: ICommandLineOptions) {
     // Keep polling for new devices, while watching for all existing connections
     // going away. This is not super clever, but there you go.
     do {
-        const devices = await findBeebLinkUSBDevices();
+        const devices = await findBeebLinkUSBDevices(options.usb_verbose ? log : undefined);
         for (const device of devices) {
             if (usbConnections.find((usbConnection) => usbConnection.usbSerial === device.usbSerial) === undefined) {
                 const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
