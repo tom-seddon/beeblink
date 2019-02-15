@@ -247,24 +247,25 @@ async function findBeebLinkUSBDevices(log: utils.Log | undefined): Promise<IBeeb
             if (log !== undefined) {
                 log.pn(getDeviceDescription(usbDevice) + ': failed to get serial number: ' + error);
             }
+            usbDevice.close();
         }
 
-        let open = true;
-        let numCloseAttempts = 0;
-        while (open) {
-            try {
-                ++numCloseAttempts;
-                usbDevice.close();
-                open = false;
-            } catch (error) {
-                if (log !== undefined) {
-                    log.pn(getDeviceDescription(usbDevice) + ': failed to close on attempt ' + numCloseAttempts + ' (will retry): ' + error);
-                }
+        // let open = true;
+        // let numCloseAttempts = 0;
+        // while (open) {
+        //     try {
+        //         ++numCloseAttempts;
+        //         usbDevice.close();
+        //         open = false;
+        //     } catch (error) {
+        //         if (log !== undefined) {
+        //             log.pn(getDeviceDescription(usbDevice) + ': failed to close on attempt ' + numCloseAttempts + ' (will retry): ' + error);
+        //         }
 
-                // hopefully very transient...
-                await delayMS(10);
-            }
-        }
+        //         // hopefully very transient...
+        //         await delayMS(10);
+        //     }
+        // }
         if (buffer === undefined) {
             continue;
         }
