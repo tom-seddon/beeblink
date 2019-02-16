@@ -27,6 +27,7 @@ import * as os from 'os';
 import { WriteStream } from 'tty';
 import * as path from 'path';
 import { Chalk } from 'chalk';
+import * as beeblink from './beeblink';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -636,3 +637,46 @@ export function getRegExpFromAFSP(afsp: string): RegExp {
     return new RegExp(r, 'i');
 }
 
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+function getBeebLinkConstantsByPrefix(prefix: string): Map<number, string> {
+    const map = new Map<number, string>();
+
+    for (const kv of Object.entries(beeblink)) {
+        if (kv[0].startsWith(prefix) && typeof (kv[1]) === 'number') {
+            // if there's already an entry for this value, don't overwrite it.
+            // This is a bodge to handle response sub-types, which have the same
+            // prefix as the main types, but (fortunately...) come later in the
+            // list.
+            //
+            // Should really do better...
+            if (!map.has(kv[1])) {
+                map.set(kv[1], kv[0]);
+            }
+        }
+    }
+
+    return map;
+}
+
+const gRequestTypeNames = getBeebLinkConstantsByPrefix('REQUEST_');
+const gResponseTypeNames = getBeebLinkConstantsByPrefix('RESPONSE_');
+
+function getRequestOrResponseTypeName(map: Map<number, string>, c: number): string {
+    let name = map.get(c);
+
+    if (name === undefined) {
+        name = '0x' + hex2(c);
+    }
+
+    return name;
+}
+
+export function getRequestTypeName(c: number): string {
+    return getRequestOrResponseTypeName(gRequestTypeNames, c);
+}
+
+export function getResponseTypeName(c: number): string {
+    return getRequestOrResponseTypeName(gResponseTypeNames, c);
+}

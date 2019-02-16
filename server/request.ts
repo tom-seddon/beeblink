@@ -21,12 +21,15 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-export class Request {
-    public readonly c: number;
-    public readonly p: Buffer;
+import { Message } from './message';
+import * as utils from './utils';
 
+export class Request extends Message {
     public constructor(c: number, p: Buffer) {
-        this.c = c;
-        this.p = p;
+        super(c, p);
+    }
+
+    public toString(): string {
+        return this.toStringHelper(utils.getRequestTypeName(this.c));
     }
 }

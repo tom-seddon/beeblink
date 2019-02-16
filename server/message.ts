@@ -21,15 +21,36 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-import { Message } from './message';
 import * as utils from './utils';
 
-export class Response extends Message {
-    public constructor(c: number, p: Buffer) {
-        super(c, p);
+export class Message {
+    public readonly c: number;
+    public readonly p: Buffer;
+
+    protected constructor(c: number, p: Buffer) {
+        this.c = c;
+        this.p = p;
     }
 
-    public toString(): string {
-        return this.toStringHelper(utils.getResponseTypeName(this.c));
+    protected toStringHelper(cName: string): string {
+        let s = 'c=' + cName + ' p=[';
+
+        let i = 0;
+        while (i < 5 && i < this.p.length) {
+            if (i > 0) {
+                s += ' ';
+            }
+
+            s += utils.hex2(this.p[i]);
+            ++i;
+        }
+
+        if (i < this.p.length) {
+            s += '...';
+        }
+
+        s += ']';
+
+        return s;
     }
 }
