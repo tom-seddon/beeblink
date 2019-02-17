@@ -960,18 +960,18 @@ class BeebLinkDevice {
         try {
             device.open(false);
         } catch (error) {
-            log.pn(d + ': failed to open device: ' + error);
+            process.stderr.write(d + ': failed to open device: ' + error + '\n');
             return undefined;
         }
 
         async function closeDevice(error: Error | undefined, what: string): Promise<undefined> {
-            log.p(d + ': ' + what);
+            process.stderr.write(d + ': ' + what);
 
             if (error !== undefined) {
-                log.p(': ' + error);
+                process.stderr.write(': ' + error);
             }
 
-            log.pn('');
+            process.stderr.write('\n');
 
             device.close();
 
@@ -1064,6 +1064,7 @@ class BeebLinkDevice {
     public readonly usbSerial: string;
     public readonly usbInEndpoint: usb.InEndpoint;
     public readonly usbOutEndpoint: usb.OutEndpoint;
+    public readonly description: string;
     public readonly log: utils.Log;
 
     private constructor(
@@ -1077,7 +1078,9 @@ class BeebLinkDevice {
         this.usbInEndpoint = usbInEndpoint;
         this.usbOutEndpoint = usbOutEndpoint;
 
-        this.log = new utils.Log('USB: ' + getDeviceDescription(this.usbDevice, this.usbSerial), process.stdout, logEnabled);
+        this.description = getDeviceDescription(this.usbDevice, this.usbSerial);
+
+        this.log = new utils.Log('USB: ' + this.description, process.stdout, logEnabled);
     }
 }
 
@@ -1101,7 +1104,7 @@ async function handleStallError(blDevice: BeebLinkDevice, endpoint: usb.Endpoint
             });
         });
 
-        blDevice.log.pn('device stall cleared.');
+        process.stderr.write(blDevice.description + ': stall cleared.\n');
 
         // treat this as a reset.
         return true;
@@ -1360,6 +1363,8 @@ async function main(options: ICommandLineOptions) {
                 return;
             }
 
+            process.stderr.write(blDevice.description + ': serving.\n');
+
             for (; ;) {
                 blDevice.log.pn('Waiting for request from BBC...');
                 const reader = new InEndpointReader(blDevice.usbInEndpoint);
@@ -1387,7 +1392,7 @@ async function main(options: ICommandLineOptions) {
 
                     request = new Request(c, p);
                 } catch (error) {
-                    blDevice.log.pn('got error while receiving: ' + error);
+                    process.stderr.write(blDevice.description + ': receive error: ' + error + '\n');
                     if (error.message === 'LIBUSB_TRANSFER_STALL') {
                         if (await handleStallError(blDevice, blDevice.usbInEndpoint)) {
                             continue;
@@ -1434,7 +1439,7 @@ async function main(options: ICommandLineOptions) {
                         });
                     });
                 } catch (error) {
-                    blDevice.log.pn('got error while sending: ' + error);
+                    process.stderr.write(blDevice.description + ': send error: ' + error + '\n');
                     if (error.message === 'LIBUSB_TRANSFER_STALL') {
                         if (await handleStallError(blDevice, blDevice.usbOutEndpoint)) {
                             continue;
@@ -1453,6 +1458,8 @@ async function main(options: ICommandLineOptions) {
                 }
             }
 
+            process.stderr.write(blDevice.description + ': closing device...\n');
+
             let closed = false;
             while (!closed) {
                 try {
@@ -1463,6 +1470,8 @@ async function main(options: ICommandLineOptions) {
                     await delayMS(1000);
                 }
             }
+
+            process.stderr.write(blDevice.description + ': device closed.\n');
         }
 
         usbLog.pn('initialisation done.');
