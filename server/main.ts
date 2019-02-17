@@ -937,28 +937,83 @@ async function isGit(folderPath: string): Promise<boolean> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-interface IBeebLinkDevice2 {
-    busNumber: number;
-    deviceAddress: number;
-    log: utils.Log;
-    usbSerial: string;
-    usbDevice: usb.Device;
+// return {
+//     busNumber: device.busNumber,
+//     deviceAddress: device.deviceAddress,
+//     log: new utils.Log('USB: ' + d, process.stdout, log.enabled),
+//     usbSerial,
+//     usbDevice: device,
+//     usbInEndpoint: inEndpoint,
+//     usbOutEndpoint: outEndpoint,
+//     usbRequestReceiver: new USBRequestReceiver(),
+//     //usbResponseSender: new USBResponseSender(),
+//     usbInEndpointIsPolling: false,
+//     worker: undefined,
+// };
 
-    usbInEndpoint: usb.InEndpoint;
-    usbInEndpointIsPolling: boolean;
+class BeebLinkDevice {
+    public readonly usbDevice: usb.Device;
+    public readonly usbSerial: string;
+    public readonly usbInEndpoint: usb.InEndpoint;
+    public readonly usbOutEndpoint: usb.OutEndpoint;
+    public readonly log: utils.Log;
+    public readonly usbRequestReceiver = new USBRequestReceiver();
 
-    usbOutEndpoint: usb.OutEndpoint;
+    public worker: Promise<void> | undefined;
+    public transferIds: number[] = [];
+    public usbInEndpointIsPolling = false;
+    public usbClose = false;
 
-    usbRequestReceiver: USBRequestReceiver;
-    usbResponseSender: USBResponseSender;
+    public constructor(
+        usbDevice: usb.Device,
+        usbSerial: string,
+        usbInEndpoint: usb.InEndpoint,
+        usbOutEndpoint: usb.OutEndpoint,
+        logEnabled: boolean) {
+        this.usbDevice = usbDevice;
+        this.usbSerial = usbSerial;
+        this.usbInEndpoint = usbInEndpoint;
+        this.usbOutEndpoint = usbOutEndpoint;
 
-    worker: Promise<void> | undefined;
+        this.log = new utils.Log('USB: ' + getDeviceDescription(this.usbDevice, this.usbSerial), process.stdout, logEnabled);
+    }
+
 }
 
+// interface IBeebLinkDevice2 {
+//     busNumber: number;
+//     deviceAddress: number;
+//     log: utils.Log;
+//     usbSerial: string;
+//     usbDevice: usb.Device;
+
+//     usbInEndpoint: usb.InEndpoint;
+//     usbInEndpointIsPolling: boolean;
+
+//     usbOutEndpoint: usb.OutEndpoint;
+
+//     usbRequestReceiver: USBRequestReceiver;
+//     //usbResponseSender: USBResponseSender;
+
+//     worker: Promise<void> | undefined;
+// }
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function initialiseBeebLinkDevice2(device: usb.Device, avrVerbose: boolean, log: utils.Log): Promise<IBeebLinkDevice2 | undefined> {
+async function clearEndpointHalt(endpoint: usb.Endpoint): Promise<void> {
+    await new Promise((resolve, reject) => {
+        (endpoint as any).clearHalt((error: any) => {
+            if (error !== undefined && error !== null) {
+                reject(error);
+            } else {
+                resolve();
+            }
+        });
+    });
+}
+
+async function initialiseBeebLinkDevice2(device: usb.Device, avrVerbose: boolean, log: utils.Log): Promise<BeebLinkDevice | undefined> {
     if (!isBeebLinkDevice(device)) {
         return undefined;
     }
@@ -1031,6 +1086,10 @@ async function initialiseBeebLinkDevice2(device: usb.Device, avrVerbose: boolean
         return await closeDevice(undefined, 'failed to find 1 input endpoint and 1 output endpoint');
     }
 
+    log.pn(d + ': clearing endpoint stalls...');
+    await clearEndpointHalt(inEndpoint);
+    await clearEndpointHalt(outEndpoint);
+
     log.pn(d + ': checking protocol version...');
     try {
         const buffer = await deviceControlTransfer(device,
@@ -1061,19 +1120,7 @@ async function initialiseBeebLinkDevice2(device: usb.Device, avrVerbose: boolean
         return await closeDevice(error, 'failed to set AVR verbose');
     }
 
-    return {
-        busNumber: device.busNumber,
-        deviceAddress: device.deviceAddress,
-        log: new utils.Log('USB: ' + d, process.stdout, log.enabled),
-        usbSerial,
-        usbDevice: device,
-        usbInEndpoint: inEndpoint,
-        usbOutEndpoint: outEndpoint,
-        usbRequestReceiver: new USBRequestReceiver(),
-        usbResponseSender: new USBResponseSender(),
-        usbInEndpointIsPolling: false,
-        worker: undefined,
-    };
+    return new BeebLinkDevice(device, usbSerial, inEndpoint, outEndpoint, log.enabled);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -1314,10 +1361,11 @@ async function main(options: ICommandLineOptions) {
     }
 
     if (NEW_USB) {
-        const beebLinkDevices: IBeebLinkDevice2[] = [];
+        let nextTransferId = 1;
+        const beebLinkDevices: BeebLinkDevice[] = [];
         const serversByUSBSerial = new Map<string, Server>();
 
-        async function handleOneRequest(blDevice: IBeebLinkDevice2, request: Request): Promise<Response> {
+        async function handleOneRequest(blDevice: BeebLinkDevice, request: Request): Promise<Response> {
             let server = serversByUSBSerial.get(blDevice.usbSerial);
             if (server === undefined) {
                 const connectionId = nextConnectionId++;
@@ -1331,7 +1379,45 @@ async function main(options: ICommandLineOptions) {
             return response;
         }
 
-        async function handleRequests(blDevice: IBeebLinkDevice2): Promise<void> {
+        function maybeClose(blDevice: BeebLinkDevice): void {
+            if (blDevice.usbClose) {
+                if (blDevice.transferIds.length === 0 && !blDevice.usbInEndpointIsPolling) {
+                    blDevice.log.pn('closing device');
+                    blDevice.usbDevice.close();
+
+                    const blDeviceIdx = beebLinkDevices.indexOf(blDevice);
+                    assert.ok(blDeviceIdx >= 0);
+                    beebLinkDevices.splice(blDeviceIdx, 1);
+
+                    process.nextTick(async () => {
+                        await updateDevices();
+                    });
+                }
+            }
+        }
+
+        function handleError(blDevice: BeebLinkDevice, dir: string, error: any): void {
+            blDevice.log.pn('got ' + dir + ' endpoint error: ' + error);
+
+            if (blDevice.usbClose) {
+                blDevice.log.pn('(device is already being closed)');
+            } else {
+                blDevice.log.pn('(will close this device)');
+                blDevice.usbClose = true;
+
+                if (blDevice.usbInEndpointIsPolling) {
+                    blDevice.usbInEndpoint.stopPoll(() => {
+                        blDevice.log.pn('in endpoint polling now stopped.');
+                        blDevice.usbInEndpointIsPolling = false;
+                        maybeClose(blDevice);
+                    });
+                }
+
+                maybeClose(blDevice);
+            }
+        }
+
+        async function handleRequests(blDevice: BeebLinkDevice): Promise<void> {
             for (; ;) {
                 const request = blDevice.usbRequestReceiver.getNextRequest();
                 if (request === undefined) {
@@ -1342,14 +1428,27 @@ async function main(options: ICommandLineOptions) {
 
                 const response = await handleOneRequest(blDevice, request);
 
+                const transferId = nextTransferId++;
+                blDevice.transferIds.push(transferId);
+
                 const responseData = getResponseData(response);
-                blDevice.log.pn('sending response: ' + response);
+                blDevice.log.pn('sending response (transferId=' + transferId + '): ' + response);
+
                 blDevice.usbOutEndpoint.transfer(responseData, (error: string | undefined): void => {
+                    const transferIdx = blDevice.transferIds.indexOf(transferId);
+                    assert.ok(transferIdx >= 0);
+                    blDevice.transferIds.splice(transferIdx, 1);
+
+                    blDevice.log.p('got transfer (transferId=' + transferId + ') callback ');
+
                     if (error !== undefined && error !== null) {
-                        blDevice.log.pn('got transfer callback error: ' + error);
+                        blDevice.log.pn('error: ' + error);
+                        handleError(blDevice, 'out', error);
                     } else {
-                        blDevice.log.pn('got transfer callback success');
+                        blDevice.log.pn('success');
                     }
+
+                    maybeClose(blDevice);
                 });
             }
 
@@ -1373,19 +1472,8 @@ async function main(options: ICommandLineOptions) {
                 }
             });
 
-            function handleError(dir: string, error: any): void {
-                blDevice!.log.pn('got ' + dir + ' endpoint error: ' + error);
-
-                if (blDevice!.usbInEndpointIsPolling) {
-                    blDevice!.usbInEndpointIsPolling = false;
-                    blDevice!.usbInEndpoint.stopPoll((): void => {
-                        blDevice!.log.pn('stopPoll callback called.');
-                    });
-                }
-            }
-
             blDevice.usbInEndpoint.on('error', (error: any): void => {
-                handleError('in', error);
+                handleError(blDevice, 'in', error);
             });
 
             blDevice.usbInEndpoint.on('end', (): void => {
@@ -1393,7 +1481,7 @@ async function main(options: ICommandLineOptions) {
             });
 
             blDevice.usbOutEndpoint.on('error', (error: any): void => {
-                handleError('out', error);
+                handleError(blDevice, 'out', error);
             });
 
             blDevice.usbOutEndpoint.on('end', (): void => {
@@ -1402,12 +1490,34 @@ async function main(options: ICommandLineOptions) {
 
             blDevice.usbInEndpoint.startPoll();
             blDevice.usbInEndpointIsPolling = true;
+
+            beebLinkDevices.push(blDevice);
         }
 
-        // Add initial device list.
-        for (const usbDevice of usb.getDeviceList()) {
-            await addBeebLinkDevice(usbDevice);
+        async function updateDevices() {
+            const newUSBDevices: usb.Device[] = [];
+            // Add initial device list.
+            for (const usbDevice of usb.getDeviceList()) {
+                let found = false;
+
+                for (const blDevice of beebLinkDevices) {
+                    if (blDevice.usbDevice.busNumber === usbDevice.busNumber && blDevice.usbDevice.deviceAddress === usbDevice.deviceAddress) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    newUSBDevices.push(usbDevice);
+                }
+            }
+
+            for (const newUSBDevice of newUSBDevices) {
+                await addBeebLinkDevice(newUSBDevice);
+            }
         }
+
+        await updateDevices();
 
         usbLog.pn('initialisation done.');
     } else {
