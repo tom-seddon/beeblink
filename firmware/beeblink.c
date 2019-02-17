@@ -791,7 +791,9 @@ static void StartupBanner(void) {
 //////////////////////////////////////////////////////////////////////////
 
 int main(void) {
-    MCUSR&=~(1<<WDRF);
+    uint8_t mcusr=MCUSR;
+    MCUSR=0;
+    
     wdt_disable();
 
     clock_prescale_set(clock_div_1);
@@ -817,6 +819,33 @@ int main(void) {
     CB2_PORT|=CB2_MASK;         /* CB2 pull-up resistor */
 
     StartupBanner();
+
+    SERIAL_PSTR("MCUSR: ");
+    serial_x8(mcusr);
+    if(mcusr!=0) {
+        SERIAL_PSTR(" -");
+
+        /* if(mcusr&1<<USBRF) { */
+        /*     SERIAL_PSTR(" USBRF"); */
+        /* } */
+        
+        if(mcusr&1<<WDRF) {
+            SERIAL_PSTR(" WDRF");
+        }
+
+        if(mcusr&1<<BORF) {
+            SERIAL_PSTR(" BORF");
+        }
+
+        if(mcusr&1<<EXTRF) {
+            SERIAL_PSTR(" EXTRF");
+        }
+
+        if(mcusr&1<<PORF) {
+            SERIAL_PSTR(" PORF");
+        }
+    }
+    serial_ch('\n');
 
     SERIAL_PSTR(".. Wait for USB config\n");
 
