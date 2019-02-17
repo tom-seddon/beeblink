@@ -626,6 +626,8 @@ static void NOINLINE MainLoop(void) {
         if(err==Error_Reset) {
             SERIAL_PSTR("!! BBC requested a reset.\n");
         } else {
+            /* this should never happen - the only error possible is
+             * Error_Reset. */
             serial_error(err,PSTR("receive header from beeb"));
             StallDeviceToHost();
         }
@@ -680,6 +682,10 @@ static void NOINLINE MainLoop(void) {
     if(err!=Error_None) {
         serial_error(err,PSTR("receive header from host"));
         StallHostToDevice();
+
+        /* Got to send something in response! - and if anything goes
+         * wrong, tough, the thing is clearly borked. */
+        (void)SendErrorToBeeb(255,PSTR("USB stall"));
         return;
     }
 
