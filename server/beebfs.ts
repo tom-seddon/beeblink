@@ -2354,17 +2354,16 @@ export class BeebFS {
 
         const files = await this.getBeebFilesForAFSP(new BeebFQN(this.volume, this.drive, this.dir, '*'));
 
-        let fileIdx = 0;
+        let fileIdx = newPtr;
 
-        while (numBytes > 0 && newPtr < files.length) {
+        while (numBytes > 0 && fileIdx < files.length) {
             builder.writePascalString(files[fileIdx].name.name);
 
             --numBytes;
-            ++newPtr;
             ++fileIdx;
         }
 
-        return new OSGBPBResult(numBytes > 0, numBytes, newPtr, builder.createBuffer());
+        return new OSGBPBResult(numBytes > 0, numBytes, fileIdx, builder.createBuffer());
     }
 
     /////////////////////////////////////////////////////////////////////////
