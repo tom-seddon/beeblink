@@ -1928,10 +1928,11 @@ export class BeebFS {
             await this.mustNotExist(hostPath);
         }
 
-        await this.writeMetadata(hostPath, fqn, load, exec, DEFAULT_ATTR);
+        const attr = DEFAULT_ATTR;
+        await this.writeMetadata(hostPath, fqn, load, exec, attr);
         await this.writeBeebFile(hostPath, data);
 
-        return new OSFILEResult(1, undefined, undefined, undefined);
+        return new OSFILEResult(1, this.createOSFILEBlock(load, exec, data.length, attr), undefined, undefined);
     }
 
     /////////////////////////////////////////////////////////////////////////
