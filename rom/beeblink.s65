@@ -69,6 +69,7 @@ osbput=$ffd4
 
 cliv=$208
 filev=$212
+fscv=$21e
                 
 ; Tube transfer reasons
 
@@ -2418,8 +2419,8 @@ ignore_disc_text:
 ; Initialise BLFS.
 ;
 init_blfs: .proc
-                lda #$77        ;close *SPOOL/*EXEC handles (AUG 141)
-                jsr osbyte
+                lda #6
+                jsr call_fsc
                 
                 lda #$A8        ;get extended vector table address
                                 ;(AUG 181)
@@ -2464,6 +2465,9 @@ loop:
                 jsr osbyte ;vectors claimed (AUG p167, p324)
 
                 rts
+
+call_fsc:
+                jmp (fscv)
                 .pend
 
 ;-------------------------------------------------------------------------
