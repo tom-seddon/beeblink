@@ -502,7 +502,7 @@ p1_syntax:
 pn_syntax:
                 .text "<T> <start> <end>",255
 blconfig_syntax:
-                .text "([V*D][+-]...)",255
+                .text "([",von_char,act_as_dfs_char,trap_disc_char,ignore_disc_char,"][+-]...)",255
 build_syntax:
                 .text "<fsp>",255
 
