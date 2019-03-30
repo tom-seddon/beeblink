@@ -543,16 +543,27 @@ svc: .proc
                 beq svc_fs_init
                 cmp #$25
                 beq svc_get_m128_fs_info
+                cmp #$26
+                beq svc_shut
 done:
                 ldx $f4
                 rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+;
+;
+svc_shut: .proc
+                pha
+                
+                jsr init_blfs
 
-star:
-                jmp svc_star
+                ldy #0          ;close all open files
+                jsr blfs_osfind.close
 
-help:
-                jmp svc_help
-
+                pla                
+                jmp svc.done
                 .pend
 
 ;-------------------------------------------------------------------------
@@ -5488,4 +5499,3 @@ done:
                 rts
                 
                 .pend
-                
