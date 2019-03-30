@@ -198,13 +198,18 @@ export class BeebFile {
     public readonly size: number;
     public readonly attr: number;
 
-    public constructor(hostPath: string, name: BeebFQN, load: number, exec: number, size: number, attr: number) {
+    // could perhaps be part of the attr field, but I'm a bit reluctant to
+    // fiddle around with that.
+    public readonly text: boolean;
+
+    public constructor(hostPath: string, name: BeebFQN, load: number, exec: number, size: number, attr: number, text: boolean) {
         this.hostPath = hostPath;
         this.name = name;
         this.load = load;
         this.exec = exec;
         this.size = size;
         this.attr = attr;
+        this.text = text;
     }
 
     public isLocked() {
@@ -890,12 +895,14 @@ export class BeebFS {
         let load;
         let exec;
         let attr;
+        let text;
 
         if (infBuffer.length === 0) {
             name = hostName;
             load = DEFAULT_LOAD;
             exec = DEFAULT_EXEC;
             attr = DEFAULT_ATTR;
+            text = name[0] === '!';
         } else {
             const infString = BeebFS.getFirstLine(infBuffer);
 
@@ -937,6 +944,8 @@ export class BeebFS {
 
                 ++i;
             }
+
+            text = false;
         }
 
         if (name.length < 2 || name[1] !== '.') {
@@ -950,7 +959,7 @@ export class BeebFS {
             return undefined;
         }
 
-        return new BeebFile(hostPath, new BeebFQN(volume, drive, dir, name), load, exec, hostStat.size, attr);
+        return new BeebFile(hostPath, new BeebFQN(volume, drive, dir, name), load, exec, hostStat.size, attr, text);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1470,6 +1479,10 @@ export class BeebFS {
         let contentsBuffer: Buffer | undefined;
         const file = await this.tryGetBeebFile(fqn);
         if (file !== undefined) {
+            this.log.pn('OSFIND: mode=$' + utils.hex2(mode) + ' nameString=``' + nameString + '\'\'');
+            this.log.pn('        hostPath=``' + file.hostPath + '\'\'');
+            this.log.pn('        text=' + file.text);
+
             // File exists.
             hostPath = file.hostPath;
 
@@ -1486,7 +1499,19 @@ export class BeebFS {
                 }
             }
 
-            contentsBuffer = await this.readFile(file);
+            if (file.text) {
+                // Not efficient, but I don't think it matters...
+                const lines = await this.readTextFile(file);
+
+                let linesString = '';
+                for (const line of lines) {
+                    linesString += line + '\x0d';
+                }
+
+                contentsBuffer = Buffer.from(linesString, 'binary');
+            } else {
+                contentsBuffer = await this.readFile(file);
+            }
         } else {
             // File doesn't exist.
             if (read) {
@@ -1722,7 +1747,7 @@ export class BeebFS {
         const newHostPath = this.getHostPath(newFQN);
         await this.mustNotExist(newHostPath);
 
-        const newFile = new BeebFile(newHostPath, newFQN, oldFile.load, oldFile.exec, oldFile.size, oldFile.attr);
+        const newFile = new BeebFile(newHostPath, newFQN, oldFile.load, oldFile.exec, oldFile.size, oldFile.attr, false);
 
         await this.writeMetadata(newFile.hostPath, newFile.name, newFile.load, newFile.exec, newFile.attr);
 

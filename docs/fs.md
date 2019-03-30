@@ -132,12 +132,28 @@ with the same name, and a `.inf` extension.
 
 For example: `$.!BOOT` and `$.!BOOT.inf`.
 
-With a 0-byte .inf file, the name seen on the BBC will be exactly the
-name it has on the PC. Its load and execution addresses will be
-&FFFFFFFF (see the `Won't` error below), and it will be unlocked.
+The following rules apply to files with a 0-byte .inf file:
+
+* the name seen on the BBC will be exactly the name it has on the PC
+* load and execution addresses wil both be &FFFFFFFF (see `Won't`
+  below)
+* the file will be unlocked
+* if the directory name is `!`, it is treated as a PC-style text file:
+  when opened for random access, double-/single-byte newlines will be
+  converted to ASCII 13, and an ASCII 13 will be added to the end if
+  necessary. This affects data read from `OSBGET`/`OSGBPB`, and the
+  value of `EXT#`. `OSFILE` access is unaffected.
+
+  (This is a hack to make it easy to use PC-style text files with
+  `*EXEC`, e.g., after downloading from the web, or saving copied and
+  pasted data, and it is no cleverer than necessary! Correct results
+  in general are far from guaranteed, and there is deliberately no
+  other way to have a file interpreted this way. This may improve over
+  time)
 
 The .inf file will be updated automatically if any of its properties
-change.
+change. This will affect the interpretation of files in the `!`
+directory.
 
 ## Accessing BBC files on the server
 
