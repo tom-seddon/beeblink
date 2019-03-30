@@ -1625,6 +1625,8 @@ export class BeebFS {
 
         files = files.filter((file) => dirRegExp.exec(file.name.dir) !== null && nameRegExp.exec(file.name.name) !== null);
 
+        this.log.pn('    matched: ' + files.length + ' file(s)');
+
         return files;
     }
 
@@ -1887,7 +1889,15 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILELoad(fqn: BeebFQN, load: number, exec: number): Promise<OSFILEResult> {
-        const file = await this.getBeebFile(fqn);
+        const files = await this.getBeebFilesForAFSP(fqn);
+        if (files.length === 0) {
+            BeebFS.throwError(ErrorCode.FileNotFound);
+        } else if (files.length > 1) {
+            throw new BeebError(ErrorCode.BadName, 'Ambiguous name');
+        }
+
+        const file = files[0];
+
         this.mustNotBeOpen(file);
 
         const data = await this.readFile(file);

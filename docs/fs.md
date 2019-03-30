@@ -200,6 +200,17 @@ files on other volumes are treated the same as files on the current
 volume. Aside from the inconvenient, verbose names there should be
 nothing particular to bear in mind when accessing them.
 
+## Wildcard OSFILE names for `LOAD`, `*LOAD`, etc.
+
+OSFILE A=255 supports wildcard names, when the wildcards only match
+one file. This can save typing when using BASIC's `LOAD` or the
+`*LOAD` command.
+
+An `Ambiguous name` error will be given if multiple files match.
+
+Wildcards are not supported for other OSFILE commands; this is
+designed to be purely for convenience when using `LOAD`/`*LOAD`.
+
 # Command reference
 
 ## Commands available in any filing system
@@ -421,6 +432,12 @@ present).
 
 Most of the errors you'll see when using the BLFS will be the usual
 DFS ones, but there are some non-standard ones too.
+
+## `Ambiguous name` (same code as `Bad name`)
+
+A wildcard name was used to load a file, and it matches multiple
+files. To fix this, be more precise - e.g., by supplying the full
+name.
 
 ## `Ambiguous volume` (same code as `Bad name`)
 
