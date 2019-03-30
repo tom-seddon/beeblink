@@ -184,42 +184,6 @@ server_string_buffer_size=20
                 .cerror server_string_buffer_size>64,"string packet has to fit on the 6502 stack"
 
 ;-------------------------------------------------------------------------
-;
-; General conditional branch.
-;
-
-do_branch .macro branch,opposite_branch,target
-                .if *-\target<-128||*-\target>127
-
-                \opposite_branch +
-                jmp \target
-+
-                
-                .else
-
-                \branch \target
-                
-                .endif
-                
-                .endm
-                
-lbne .macro target
-                .do_branch bne,beq,\target
-                .endm
-
-lbeq .macro target
-                .do_branch beq,bne,\target
-                .endm
-
-lbcc .macro target
-                .do_branch bcc,bcs,\target
-                .endm
-
-lbcs .macro target
-                .do_branch bcs,bcc,\target
-                .endm
-
-;-------------------------------------------------------------------------
 ; 
 ; Load word from memory and push onto stack.
 ;
@@ -572,9 +536,9 @@ svc: .proc
                 cmp #$03
                 beq svc_boot
                 cmp #$04
-                beq star
+                beq svc_star
                 cmp #$09
-                beq help
+                beq svc_help
                 cmp #$12
                 beq svc_fs_init
                 cmp #$25
@@ -702,7 +666,7 @@ svc_boot: .proc
                 beq boot_fs     ;taken if no key pressed
                 
                 cpx #boot_key
-                .lbne pass_on   ;taken if something other than the
+                bne pass_on     ;taken if something other than the
                                 ;special key was held down
 
 boot_fs:
@@ -3659,7 +3623,7 @@ recv_file_data_host_pagewise: .proc
                 ; stragglers.
 
                 jsr fix_up_packet_size_for_pagewise_transfer
-                .lbcc last_page
+                bcc last_page
 
 num_unrolls=4
                 .cerror 256%num_unrolls!=0,"no"
@@ -3683,16 +3647,16 @@ one_page_loop:
 
                 .next
                 
-                .lbne one_page_loop
+                bne one_page_loop
 
                 inc scratch_load+1
                 
                 inc scratch_payload_size+1
-                .lbne one_page_loop
+                bne one_page_loop
                 inc scratch_payload_size+2
-                .lbne one_page_loop
+                bne one_page_loop
                 inc scratch_payload_size+3
-                .lbne one_page_loop
+                bne one_page_loop
 
 last_page:
                 ldx scratch_payload_size+0
@@ -3752,7 +3716,7 @@ recv_file_data_parasite_pagewise: .proc
                 jsr claim_tube
 
                 jsr fix_up_packet_size_for_pagewise_transfer
-                .lbcc last_page
+                bcc last_page
 
 first_pages:
                 ldx #<scratch_load
@@ -3800,11 +3764,11 @@ one_page_loop:
 +
 
                 inc scratch_payload_size+1
-                .lbne first_pages
+                bne first_pages
                 inc scratch_payload_size+2
-                .lbne first_pages
+                bne first_pages
                 inc scratch_payload_size+3
-                .lbne first_pages
+                bne first_pages
 
 last_page:
                 lda scratch_payload_size+0
@@ -3929,7 +3893,7 @@ send_file_data: .proc
 +
                 ldx #scratch_load
                 jsr is_parasite_address
-                .lbcc send_file_data_host
+                bcc send_file_data_host
                 jmp send_file_data_parasite
                 .pend
 
@@ -3941,7 +3905,7 @@ send_file_data: .proc
 send_file_data_host_pagewise: .proc
 
                 jsr fix_up_packet_size_for_pagewise_transfer
-                .lbcc last_page
+                bcc last_page
 
 num_unrolls=2
                 .cerror 256%num_unrolls!=0,"no"
@@ -3970,9 +3934,9 @@ one_page_loop:
                 inc scratch_load+1
 
                 inc scratch_payload_size+1
-                .lbne one_page_loop
+                bne one_page_loop
                 inc scratch_payload_size+2
-                .lbne one_page_loop
+                bne one_page_loop
                 inc scratch_payload_size+2
 
 last_page:
@@ -4035,7 +3999,7 @@ send_file_data_parasite_pairwise: .proc
                 jsr claim_tube
 
                 jsr fix_up_packet_size_for_pagewise_transfer
-                .lbcc last_page
+                bcc last_page
 
                 ; Initialise pairwise transfer.
                 ldx #<scratch_load
@@ -4101,11 +4065,11 @@ one_page_loop:
 +
 
                 inc scratch_payload_size+1
-                .lbne one_page
+                bne one_page
                 inc scratch_payload_size+2
-                .lbne one_page
+                bne one_page
                 inc scratch_payload_size+3
-                .lbne one_page
+                bne one_page
 
 last_page:
                 lda scratch_payload_size+0
@@ -4209,7 +4173,7 @@ send_file_data_parasite_pagewise: .proc
                 jsr claim_tube
 
                 jsr fix_up_packet_size_for_pagewise_transfer
-                .lbcc last_page
+                bcc last_page
 
 first_pages:
                 ldx #<scratch_load
@@ -4242,7 +4206,7 @@ one_page_loop:
 
                 .next
 
-                .lbne one_page_loop
+                bne one_page_loop
                 ;bne one_page_loop ;+19
 
                 inc scratch_load+1
@@ -4253,11 +4217,11 @@ one_page_loop:
 +
 
                 inc scratch_payload_size+1
-                .lbne first_pages
+                bne first_pages
                 inc scratch_payload_size+2
-                .lbne first_pages
+                bne first_pages
                 inc scratch_payload_size+3
-                .lbne first_pages
+                bne first_pages
 
 last_page:
                 lda scratch_payload_size+0
