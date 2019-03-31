@@ -1,7 +1,6 @@
 DEST:=.build
 TASS:=64tass --m65xx --nostart -Wall -Wno-implied-reg -C --line-numbers --long-branch
 GIT_VER:=$(shell git log -1 '--format=%cd-%h' '--date=format:%Y%m%d-%H%M%S')
-
 ifeq ($(shell git status --porcelain),)
 VER:=$(GIT_VER)
 else
@@ -13,11 +12,14 @@ else
 VER:=$(GIT_VER)*
 endif
 
+COMMIT:=$(shell git log -1 '--format=%H')
+BUILD_TIME:=$(shell date '+%Y-%m-%d %H:%M:%S')
+
 .PHONY:build
 build:
 	mkdir -p $(DEST)
 	python ../tools/make_constants.py -o $(DEST)/beeblink_constants.s65 ../server/beeblink.ts 6502
-	$(TASS) beeblink.s65 -L$(DEST)/beeblink.lst -o$(DEST)/beeblink.rom "-DVERSION=\"$(VER)\"" "-DCOMMIT=\"$(COMMIT)\""
+	$(TASS) beeblink.s65 -L$(DEST)/beeblink.lst -o$(DEST)/beeblink.rom "-DVERSION=\"$(VER)\"" "-DBUILD_TIME=\"$(BUILD_TIME)\"" "-DCOMMIT=\"$(COMMIT)\""
 
 # (Hack, for my benefit, on my computer - make a second copy of the
 # BeebLink ROM for my BBC B that has some extra stuff in it.)

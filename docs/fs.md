@@ -253,6 +253,13 @@ The server must be able to find the ROM file - see
 
 This is mainly for my benefit when working on the ROM code.
 
+### `BLVERSION`
+
+Shows BeebLink ROM version, Git commit and build date/time.
+
+The BeebLink ROM version has a `*` suffix if the ROM was built with a
+modified working copy rather than the exact contents of that commit.
+
 ### `BUILD <fsp>`
 
 Create a text file line by line. Designed for creating `!BOOT`, but
@@ -391,6 +398,19 @@ The volume browser isn't recommended in 20-column modes.
 ### `WDUMP <fsp>`
 
 Produce wide hex dump of file, for use in 80 column modes.
+
+### `WRITE <fsp> <drive> <type> ###
+
+**Overwrites I/O processor memory from OSHWM onwards!**
+
+Write a DFS disk image to a formatted DFS disk.
+
+`<drive>` is the drive to write to.
+
+`<type>` is the type of image:
+
+* `S`: .ssd
+* `D`: .dsd, track order
 
 # `BLCONFIG` options
 

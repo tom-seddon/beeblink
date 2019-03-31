@@ -27,6 +27,7 @@ import * as beebfs from './beebfs';
 import * as path from 'path';
 import * as volumebrowser from './volumebrowser';
 import * as speedtest from './speedtest';
+import * as dfsimage from './dfsimage';
 import * as crypto from 'crypto';
 import { BNL } from './utils';
 import { Chalk } from 'chalk';
@@ -140,11 +141,14 @@ export class Server {
     private volumeBrowser: volumebrowser.Browser | undefined;
     private speedTest: speedtest.SpeedTest | undefined;
     private dumpPackets: boolean;
+    private imageParts: Buffer[] | undefined;
+    private imagePartIdx: number;
 
     public constructor(romPath: string, bfs: beebfs.BeebFS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
         this.romPath = romPath;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
+        this.imagePartIdx = 0;
         this.commands = [
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
             new Command('DELETE', '<fsp>', this.deleteCommand),
@@ -166,6 +170,7 @@ export class Server {
             new Command('VOL', '(<avsp>)', this.volCommand),
             new Command('VOLS', '(<avsp>)', this.volsCommand),
             new Command('WDUMP', '<fsp>', this.wdumpCommand),
+            new Command('WRITE', '<fsp> <drive> <type>', this.writeCommand),
         ];
 
         this.handlers = [];
@@ -192,6 +197,7 @@ export class Server {
         this.handlers[beeblink.REQUEST_BOOT_OPTION] = new Handler('GET_BOOT_OPTION', this.handleGetBootOption);
         this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('REQUEST_VOLUME_BROWSER', this.handleVolumeBrowser);
         this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('REQUEST_SPEED_TEST', this.handleSpeedTest);
+        this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('REQUEST_NEXT_DISK_IMAGE_PART', this.handleNextDiskImagePart);
 
         this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stderr, logPrefix !== undefined);
         this.log.colours = colours;
@@ -844,6 +850,15 @@ export class Server {
         }
     }
 
+    private async handleNextDiskImagePart(handler: Handler, p: Buffer): Promise<Response> {
+        if (this.imageParts === undefined || this.imagePartIdx >= this.imageParts.length) {
+            this.imageParts = undefined;
+            return newResponse(beeblink.RESPONSE_NO);
+        } else {
+            return newResponse(beeblink.RESPONSE_DATA, this.imageParts[this.imagePartIdx++]);
+        }
+    }
+
     private internalError(text: string): never {
         throw new beebfs.BeebError(beebfs.ErrorCode.DiscFault, text);
     }
@@ -1290,5 +1305,47 @@ export class Server {
         }
 
         return this.textResponse('Volume: ' + volume.name + BNL + 'Path: ' + volume.path + BNL);
+    }
+
+    private async writeCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+        if (commandLine.parts.length < 4) {
+            throw new CommandSyntaxError();
+        }
+
+        this.imageParts = undefined;
+        this.imagePartIdx = 0;
+
+        const fileName = commandLine.parts[1];
+        const driveString = commandLine.parts[2];
+        const type = commandLine.parts[3].toLowerCase();
+
+        const data = await this.bfs.readFile(await this.bfs.getBeebFile(await this.bfs.parseFQN(commandLine.parts[1])));
+
+        if (driveString.length !== 1 || !utils.isdigit(driveString)) {
+            throw new CommandSyntaxError();
+        }
+        const drive: number = +driveString;
+
+        if (type === 'a') {
+            // there's only a 3-bit field for ADFS drives.
+            if (drive < 0 || drive > 7) {
+                beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDrive);
+            }
+
+            throw new beebfs.BeebError(beebfs.ErrorCode.DiscFault, 'ADFS = TODO');
+        } else if (type === 's') {
+            this.imageParts = dfsimage.getSSDParts(data, drive, this.log);
+            return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_WRITE_DFS_IMAGE);
+        } else if (type === 'd') {
+            if (drive !== 0 && drive !== 1) {
+                beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDrive);
+            }
+
+            this.imageParts = dfsimage.getDSDParts(data, drive, this.log);
+
+            return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_WRITE_DFS_IMAGE);
+        } else {
+            throw new CommandSyntaxError();
+        }
     }
 }

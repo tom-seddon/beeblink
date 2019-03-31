@@ -467,7 +467,9 @@ rom_name:
                 .text "(VON)"
                 .endif
 rom_version:
-                .text 0,VERSION
+                .text 0
+rom_version_text:
+                .text VERSION
 rom_copyright:
                 .text 0,"(C)",0
 
@@ -482,6 +484,7 @@ utils_commands:
                 .command "BLCONFIG",blconfig_syntax-syntaxes,blconfig_cmd
                 .command "BLFS",0,init_blfs
                 .command "BLSELFUPDATE",0,selfupdate_cmd
+                .command "BLVERSION",0,version_cmd
                 .command "BUILD",build_syntax-syntaxes,build_cmd
                 .byte 255
 
@@ -681,7 +684,9 @@ svc_boot: .proc
                                 ;special key was held down
 
 boot_fs:
-                jsr print_rom_name
+                ldx #<rom_name
+                ldy #rom_version-rom_name
+                jsr print_rom_header_text
 
                 jsr is_sideways_ram
                 bcc +
@@ -1269,28 +1274,28 @@ ok:
 
 ;-------------------------------------------------------------------------
 ;
-; Print ROM details.
+; Print text from the ROM header. 0 bytes are printed as spaces.
 ;
+; X = offset from start of ROM
+; Y = number of chars to print
 
-print_rom_name: .proc
-                ldy #rom_version-rom_name
-print:
-                ldx #0
+print_rom_header_text: .proc
 loop:
-                lda rom_name,x
+                lda $8000,x
                 jsr print_rom_name_char
                 inx
                 dey
                 bne loop
-done:
                 rts
                 .pend
 
 print_rom_banner: .proc
                 jsr osnewl
+no_newline:
+                ldx #<rom_name
                 ldy #rom_copyright-rom_name
-                jsr print_rom_name.print
-                jsr osnewl
+                jsr print_rom_header_text
+                jmp osnewl
                 .pend
 
 ;-------------------------------------------------------------------------
@@ -3355,6 +3360,8 @@ fsc_lib_run: .proc
                 .pend
 
 ;-------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------
 ;
 ; Submits some kind of * command to the server. Sends packet plus
 ; CR-terminated string to the server, waits for response, and fields
@@ -3414,8 +3421,7 @@ send_done:
                 cmp #RESPONSE_SPECIAL
                 beq special
 
-bad_response:
-                .brk_error 255,"Bad response",0
+                bne bad_response_brk
 
 yes:
                 jsr discard_remaining_payload
@@ -3430,7 +3436,7 @@ run:
                 ldy #0
 recv_run_metadata_loop:
                 jsr recv_payload_byte
-                bcc bad_response
+                bcc bad_response_brk
                 sta scratch_run_metadata,y ;abs,Y :(
                 iny
                 cpy #9
@@ -3466,7 +3472,7 @@ exec_parasite:
 
 special:
                 jsr recv_payload_byte
-                bcc bad_response
+                bcc bad_response_brk
 
                 cmp #len(special_routines)
                 bcs not_supported
@@ -3484,6 +3490,7 @@ special_routines=[
                 volumes_browser_special,
                 enable_speed_test?speed_test_special:not_supported,
                 enable_speed_test?speed_test_special.sure:not_supported,
+                write_dfs_image_special,
                 ]
                 
 special_routines_l:
@@ -4470,6 +4477,14 @@ pop_stack_loop:
                 
                 rts
 
+                .pend
+
+;-------------------------------------------------------------------------
+;
+;
+;
+bad_response_brk: .proc
+                .brk_error 255,"Bad response",0
                 .pend
 
 ;-------------------------------------------------------------------------
@@ -5496,6 +5511,227 @@ done:
 
                 jsr osnewl
 
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+;
+;
+version_cmd: .proc
+                jsr print_rom_banner.no_newline
+                jsr pcprint
+                .text "Git commit: ",COMMIT,13
+                .text "Build time: ",BUILD_TIME,13
+                .text 255
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+; Check if running on a Master of some description.
+;
+; exit: C=1 if Master, C=0 if not
+;
+is_master: .proc
+                lda #0
+                ldx #1
+                jsr osbyte
+
+                cpx #3
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+; Handle *WRITE for a DFS image.
+;
+; On the Master - and it's probably the same on a B - it's no good
+; switching between DFS and BLFS all the time, because the disk drive
+; ends up seeking back to track 0 each time.
+;
+; To work around this, switch to DFS once, on startup, and
+; save/restore its zero page when communicating with the BeebLink
+; server.
+write_dfs_image_special: .proc
+                lda #$77        ;close SPOOL/EXEC files (AUG 141)
+                jsr osbyte
+
+                lda #sf_act_as_dfs
+                jsr get_rom_status_flag
+                bcc +
+                .brk_error 255,"Not possible when acting as DFS"
++
+
+                lda #143        ;issue ROM service request (AUG 167)
+                ldx #$12        ;change filing system (AUG 325)
+                ldy #dfs_fs_number
+                jsr osbyte
+
+parts_loop:
+                jsr save_fs_workspace
+
+                bit $ff
+                bmi done
+
+                ; Get next bit of disk image.
+                lda #REQUEST_NEXT_DISK_IMAGE_PART
+                ldx #0          ;not used by server
+                jsr send_request_1
+
+                jsr recv_response
+                
+                cmp #RESPONSE_NO
+                beq done
+
+                cmp #RESPONSE_DATA
+                beq got_data
+
+                jsr discard_remaining_payload
+                jsr init_blfs
+                jmp bad_response_brk
+
+got_data:
+                jsr get_buffer
+                jsr recv_file_data
+
+                ; adjust data address in OSWORD block
+                jsr get_buffer
+                ldy #1
+                clc
+-
+                lda (scratch_load),y
+                adc scratch_load-1,y
+                sta (scratch_load),y
+                iny
+                cpy #5
+                bne -
+
+                ; print info
+                lda #"D"
+                jsr oswrch
+
+                ldy #0
+                lda (scratch_load),y
+                jsr print_hex_byte
+
+                jsr pcprint
+                .text " T",255
+
+                ldy #7
+                lda (scratch_load),y
+                beq +
+                
+                ; convert track # to BCD, stupidly
+                tax
+                lda #0
+                clc
+                sed
+-
+                adc #$01
+                dex
+                bne -
+                cld
++
+                jsr print_hex_byte
+                
+                lda #13
+                jsr oswrch
+
+                jsr get_buffer
+                lda scratch_load+0
+                pha
+                lda scratch_load+1
+                pha
+                
+                jsr restore_fs_workspace
+
+                pla
+                tay
+                pla
+                tax
+                lda #$7f        ;MasRef J.11-14
+                jsr osword
+
+                jsr get_buffer
+
+                ldy #10
+                lda (scratch_load),y
+                beq parts_loop
+
+                ; error :(
+                pha
+                
+                jsr init_blfs
+                
+                jsr pcprint
+                .text "Write error: &",255
+
+                pla
+                jsr print_hex_byte
+                jsr osnewl
+
+                .brk_error 199,"Disc fault"
+done:
+                jsr restore_fs_workspace
+
+                jsr pcprint
+                ;      Dxx Txx
+                .text "       ",255
+
+                lda #13
+                jsr oswrch
+
+                ; leave in DFS, as you'll probably want to look at the
+                ; disk.
+                
+                rts
+
+; Fill in scratch_load (4 bytes) with full 32-bit address of buffer
+; for data. Various options - but for now, just stick it at OSHWM+256.
+; No worse than *COMPACT, *COPY, *BACKUP, etc.
+get_buffer:
+                jsr get_oshwm
+                
+                iny
+                
+                stx scratch_load+0
+                sty scratch_load+1
+
+                lda #$ff        ;store data in host processor memory
+                sta scratch_load+2
+                sta scratch_load+3
+                rts
+
+; Set $a8 (2 bytes) to 16-bit address of temp buffer for saving DFS
+; workspace.
+get_temp:
+                jsr get_oshwm
+                stx $a8
+                sty $a9
+                rts
+
+; set YX to OSHWM.
+get_oshwm:
+                lda #131        ;read OSHWM (AUG 155)
+                jmp osbyte
+
+save_fs_workspace:
+                jsr get_temp
+                ldy #31
+-
+                lda $b0,y       ;abs,y :(
+                sta ($a8),y
+                dey
+                bpl -
+                rts
+
+restore_fs_workspace:
+                jsr get_temp
+                ldy #31
+-
+                lda ($a8),y
+                sta $b0,y       ;abs,y
+                dey
+                bpl -
                 rts
                 
                 .pend

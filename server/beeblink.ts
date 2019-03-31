@@ -251,6 +251,16 @@ export const REQUEST_VOLUME_BROWSER = 0x17;
 // the comments below.
 export const REQUEST_SPEED_TEST = 0x18;
 
+// Request next disk image part.
+//
+// Response is NO if all parts have been consumed.
+//
+// Response is DATA if there is another part: an OSWORD 7f/72 control block,
+// then the data. The address value in the control block (bytes 1...5 inclusive)
+// is an offset relative to the start of the data and must have the data address
+// added to it.
+export const REQUEST_NEXT_DISK_IMAGE_PART = 0x19;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -404,8 +414,6 @@ export const RESPONSE_BOOT_OPTION = 0x0e;
 // part of the OSFSC handling, including ones that actually need to be handled
 // by the ROM.
 //
-// Uncertain how much use this will actually get...
-//
 // P = 1 byte special action type, then whatever other stuff.
 export const RESPONSE_SPECIAL = 0x0f;
 
@@ -425,6 +433,17 @@ export const RESPONSE_SPECIAL_VOLUME_BROWSER = 0;
 // Do the speed test.
 export const RESPONSE_SPECIAL_SPEED_TEST = 1;//check if sure
 export const RESPONSE_SPECIAL_SPEED_TEST_SURE = 2;//don't check if sure
+
+// Do a DFS disk image write. The image has been prepared and the data is ready
+// for fetching.
+export const RESPONSE_SPECIAL_WRITE_DFS_IMAGE = 3;
+
+// Do an ADFS disk image write. The image has been prepared and the data is
+// ready for fetching.
+//
+// P = 4 bytes, number of sectors on disk (should check, to
+// ensure that current disk is the right format)
+export const RESPONSE_SPECIAL_WRITE_ADFS_IMAGE = 4;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -448,3 +467,6 @@ export const RESPONSE_VOLUME_BROWSER_PRINT_STRING = 4;
 
 // ROM should print the server's string and flush the keyboard buffer.
 export const RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER = 5;
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
