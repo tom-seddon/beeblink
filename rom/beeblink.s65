@@ -5561,11 +5561,12 @@ write_dfs_image_special: .proc
                 .brk_error 255,"Not possible when acting as DFS"
 +
 
-                lda #143        ;issue ROM service request (AUG 167)
-                ldx #$12        ;change filing system (AUG 325)
-                ldy #dfs_fs_number
-                jsr osbyte
-
+                lda #dfs_fs_number
+                jsr select_fs
+                bcs +
+                .brk_error 255,"Failed to select DFS"
++
+                
 parts_loop:
                 jsr save_fs_workspace
 
@@ -5732,6 +5733,32 @@ restore_fs_workspace:
                 sta $b0,y       ;abs,y
                 dey
                 bpl -
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+; Select filing system.
+;
+; A=FS number
+select_fs: .proc
+                pha
+                tay
+                lda #143        ;issue ROM service request (AUG 167)
+                ldx #$12        ;change filing system (AUG 325)
+                jsr osbyte
+
+                lda #0
+                tay             ;get current FS (AUG 337)
+                jsr osargs
+
+                sec
+                tsx
+                cmp $101,x
+                beq +
+                clc
++
+                pla
                 rts
                 
                 .pend
