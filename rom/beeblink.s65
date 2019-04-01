@@ -5633,8 +5633,12 @@ write_adfs_image_special: .proc
                 
 parts_loop:
                 bit $ff
-                bmi write_image_canceled
+                bpl +
+
+                pla             ;discard drive number
+                jmp write_image_canceled
                 
++
                 jsr recv_next_disk_image_part
                 bcc +
 
@@ -5840,11 +5844,10 @@ print_part_info:
 ;-------------------------------------------------------------------------
 
 write_image_canceled: .proc
-                jsr init_blfs
-                ; fall through to write_image_done
+                lda #blfs_fs_number
+                jsr select_fs
                 .pend
 write_image_done: .block
-
                 ; 0123456
                 ; D01 T01 (dfs)
                 ; S012345 (adfs)
