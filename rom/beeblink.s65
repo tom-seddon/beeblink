@@ -122,6 +122,9 @@ tube_pairwise_transfer=false
 
 ; If true, include support for *BLSPEEDTEST command.
 enable_speed_test=true
+
+; If true, extra logging when writing ADFS disks.
+write_adfs_verbose=false
                 
 ;-------------------------------------------------------------------------
 
@@ -152,6 +155,9 @@ blfs_fs_number=93
 
 ; FS number for DFS
 dfs_fs_number=4
+
+; FS number for ADFS
+adfs_fs_number=8
 
 ; Where to copy BRKstuff to
 brkthunk=$104
@@ -419,6 +425,12 @@ build_handle .fill 1
 build_line .fill 2
 build_osword0_block .fill 5
                 .cerror *>$b0,"*BUILD workspace overflow"
+
+; *WRITE workspace
+*=$a8
+write_image_temp .fill 2
+write_image_data .fill 2
+                .cerror *>$b0,"*WRITE workspace overflow"
 
                 
 ; Filing system scratch space
@@ -3491,6 +3503,7 @@ special_routines=[
                 enable_speed_test?speed_test_special:not_supported,
                 enable_speed_test?speed_test_special.sure:not_supported,
                 write_dfs_image_special,
+                write_adfs_image_special,
                 ]
                 
 special_routines_l:
@@ -5540,7 +5553,216 @@ is_master: .proc
                 cpx #3
                 rts
                 .pend
+
+;-------------------------------------------------------------------------
+; Handle *WRITE for an ADFS image.
+write_adfs_image_special: .proc
+                ; Receive sector count and drive.
+                ldx #4
+-
+                jsr recv_payload_byte
+                .if write_adfs_verbose
+                jsr print_hex_byte
+                .endif
+                pha
+                dex
+                bne -
+
+                jsr discard_remaining_payload
                 
+                .if write_adfs_verbose
+                jsr osnewl
+                .endif
+                
+                .if write_adfs_verbose
+                jsr pcprint
+                .text "Init...",13,255
+                .endif
+                
+                jsr write_image_init
+
+                lda #adfs_fs_number
+                jsr select_fs
+                bcs +
+                .brk_error 255,"Failed to select ADFS"
++
+
+                pla
+                pha
+                jsr mount
+
+                .if write_adfs_verbose
+                jsr pcprint
+                .text "Reading sector 0...",13,255
+                .endif
+                
+                jsr read_sector_0
+
+                pla
+                tax             ;save drive number
+                
+                ; Check device sector count matches image sector
+                ; count.
+                ldy #$fe
+
+                pla             ;image sector count bits 16...23
+                cmp (write_image_data),y ;device sector count bits 16...23
+                bne mismatch
+                dey
+
+                pla             ;image sector count bits 8...15
+                cmp (write_image_data),y ;device sector count bits 8...15
+                bne mismatch
+                dey
+
+                pla             ;image sector count bits 0...7
+                cmp (write_image_data),y ;device sector count bits 0...7
+                bne mismatch
+
+                txa
+                pha             ;save drive number
+
+                .if write_adfs_verbose
+                jsr pcprint
+                .text "Writing...",13,255
+                .endif
+
+                pla
+                pha
+                jsr remount
+                
+parts_loop:
+                bit $ff
+                bmi write_image_canceled
+                
+                jsr recv_next_disk_image_part
+                bcc +
+
+                pla
+                jsr remount
+                jmp write_image_done
+
++
+                jsr print_part_info
+                
+                lda #$72        ;MasRef J.11-12
+                jsr write_image_do_osword
+                
+                jmp parts_loop
+
+mismatch:
+                .brk_error 255,"Sector count mismatch"
+
+remount:
+                pha
+                ldx #dismount_text-dismount_text
+                jsr mount_or_dismount
+                pla
+                ; fall through
+mount:
+                ; does a *MOUNT with drive (as number) in A
+                ldx #mount_text-dismount_text
+                ; fall through
+mount_or_dismount:
+                pha
+                ldy #0
+-
+                lda dismount_text,x
+                bne +
+                pla
+                ora #48         ;itoa
++
+                sta brkthunk,y  ;well, it's got to go somewhere...
+                bmi +
+                inx
+                iny
+                bne -
++
+                .if write_adfs_verbose
+                jsr pcprint
+                .text "Command: ",255
+
+                ldx #<brkthunk
+                ldy #>brkthunk
+                jsr printyx
+                .endif
+
+                ldx #<brkthunk
+                ldy #>brkthunk
+                jmp oscli
+
+                ; Must have exactly 1 zero byte in it. Also, must
+                ; finish with 255, so it's printable...
+dismount_text:
+                .text "DIS"
+mount_text:
+                .text "MOUNT ",0,13,255
+                
+read_sector_0:
+                ; Read sector 0 to get sector count. Temp buffer =
+                ; parameter block, data buffer = data.
+                jsr get_write_image_buffers
+
+                ldy #read_sector_0_osword_72_block_end-1-read_sector_0_osword_72_block_begin
+-
+                lda read_sector_0_osword_72_block_begin,y
+                sta (write_image_temp),y
+                dey
+                bpl -
+
+                ; fix up data address
+                ldy #1
+                lda write_image_data+0
+                sta (write_image_temp),y     ;+1 = 0...7
+                iny
+                
+                lda write_image_data+1
+                sta (write_image_temp),y     ;+2 = 8...15
+
+                ; do OSWORD and check result.                
+                ldx write_image_temp+0
+                ldy write_image_temp+1
+                lda #$72
+                jsr osword
+                
+                jsr get_write_image_buffers
+                ldy #0
+                lda (write_image_temp),y
+                bne write_image_io_error
+                rts
+
+read_sector_0_osword_72_block_begin:
+                .byte 0          ;controller number
+                .dword $ffffffff ;address (filled in later)
+                .byte 8          ;command = read
+                .byte 0,0,0      ;drive = current, sector = 0
+                .byte 0          ;sector count = N/A (using data size)
+                .byte 0          ;not used
+                .dword 256       ;data size = one sector
+read_sector_0_osword_72_block_end:
+                
+print_part_info:
+                ; print info
+                lda #"S"
+                jsr oswrch
+
+                ldy #6
+                lda (write_image_data),y
+                and #%00011111
+                jsr print_hex_byte
+
+                iny
+                lda (write_image_data),y
+                jsr print_hex_byte
+
+                iny
+                lda (write_image_data),y
+                jsr print_hex_byte
+
+                lda #13
+                jmp oswrch
+                .pend
+
 ;-------------------------------------------------------------------------
 ; Handle *WRITE for a DFS image.
 ;
@@ -5552,14 +5774,15 @@ is_master: .proc
 ; save/restore its zero page when communicating with the BeebLink
 ; server.
 write_dfs_image_special: .proc
-                lda #$77        ;close SPOOL/EXEC files (AUG 141)
-                jsr osbyte
-
+                jsr discard_remaining_payload
+                
                 lda #sf_act_as_dfs
                 jsr get_rom_status_flag
                 bcc +
-                .brk_error 255,"Not possible when acting as DFS"
+                .brk_error 255,"Not when acting as DFS"
 +
+
+                jsr write_image_init
 
                 lda #dfs_fs_number
                 jsr select_fs
@@ -5568,57 +5791,32 @@ write_dfs_image_special: .proc
 +
                 
 parts_loop:
-                jsr save_fs_workspace
-
                 bit $ff
-                bmi done
-
-                ; Get next bit of disk image.
-                lda #REQUEST_NEXT_DISK_IMAGE_PART
-                ldx #0          ;not used by server
-                jsr send_request_1
-
-                jsr recv_response
+                bmi write_image_canceled
                 
-                cmp #RESPONSE_NO
-                beq done
+                jsr recv_next_disk_image_part
+                bcs write_image_done
 
-                cmp #RESPONSE_DATA
-                beq got_data
+                jsr print_part_info
 
-                jsr discard_remaining_payload
-                jsr init_blfs
-                jmp bad_response_brk
+                lda #$7f        ;MasRef J.11-14
+                jsr write_image_do_osword
+                jmp parts_loop
 
-got_data:
-                jsr get_buffer
-                jsr recv_file_data
-
-                ; adjust data address in OSWORD block
-                jsr get_buffer
-                ldy #1
-                clc
--
-                lda (scratch_load),y
-                adc scratch_load-1,y
-                sta (scratch_load),y
-                iny
-                cpy #5
-                bne -
-
+print_part_info:
                 ; print info
                 lda #"D"
                 jsr oswrch
 
                 ldy #0
-                lda (scratch_load),y
+                lda (write_image_data),y
                 jsr print_hex_byte
 
                 jsr pcprint
                 .text " T",255
 
                 ldy #7
-                lda (scratch_load),y
+                lda (write_image_data),y
                 beq +
                 
                 ; convert track # to BCD, stupidly
@@ -5635,112 +5833,149 @@ got_data:
                 jsr print_hex_byte
                 
                 lda #13
-                jsr oswrch
+                jmp oswrch
 
-                jsr get_buffer
-                lda scratch_load+0
-                pha
-                lda scratch_load+1
-                pha
-                
-                jsr restore_fs_workspace
+                .pend
 
-                pla
-                tay
-                pla
-                tax
-                lda #$7f        ;MasRef J.11-14
-                jsr osword
+;-------------------------------------------------------------------------
 
-                jsr get_buffer
-
-                ldy #10
-                lda (scratch_load),y
-                beq parts_loop
-
-                ; error :(
-                pha
-                
+write_image_canceled: .proc
                 jsr init_blfs
-                
-                jsr pcprint
-                .text "Write error: &",255
+                ; fall through to write_image_done
+                .pend
+write_image_done: .block
 
-                pla
-                jsr print_hex_byte
-                jsr osnewl
-
-                .brk_error 199,"Disc fault"
-done:
-                jsr restore_fs_workspace
-
-                jsr pcprint
-                ;      Dxx Txx
-                .text "       ",255
+                ; 0123456
+                ; D01 T01 (dfs)
+                ; S012345 (adfs)
+                ldx #6
+                lda #" "
+-
+                jsr oswrch
+                dex
+                bpl -
 
                 lda #13
                 jsr oswrch
 
-                ; leave in DFS, as you'll probably want to look at the
-                ; disk.
-                
                 rts
+                .bend
 
-; Fill in scratch_load (4 bytes) with full 32-bit address of buffer
-; for data. Various options - but for now, just stick it at OSHWM+256.
-; No worse than *COMPACT, *COPY, *BACKUP, etc.
-get_buffer:
-                jsr get_oshwm
+;-------------------------------------------------------------------------
+; Receive next *WRITE disk image part and prepare the
+; OSWORD parameter block.
+;
+; exit: C=1 - no more parts
+;       C=0 - got a part
+;             (write_image_data) = address of OSWORD parameter block,
+;                                  ready for OSWORD $72/$7f
+recv_next_disk_image_part: .proc
+                jsr get_write_image_buffers
                 
-                iny
-                
-                stx scratch_load+0
-                sty scratch_load+1
-
-                lda #$ff        ;store data in host processor memory
-                sta scratch_load+2
-                sta scratch_load+3
-                rts
-
-; Set $a8 (2 bytes) to 16-bit address of temp buffer for saving DFS
-; workspace.
-get_temp:
-                jsr get_oshwm
-                stx $a8
-                sty $a9
-                rts
-
-; set YX to OSHWM.
-get_oshwm:
-                lda #131        ;read OSHWM (AUG 155)
-                jmp osbyte
-
-save_fs_workspace:
-                jsr get_temp
+                ; save DFS/ADFS workspace.
                 ldy #31
 -
                 lda $b0,y       ;abs,y :(
-                sta ($a8),y
+                sta (write_image_temp),y
                 dey
                 bpl -
-                rts
 
-restore_fs_workspace:
-                jsr get_temp
+                lda #REQUEST_NEXT_DISK_IMAGE_PART
+                ldx #0          ;unused
+                jsr send_request_1
+
+                jsr recv_response
+
+                cmp #RESPONSE_NO
+                bne +
+
+                ; return with C=1
+                rts
++
+                cmp #RESPONSE_DATA
+                beq +
+
+                ; "Bad response" brk
+                jsr discard_remaining_payload
+                jsr init_blfs
+                jmp bad_response_brk
+
++
+                ; receive disk image part in data buffer.
+                lda write_image_data+0
+                sta scratch_load+0
+                lda write_image_data+1
+                sta scratch_load+1
+                lda #$ff
+                sta scratch_load+2
+                sta scratch_load+3
+                jsr recv_file_data
+
+                ; restore DFS/ADFS workspace.
                 ldy #31
 -
-                lda ($a8),y
+                lda (write_image_temp),y
                 sta $b0,y       ;abs,y
                 dey
                 bpl -
-                rts
-                
-                .pend
 
+                ; adjust address in OSWORD parameter block to point to
+                ; disk image part data.
+                ldy #1
+
+                clc
+                
+                lda (write_image_data),y
+                adc write_image_data+0
+                sta (write_image_data),y
+                iny
+
+                lda (write_image_data),y
+                adc write_image_data+1
+                sta (write_image_data),y
+                iny
+                
+                lda (write_image_data),y
+                adc #$ff
+                sta (write_image_data),y
+                iny
+
+                lda (write_image_data),y
+                adc #$ff
+                sta (write_image_data),y
+
+                ; though carry almost certainly clear already...
+                clc
+
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+; Get addresses of buffers for *WRITE.
+;
+; entry: none
+; exit: (write_image_temp) = temp buffer (256 bytes)
+;       (write_image_data) = data buffer (MAX_DISK_IMAGE_PART_SIZE bytes)
+get_write_image_buffers: .proc
+                lda #131        ;read OSHWM (AUG 155)
+                jsr osbyte
+
+                stx write_image_temp+0
+                sty write_image_temp+1
+
+                iny
+
+                stx write_image_data+0
+                sty write_image_data+1
+                
+                rts
+                .pend
+                
 ;-------------------------------------------------------------------------
 ; Select filing system.
 ;
-; A=FS number
+; entry: A = FS number
+; exit: C=1 if FS was selected
 select_fs: .proc
                 pha
                 tay
@@ -5762,3 +5997,84 @@ select_fs: .proc
                 rts
                 
                 .pend
+
+;-------------------------------------------------------------------------
+; Prepare for a *WRITE operation: close SPOOL/EXEC files, and ensure
+; there's enough room between OSHWM and HIMEM for the largest possible
+; disk part.
+write_image_init: .proc
+                lda #$77        ;close SPOOL/EXEC files (AUG 141)
+                jsr osbyte
+
+                ; There must be enough space free for the largest
+                ; possible disk part.
+
+                jsr get_write_image_buffers
+
+                clc
+                lda write_image_data+0
+                adc #<MAX_DISK_IMAGE_PART_SIZE
+                sta write_image_data+0
+
+                lda write_image_data+1
+                adc #>MAX_DISK_IMAGE_PART_SIZE
+                sta write_image_data+1
+
+                lda #132        ;get HIMEM (AUG 156)
+                jsr osbyte
+
+                sec
+                txa
+                sbc write_image_data+0
+                tya
+                sbc write_image_data+1
+                bpl +
+
+                .brk_error 255,"No room for buffer"
+
++
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+; Do a disk write OSWORD with the disk image part.
+;
+; entry: A = OSWORD number - $7f or $72
+; exit: none
+;       does a BRK if the OSWORD failed
+write_image_do_osword: .proc
+                cmp #$7f        ;set carry if OSWORD $7f
+                php
+                
+                ldx write_image_data+0
+                ldy write_image_data+1
+                jsr osword
+
+                jsr get_write_image_buffers
+
+                ldy #0          ;error offset for OSWORD $72
+                plp
+                bcc +           ;taken if OSWORD $72
+                ldy #10         ;error offset for OSWORD $7f
++
+                lda (write_image_data),y
+                bne write_image_io_error
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+write_image_io_error: .proc
+                pha
+                
+                jsr init_blfs
+                
+                jsr pcprint
+                .text "Write error: &",255
+
+                pla
+                jsr print_hex_byte
+                jsr osnewl
+
+                .brk_error 199,"Disc fault"
+                .pend
+

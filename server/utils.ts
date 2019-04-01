@@ -680,3 +680,16 @@ export function getRequestTypeName(c: number): string {
 export function getResponseTypeName(c: number): string {
     return getRequestOrResponseTypeName(gResponseTypeNames, c);
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export function getUInt24LE(b: Buffer, i: number): number {
+    return b[i] << 0 | b[i + 1] << 8 | b[i + 2] << 16;
+}
+
+export function setUInt24LE(b: Buffer, i: number, x: number): void {
+    b[i + 0] = x >> 0;
+    b[i + 1] = x >> 8;
+    b[i + 2] = x >> 16;
+}

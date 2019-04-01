@@ -28,6 +28,7 @@ import * as path from 'path';
 import * as volumebrowser from './volumebrowser';
 import * as speedtest from './speedtest';
 import * as dfsimage from './dfsimage';
+import * as adfsimage from './adfsimage';
 import * as crypto from 'crypto';
 import { BNL } from './utils';
 import { Chalk } from 'chalk';
@@ -855,7 +856,13 @@ export class Server {
             this.imageParts = undefined;
             return newResponse(beeblink.RESPONSE_NO);
         } else {
-            return newResponse(beeblink.RESPONSE_DATA, this.imageParts[this.imagePartIdx++]);
+            const part = this.imageParts[this.imagePartIdx++];
+
+            if (part.length > beeblink.MAX_DISK_IMAGE_PART_SIZE) {
+                return this.internalError('Disk part too large');//aaggh.
+            }
+
+            return newResponse(beeblink.RESPONSE_DATA, part);
         }
     }
 
@@ -1332,7 +1339,16 @@ export class Server {
                 beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDrive);
             }
 
-            throw new beebfs.BeebError(beebfs.ErrorCode.DiscFault, 'ADFS = TODO');
+            const image = adfsimage.getADFSImage(data, drive, this.log);
+
+            this.imageParts = image.parts;
+
+            const p = Buffer.alloc(5);
+            p[0] = beeblink.RESPONSE_SPECIAL_WRITE_ADFS_IMAGE;
+            utils.setUInt24LE(p, 1, image.totalNumSectors);
+            p[4] = drive;
+
+            return newResponse(beeblink.RESPONSE_SPECIAL, p);
         } else if (type === 's') {
             this.imageParts = dfsimage.getSSDParts(data, drive, this.log);
             return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_WRITE_DFS_IMAGE);

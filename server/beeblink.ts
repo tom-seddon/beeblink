@@ -441,7 +441,7 @@ export const RESPONSE_SPECIAL_WRITE_DFS_IMAGE = 3;
 // Do an ADFS disk image write. The image has been prepared and the data is
 // ready for fetching.
 //
-// P = 4 bytes, number of sectors on disk (should check, to
+// P = 1 byte, drive; 3 bytes, LE number of sectors on disk (should check, to
 // ensure that current disk is the right format)
 export const RESPONSE_SPECIAL_WRITE_ADFS_IMAGE = 4;
 
@@ -470,3 +470,10 @@ export const RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER = 5;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
+
+// 4112 = 4096 (ADFS track size) + 16 (space for OSWORD $7f/$72 parameter block)
+// - the make_constants script is not clever enough to understand expressions.
+//
+// The parameter block part promises to be <256 bytes. Mask this value with
+// 0xff00 to determine the maximum valid size for the sector data.
+export const MAX_DISK_IMAGE_PART_SIZE = 4112;

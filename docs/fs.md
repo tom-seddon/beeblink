@@ -403,7 +403,7 @@ Produce wide hex dump of file, for use in 80 column modes.
 
 **Overwrites I/O processor memory from OSHWM onwards!**
 
-Write a DFS disk image to a formatted DFS disk.
+Write a DFS/ADFS disk image to a formatted disk.
 
 `<drive>` is the drive to write to.
 
@@ -411,6 +411,8 @@ Write a DFS disk image to a formatted DFS disk.
 
 * `S`: .ssd
 * `D`: .dsd, track order
+* `A`: ADFS S/M/L (ADFS L images must be track order) (image size must
+  match the disk to be written to)
 
 # `BLCONFIG` options
 
