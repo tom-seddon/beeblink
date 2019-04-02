@@ -53,9 +53,6 @@ const HTTP_LISTEN_PORT = 48875;//0xbeeb;
 
 const BEEBLINK_SENDER_ID = 'beeblink-sender-id';
 
-// will go away eventually, once NEW_USB is fully working...
-const NEW_USB = true;
-
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -1353,201 +1350,167 @@ async function main(options: ICommandLineOptions) {
         process.stderr.write('HTTP server listening on ' + (listenHost === undefined ? 'all interfaces' : listenHost) + ', port ' + HTTP_LISTEN_PORT + '\n');
     }
 
-    if (NEW_USB) {
-        const blUSBDevices: usb.Device[] = [];
-        const serversByUSBSerial = new Map<string, Server>();
+    const blUSBDevices: usb.Device[] = [];
+    const serversByUSBSerial = new Map<string, Server>();
 
-        async function handleDevice(usbDevice: usb.Device): Promise<void> {
-            const blDevice = await BeebLinkDevice.create(usbDevice, options.avr_verbose, usbLog);
-            if (blDevice === undefined) {
-                return;
-            }
-
-            process.stderr.write(blDevice.description + ': serving.\n');
-
-            for (; ;) {
-                blDevice.log.pn('Waiting for request from BBC...');
-                const reader = new InEndpointReader(blDevice.usbInEndpoint);
-
-                // read incoming request.
-                let request: Request;
-                try {
-                    let c = await reader.readUInt8();
-                    blDevice.log.pn('Got request: V=' + ((c & 0x80) !== 0 ? '1' : '0') + ', C=' + utils.getRequestTypeName(c & 0x7f));
-
-                    let pSize: number;
-                    if ((c & 0x80) === 0) {
-                        pSize = 1;
-                    } else {
-                        c &= 0x7f;
-                        pSize = await reader.readUInt32LE();
-                    }
-
-                    blDevice.log.pn('Waiting for payload of ' + pSize + ' byte(s)...');
-
-                    const p = Buffer.alloc(pSize);
-                    for (let i = 0; i < p.length; ++i) {
-                        p[i] = await reader.readUInt8();
-                    }
-
-                    request = new Request(c, p);
-                } catch (error) {
-                    process.stderr.write(blDevice.description + ': receive error: ' + error + '\n');
-                    if (error.message === 'LIBUSB_TRANSFER_STALL') {
-                        if (await handleStallError(blDevice, blDevice.usbInEndpoint)) {
-                            continue;
-                        } else {
-                            break;
-                        }
-                    } else if (error.message === 'LIBUSB_ERROR_PIPE') {
-                        blDevice.log.pn('device lost...');
-
-                        // have to close.
-                        break;
-                    } else {
-                        // pass it on.
-                        throw error;
-                    }
-                }
-
-                blDevice.log.pn('Got request: ' + request);
-
-                // try to find the server. Make a new one, if none found.
-                let server = serversByUSBSerial.get(blDevice.usbSerial);
-                if (server === undefined) {
-                    const connectionId = nextConnectionId++;
-                    const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
-                    server = await createServer(options, connectionId, defaultVolume, colours, gaManipulator);
-                    serversByUSBSerial.set(blDevice.usbSerial, server);
-                }
-
-                // field incoming request.
-                const response = await server.handleRequest(request);
-
-                blDevice.log.pn('Got response: ' + response);
-
-                const responseData = getResponseData(response);
-
-                try {
-                    await new Promise((resolve, reject) => {
-                        blDevice.usbOutEndpoint.transfer(responseData, (error) => {
-                            if (error !== undefined && error !== null) {
-                                reject(error);
-                            } else {
-                                resolve();
-                            }
-                        });
-                    });
-                } catch (error) {
-                    process.stderr.write(blDevice.description + ': send error: ' + error + '\n');
-                    if (error.message === 'LIBUSB_TRANSFER_STALL') {
-                        if (await handleStallError(blDevice, blDevice.usbOutEndpoint)) {
-                            continue;
-                        } else {
-                            break;
-                        }
-                    } else if (error.message === 'LIBUSB_ERROR_PIPE') {
-                        blDevice.log.pn('device lost...');
-
-                        // have to close.
-                        break;
-                    } else {
-                        // pass it on.
-                        throw error;
-                    }
-                }
-            }
-
-            process.stderr.write(blDevice.description + ': closing device...\n');
-
-            let closed = false;
-            while (!closed) {
-                try {
-                    blDevice.usbDevice.close();
-                    closed = true;
-                } catch (error) {
-                    blDevice.log.pn('failed to close (but will retry): ' + error);
-                    await delayMS(1000);
-                }
-            }
-
-            process.stderr.write(blDevice.description + ': device closed.\n');
+    async function handleDevice(usbDevice: usb.Device): Promise<void> {
+        const blDevice = await BeebLinkDevice.create(usbDevice, options.avr_verbose, usbLog);
+        if (blDevice === undefined) {
+            return;
         }
 
-        usbLog.pn('initialisation done.');
+        process.stderr.write(blDevice.description + ': serving.\n');
 
         for (; ;) {
-            // Add new devices as they appear.
-            //
-            // Any devices that become invalid will (hopefully...) be caught by
-            // exceptions in the handleDevice function.
-            const newBLUSBDevices: usb.Device[] = [];
+            blDevice.log.pn('Waiting for request from BBC...');
+            const reader = new InEndpointReader(blDevice.usbInEndpoint);
 
-            for (const usbDevice of usb.getDeviceList()) {
-                if (isBeebLinkDevice(usbDevice)) {
-                    let found = false;
+            // read incoming request.
+            let request: Request;
+            try {
+                let c = await reader.readUInt8();
+                blDevice.log.pn('Got request: V=' + ((c & 0x80) !== 0 ? '1' : '0') + ', C=' + utils.getRequestTypeName(c & 0x7f));
 
-                    for (const blUSBDevice of blUSBDevices) {
-                        if (blUSBDevice.busNumber === usbDevice.busNumber && blUSBDevice.deviceAddress === usbDevice.deviceAddress) {
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found) {
-                        newBLUSBDevices.push(usbDevice);
-                    }
+                let pSize: number;
+                if ((c & 0x80) === 0) {
+                    pSize = 1;
+                } else {
+                    c &= 0x7f;
+                    pSize = await reader.readUInt32LE();
                 }
-            }
 
-            for (const newBLUSBDevice of newBLUSBDevices) {
-                // indicate that this one is being handled.
-                blUSBDevices.push(newBLUSBDevice);
+                blDevice.log.pn('Waiting for payload of ' + pSize + ' byte(s)...');
 
-                handleDevice(newBLUSBDevice).then(() => {
-                    // indicate this one is no longer being handled.
-                    const blUSBDeviceIdx = blUSBDevices.indexOf(newBLUSBDevice);
-                    assert.ok(blUSBDeviceIdx !== -1);
-                    blUSBDevices.splice(blUSBDeviceIdx, 1);
-                }).catch((error) => {
-                    throw error;
-                });
-            }
+                const p = Buffer.alloc(pSize);
+                for (let i = 0; i < p.length; ++i) {
+                    p[i] = await reader.readUInt8();
+                }
 
-            await delayMS(1000);
-        }
-    } else {
-        const usbConnections: Connection[] = [];
+                request = new Request(c, p);
+            } catch (error) {
+                process.stderr.write(blDevice.description + ': receive error: ' + error + '\n');
+                if (error.message === 'LIBUSB_TRANSFER_STALL') {
+                    if (await handleStallError(blDevice, blDevice.usbInEndpoint)) {
+                        continue;
+                    } else {
+                        break;
+                    }
+                } else if (error.message === 'LIBUSB_ERROR_PIPE') {
+                    blDevice.log.pn('device lost...');
 
-        function removeConnection(usbConnection: Connection): void {
-            for (let i = 0; i < usbConnections.length; ++i) {
-                if (usbConnections[i] === usbConnection) {
-                    usbConnections.splice(i, 1);
+                    // have to close.
                     break;
+                } else {
+                    // pass it on.
+                    throw error;
+                }
+            }
+
+            blDevice.log.pn('Got request: ' + request);
+
+            // try to find the server. Make a new one, if none found.
+            let server = serversByUSBSerial.get(blDevice.usbSerial);
+            if (server === undefined) {
+                const connectionId = nextConnectionId++;
+                const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
+                server = await createServer(options, connectionId, defaultVolume, colours, gaManipulator);
+                serversByUSBSerial.set(blDevice.usbSerial, server);
+            }
+
+            // field incoming request.
+            const response = await server.handleRequest(request);
+
+            blDevice.log.pn('Got response: ' + response);
+
+            const responseData = getResponseData(response);
+
+            try {
+                await new Promise((resolve, reject) => {
+                    blDevice.usbOutEndpoint.transfer(responseData, (error) => {
+                        if (error !== undefined && error !== null) {
+                            reject(error);
+                        } else {
+                            resolve();
+                        }
+                    });
+                });
+            } catch (error) {
+                process.stderr.write(blDevice.description + ': send error: ' + error + '\n');
+                if (error.message === 'LIBUSB_TRANSFER_STALL') {
+                    if (await handleStallError(blDevice, blDevice.usbOutEndpoint)) {
+                        continue;
+                    } else {
+                        break;
+                    }
+                } else if (error.message === 'LIBUSB_ERROR_PIPE') {
+                    blDevice.log.pn('device lost...');
+
+                    // have to close.
+                    break;
+                } else {
+                    // pass it on.
+                    throw error;
                 }
             }
         }
 
-        // Keep polling for new devices, while watching for all existing connections
-        // going away. This is not super clever, but there you go.
-        do {
-            const devices = await findBeebLinkUSBDevices(options.usb_verbose ? log : undefined);
-            for (const device of devices) {
-                if (usbConnections.find((usbConnection) => usbConnection.usbSerial === device.usbSerial) === undefined) {
-                    const connectionId = nextConnectionId++;
-                    const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
-                    const usbConnection = await Connection.create(options, defaultVolume, connectionId, device.usbSerial, colours, gaManipulator);
-                    usbConnections.push(usbConnection);
-                    usbConnection.run().then(() => {
-                        removeConnection(usbConnection);
-                    }).catch((error) => {
-                        throw error;
-                    });
+        process.stderr.write(blDevice.description + ': closing device...\n');
+
+        let closed = false;
+        while (!closed) {
+            try {
+                blDevice.usbDevice.close();
+                closed = true;
+            } catch (error) {
+                blDevice.log.pn('failed to close (but will retry): ' + error);
+                await delayMS(1000);
+            }
+        }
+
+        process.stderr.write(blDevice.description + ': device closed.\n');
+    }
+
+    usbLog.pn('initialisation done.');
+
+    for (; ;) {
+        // Add new devices as they appear.
+        //
+        // Any devices that become invalid will (hopefully...) be caught by
+        // exceptions in the handleDevice function.
+        const newBLUSBDevices: usb.Device[] = [];
+
+        for (const usbDevice of usb.getDeviceList()) {
+            if (isBeebLinkDevice(usbDevice)) {
+                let found = false;
+
+                for (const blUSBDevice of blUSBDevices) {
+                    if (blUSBDevice.busNumber === usbDevice.busNumber && blUSBDevice.deviceAddress === usbDevice.deviceAddress) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    newBLUSBDevices.push(usbDevice);
                 }
             }
+        }
 
-            await delayMS(1000);
-        } while (options.http || usbConnections.length > 0);
+        for (const newBLUSBDevice of newBLUSBDevices) {
+            // indicate that this one is being handled.
+            blUSBDevices.push(newBLUSBDevice);
+
+            handleDevice(newBLUSBDevice).then(() => {
+                // indicate this one is no longer being handled.
+                const blUSBDeviceIdx = blUSBDevices.indexOf(newBLUSBDevice);
+                assert.ok(blUSBDeviceIdx !== -1);
+                blUSBDevices.splice(blUSBDeviceIdx, 1);
+            }).catch((error) => {
+                throw error;
+            });
+        }
+
+        await delayMS(1000);
     }
 }
 
