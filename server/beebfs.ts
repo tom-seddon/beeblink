@@ -1048,13 +1048,6 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    // public getVolumeName() {
-    //     return path.basename(this.volumePath);
-    // }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     public getVolume() {
         if (this.volume === undefined) {
             return BeebFS.throwNoVolumeError();
@@ -1619,13 +1612,9 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    // private async tryGetBeebFile(fqn: BeebFQN): Promise<BeebFile | undefined> {
-    //     return await this.getBeebFileInternal(fqn, false);
-    // }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
+    // get BeebFile matching FQN, or throw a NotFound. If FQN has wildcards,
+    // that's fine, but it's a BadName/'Ambiguous name' if multiple files are
+    // matched.
     public async getExistingBeebFileForRead(fqn: BeebFQN): Promise<BeebFile> {
         return (await this.getBeebFileInternal(fqn, true, true))!;
     }
@@ -1633,11 +1622,8 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    // Get list of BeebFile(s) matching FQN.
     public async getBeebFilesForAFSP(afsp: BeebFQN): Promise<BeebFile[]> {
-        // if (this.volume === undefined) {
-        //     return BeebFS.throwNoVolumeError();
-        // }
-
         this.log.pn('getBeebFilesForAFSP: ' + afsp);
 
         let files = await BeebFS.getBeebFiles(afsp.volume, afsp.drive, this.log);
@@ -1718,7 +1704,7 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     public async delete(fqn: BeebFQN): Promise<void> {
-        const file = (await this.getBeebFileInternal(fqn, true, true))!;
+        const file = (await this.getBeebFileInternal(fqn, false, true))!;
 
         await this.deleteFile(file);
     }
@@ -1875,11 +1861,6 @@ export class BeebFS {
     // If wildcardsOK, wild cards will be handled: the result is the uniquely
     // matching BeebFile, or a BadName/'Ambiguous name' error is thrown; if
     // throwIfNotFound, when not found, a FileNotFound error will be thrown.
-    //
-    // The lack of mapping from Beeb name to host name makes this a bit
-    // inefficient.
-    //
-    // But this will improve...
     private async getBeebFileInternal(fqn: BeebFQN, wildcardsOK: boolean, throwIfNotFound: boolean): Promise<BeebFile | undefined> {
         if (!wildcardsOK) {
             if (fqn.dir === utils.MATCH_N_CHAR || fqn.dir === utils.MATCH_ONE_CHAR) {
@@ -1926,14 +1907,7 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILELoad(fqn: BeebFQN, load: number, exec: number): Promise<OSFILEResult> {
-        const files = await this.getBeebFilesForAFSP(fqn);
-        if (files.length === 0) {
-            BeebFS.throwError(ErrorCode.FileNotFound);
-        } else if (files.length > 1) {
-            throw new BeebError(ErrorCode.BadName, 'Ambiguous name');
-        }
-
-        const file = files[0];
+        const file = await this.getExistingBeebFileForRead(fqn);
 
         this.mustNotBeOpen(file);
 
