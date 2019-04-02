@@ -1,0 +1,302 @@
+;-------------------------------------------------------------------------
+;
+; BeebLink - BBC Micro file storage system
+; Copyright (C) 2018 Tom Seddon
+; 
+; This program is free software: you can redistribute it and/or
+; modify it under the terms of the GNU General Public License as
+; published by the Free Software Foundation, either version 3 of the
+; License, or (at your option) any later version.
+; 
+; This program is distributed in the hope that it will be useful, but
+; WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+; General Public License for more details.
+; 
+; You should have received a copy of the GNU General Public License
+; along with this program. If not, see
+; <https://www.gnu.org/licenses/>.
+;
+;-------------------------------------------------------------------------
+
+; In principle, it ought to work with multiple user ports. Might even
+; be possible to fix it up for port A...
+via=$fe60
+                
+;-------------------------------------------------------------------------
+
+                .section fs_scratch_workspace
+scratch_old_acr: .fill 1
+                .send fs_scratch_workspace
+
+;-------------------------------------------------------------------------
+
+                .section code
+
+;-------------------------------------------------------------------------
+;
+; Configure a prepared VIA for the receive operation. Must have
+; previously called via_prepare!
+;
+; preserves: X; Y; C
+;
+via_prepare_for_recv: .macro
+                lda #0
+                sta via+2
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Configure a prepared VIA for a send operation. Must have previously
+; called via_prepare!
+;
+; preserves: X; Y; C
+;
+via_prepare_for_send: .macro
+                lda #255
+                sta via+2
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Prepare VIA for use, setting it up for the initial send operation.
+;
+; preserves: A; X; Y; C
+
+via_prepare: .proc
+                pha
+
+                lda via+11
+                sta scratch_old_acr
+                and #%01100001  ;TxxSSSLx - T = disable PB7 toggle, S
+                                ;= disable shift register, L = disable
+                                ;port B latching
+                sta via+11
+                
+                lda #$18
+                sta via+14      ;disable CB1+CB2 IRQs
+                sta via+13      ;acknowledge any pending such IRQs
+
+                lda via+11
+                ora #2          ;enable port B input latching
+                sta via+11
+
+                .via_prepare_for_send
+
+                lda via+12
+                and #$0f
+                ora #$e0        ;CB2=1, CB1 -ve edge
+                sta via+12
+
+                lda via+12
+                and #$0f
+                ora #$80        ;CB2=1, handshake mode, CB1 -ve edge
+                sta via+12
+
+                pla
+
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; The opposite of via_prepare, setting it up again for non-use.
+; 
+via_unprepare: .proc
+                lda via+12
+                and #$1f
+                ora #$e0        ;CB2=1
+                sta via+12
+
+                lda scratch_old_acr
+                sta via+11
+                
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Send byte. *Call prepare_via_for_send first.*
+;
+; preserves: X; Y; C
+; 
+send_byte: .proc
+                sta via+0       ;set ORB
+loop:
+                lda via+13
+                and #$10        ;wait for CB1 IRQ
+                beq loop
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Receive byte. *Call prepare_via_for_recv first.*
+;
+; exit: A = byte read
+;       N, Z = set as per byte read
+; preserves: X; Y; C
+; takes: ~25 cycles best case
+recv_byte: .proc
+                sta via+0       ;write something into ORB, anything,
+                                ;to set the handshaking off
+loop:
+                lda via+13
+                and #$10
+                beq loop
+                lda via+0
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+; 
+; send byte with timeout. *Call prepare_via_for_send first.*
+; 
+; entry: A = byte to send
+; exit: C=1 if sent, C=0 if not
+; preserves: X; Y
+; 
+send_byte_with_timeout: .proc
+                sta via+0
+                txa
+                pha
+                ldx #0
+loop:
+                lda via+13
+                and #$10
+                bne done
+                inx
+                bne loop
+done:
+                cmp #$10
+                pla
+                tax
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------
+;
+; Get and print current AVR status.
+;
+; exit: C=0 if OK
+;       C=1 if not ready
+
+; ; A=BEEBLINK_STATUS_NO_AVR - AVR not present
+; ;       A=BEEBLINK_STATUS_AVR_NOT_READY - AVR present, but not ready
+; ;       A=BEEBLINK_STATUS_NO_SERVER - AVR ready but server not connected
+; ;       A=BEEBLINK_STATUS_OK (0) - all systems (apparently) go
+
+; BEEBLINK_STATUS_OK=0
+; BEEBLINK_STATUS_NO_AVR=1
+; BEEBLINK_STATUS_WRONG_PROTOCOL=2
+; BEEBLINK_STATUS_AVR_NOT_READY=3
+; BEEBLINK_STATUS_NO_SERVER=4
+; BEEBLINK_STATUS_OK=4
+
+; beeblink_status_strings: strings_list ["no AVR","protocol not "..format("%02X",AVR_PROTOCOL_VERSION),"AVR not ready","no server","OK"]
+
+print_beeblink_status: .proc
+                jsr reset
+                
+                jsr via_prepare
+                
+                lda #REQUEST_AVR_PRESENCE
+                jsr send_byte_with_timeout
+                
+                bcs check_avr_ready
+                
+                jsr pcprint
+                .text "no AVR",255
+
+                sec
+                rts             
+
+check_avr_ready:
+                lda #REQUEST_AVR
+                ldx #REQUEST_AVR_READY
+                jsr send_request_1
+
+                jsr recv_response
+
+                tay                   ;Y = response
+                
+                jsr recv_payload_byte ;A = protocol version
+                bcc wrong_protocol    ;bleargh
+
+                jsr discard_remaining_payload
+
+                cmp #AVR_PROTOCOL_VERSION
+                beq check_avr_ready_2
+
+wrong_protocol:
+                jsr pcprint
+                .text "protocol not ",format("%02X",AVR_PROTOCOL_VERSION),255
+                sec
+                rts
+
+check_avr_ready_2:
+                cpy #RESPONSE_YES
+                beq avr_ready
+
+                jsr pcprint
+                .text "AVR not ready",255
+
+                sec
+                rts
+
+avr_ready:
+                jsr pcprint
+                .text "OK",255
+                
+                clc
+                rts
+
+reset: .proc
+                lda via+12
+                and #$1f
+                ora #$e0        ;CB2=1
+                jsr reset2
+
+                lda via+12
+                and #$1f
+                ora #$C0        ;CB2=0
+                jsr reset2
+
+                lda via+12
+                and #$1f
+                ora #$e0        ;CB2=1
+reset2:
+                sta via+12
+                lda #19
+                jmp osbyte
+                .pend
+                
+                .pend
+
+; ;-------------------------------------------------------------------------
+; ;
+; ; Get and print AVR status
+; ;
+; ; exit: A=0 - AVR not present
+; ;       A=1 - AVR present, but not ready
+; ;       A=2 - AVR ready
+; ;
+
+; verbose_get_beeblink_status: .proc
+;                 jsr via_reset
+;                 jsr get_beeblink_status
+;                 pha
+;                 tax
+;                 ldy beeblink_status_strings.h,x
+;                 lda beeblink_status_strings.l,x
+;                 tax
+;                 jsr printyx
+;                 pla
+;                 rts
+;                 .pend
+
+;-------------------------------------------------------------------------
+
+                .send code

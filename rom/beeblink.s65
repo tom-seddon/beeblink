@@ -48,49 +48,11 @@
 ;
 ;-------------------------------------------------------------------------
 
+                .include "common.s65"
                 .include ".build/beeblink_constants.s65"
+                .include "beeb.s65"
+                .include "macros.s65"
                 
-;-------------------------------------------------------------------------
-
-; MOS entry points
-
-gsinit=$ffc2
-gsread=$ffc5
-osargs=$ffda
-osnewl=$ffe7
-osrdch=$ffe0
-osasci=$ffe3
-oswrch=$ffee
-osword=$fff1
-osbyte=$fff4
-oscli=$fff7
-osfind=$ffce
-osbput=$ffd4
-
-cliv=$208
-filev=$212
-fscv=$21e
-                
-; Tube transfer reasons
-
-tube_multi_byte_parasite_to_host=0
-tube_multi_byte_host_to_parasite=1
-tube_multi_pairs_parasite_to_host=2
-tube_multi_pairs_host_to_parasite=3
-tube_execute=4
-tube_256_byte_parasite_to_host=6
-tube_256_byte_host_to_parasite=7
-                
-;-------------------------------------------------------------------------
-
-; Set up C-style escape for CR.
-                .edef "\r",13
-
-; This one isn't strictly necessary, but my Emacs mode for 6502 source
-; code doesn't colourize single quoted apostrophes properly, and this
-; is a quick fix...
-                .edef "\'",$27
-
 ;-------------------------------------------------------------------------
 
 ; Config toggles.
@@ -172,10 +134,6 @@ brkthunk_max_size=$128-brkthunk
 ; Can this ever move??
 roms_table=$DF0
 
-; In principle, it ought to work with multiple user ports. Might even
-; be possible to fix it up for port A...
-via=$fe60
-
 ; Key to hold down to select this filing system on BREAK (AUG p143)
 boot_key=100                    ;100=B
 
@@ -188,184 +146,6 @@ server_string_buffer_size=20
 
                 .cerror server_string_buffer_size<1,"server string buffer must be 1+ bytes"
                 .cerror server_string_buffer_size>64,"string packet has to fit on the 6502 stack"
-
-;-------------------------------------------------------------------------
-; 
-; Load word from memory and push onto stack.
-;
-
-push8 .macro
-                lda \1
-                pha
-                .endm
-                
-push16 .macro
-                push8 \1+1
-                push8 \1+0
-                .endm
-
-push32 .macro
-                push8 \1+3
-                push8 \1+2
-                push8 \1+1
-                push8 \1+0
-                .endm
-
-push16zx: .macro
-                lda 0,x
-                pha
-                lda 1,x
-                pha
-                .endm
-
-push32zx: .macro
-                lda 0,x
-                pha
-                lda 1,x
-                pha
-                lda 2,x
-                pha
-                lda 3,x
-                pha
-                .endm
-
-;-------------------------------------------------------------------------
-;
-; Pop word from stack and store into memory.
-;
-
-pop8 .macro
-                pla
-                sta \1
-                .endm
-                
-pop16 .macro
-                pop8 \1
-                pop8 \1+1
-                .endm
-
-pop32 .macro
-                pop8 \1+0
-                pop8 \1+1
-                pop8 \1+2
-                pop8 \1+3
-                .endm
-
-pop16zx: .macro
-                pla
-                sta 1,x
-                pla
-                sta 0,x
-                .endm
-
-pop32zx: .macro
-                pla
-                sta 3,x
-                pla
-                sta 2,x
-                pla
-                sta 1,x
-                pla
-                sta 0,x
-                .endm
-                
-;-------------------------------------------------------------------------
-;
-; debug print nonsense.
-;
-; The macro's single argument is a list of items to print. Each item
-; can be:
-;
-; string - string is printed as-is using osasci
-;
-; 16-bit integer - hex value of byte at that address is printed
-;
-; DP_A, DP_X, DP_Y - print hex value of that register
-;
-; print - always prints using osasci
-; preserves: A; X; Y: p
-;
-; debug_print - prints using osasci if the VON flag is set
-; preserves: A; X; Y; P
-
-DP_A=-1
-DP_X=-2
-DP_Y=-3
-DP_P=-4
-
-print: .macro items
-                php             ;103=p
-                pha             ;102=a
-                txa
-                pha             ;101=x
-                tsx
-                .for i=0,i<len(\items),i+=1
-
-                .if type(\items[i])==str
-
-                .if \items[i]=="\r"
-                jsr osnewl
-                .elsif len(\items[i])==1
-                lda #\items[i][0]
-                jsr osasci
-                .else
-                jsr pcprint
-                .text \items[i],255
-                .endif
-                
-                .elsif type(\items[i])==int||type(\items[i])==bits||type(\items[i])==code
-                
-                .if \items[i]>=0&&\items[i]<=65535
-                lda \items[i]
-                jsr print_hex_byte
-                .elsif \items[i]==DP_A
-                lda $102,x
-                jsr print_hex_byte
-                .elsif \items[i]==DP_X
-                lda $101,x
-                jsr print_hex_byte
-                .elsif \items[i]==DP_Y
-                tya
-                jsr print_hex_byte
-                .elsif \items[i]==DP_P
-                lda $103,x
-                jsr print_p
-                .else
-                .cerror true,"bad debug_print integer"
-                .endif
-
-                .else
-
-                .cerror true,"bad debug_print item: ",\items[i]," ",type(\items[i])
-
-                .endif
-                
-                .next
-                
-                pla
-                tax
-                pla
-                plp
-                .endm
-
-;-------------------------------------------------------------------------
-;
-;
-
-debug_print .macro items,enabled=true
-                .if enable_debug_print
-                .if \enabled
-                php             ;104=p
-                jsr get_vstatus
-                bcs +
-                jmp debug_print_done
-+
-                print list(\items)
-debug_print_done:
-                plp
-                .endif
-                .endif
-                .endm
 
 ;-------------------------------------------------------------------------
 ;
@@ -381,60 +161,54 @@ command .macro name,value,routine
                 .endm
 
 ;-------------------------------------------------------------------------
-;
-;
-;
 
-strings_list .macro strings
-
-addresses:=[]
-strings:
-                .for i=0,i<len(\strings),i+=1
-addresses:=addresses..[*]
-                .text \strings[i],255
-                .next
-
-l:
-                .byte <addresses
-h:
-                .byte >addresses
-                .endm
-
-;-------------------------------------------------------------------------
-
-brk_error .macro code,text
-                jsr dobrk
-                .text \code,\text,0
-                .endm
-                
-;-------------------------------------------------------------------------
-
-                .dsection bss
-
-; MOS command workspace
 *=$a8
+                .dsection misc_workspace
+                .cerror *>$b0,"Misc workspace overflow"
+                
+*=$a8
+                .dsection build_workspace
+                .cerror *>$b0,"*BUILD workspace overflow"
+                
+*=$a8
+                .dsection write_workspace
+                .cerror *>$b0,"*WRITE workspace overflow"
+
+*=$b0
+                .dsection fs_scratch_workspace
+                .cerror *>$c0,"FS scratch workspace overflow"
+
+*=$c0
+                .dsection fs_private_workspace
+                .cerror *>$d0,"FS private workspace overflow"
+
+;-------------------------------------------------------------------------
+
+                .section misc_workspace
 print_ptr .fill 0
 cmd_ptr .fill 0
 brk_ptr .fill 0
                 .fill 2
-                .cerror *>$b0,"Temp workspace overflow"
+                .send misc_workspace
 
-; *BUILD workspace
-*=$a8
+;-------------------------------------------------------------------------
+
+                .section build_workspace
 build_handle .fill 1
 build_line .fill 2
 build_osword0_block .fill 5
-                .cerror *>$b0,"*BUILD workspace overflow"
+                .send build_workspace
 
-; *WRITE workspace
-*=$a8
+;-------------------------------------------------------------------------
+
+                .section write_workspace
 write_image_temp .fill 2
 write_image_data .fill 2
-                .cerror *>$b0,"*WRITE workspace overflow"
+                .send write_workspace
 
-                
-; Filing system scratch space
-*=$b0
+;-------------------------------------------------------------------------
+
+                .section fs_scratch_workspace
 scratch_payload_size .fill 4
 scratch_ptr .fill 2
                 
@@ -444,12 +218,11 @@ scratch_load .fill 4
 scratch_exec .fill 4
                 .cerror scratch_load!=scratch_command_line_tail_offset+1,"Scratch space load must follow command line tail offset"
                 .cerror scratch_exec!=scratch_load+4,"Scratch space exec must follow load"
-scratch_old_acr: .fill 1
+                .send fs_scratch_workspace
                 
-                .cerror *>$c0,"Filing system scratch space overflow"
+;-------------------------------------------------------------------------
 
-; Filing system private space
-*=$c0
+                .section fs_private_workspace
 private_ptr .fill 2
 private_request .fill 1
 private_response .fill 1
@@ -457,14 +230,16 @@ private_x .fill 1
 private_y .fill 1
 private_command_line_ptr .fill 2
 private_old_cliv .fill 2
-                .cerror *>$d0,"Filing system scratch space overflow"
+                .send fs_private_workspace
 
 ;-------------------------------------------------------------------------
 
-                .dsection code
-                
 *=$8000
-
+                .dsection header
+                .dsection code
+                .cerror *>$c000,"ROM overflow"
+                
+                .section header
                 brk
                 brk
                 brk
@@ -484,8 +259,15 @@ rom_version_text:
                 .text VERSION
 rom_copyright:
                 .text 0,"(C)",0
+                .send header
 
 ;-------------------------------------------------------------------------
+
+                .include "avr.s65"
+
+;-------------------------------------------------------------------------
+
+                .section code
 
 help_subjects_commands:
                 .command "BLFS",0,svc_help.blfs
@@ -737,18 +519,16 @@ show_avr_status:
                 jsr pcprint
                 .text " - ",255
 
-                jsr via_reset
-                jsr verbose_get_beeblink_status
+                jsr print_beeblink_status
 
-                pha
+                php
 
                 jsr osnewl
                 jsr osnewl
 
-                pla
+                plp
 
-                cmp #BEEBLINK_STATUS_OK
-                bne pass_on
+                bcs pass_on     ;taken if link not ready
 
                 lda #253        ;get reset type in X (AUG 244)
                 jsr osbyte_x00_yff
@@ -1664,167 +1444,6 @@ reg:
                 .pend
 
 ;-------------------------------------------------------------------------
-
-via_reset: .proc
-                lda via+12
-                and #$1f
-                ora #$e0        ;CB2=1
-                jsr reset2
-
-                lda via+12
-                and #$1f
-                ora #$C0        ;CB2=0
-                jsr reset2
-
-                lda via+12
-                and #$1f
-                ora #$e0        ;CB2=1
-reset2:
-                sta via+12
-                lda #19
-                jmp osbyte
-                .pend
-
-;-------------------------------------------------------------------------
-
-via_deactivate: .proc
-                lda via+12
-                and #$1f
-                ora #$e0        ;CB2=1
-                sta via+12
-
-                lda scratch_old_acr
-                sta via+11
-                
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
-; Configure a prepared VIA for the receive operation. Must have
-; previously called prepare_via!
-;
-; preserves: X; Y; C
-;
-via_prepare_for_recv: .macro
-                lda #0
-                sta via+2
-                .endm
-
-;-------------------------------------------------------------------------
-;
-; Configure a prepared VIA for a send operation. Must have previously
-; called prepare_via!
-;
-; preserves: X; Y; C
-;
-via_prepare_for_send: .macro
-                lda #255
-                sta via+2
-                .endm
-
-;-------------------------------------------------------------------------
-;
-; Prepare VIA for use, setting it up for the initial send operation.
-;
-; preserves: A; X; Y; C
-
-via_prepare: .proc
-                pha
-
-                lda via+11
-                sta scratch_old_acr
-                and #%01100001  ;TxxSSSLx - T = disable PB7 toggle, S
-                                ;= disable shift register, L = disable
-                                ;port B latching
-                sta via+11
-                
-                lda #$18
-                sta via+14      ;disable CB1+CB2 IRQs
-                sta via+13      ;acknowledge any pending such IRQs
-
-                lda via+11
-                ora #2          ;enable port B input latching
-                sta via+11
-
-                .via_prepare_for_send
-
-                lda via+12
-                and #$0f
-                ora #$e0        ;CB2=1, CB1 -ve edge
-                sta via+12
-
-                lda via+12
-                and #$0f
-                ora #$80        ;CB2=1, handshake mode, CB1 -ve edge
-                sta via+12
-
-                pla
-
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
-; Send byte. *Call prepare_via_for_send first.*
-;
-; preserves: X; Y; C
-; 
-send_byte: .proc
-                sta via+0       ;set ORB
-loop:
-                lda via+13
-                and #$10        ;wait for CB1 IRQ
-                beq loop
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
-; Receive byte. *Call prepare_via_for_recv first.*
-;
-; exit: A = byte read
-;       N, Z = set as per byte read
-; preserves: X; Y; C
-; takes: ~25 cycles best case
-recv_byte: .proc
-                sta via+0       ;write something into ORB, anything,
-                                ;to set the handshaking off
-loop:
-                lda via+13
-                and #$10
-                beq loop
-                lda via+0
-                rts
-                .pend
-                
-;-------------------------------------------------------------------------
-; 
-; send byte with timeout. *Call prepare_via_for_send first.*
-; 
-; entry: A = byte to send
-; exit: C=1 if sent, C=0 if not
-; preserves: X; Y
-; 
-send_byte_with_timeout: .proc
-                sta via+0
-                txa
-                pha
-                ldx #0
-loop:
-                lda via+13
-                and #$10
-                bne done
-                inx
-                bne loop
-done:
-                cmp #$10
-                pla
-                tax
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
 ;
 ; Start sending a request with an N-byte payload.
 ;
@@ -2114,7 +1733,7 @@ recv_payload_byte: .proc
                 jsr test_payload_size
                 bne more
 
-                jsr via_deactivate
+                jsr via_unprepare
                 lda #0
                 
                 clc
@@ -2139,94 +1758,6 @@ loop:
                 jsr recv_payload_byte
                 bcs loop
                 
-                pla
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
-; Get current status.
-;
-; exit: A=BEEBLINK_STATUS_NO_AVR - AVR not present
-;       A=BEEBLINK_STATUS_AVR_NOT_READY - AVR present, but not ready
-;       A=BEEBLINK_STATUS_NO_SERVER - AVR ready but server not connected
-;       A=BEEBLINK_STATUS_OK - all systems (apparently) go
-
-BEEBLINK_STATUS_NO_AVR=0
-BEEBLINK_STATUS_WRONG_PROTOCOL=1
-BEEBLINK_STATUS_AVR_NOT_READY=2
-BEEBLINK_STATUS_NO_SERVER=3
-BEEBLINK_STATUS_OK=4
-
-beeblink_status_strings: strings_list ["no AVR","protocol not "..format("%02X",AVR_PROTOCOL_VERSION),"AVR not ready","no server","OK"]
-
-get_beeblink_status: .proc
-
-                jsr via_reset
-                jsr via_prepare
-                
-                lda #REQUEST_AVR_PRESENCE
-                jsr send_byte_with_timeout
-                
-                bcs check_avr_ready
-                
-                ; AVR is apparently not present.
-                lda #BEEBLINK_STATUS_NO_AVR
-                rts             
-
-check_avr_ready:
-                lda #REQUEST_AVR
-                ldx #REQUEST_AVR_READY
-                jsr send_request_1
-
-                jsr recv_response
-
-                tay                   ;Y = response
-                
-                jsr recv_payload_byte ;A = protocol version
-                bcc wrong_protocol    ;bleargh
-
-                jsr discard_remaining_payload
-
-                cmp #AVR_PROTOCOL_VERSION
-                beq check_avr_ready_2
-
-wrong_protocol:
-                ; AVR is the wrong protocol version.
-                lda #BEEBLINK_STATUS_WRONG_PROTOCOL
-                rts
-
-check_avr_ready_2:
-                cpy #RESPONSE_YES
-                beq avr_ready
-
-                lda #BEEBLINK_STATUS_AVR_NOT_READY
-                rts
-
-avr_ready:
-                ; Don't ask where BEEBLINK_STATUS_NO_SERVER is...
-
-                lda #BEEBLINK_STATUS_OK
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
-; Get and print AVR status
-;
-; exit: A=0 - AVR not present
-;       A=1 - AVR present, but not ready
-;       A=2 - AVR ready
-;
-
-verbose_get_beeblink_status: .proc
-                jsr get_beeblink_status
-                pha
-                tax
-                ldy beeblink_status_strings.h,x
-                lda beeblink_status_strings.l,x
-                tax
-                jsr printyx
                 pla
                 rts
                 .pend
@@ -3642,7 +3173,7 @@ recv_file_data: .proc
 +
                 jsr recv_file_data_host
 done:
-                jsr via_deactivate
+                jsr via_unprepare
                 rts
                 .pend
 
@@ -4359,42 +3890,6 @@ print_server_string: .proc
                 
                 .endif
 
-                .if server_string_buffer_size==1
-                
-                lda #REQUEST_READ_STRING
-                jsr get_vstatus
-                bcc +
-                lda #REQUEST_READ_STRING_VERBOSE
-+
-                pha
-
-                
-loop:
-                .prepare_via_for_send
-
-                pla
-                pha
-                ldx #server_string_buffer_size
-                jsr send_request_1_recv_response_1.without_prepare
-
-                cpx #RESPONSE_DATA
-                bne done
-
-                jsr oswrch
-
-                ; Check for Escape, but leave it up to the language to
-                ; acknowledge it.
-                bit $ff
-                bmi done
-                
-                jmp loop
-
-done:
-
-                pla
-                
-                .else
-
                 ; This routine is fiddly, as it tries to preserve zero
                 ; page between OSASCI calls...
 
@@ -4479,9 +3974,6 @@ pop_stack_loop:
                 pla
                 dex
                 bne pop_stack_loop
-                
-
-                .endif
                 
                 .if print_server_string_voff
                 plp
@@ -6045,3 +5537,7 @@ write_image_io_error: .proc
 
                 .brk_error 199,"Disc fault"
                 .pend
+
+;-------------------------------------------------------------------------
+
+                .send code

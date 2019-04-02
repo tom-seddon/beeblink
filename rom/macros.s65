@@ -1,0 +1,226 @@
+;-------------------------------------------------------------------------
+;
+; BeebLink - BBC Micro file storage system
+; Copyright (C) 2018 Tom Seddon
+; 
+; This program is free software: you can redistribute it and/or
+; modify it under the terms of the GNU General Public License as
+; published by the Free Software Foundation, either version 3 of the
+; License, or (at your option) any later version.
+; 
+; This program is distributed in the hope that it will be useful, but
+; WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+; General Public License for more details.
+; 
+; You should have received a copy of the GNU General Public License
+; along with this program. If not, see
+; <https://www.gnu.org/licenses/>.
+;
+;-------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------
+; 
+; Load word from memory and push onto stack.
+;
+
+push8 .macro
+                lda \1
+                pha
+                .endm
+                
+push16 .macro
+                push8 \1+1
+                push8 \1+0
+                .endm
+
+push32 .macro
+                push8 \1+3
+                push8 \1+2
+                push8 \1+1
+                push8 \1+0
+                .endm
+
+push16zx: .macro
+                lda 0,x
+                pha
+                lda 1,x
+                pha
+                .endm
+
+push32zx: .macro
+                lda 0,x
+                pha
+                lda 1,x
+                pha
+                lda 2,x
+                pha
+                lda 3,x
+                pha
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Pop word from stack and store into memory.
+;
+
+pop8 .macro
+                pla
+                sta \1
+                .endm
+                
+pop16 .macro
+                pop8 \1
+                pop8 \1+1
+                .endm
+
+pop32 .macro
+                pop8 \1+0
+                pop8 \1+1
+                pop8 \1+2
+                pop8 \1+3
+                .endm
+
+pop16zx: .macro
+                pla
+                sta 1,x
+                pla
+                sta 0,x
+                .endm
+
+pop32zx: .macro
+                pla
+                sta 3,x
+                pla
+                sta 2,x
+                pla
+                sta 1,x
+                pla
+                sta 0,x
+                .endm
+                
+;-------------------------------------------------------------------------
+;
+; debug print nonsense.
+;
+; The macro's single argument is a list of items to print. Each item
+; can be:
+;
+; string - string is printed as-is using osasci
+;
+; 16-bit integer - hex value of byte at that address is printed
+;
+; DP_A, DP_X, DP_Y - print hex value of that register
+;
+; print - always prints using osasci
+; preserves: A; X; Y: p
+;
+; debug_print - prints using osasci if the VON flag is set
+; preserves: A; X; Y; P
+
+DP_A=-1
+DP_X=-2
+DP_Y=-3
+DP_P=-4
+
+print: .macro items
+                php             ;103=p
+                pha             ;102=a
+                txa
+                pha             ;101=x
+                tsx
+                .for i=0,i<len(\items),i+=1
+
+                .if type(\items[i])==str
+
+                .if \items[i]=="\r"
+                jsr osnewl
+                .elsif len(\items[i])==1
+                lda #\items[i][0]
+                jsr osasci
+                .else
+                jsr pcprint
+                .text \items[i],255
+                .endif
+                
+                .elsif type(\items[i])==int||type(\items[i])==bits||type(\items[i])==code
+                
+                .if \items[i]>=0&&\items[i]<=65535
+                lda \items[i]
+                jsr print_hex_byte
+                .elsif \items[i]==DP_A
+                lda $102,x
+                jsr print_hex_byte
+                .elsif \items[i]==DP_X
+                lda $101,x
+                jsr print_hex_byte
+                .elsif \items[i]==DP_Y
+                tya
+                jsr print_hex_byte
+                .elsif \items[i]==DP_P
+                lda $103,x
+                jsr print_p
+                .else
+                .cerror true,"bad debug_print integer"
+                .endif
+
+                .else
+
+                .cerror true,"bad debug_print item: ",\items[i]," ",type(\items[i])
+
+                .endif
+                
+                .next
+                
+                pla
+                tax
+                pla
+                plp
+                .endm
+
+;-------------------------------------------------------------------------
+;
+;
+
+debug_print .macro items,enabled=true
+                .if enable_debug_print
+                .if \enabled
+                php             ;104=p
+                jsr get_vstatus
+                bcs +
+                jmp debug_print_done
++
+                print list(\items)
+debug_print_done:
+                plp
+                .endif
+                .endif
+                .endm
+                
+;-------------------------------------------------------------------------
+;
+;
+;
+
+strings_list .macro strings
+
+addresses:=[]
+strings:
+                .for i=0,i<len(\strings),i+=1
+addresses:=addresses..[*]
+                .text \strings[i],255
+                .next
+
+l:
+                .byte <addresses
+h:
+                .byte >addresses
+                .endm
+
+;-------------------------------------------------------------------------
+
+brk_error .macro code,text
+                jsr dobrk
+                .text \code,\text,0
+                .endm
+                
