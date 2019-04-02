@@ -216,16 +216,21 @@ files on other volumes are treated the same as files on the current
 volume. Aside from the inconvenient, verbose names there should be
 nothing particular to bear in mind when accessing them.
 
-## Wildcard OSFILE names for `LOAD`, `*LOAD`, etc.
+## Wildcard names
 
-OSFILE A=255 supports wildcard names, when the wildcards only match
-one file. This can save typing when using BASIC's `LOAD` or the
-`*LOAD` command.
+Unlike the DFS, wildcard names are supported in most cases where a
+file is going to be read: `OSFILE` (`LOAD`, `*LOAD`, etc.), `OSFILE`
+when opening for read (`OPENIN`), and various OS/FS commands (`*DUMP`,
+`*TYPE`, etc.).
 
-An `Ambiguous name` error will be given if multiple files match.
+This doesn't do anything clever, and is intended purely to save typing
+on the command line. The wildcard name must match exactly one file,
+and an `Ambiguous name` error will be given if multiple files match.
+(If no names match, the behaviour is the same as if a non-wildcard
+name was given: `File not found` for `*LOAD`, a result of 0 from
+`OPENIN`, etc.)
 
-Wildcards are not supported for other OSFILE commands; this is
-designed to be purely for convenience when using `LOAD`/`*LOAD`.
+Wildcards are not permitted when saving, deleting or renaming files.
 
 # Command reference
 
@@ -401,7 +406,8 @@ Produce wide hex dump of file, for use in 80 column modes.
 
 ### `WRITE <fsp> <drive> <type> ###
 
-**Overwrites I/O processor memory from OSHWM onwards!**
+**Overwrites I/O processor memory from OSHWM onwards, and writes to
+the disk in the specified drive, no questions asked!**
 
 Write a DFS/ADFS disk image to a formatted disk.
 
@@ -521,4 +527,3 @@ address is &FFFFFFFF.
 
 (This usually means the file has a 0-byte .inf file, but these
 addresses can also be assigned manually.)
-

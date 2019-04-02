@@ -1120,7 +1120,7 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const lines = await this.bfs.readTextFile(await this.bfs.getBeebFile(await this.bfs.parseFQN(commandLine.parts[1])));
+        const lines = await this.bfs.readTextFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
 
         return this.textResponse(lines.join(BNL) + BNL);
     }
@@ -1130,7 +1130,7 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const lines = await this.bfs.readTextFile(await this.bfs.getBeebFile(await this.bfs.parseFQN(commandLine.parts[1])));
+        const lines = await this.bfs.readTextFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
 
         let text = '';
 
@@ -1198,7 +1198,7 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const data = await this.bfs.readFile(await this.bfs.getBeebFile(await this.bfs.parseFQN(commandLine.parts[1])));
+        const data = await this.bfs.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
 
         let text = '';
 
@@ -1320,7 +1320,7 @@ export class Server {
         const driveString = commandLine.parts[2];
         const type = commandLine.parts[3].toLowerCase();
 
-        const data = await this.bfs.readFile(await this.bfs.getBeebFile(await this.bfs.parseFQN(commandLine.parts[1])));
+        const data = await this.bfs.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
 
         if (driveString.length !== 1 || !utils.isdigit(driveString)) {
             throw new CommandSyntaxError();
