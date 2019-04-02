@@ -6067,17 +6067,17 @@ write_image_do_osword: .proc
 
 ;-------------------------------------------------------------------------
 write_image_io_error: .proc
-                pha
-                
-                jsr init_blfs
+                pha             ;save error code
+
+                lda #blfs_fs_number
+                jsr select_fs
                 
                 jsr pcprint
                 .text "Write error: &",255
 
-                pla
+                pla             ;restore error code
                 jsr print_hex_byte
                 jsr osnewl
 
                 .brk_error 199,"Disc fault"
                 .pend
-
