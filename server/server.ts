@@ -133,7 +133,9 @@ class CommandSyntaxError extends Error {
 
 export class Server {
     private bfs: beebfs.BeebFS;
-    private romPath: string;
+    // romPath is set directly from the command line options struct, which is
+    // why it's a bit inconistent.
+    private romPath: string | null;
     private stringBuffer: Buffer | undefined;
     private stringBufferIdx: number;
     private commands: Command[];
@@ -145,7 +147,7 @@ export class Server {
     private imageParts: Buffer[] | undefined;
     private imagePartIdx: number;
 
-    public constructor(romPath: string, bfs: beebfs.BeebFS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
+    public constructor(romPath: string | null, bfs: beebfs.BeebFS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
         this.romPath = romPath;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
@@ -267,12 +269,16 @@ export class Server {
     }
 
     private async handleGetROM(handler: Handler, p: Buffer): Promise<Response> {
-        try {
-            const rom = await utils.fsReadFile(this.romPath);
-            this.log.pn('ROM is ' + rom.length + ' bytes');
-            return newResponse(beeblink.RESPONSE_DATA, rom);
-        } catch (error) {
-            return beebfs.BeebFS.throwServerError(error);
+        if (this.romPath === null) {
+            throw new beebfs.BeebError(beebfs.ErrorCode.DiscFault, 'No ROM available');
+        } else {
+            try {
+                const rom = await utils.fsReadFile(this.romPath);
+                this.log.pn('ROM is ' + rom.length + ' bytes');
+                return newResponse(beeblink.RESPONSE_DATA, rom);
+            } catch (error) {
+                return beebfs.BeebFS.throwServerError(error);
+            }
         }
     }
 
