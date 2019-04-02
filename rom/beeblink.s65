@@ -5647,8 +5647,6 @@ parts_loop:
                 jmp write_image_done
 
 +
-                jsr print_part_info
-                
                 lda #$72        ;MasRef J.11-12
                 jsr write_image_do_osword
                 
@@ -5801,43 +5799,9 @@ parts_loop:
                 jsr recv_next_disk_image_part
                 bcs write_image_done
 
-                jsr print_part_info
-
                 lda #$7f        ;MasRef J.11-14
                 jsr write_image_do_osword
                 jmp parts_loop
-
-print_part_info:
-                ; print info
-                lda #"D"
-                jsr oswrch
-
-                ldy #0
-                lda (write_image_data),y
-                jsr print_hex_byte
-
-                jsr pcprint
-                .text " T",255
-
-                ldy #7
-                lda (write_image_data),y
-                beq +
-                
-                ; convert track # to BCD, stupidly
-                tax
-                lda #0
-                clc
-                sed
--
-                adc #$01
-                dex
-                bne -
-                cld
-+
-                jsr print_hex_byte
-                
-                lda #13
-                jmp oswrch
 
                 .pend
 
@@ -5848,19 +5812,7 @@ write_image_canceled: .proc
                 jsr select_fs
                 .pend
 write_image_done: .block
-                ; 0123456
-                ; D01 T01 (dfs)
-                ; S012345 (adfs)
-                ldx #6
-                lda #" "
--
-                jsr oswrch
-                dex
-                bpl -
-
-                lda #13
-                jsr oswrch
-
+                jsr osnewl
                 rts
                 .bend
 
@@ -5921,31 +5873,6 @@ recv_next_disk_image_part: .proc
                 sta $b0,y       ;abs,y
                 dey
                 bpl -
-
-                ; adjust address in OSWORD parameter block to point to
-                ; disk image part data.
-                ldy #1
-
-                clc
-                
-                lda (write_image_data),y
-                adc write_image_data+0
-                sta (write_image_data),y
-                iny
-
-                lda (write_image_data),y
-                adc write_image_data+1
-                sta (write_image_data),y
-                iny
-                
-                lda (write_image_data),y
-                adc #$ff
-                sta (write_image_data),y
-                iny
-
-                lda (write_image_data),y
-                adc #$ff
-                sta (write_image_data),y
 
                 ; though carry almost certainly clear already...
                 clc
@@ -6046,9 +5973,45 @@ write_image_init: .proc
 ; exit: none
 ;       does a BRK if the OSWORD failed
 write_image_do_osword: .proc
-                cmp #$7f        ;set carry if OSWORD $7f
-                php
+                pha
+
+                ; print message.
+                ldy #16
+-
+                lda (write_image_data),y
+                beq +
+                jsr oswrch
+                iny
+                bne -
++
+
+                ; adjust address in OSWORD parameter block
+                ldy #1
+
+                clc
                 
+                lda (write_image_data),y
+                adc write_image_data+0
+                sta (write_image_data),y
+                iny
+
+                lda (write_image_data),y
+                adc write_image_data+1
+                sta (write_image_data),y
+                iny
+                
+                lda (write_image_data),y
+                adc #$ff
+                sta (write_image_data),y
+                iny
+
+                lda (write_image_data),y
+                adc #$ff
+                sta (write_image_data),y
+
+                ; actually do the OSWORD
+                pla
+                pha
                 ldx write_image_data+0
                 ldy write_image_data+1
                 jsr osword
@@ -6056,8 +6019,9 @@ write_image_do_osword: .proc
                 jsr get_write_image_buffers
 
                 ldy #0          ;error offset for OSWORD $72
-                plp
-                bcc +           ;taken if OSWORD $72
+                pla
+                cmp #$72
+                beq +           ;taken if OSWORD $72
                 ldy #10         ;error offset for OSWORD $7f
 +
                 lda (write_image_data),y

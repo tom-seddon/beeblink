@@ -72,7 +72,7 @@ function getSideTracks(diskImageData: Buffer, drive: number, diskImageTrack0Offs
         throwError('Bad DFS format (file count)');
     }
 
-    const tracksUsedMap = new Map<number, boolean>();
+    const usedTracksMap = new Map<number, boolean>();
 
     log.pn('Files on drive ' + drive + ':');
 
@@ -98,43 +98,29 @@ function getSideTracks(diskImageData: Buffer, drive: number, diskImageTrack0Offs
 
         for (let i = 0; i < size; i += 256) {
             const sector = startSector + Math.floor(i / SECTOR_SIZE_BYTES);
-            tracksUsedMap.set(Math.floor(sector / TRACK_SIZE_SECTORS), true);
+            usedTracksMap.set(Math.floor(sector / TRACK_SIZE_SECTORS), true);
         }
     }
 
     const tracks: ITrack[] = [];
-    for (const trackIndex of tracksUsedMap.keys()) {
-        const headerSize = 16;//needs to be >=11
-        const data = Buffer.alloc(headerSize + TRACK_SIZE_BYTES);
-
-        data.writeUInt8(drive, 0);//drive number
-        data.writeUInt32LE(headerSize, 1);//data offset
-        data.writeUInt8(3, 5);//parameter count
-        data.writeUInt8(0x4b, 6);//write
-        data.writeUInt8(trackIndex, 7);//track number
-        data.writeUInt8(0, 8);//sector number
-        data.writeUInt8(1 << 5 | TRACK_SIZE_SECTORS, 9);//sector size (1=256 bytes)/count
-        data.writeUInt8(0, 10);//space for result
-
-        let srcIdx = diskImageTrack0Offset + trackIndex * diskImageTrackSizeBytes;
-
-        for (let i = 0; i < TRACK_SIZE_BYTES; ++i) {
-            if (srcIdx < diskImageData.length) {
-                data[headerSize + i] = diskImageData[srcIdx];
-            }
-            ++srcIdx;
+    for (const index of usedTracksMap.keys()) {
+        const begin = diskImageTrack0Offset + index * diskImageTrackSizeBytes;
+        if (begin >= diskImageData.length) {
+            throwError('Bad DFS format (overrun)');
         }
 
-        tracks.push({ drive, index: trackIndex, data });
-    }
+        // Assume end overrun isn't an error, just a correctly truncated image. 
+        let end = begin + TRACK_SIZE_BYTES;
+        if (end > diskImageData.length) {
+            end = diskImageData.length;
+        }
 
-    tracks.sort(compareTracks);
-
-    log.p('Tracks used:');
-    for (const track of tracks) {
-        log.p(' ' + track.index);
+        tracks.push({
+            drive,
+            index,
+            data: Buffer.from(diskImageData.buffer, begin, end - begin),
+        });
     }
-    log.pn('');
 
     return tracks;
 }
@@ -144,8 +130,26 @@ function getPartBuffers(tracks: ITrack[]): Buffer[] {
 
     tracks.sort(compareTracks);
 
-    for (const track of tracks) {
-        buffers.push(track.data);
+    for (let i = 0; i < tracks.length; ++i) {
+        const messageString = String.fromCharCode(13) + 'Writing: ' + (((i + 1) / tracks.length) * 100.0).toFixed(1) + '%' + String.fromCharCode(0);
+        const messageData = Buffer.from(messageString, 'binary');
+
+        const data = Buffer.concat([
+            Buffer.alloc(16),
+            messageData,
+            tracks[i].data,
+        ]);
+
+        data.writeUInt8(tracks[i].drive, 0);//drive number
+        data.writeUInt32LE(16 + messageData.length, 1);//data offset
+        data.writeUInt8(3, 5);//parameter count
+        data.writeUInt8(0x4b, 6);//write
+        data.writeUInt8(tracks[i].index, 7);//track number
+        data.writeUInt8(0, 8);//sector number
+        data.writeUInt8(1 << 5 | TRACK_SIZE_SECTORS, 9);//sector size (1=256 bytes)/count
+        data.writeUInt8(0, 10);//space for result
+
+        buffers.push(data);
     }
 
     return buffers;

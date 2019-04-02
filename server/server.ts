@@ -856,13 +856,7 @@ export class Server {
             this.imageParts = undefined;
             return newResponse(beeblink.RESPONSE_NO);
         } else {
-            const part = this.imageParts[this.imagePartIdx++];
-
-            if (part.length > beeblink.MAX_DISK_IMAGE_PART_SIZE) {
-                return this.internalError('Disk part too large');//aaggh.
-            }
-
-            return newResponse(beeblink.RESPONSE_DATA, part);
+            return newResponse(beeblink.RESPONSE_DATA, this.imageParts[this.imagePartIdx++]);
         }
     }
 

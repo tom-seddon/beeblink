@@ -177,15 +177,18 @@ export function getADFSImage(data: Buffer, drive: number, log: utils.Log): IADFS
 
     log.pn(parts.length + ' parts');
 
-    // Add an OSWORD $72 parameter block to each part.
-    const parts2: Buffer[] = [];
+    // Add an OSWORD $72 parameter block and a message to each part.
+    const parts2: Buffer[] = [];//nope... not sure about the naming here.
 
-    for (const part of parts) {
-        const parameterBlockSizeBytes = 16;
+    for (let partIdx = 0; partIdx < parts.length; ++partIdx) {
+        const part = parts[partIdx];
 
-        const part2 = Buffer.concat([Buffer.alloc(parameterBlockSizeBytes), part.data]);
+        const messageString = String.fromCharCode(13) + 'Writing: ' + (((partIdx + 1) / parts.length) * 100.0).toFixed(1) + '%' + String.fromCharCode(0);
+        const messageData = Buffer.from(messageString, 'binary');
 
-        part2.writeInt32LE(parameterBlockSizeBytes, 1);//data pointer
+        const part2 = Buffer.concat([Buffer.alloc(16), messageData, part.data]);
+
+        part2.writeInt32LE(16 + messageData.length, 1);//data pointer
         part2.writeUInt8(0x0a, 5);//0x0a=write
 
         // disk address is big-endian.

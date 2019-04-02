@@ -255,10 +255,15 @@ export const REQUEST_SPEED_TEST = 0x18;
 //
 // Response is NO if all parts have been consumed.
 //
-// Response is DATA if there is another part: an OSWORD 7f/72 control block,
-// then the data. The address value in the control block (bytes 1...5 inclusive)
-// is an offset relative to the start of the data and must have the data address
-// added to it.
+// Response is DATA if there is another part:
+
+// +0     - OSWORD $72/$7f parameter block, max 16 bytes
+// +16... - string to print, CR-terminated
+// +N...  - OSWORD $72/$7f data
+
+// The address value in the parameter block (bytes 1...5 inclusive) is an offset
+// relative to the start of the parameter block, and must have the parameter
+// block address added to it.
 export const REQUEST_NEXT_DISK_IMAGE_PART = 0x19;
 
 /////////////////////////////////////////////////////////////////////////
@@ -471,9 +476,9 @@ export const RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER = 5;
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// 4112 = 4096 (ADFS track size) + 16 (space for OSWORD $7f/$72 parameter block)
+// 4351 = 4096 (ADFS track size) + 255 (space for additional stuff)
 // - the make_constants script is not clever enough to understand expressions.
 //
-// The parameter block part promises to be <256 bytes. Mask this value with
+// The additional stuff part promises to be <256 bytes. Mask this value with
 // 0xff00 to determine the maximum valid size for the sector data.
-export const MAX_DISK_IMAGE_PART_SIZE = 4112;
+export const MAX_DISK_IMAGE_PART_SIZE = 4351;
