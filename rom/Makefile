@@ -19,19 +19,26 @@ BUILD_TIME:=$(shell date '+%Y-%m-%d %H:%M:%S')
 build:
 	mkdir -p $(DEST)
 	python ../tools/make_constants.py -o $(DEST)/beeblink_constants.s65 ../server/beeblink.ts 6502
-	$(TASS) beeblink.s65 -L$(DEST)/beeblink.lst -o$(DEST)/beeblink.rom "-DVERSION=\"$(VER)\"" "-DBUILD_TIME=\"$(BUILD_TIME)\"" "-DCOMMIT=\"$(COMMIT)\""
 
-# (Hack, for my benefit, on my computer - make a second copy of the
-# BeebLink ROM for my BBC B that has some extra stuff in it.)
-ifneq ($(OS),Windows_NT)
-ifeq ($(shell uname -sn),Darwin tmbp.local)
-ifeq ($(shell whoami),tom)
-	smload_join $(DEST)/beeblink.rom $(HOME)/beeb/beeb-files/stuff/65boot/0/$$.TUBEROM '../../startup_rom/.build/.tmp/startup_module.rom' -o $(DEST)/beeblink_b.rom
-	cp $(DEST)/beeblink_b.rom ../../startup_rom/.build/startup_rom/0/R.BEEBLINK
-	touch ../../startup_rom/.build/startup_rom/0/R.BEEBLINK.inf
-endif
-endif
-endif
+# 65120 = $fe60 - can't figure out how to get the $ through without
+# making a mess...
+	$(MAKE) _rom SUFFIX=avr_fe60 "EXTRA_ARGS=-Dlink_avr=true -Dlink_avr_via=65120"
+
+.PHONY:_rom
+_rom:
+	$(TASS) beeblink.s65 -L$(DEST)/beeblink_$(SUFFIX).lst -o$(DEST)/beeblink_$(SUFFIX).rom "-DVERSION=\"$(VER)\"" "-DBUILD_TIME=\"$(BUILD_TIME)\"" "-DCOMMIT=\"$(COMMIT)\"" $(EXTRA_ARGS)
+
+# # (Hack, for my benefit, on my computer - make a second copy of the
+# # BeebLink ROM for my BBC B that has some extra stuff in it.)
+# ifneq ($(OS),Windows_NT)
+# ifeq ($(shell uname -sn),Darwin tmbp.local)
+# ifeq ($(shell whoami),tom)
+# 	smload_join $(DEST)/beeblink.rom $(HOME)/beeb/beeb-files/stuff/65boot/0/$$.TUBEROM '../../startup_rom/.build/.tmp/startup_module.rom' -o $(DEST)/beeblink_b.rom
+# 	cp $(DEST)/beeblink_b.rom ../../startup_rom/.build/startup_rom/0/R.BEEBLINK
+# 	touch ../../startup_rom/.build/startup_rom/0/R.BEEBLINK.inf
+# endif
+# endif
+# endif
 
 .PHONY:clean
 clean:

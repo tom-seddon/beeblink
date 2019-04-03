@@ -46,7 +46,8 @@ const DEFAULT_USB_PID = 0xbeeb;
 
 const DEVICE_RETRY_DELAY_MS = 1000;
 
-const DEFAULT_BEEBLINK_ROM = './beeblink.rom';
+const DEFAULT_BEEBLINK_AVR_ROM = './beeblink_avr_fe60.rom';
+const DEFAULT_BEEBLINK_SERIAL_ROM = './beeblink_tube_serial.rom';
 
 const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
 
@@ -62,7 +63,8 @@ const DEFAULT_SERIAL_BAUD_RATE = 115200;
 interface IConfigFile {
     folders: string[] | undefined;
     defaultVolume: string | undefined;
-    rom: string | undefined;
+    avr_rom: string | undefined;
+    serial_rom: string | undefined;
     git: boolean | undefined;
 }
 
@@ -72,7 +74,8 @@ interface IConfigFile {
 interface ICommandLineOptions {
     verbose: boolean;
     device: number[];
-    rom: string | null;
+    avr_rom: string | null;
+    serial_rom: string | null;
     fs_verbose: boolean;
     server_verbose: boolean;
     default_volume: string | null;
@@ -381,13 +384,20 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
         }
     }
 
-    if (options.rom === null) {
-        if (config.rom !== undefined) {
-            options.rom = config.rom;
+    function getROM(optionValue: string | null, configValue: string | undefined, defaultValue: string): string {
+        if (optionValue !== null) {
+            return optionValue;
         } else {
-            options.rom = DEFAULT_BEEBLINK_ROM;
+            if (configValue !== undefined) {
+                return configValue;
+            } else {
+                return defaultValue;
+            }
         }
     }
+
+    options.avr_rom = getROM(options.avr_rom, config.avr_rom, DEFAULT_BEEBLINK_AVR_ROM);
+    options.serial_rom = getROM(options.serial_rom, config.serial_rom, DEFAULT_BEEBLINK_SERIAL_ROM);
 
     options.git = options.git || config.git === true;
 }
@@ -403,7 +413,8 @@ async function maybeSaveConfig(options: ICommandLineOptions): Promise<void> {
     const config: IConfigFile = {
         defaultVolume: options.default_volume !== null ? options.default_volume : undefined,
         folders: options.folders,
-        rom: options.rom !== null ? options.rom : undefined,
+        avr_rom: options.avr_rom !== null ? options.avr_rom : undefined,
+        serial_rom: options.serial_rom !== null ? options.serial_rom : undefined,
         git: options.git !== null ? options.git : undefined,
     };
 
@@ -698,8 +709,12 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         process.stderr.write('Note: new volumes will be created in: ' + options.folders[0] + '\n');
     }
 
-    if (!await utils.fsExists(options.rom!)) {
-        process.stderr.write('ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.rom + '\n');
+    if (!await utils.fsExists(options.avr_rom!)) {
+        process.stderr.write('AVR ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.avr_rom + '\n');
+    }
+
+    if(!await utils.fsExists(options.serial_rom!)) {
+        process.stderr.write('Serial ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.avr_rom + '\n');
     }
 
     if (!options.http) {
@@ -869,11 +884,11 @@ function handleHTTP(options: ICommandLineOptions, createServer: () => Promise<Se
                 return await errorResponse(405, 'only GET is permitted');
             }
 
-            if (options.rom === null) {
+            if (options.avr_rom === null) {
                 return await errorResponse(404, undefined);
             }
 
-            const rom = await utils.tryReadFile(options.rom);
+            const rom = await utils.tryReadFile(options.avr_rom);
             if (rom === undefined) {
                 return await errorResponse(501, undefined);
             }
@@ -1173,7 +1188,7 @@ async function main(options: ICommandLineOptions) {
             await bfs.mount(defaultVolume);
         }
 
-        const server = new Server(options.rom, bfs, serverLogPrefix, colours, options.packet_verbose);
+        const server = new Server(options.avr_rom, bfs, serverLogPrefix, colours, options.packet_verbose);
         return server;
     }
 
@@ -1224,7 +1239,8 @@ function integer(s: string): number {
 
     parser.addArgument(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });
     parser.addArgument(['--device'], { nargs: 2, metavar: 'ID', type: usbVIDOrPID, defaultValue: [DEFAULT_USB_VID, DEFAULT_USB_PID], help: 'set USB device VID/PID. Default: 0x' + utils.hex4(DEFAULT_USB_VID) + ' 0x' + utils.hex4(DEFAULT_USB_PID) });
-    parser.addArgument(['--rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_ROM });
+    parser.addArgument(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink AVR ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM });
+    parser.addArgument(['--serial-rom'], { metavar: 'FILE:', defaultValue: null, help: 'read BeebLink serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_SERIAL_ROM });
     parser.addArgument(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
     parser.addArgument(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
     parser.addArgument(['--packet-verbose'], { action: 'storeTrue', help: 'dump incoming/outgoing request data' });

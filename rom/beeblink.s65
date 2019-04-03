@@ -245,9 +245,9 @@ private_old_cliv .fill 2
                 .byte rom_copyright&$ff
                 .byte 0         ;version
 rom_name:
-                .text "BeebLink"
+                .text "BeebLink (",link_name,")"
                 .if default_von
-                .text "(VON)"
+                .text " (VON)"
                 .endif
 rom_version:
                 .text 0
@@ -259,7 +259,15 @@ rom_copyright:
 
 ;-------------------------------------------------------------------------
 
+                .weak
+link_avr=false
+                .endweak
+                
+                .if link_avr
                 .include "avr.s65"
+                .else
+                .error "unknown link type"
+                .endif
 
 ;-------------------------------------------------------------------------
 

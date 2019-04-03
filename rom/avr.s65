@@ -19,10 +19,6 @@
 ;
 ;-------------------------------------------------------------------------
 
-; In principle, it ought to work with multiple user ports. Might even
-; be possible to fix it up for port A...
-via=$fe60
-                
 ;-------------------------------------------------------------------------
 
                 .section fs_scratch_workspace
@@ -31,9 +27,19 @@ scratch_old_acr: .fill 1
 
 ;-------------------------------------------------------------------------
 
+                .weak
+; In principle, it ought to work with multiple user ports. Might even
+; be possible to fix it up for port A...
+link_avr_via=$fe60
+                .endweak
+                
 avr: .block
+                
+                
                 .section code
 
+via=link_avr_via
+                
 ;-------------------------------------------------------------------------
 ;
 ; Configure a prepared VIA for the receive operation. Must have
@@ -647,6 +653,8 @@ no_pages:
 ;-------------------------------------------------------------------------
 
 ; Link interface.
+
+link_name="AVR "..format("%04x",avr.via)
 
 ; Prepare link. Get everything ready and put it in send mode.
 link_prepare=avr.via_prepare
