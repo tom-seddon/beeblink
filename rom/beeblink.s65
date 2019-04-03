@@ -73,10 +73,10 @@ enable_debug_print=true
 ; Various verbosity flags.
 verbose_file_data=false
 
-; Use optimised or simplified version of send/receive file data
-; routines.
-recv_file_data_optimised=true
-send_file_data_optimised=true
+; ; Use optimised or simplified version of send/receive file data
+; ; routines.
+; recv_file_data_optimised=true
+; send_file_data_optimised=true
 
 ; If true, include support for *BLSPEEDTEST command.
 enable_speed_test=true
@@ -515,7 +515,7 @@ show_avr_status:
                 jsr pcprint
                 .text " - ",255
 
-                jsr print_beeblink_status
+                jsr link_print_status
 
                 php
 
@@ -1453,7 +1453,7 @@ reg:
 ; preserves: X; Y
 ;
 send_request_n: .proc
-                jsr via_prepare
+                jsr link_prepare
 
                 .debug_print ["send_request_n: Request: T=&",DP_A," payload_size=&",scratch_payload_size+3,scratch_payload_size+2,scratch_payload_size+1,scratch_payload_size+0,"\r"]
 
@@ -1461,19 +1461,19 @@ send_request_n: .proc
                 ; send. But it's so annoying to check for.
                 ora #$80
 
-                jsr send_byte
+                jsr link_send_byte
 
                 lda scratch_payload_size+0
-                jsr send_byte
+                jsr link_send_byte
 
                 lda scratch_payload_size+1
-                jsr send_byte
+                jsr link_send_byte
                 
                 lda scratch_payload_size+2
-                jsr send_byte
+                jsr link_send_byte
 
                 lda scratch_payload_size+3
-                jsr send_byte
+                jsr link_send_byte
 
                 jsr negate_payload_size
 
@@ -1500,7 +1500,7 @@ send_payload_byte: .proc
 
 more:
                 pla
-                jsr send_byte
+                jsr link_send_byte
                 jsr inc_payload_size
                 sec
                 rts
@@ -1517,14 +1517,14 @@ more:
 ;        X = packet P
 ;
 send_request_1: .proc
-                jsr via_prepare
+                jsr link_prepare
                 
 without_prepare:
                 .debug_print ["send_request_1: T=&",DP_A," P=&",DP_X,"\r"]
 
-                jsr send_byte
+                jsr link_send_byte
                 txa
-                jsr send_byte
+                jsr link_send_byte
                 rts
                 .pend
 
@@ -1542,26 +1542,26 @@ without_prepare:
 ;       X = response C (*not* P!)
 
 send_request_1_recv_response_1: .block
-                jsr via_prepare
+                jsr link_prepare
 
 without_prepare:
-                jsr send_byte
+                jsr link_send_byte
 send_payload:
                 txa
-                jsr send_byte
+                jsr link_send_byte
 
                 .bend
 
 recv_response_1: .block
-                .via_prepare_for_recv
+                .link_prepare_for_recv
 
 without_prepare:
-                jsr recv_byte
+                jsr link_recv_byte
                 bmi got_n
 
                 tax
 
-                jsr recv_byte
+                jsr link_recv_byte
                 rts
 
 got_n:
@@ -1582,24 +1582,6 @@ got_n:
 
 ;-------------------------------------------------------------------------
 ;
-; As send_request_1_recv_response_1, but with a timeout for the
-; initial byte.
-;
-; entry: A = request C (bit 7 clear)
-;        X = request P
-; exit: C = 0: timed out sending first byte
-;       C = 1: A = response P (*not* C!) (0 if response payload was 0 bytes)
-;              X = response C (*not* P!)
-;
-send_request_1_with_timeout_recv_response_1: .proc
-                jsr prepare_via
-                jsr send_byte_with_timeout
-                bcs send_request_1_recv_response_1.send_payload
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
 ; Receive response and discard the payload. For use when the response
 ; is either an error (which will be handled by recv_response) or not
 ; (and it doesn't really matter what exactly).
@@ -1610,7 +1592,7 @@ send_request_1_with_timeout_recv_response_1: .proc
 recv_response_and_discard_payload: .proc
                 .push32 scratch_payload_size
                 
-                .via_prepare_for_recv
+                .link_prepare_for_recv
 
                 jsr recv_response
 
@@ -1637,9 +1619,9 @@ recv_response_and_discard_payload: .proc
 ; preserves: X; Y
                 
 recv_response: .proc
-                .via_prepare_for_recv
+                .link_prepare_for_recv
 
-                jsr recv_byte
+                jsr link_recv_byte
                 bmi got_n
 got_1:
                 pha
@@ -1657,13 +1639,13 @@ got_1:
 
 got_n:
                 pha
-                jsr recv_byte
+                jsr link_recv_byte
                 sta scratch_payload_size+0
-                jsr recv_byte
+                jsr link_recv_byte
                 sta scratch_payload_size+1
-                jsr recv_byte
+                jsr link_recv_byte
                 sta scratch_payload_size+2
-                jsr recv_byte
+                jsr link_recv_byte
                 sta scratch_payload_size+3
                 jsr negate_payload_size
                 pla
@@ -1729,14 +1711,14 @@ recv_payload_byte: .proc
                 jsr test_payload_size
                 bne more
 
-                jsr via_unprepare
+                jsr link_unprepare
                 lda #0
                 
                 clc
                 rts
 
 more:
-                jsr recv_byte
+                jsr link_recv_byte
                 jsr inc_payload_size
                 sec
                 rts
@@ -3120,29 +3102,29 @@ is_tube_active: .proc
 ; the ROM.
 ;
 
-                .if recv_file_data_optimised
+;                 .if recv_file_data_optimised
                 
-recv_file_data_parasite=recv_file_data_parasite_pagewise
-recv_file_data_host=recv_file_data_host_pagewise
+; recv_file_data_parasite=recv_file_data_parasite_pagewise
+; recv_file_data_host=recv_file_data_host_pagewise
 
-                .else
+;                 .else
 
-recv_file_data_parasite=recv_file_data_parasite_bytewise
-recv_file_data_host=recv_file_data_host_bytewise
+; recv_file_data_parasite=recv_file_data_parasite_bytewise
+; recv_file_data_host=recv_file_data_host_bytewise
 
-                .endif
+;                 .endif
 
-                .if send_file_data_optimised
+;                 .if send_file_data_optimised
 
-send_file_data_parasite=send_file_data_parasite_pagewise
-send_file_data_host=send_file_data_host_pagewise
+; send_file_data_parasite=send_file_data_parasite_pagewise
+; send_file_data_host=send_file_data_host_pagewise
 
-                .else
+;                 .else
 
-send_file_data_parasite=send_file_data_parasite_bytewise
-send_file_data_host=send_file_data_host_bytewise
+; send_file_data_parasite=send_file_data_parasite_bytewise
+; send_file_data_host=send_file_data_host_bytewise
                 
-                .endif
+;                 .endif
                 
 ;-------------------------------------------------------------------------
 ;
@@ -3159,85 +3141,15 @@ recv_file_data: .proc
                 ldx #scratch_load
                 jsr is_parasite_address
                 bcc +
-                jsr recv_file_data_parasite
+                jsr link_recv_file_data_parasite
                 jmp done
 +
-                jsr recv_file_data_host
+                jsr link_recv_file_data_host
 done:
-                jsr via_unprepare
+                jsr link_unprepare
                 rts
                 .pend
 
-;-------------------------------------------------------------------------
-
-recv_file_data_host_pagewise: .proc
-
-                ; Receive data in 256-byte chunks, then receive any
-                ; stragglers.
-
-                jsr fix_up_packet_size_for_pagewise_transfer
-                bcc last_page
-
-num_unrolls=4
-                .cerror 256%num_unrolls!=0,"no"
-                
-first_pages:
-                ldy #0
-one_page_loop:
-                .rept num_unrolls
-                
-                sta via+0
-
--
-                lda via+13
-                and #$10
-                beq -
-
-                lda via+0
-                sta (scratch_load),y
-
-                iny
-
-                .next
-                
-                bne one_page_loop
-
-                inc scratch_load+1
-                
-                inc scratch_payload_size+1
-                bne one_page_loop
-                inc scratch_payload_size+2
-                bne one_page_loop
-                inc scratch_payload_size+3
-                bne one_page_loop
-
-last_page:
-                ldx scratch_payload_size+0
-                beq done
-                
-                ldy #0
-last_page_loop:
-                sta via+0
-
--
-                lda via+13
-                and #$10
-                beq -
-
-                lda via+0
-                sta (scratch_load),y
-
-                iny
-                inx
-                bne last_page_loop
-
-                ; ldx #scratch_load
-                ; jsr addyz16
-done:
-                
-                rts
-                .pend
-                
 ;-------------------------------------------------------------------------
 
 recv_file_data_host_bytewise: .proc
@@ -3264,108 +3176,6 @@ done:
 
 ;-------------------------------------------------------------------------
 
-recv_file_data_parasite_pagewise: .proc
-
-                jsr claim_tube
-
-                jsr fix_up_packet_size_for_pagewise_transfer
-                bcc last_page
-
-first_pages:
-                ldx #<scratch_load
-                ldy #>scratch_load
-                lda #tube_256_byte_host_to_parasite
-                jsr $406
-
-num_unrolls=2
-                .cerror 256%num_unrolls!=0,"no"
-                
-                ; The recv case is naturally slower than the send
-                ; case, so there's no gap to put the iny in. It's
-                ; quicker to divide the counter by the number of
-                ; unrolls.
-                
-                ldy #(256/num_unrolls)&$ff
-
-                ; inter-byte delay is 10 uS, or 20 cycles
-
-                lda #$10        ;VIA IFR mask
-
-one_page_loop:
-
-                .rept num_unrolls
-                
-                stx via+0       ;+6 = 6
-
--
-                bit via+13       ;+6 = 12
-                beq -           ;+2 = 14
-
-                ldx via+0       ;+6 = 20
-                stx $fee5       ;+4 = 24 | +0
-
-                .next
-
-                dey
-                bne one_page_loop
-
-                inc scratch_load+1
-                bne +
-                inc scratch_load+2
-                bne +
-                inc scratch_load+3
-+
-
-                inc scratch_payload_size+1
-                bne first_pages
-                inc scratch_payload_size+2
-                bne first_pages
-                inc scratch_payload_size+3
-                bne first_pages
-
-last_page:
-                lda scratch_payload_size+0
-                beq done
-
-                ldx #<scratch_load
-                ldy #>scratch_load
-                lda #tube_multi_byte_host_to_parasite
-                jsr $406
-
-                ldx scratch_payload_size+0
-
-                ; inter-byte delay is 24 uS, or 48 cycles
-
-                lda #$10        ;IFR mask
-                
-last_page_loop:
-                stx via+0       ;+6 = 11
--
-                bit via+13      ;+6 = 17
-                beq -           ;+2 = 19
-
-                ldy via+0       ;+6 = 25
-
-                jsr delay_12_cycles ;+12 = 37
-
-                bit $ff         ;+3 = 40
-
-                nop             ;+2 = 42
-                nop             ;+2 = 44
-
-                sty $fee5       ;+4 = 48 | +0 = 0
-
-                inx                ;+2 = 2
-                bne last_page_loop ;+3 = 5
-                
-done:
-                jsr release_tube
-                
-                rts
-                .pend
-                
-;-------------------------------------------------------------------------
-
 recv_file_data_parasite_bytewise: .proc
 
                 jsr claim_tube
@@ -3390,50 +3200,6 @@ done:
 
 ;-------------------------------------------------------------------------
 ;
-; Fix up the packet size for a pagewise transfer. The result makes no
-; real sense, it's just convenient for the calling code.
-;
-; entry: !scratch_p_size = negated packet size
-; exit: ?scratch_p_size is negated number of bytes (possibly 0) to
-;       transfer in the final loop
-;       C=0 if there are 0 whole pages to transfer
-;       C=1 if there are >=1 whole pages to transfer. The negated
-;           page count is in scratch_p_size+1..3 (a 24-bit value).
-;
-                .if recv_file_data_optimised
-fix_up_packet_size_for_pagewise_transfer: .proc
-                ldy scratch_payload_size+0
-
-                jsr negate_payload_size
-                
-                lda scratch_payload_size+1
-                ora scratch_payload_size+2
-                ora scratch_payload_size+3
-                beq no_pages
-
-some_pages:
-                lda #0
-                sta scratch_payload_size+0
-                jsr negate_payload_size
-                sty scratch_payload_size+0
-                sec
-                rts
-
-no_pages:
-                sty scratch_payload_size+0
-                clc
-                rts
-
-
-                
-                jsr negate_payload_size
-                pla
-                rts
-                .pend
-                .endif
-
-;-------------------------------------------------------------------------
-;
 ; Send file data: whatever is left of the current payload.
 ;
 ; entry: !scratch_p_size = negated amount of data left
@@ -3446,73 +3212,10 @@ send_file_data: .proc
 +
                 ldx #scratch_load
                 jsr is_parasite_address
-                bcc send_file_data_host
-                jmp send_file_data_parasite
+                bcc link_send_file_data_host
+                jmp link_send_file_data_parasite
                 .pend
 
-;-------------------------------------------------------------------------
-;
-; Send file data from host memory, with a faster path for sending
-; 256-byte chunks when possible.
-;
-send_file_data_host_pagewise: .proc
-
-                jsr fix_up_packet_size_for_pagewise_transfer
-                bcc last_page
-
-num_unrolls=2
-                .cerror 256%num_unrolls!=0,"no"
-                
-first_pages:
-                ldy #0
-                
-one_page_loop:
-
-                .rept num_unrolls
-                
-                lda (scratch_load),y
-                sta via+0
-
-                lda #$10
--
-                bit via+13
-                beq -
-                
-                iny
-
-                .next
-                
-                bne one_page_loop
-
-                inc scratch_load+1
-
-                inc scratch_payload_size+1
-                bne one_page_loop
-                inc scratch_payload_size+2
-                bne one_page_loop
-                inc scratch_payload_size+2
-
-last_page:
-                ldx scratch_payload_size+0
-                beq done
-
-                ldy #0
-last_page_loop:
-                lda (scratch_load),y
-                sta via+0
--
-                lda via+13
-                and #$10
-                beq -
-
-                iny
-                inx
-                bne last_page_loop
-
-done:
-                rts
-                .pend
-                
 ;-------------------------------------------------------------------------
 ;
 ; Send file data from host memory, byte by byte.
@@ -3539,107 +3242,6 @@ send_host_loop:
 
 done:
 send_host_done:
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
-; Send file data from parasite memory, using the 256-byte Tube
-; transfer mode when possible.
-; 
-send_file_data_parasite_pagewise: .proc
-
-                jsr claim_tube
-
-                jsr fix_up_packet_size_for_pagewise_transfer
-                bcc last_page
-
-first_pages:
-                ldx #<scratch_load
-                ldy #>scratch_load
-                lda #tube_256_byte_parasite_to_host
-                jsr $406
-
-                ; initial delay is 19 uS, or 38 cycles
-                jsr delay_36_cycles
-                nop
-
-num_unrolls=4
-                
-                ldy #0
-                lda #$10     ;VIA IFR mask
-                ; inter-byte delay is 10 uS, or 20 cycles
-one_page_loop:
-
-                .rept num_unrolls
-                
-                ldx $fee5       ;+20 | +0
-                stx via+0       ;+6
--
-                bit via+13      ;+12
-                beq -           ;+14
-
-                ; There needs to be a 2-cycle delay here anyway, so no
-                ; point dividing the counter by the number of unrolls.
-                iny             ;+16
-
-                .next
-
-                bne one_page_loop
-                ;bne one_page_loop ;+19
-
-                inc scratch_load+1
-                bne +
-                inc scratch_load+2
-                bne +
-                inc scratch_load+3
-+
-
-                inc scratch_payload_size+1
-                bne first_pages
-                inc scratch_payload_size+2
-                bne first_pages
-                inc scratch_payload_size+3
-                bne first_pages
-
-last_page:
-                lda scratch_payload_size+0
-                beq done
-
-                ldx #<scratch_load
-                ldy #>scratch_load
-                lda #tube_multi_byte_parasite_to_host
-                jsr $406
-
-                ; initial delay is 24 uS, or 48 cycles
-                jsr delay_48_cycles
-
-                ldy #0
-                ldx scratch_payload_size+0
-                
-                ; inter-byte delay is 24 uS, or 48 cycles
-last_page_loop:
-                lda $fee5       ;48 | 0
-                sta via+0       ;6
--
-                lda via+13      ;12
-                and #$10        ;14
-                beq -           ;16
-
-                jsr delay_12_cycles ;28
-
-                nop             ;30
-                nop             ;32
-                nop             ;34
-                nop             ;36
-                bit $ff         ;39
-
-                inx             ;41
-
-                bne last_page_loop ;44
-
-done:
-                jsr release_tube
                 rts
                 .pend
 
@@ -3722,7 +3324,7 @@ push_stack_loop:
                 ; $101,y is the string buffer.
 
 loop:
-                .via_prepare_for_send
+                .link_prepare_for_send
 
                 lda #REQUEST_READ_STRING
                 jsr get_vstatus
