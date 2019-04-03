@@ -1553,7 +1553,7 @@ send_payload:
                 .bend
 
 recv_response_1: .block
-                .link_prepare_for_recv
+                jsr link_begin_recv
 
 without_prepare:
                 jsr link_recv_byte
@@ -1591,8 +1591,8 @@ got_n:
 ;
 recv_response_and_discard_payload: .proc
                 .push32 scratch_payload_size
-                
-                .link_prepare_for_recv
+
+                jsr link_begin_recv
 
                 jsr recv_response
 
@@ -1619,7 +1619,7 @@ recv_response_and_discard_payload: .proc
 ; preserves: X; Y
                 
 recv_response: .proc
-                .link_prepare_for_recv
+                jsr link_begin_recv
 
                 jsr link_recv_byte
                 bmi got_n
@@ -3324,7 +3324,7 @@ push_stack_loop:
                 ; $101,y is the string buffer.
 
 loop:
-                .link_prepare_for_send
+                jsr link_begin_send
 
                 lda #REQUEST_READ_STRING
                 jsr get_vstatus
