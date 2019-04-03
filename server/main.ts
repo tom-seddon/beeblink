@@ -91,8 +91,9 @@ interface ICommandLineOptions {
     packet_verbose: boolean;
     http_all_interfaces: boolean;
     libusb_debug_level: number | null;
-    serial_device: string[];
+    serial_device: string[] | null;
     serial_verbose: boolean;
+    list_serial_devices: boolean;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -654,6 +655,16 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         return false;
     }
 
+    if (options.list_serial_devices) {
+        const portInfos = await SerialPort.list();
+        process.stdout.write(portInfos.length + ' serial devices:\n');
+        for (let i = 0; i < portInfos.length; ++i) {
+            process.stdout.write('  ' + i + '. ' + portInfos[i].comName + '\n');
+        }
+
+        return false;
+    }
+
     log.pn('libusb_debug_level: ``' + options.libusb_debug_level + '\'\'');
     if (options.libusb_debug_level !== null) {
         usb.setDebugLevel(options.libusb_debug_level);
@@ -1065,24 +1076,26 @@ interface ISerialDevice {
 function getSerialDevices(options: ICommandLineOptions): ISerialDevice[] {
     const serialDevices: ISerialDevice[] = [];
 
-    for (const serialDeviceString of options.serial_device) {
-        const parts = serialDeviceString.split(':');
+    if (options.serial_device !== null) {
+        for (const serialDeviceString of options.serial_device) {
+            const parts = serialDeviceString.split(':');
 
-        let serialDevice: ISerialDevice;
-        if (parts.length === 1) {
-            serialDevice = { deviceName: parts[0], baud: DEFAULT_SERIAL_BAUD_RATE };
-        } else if (parts.length === 2) {
-            const baud = parseInt(parts[1], undefined);
-            if (Number.isNaN(baud)) {
-                throw new Error('invalid baud rate: ' + parts[1]);
+            let serialDevice: ISerialDevice;
+            if (parts.length === 1) {
+                serialDevice = { deviceName: parts[0], baud: DEFAULT_SERIAL_BAUD_RATE };
+            } else if (parts.length === 2) {
+                const baud = parseInt(parts[1], undefined);
+                if (Number.isNaN(baud)) {
+                    throw new Error('invalid baud rate: ' + parts[1]);
+                }
+
+                serialDevice = { deviceName: parts[0], baud };
+            } else {
+                throw new Error('invalid serial device syntax: ' + serialDeviceString);
             }
 
-            serialDevice = { deviceName: parts[0], baud };
-        } else {
-            throw new Error('invalid serial device syntax: ' + serialDeviceString);
+            serialDevices.push(serialDevice);
         }
-
-        serialDevices.push(serialDevice);
     }
 
     return serialDevices;
@@ -1234,6 +1247,7 @@ function integer(s: string): number {
     parser.addArgument(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
     parser.addArgument(['--serial-device'], { action: 'append', metavar: 'DEVICE(:BAUD)', help: 'listen on serial port DEVICE (optionally, with baud rate BAUD - default is ' + DEFAULT_SERIAL_BAUD_RATE + ')' });
     parser.addArgument(['--serial-verbose'], { action: 'storeTrue', help: 'extra serial-related output' });
+    parser.addArgument(['--list-serial-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
     //parser.addArgument(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
 
     const options = parser.parseArgs();
