@@ -66,8 +66,10 @@ export const CR_SET_SERIAL = 3;
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export const FIRST_FILE_HANDLE = 0xB0;
-export const NUM_FILE_HANDLES = 16;
+// The ROM can specify the handle range when it boots. This are the default
+// values used if it doesn't do that.
+export const DEFAULT_FIRST_FILE_HANDLE = 0xB0;
+export const DEFAULT_NUM_FILE_HANDLES = 16;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -265,6 +267,20 @@ export const REQUEST_SPEED_TEST = 0x18;
 // relative to the start of the parameter block, and must have the parameter
 // block address added to it.
 export const REQUEST_NEXT_DISK_IMAGE_PART = 0x19;
+
+// Set file handle range.
+//
+// The configurable handle range is there to allow multiple builds of the ROM to
+// coexist, and is no cleverer than necessary. The range is designed to be
+// hard-coded into the ROM, and not to change from boot to boot.
+//
+// If the range changes, any open files will be closed - but that's never
+// actually expected to happen. The first boot may change the range from the
+// default, but of course no files will be open at that point; and subsequent
+// boots are expected to supply the same parameters each time.
+//
+// P = first file handle; num file handles
+export const REQUEST_SET_FILE_HANDLE_RANGE = 0x1a;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////

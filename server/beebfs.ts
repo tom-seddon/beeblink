@@ -24,7 +24,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { FIRST_FILE_HANDLE, NUM_FILE_HANDLES } from './beeblink';
+import { DEFAULT_FIRST_FILE_HANDLE, DEFAULT_NUM_FILE_HANDLES } from './beeblink';
 import * as utils from './utils';
 import { BNL } from './utils';
 import { Chalk } from 'chalk';
@@ -990,6 +990,7 @@ export class BeebFS {
 
     private volume: BeebVolume | undefined;
 
+    private firstFileHandle: number;
     private openFiles: (OpenFile | undefined)[];
 
     private log: utils.Log;
@@ -1012,7 +1013,8 @@ export class BeebFS {
         this.resetDirs();
 
         this.openFiles = [];
-        for (let i = 0; i < NUM_FILE_HANDLES; ++i) {
+        this.firstFileHandle = DEFAULT_FIRST_FILE_HANDLE;
+        for (let i = 0; i < DEFAULT_NUM_FILE_HANDLES; ++i) {
             this.openFiles.push(undefined);
         }
 
@@ -1216,7 +1218,7 @@ export class BeebFS {
         let text = '';
         let anyOpen = false;
 
-        for (let i = 0; i < NUM_FILE_HANDLES; ++i) {
+        for (let i = 0; i < this.openFiles.length; ++i) {
             const openFile = this.openFiles[i];
             if (openFile === undefined) {
                 continue;
@@ -1224,7 +1226,7 @@ export class BeebFS {
 
             anyOpen = true;
 
-            text += '&' + utils.hex2(FIRST_FILE_HANDLE + i).toUpperCase() + ": ";
+            text += '&' + utils.hex2(this.firstFileHandle + i).toUpperCase() + ": ";
 
             if (openFile.read) {
                 if (openFile.write) {
@@ -1526,7 +1528,7 @@ export class BeebFS {
         }
 
         this.openFiles[index] = new OpenFile(hostPath, fqn, read, write, contents);
-        return FIRST_FILE_HANDLE + index;
+        return this.firstFileHandle + index;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1534,27 +1536,9 @@ export class BeebFS {
 
     public async OSFINDClose(handle: number): Promise<void> {
         if (handle === 0) {
-            // Close all.
-            let dataLost = false;
-
-            for (let index = 0; index < this.openFiles.length; ++index) {
-                try {
-                    await this.closeByIndex(index);
-                } catch (error) {
-                    if (error instanceof BeebError) {
-                        dataLost = true;
-                        // but keep going so that all the files get closed.
-                    } else {
-                        throw error;
-                    }
-                }
-            }
-
-            if (dataLost) {
-                BeebFS.throwError(ErrorCode.DataLost);
-            }
-        } else if (handle >= FIRST_FILE_HANDLE && handle < FIRST_FILE_HANDLE + NUM_FILE_HANDLES) {
-            const index = handle - FIRST_FILE_HANDLE;
+            await this.closeAllFiles();
+        } else if (handle >= this.firstFileHandle && handle < this.firstFileHandle + this.openFiles.length) {
+            const index = handle - this.firstFileHandle;
             if (this.openFiles[index] === undefined) {
                 BeebFS.throwError(ErrorCode.Channel);
             }
@@ -1786,10 +1770,39 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    public async setFileHandleRange(firstFileHandle: number, numFileHandles: number): Promise<void> {
+        this.log.pn(`Set file handle range: first handle = 0x${utils.hex2(firstFileHandle)}, num handles = ${numFileHandles}`);
+
+        if (firstFileHandle <= 0 || numFileHandles < 1 || firstFileHandle + numFileHandles > 256) {
+            this.log.pn(`Ignoring invalid settings.`);
+        } else {
+            if (firstFileHandle !== this.firstFileHandle || numFileHandles !== this.openFiles.length) {
+                this.log.pn(`Settings have changed - closing any open files.`);
+                try {
+                    await this.closeAllFiles();
+                } catch (error) {
+                    this.log.pn(`Ignoring closeAllFiles error: ${error}`);
+                }
+            }
+
+            this.firstFileHandle = firstFileHandle;
+
+            this.openFiles = [];
+            for (let i = 0; i < numFileHandles; ++i) {
+                this.openFiles.push(undefined);
+            }
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     private async getVolumeFromFSP(fsp: BeebFSP): Promise<BeebVolume> {
         if (fsp.volumeName !== undefined) {
             const volumes = await this.findVolumesMatching(fsp.volumeName);
-            if (volumes.length !== 1) {
+            if (volumes.length === 0) {
+                throw new BeebError(ErrorCode.FileNotFound, 'Volume not found');
+            } else if(volumes.length>1) {
                 throw new BeebError(ErrorCode.BadName, 'Ambiguous volume');
             }
 
@@ -2189,9 +2202,34 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    private async closeAllFiles(): Promise<void> {
+        // Close all.
+        let dataLost = false;
+
+        for (let index = 0; index < this.openFiles.length; ++index) {
+            try {
+                await this.closeByIndex(index);
+            } catch (error) {
+                if (error instanceof BeebError) {
+                    dataLost = true;
+                    // but keep going so that all the files get closed.
+                } else {
+                    throw error;
+                }
+            }
+        }
+
+        if (dataLost) {
+            BeebFS.throwError(ErrorCode.DataLost);
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     private getOpenFileByHandle(handle: number): OpenFile | undefined {
-        if (handle >= FIRST_FILE_HANDLE && handle < FIRST_FILE_HANDLE + NUM_FILE_HANDLES) {
-            return this.openFiles[handle - FIRST_FILE_HANDLE];
+        if (handle >= this.firstFileHandle && handle < this.firstFileHandle + this.openFiles.length) {
+            return this.openFiles[handle - this.firstFileHandle];
         } else {
             return undefined;
         }

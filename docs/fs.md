@@ -517,7 +517,7 @@ large. There's a (fairly arbitrary) size limit of 16MBytes.
 
 ## `Volume not found` (same code as `File not found`)
 
-The name supplied to `*VOL` didn't match any volumes.
+The volume name supplied didn't match any volumes.
 
 ## `Won't` (&93) (as seen on ADFS)
 

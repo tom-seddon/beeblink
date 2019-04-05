@@ -122,6 +122,10 @@ blfs_prefix="BL"
                 
 ; FS number as per OSARGS A=0
 blfs_fs_number=93
+
+; Handle range
+blfs_first_handle=DEFAULT_FIRST_FILE_HANDLE
+blfs_num_handles=DEFAULT_NUM_FILE_HANDLES
                 .endweak
 
 ; FS number for DFS
@@ -352,23 +356,22 @@ build_syntax:
 
 ;-------------------------------------------------------------------------
 
-m128_fs_info_entry: .macro name,fs_number,first_handle,num_handles
+m128_fs_info_entry: .macro name,fs_number
 start:
                 .cerror len(\name)>8,"no"
-                .cerror \num_handles==0,"no"
                 .text \name
                 .fill 8-len(\name)," "
-                .byte \first_handle
-                .byte \first_handle+\num_handles-1
+                .byte blfs_first_handle
+                .byte blfs_first_handle+blfs_num_handles-1
                 .byte \fs_number
                 .cerror (*-start)!=11,"oops"
                 .endm
                 
 m128_fs_info: .block
-                .m128_fs_info_entry blfs_prefix.."FS",blfs_fs_number,FIRST_FILE_HANDLE,NUM_FILE_HANDLES
+                .m128_fs_info_entry blfs_prefix.."FS",blfs_fs_number
 blfs_end:
-                .m128_fs_info_entry "DISC",dfs_fs_number,FIRST_FILE_HANDLE,NUM_FILE_HANDLES
-                .m128_fs_info_entry "DISK",dfs_fs_number,FIRST_FILE_HANDLE,NUM_FILE_HANDLES
+                .m128_fs_info_entry "DISC",dfs_fs_number
+                .m128_fs_info_entry "DISK",dfs_fs_number
 end:
                 .bend
                 
@@ -2083,10 +2086,22 @@ link_ok:
                 lda #REQUEST_RESET
                 jsr send_request_1
 
-                jsr recv_response
-
                 ; whatever it was, I'm sure it was fine...
-                jsr discard_remaining_payload
+                jsr recv_response_and_discard_payload
+
+                lda #2
+                jsr set_payload_size
+
+                lda #REQUEST_SET_FILE_HANDLE_RANGE
+                jsr send_request_n
+
+                lda #blfs_first_handle
+                jsr send_payload_byte
+
+                lda #blfs_num_handles
+                jsr send_payload_byte
+
+                jsr recv_response_and_discard_payload
 
                 clc             ;init ok
                 rts
@@ -3013,8 +3028,8 @@ fsc_shut_down_fs: .proc
 ; statically. Could maybe use CMOS RAM to do it.
 ;
 fsc_get_handle_range: .proc
-                ldx #FIRST_FILE_HANDLE
-                ldy #FIRST_FILE_HANDLE+NUM_FILE_HANDLES-1
+                ldx #blfs_first_handle
+                ldy #blfs_first_handle+blfs_num_handles-1
                 rts
                 .pend
                 

@@ -201,6 +201,7 @@ export class Server {
         this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('REQUEST_VOLUME_BROWSER', this.handleVolumeBrowser);
         this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('REQUEST_SPEED_TEST', this.handleSpeedTest);
         this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('REQUEST_NEXT_DISK_IMAGE_PART', this.handleNextDiskImagePart);
+        this.handlers[beeblink.REQUEST_SET_FILE_HANDLE_RANGE] = new Handler('REQUEST_SET_FILE_HANDLE_RANGE', this.handleSetFileHandleRange);
 
         this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stderr, logPrefix !== undefined);
         this.log.colours = colours;
@@ -864,6 +865,12 @@ export class Server {
         } else {
             return newResponse(beeblink.RESPONSE_DATA, this.imageParts[this.imagePartIdx++]);
         }
+    }
+
+    private async handleSetFileHandleRange(handler: Handler, p: Buffer): Promise<Response> {
+        await this.bfs.setFileHandleRange(p[0], p[1]);
+
+        return newResponse(beeblink.RESPONSE_YES);
     }
 
     private internalError(text: string): never {
