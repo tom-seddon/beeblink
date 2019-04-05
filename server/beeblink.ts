@@ -79,7 +79,7 @@ export const NUM_FILE_HANDLES = 16;
 
 // AVR presence check. **SPECIAL SYNTAX** **BBC->AVR only**
 //
-// The AVR accepts the $01 byte with the usual handshaking, but does nothing
+// The AVR accepts the $00 byte with the usual handshaking, but does nothing
 // with it, does not expect any payload, and sends no response. Use this (in
 // conjunction with a timeout) to check whether the AVR is actually connected to
 // the user port.

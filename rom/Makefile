@@ -24,6 +24,11 @@ build:
 # making a mess...
 	$(MAKE) _rom SUFFIX=avr_fe60 "EXTRA_ARGS=-Dlink_avr=true -Dlink_avr_via=65120"
 
+	$(MAKE) _rom SUFFIX=tube_serial "EXTRA_ARGS=-Dlink_tube_serial=true -Dblfs_prefix=\\\"TSBL\\\" -Dblfs_fs_number=94"
+
+	cp .build/beeblink_tube_serial.rom ../volumes/beeblink/0/R.TS
+	touch ../volumes/beeblink/0/R.TS.inf
+
 .PHONY:_rom
 _rom:
 	$(TASS) beeblink.s65 -L$(DEST)/beeblink_$(SUFFIX).lst -o$(DEST)/beeblink_$(SUFFIX).rom "-DVERSION=\"$(VER)\"" "-DBUILD_TIME=\"$(BUILD_TIME)\"" "-DCOMMIT=\"$(COMMIT)\"" $(EXTRA_ARGS)

@@ -53,3 +53,50 @@ tube_multi_pairs_host_to_parasite=3
 tube_execute=4
 tube_256_byte_parasite_to_host=6
 tube_256_byte_host_to_parasite=7
+
+;-------------------------------------------------------------------------
+
+; Hardware stuff
+
+;-------------------------------------------------------------------------
+
+; ROMSEL
+                .virtual $fe30
+romsel: .fill 0
+                .endv
+
+;-------------------------------------------------------------------------
+
+; ACCCON
+                .virtual $fe34
+acccon: .block
+;D=1 = display shadow RAM; D=0 = display main RAM
+d=$01
+
+;E=1 = VDU code ($c000-$dfff in MOS ROM) accesses shadow RAM; E=0 =
+;VDU code accesses main RAM
+e=$02
+
+;X=1 = shadow RAM at $3000; X=0 = main RAM at $3000
+x=$04
+
+;Y=1 = HAZEL at $c000; Y=0 = MOS ROM at $c000
+y=$08
+
+;ITU=1 = access internal Tube; ITU=0 = access external Tube
+itu=$10
+
+;IFJ=1 = $fc00...$fdff accesses cartridge; IFJ=0 = $fc00...$fdff
+;accesses 1MHz bus
+ifj=$20
+
+; TST=1 = read MOS ROM at $fc00...$feff; TST=0 = read I/O at
+; $fc00...$feff
+tst=$40
+
+;IRR=1 = IRQ to CPU
+irr=$80
+                .bend
+                .endv
+                
+;-------------------------------------------------------------------------

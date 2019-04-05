@@ -103,6 +103,24 @@ interface ICommandLineOptions {
 const gError = new utils.Log('ERROR', process.stderr);
 //const gSendLog = new utils.Log('SEND', process.stderr);
 
+
+// don't shift to do this!
+//
+// > 255*16777216
+// 4278190080
+// > 255<<24
+// -16777216
+//
+// :(
+function UInt32(b0: number, b1: number, b2: number, b3: number): number {
+    assert.ok(b0 >= 0 && b0 <= 255);
+    assert.ok(b1 >= 0 && b1 <= 255);
+    assert.ok(b2 >= 0 && b2 <= 255);
+    assert.ok(b3 >= 0 && b3 <= 255);
+
+    return b0 + b1 * 0x100 + b2 * 0x10000 + b3 * 0x1000000;
+}
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -147,7 +165,7 @@ class InEndpointReader {
         const b2 = await this.readUInt8();
         const b3 = await this.readUInt8();
 
-        return b0 | b1 << 8 | b2 << 16 | b3 << 24;
+        return UInt32(b0, b1, b2, b3);
     }
 
     public async readBytes(size: number): Promise<Buffer> {
@@ -161,35 +179,6 @@ class InEndpointReader {
 
         return data;
     }
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-function getResponseData(response: Response): Buffer {
-    let buffer: Buffer;
-
-    if (response.p.length === 1) {
-        buffer = Buffer.alloc(2);
-
-        buffer[0] = response.c & 0x7f;
-        buffer[1] = response.p[0];
-    } else {
-        buffer = Buffer.alloc(1 + 4 + response.p.length);
-
-        let i = 0;
-
-        buffer[i++] = response.c | 0x80;
-
-        buffer.writeUInt32LE(response.p.length, i);
-        i += 4;
-
-        for (const byte of response.p) {
-            buffer[i++] = byte;
-        }
-    }
-
-    return buffer;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -400,25 +389,6 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
     options.serial_rom = getROM(options.serial_rom, config.serial_rom, DEFAULT_BEEBLINK_SERIAL_ROM);
 
     options.git = options.git || config.git === true;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-async function maybeSaveConfig(options: ICommandLineOptions): Promise<void> {
-    if (options.save_config === null) {
-        return;
-    }
-
-    const config: IConfigFile = {
-        defaultVolume: options.default_volume !== null ? options.default_volume : undefined,
-        folders: options.folders,
-        avr_rom: options.avr_rom !== null ? options.avr_rom : undefined,
-        serial_rom: options.serial_rom !== null ? options.serial_rom : undefined,
-        git: options.git !== null ? options.git : undefined,
-    };
-
-    await utils.fsMkdirAndWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -713,8 +683,20 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         process.stderr.write('AVR ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.avr_rom + '\n');
     }
 
-    if(!await utils.fsExists(options.serial_rom!)) {
-        process.stderr.write('Serial ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.avr_rom + '\n');
+    if (!await utils.fsExists(options.serial_rom!)) {
+        process.stderr.write('Serial ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.serial_rom + '\n');
+    }
+
+    if (options.save_config !== null) {
+        const config: IConfigFile = {
+            defaultVolume: options.default_volume !== null ? options.default_volume : undefined,
+            folders: options.folders,
+            avr_rom: options.avr_rom !== null ? options.avr_rom : undefined,
+            serial_rom: options.serial_rom !== null ? options.serial_rom : undefined,
+            git: options.git !== null ? options.git : undefined,
+        };
+
+        await utils.fsMkdirAndWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
     }
 
     if (!options.http) {
@@ -988,7 +970,27 @@ async function handleUSB(options: ICommandLineOptions, createServer: () => Promi
 
             blDevice.log.pn('Got response: ' + response);
 
-            const responseData = getResponseData(response);
+            let responseData: Buffer;
+
+            if (response.p.length === 1) {
+                responseData = Buffer.alloc(2);
+
+                responseData[0] = response.c & 0x7f;
+                responseData[1] = response.p[0];
+            } else {
+                responseData = Buffer.alloc(1 + 4 + response.p.length);
+
+                let i = 0;
+
+                responseData[i++] = response.c | 0x80;
+
+                responseData.writeUInt32LE(response.p.length, i);
+                i += 4;
+
+                for (const byte of response.p) {
+                    responseData[i++] = byte;
+                }
+            }
 
             try {
                 await new Promise((resolve, reject) => {
@@ -1119,6 +1121,307 @@ function getSerialDevices(options: ICommandLineOptions): ISerialDevice[] {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+// class SerialRequestBuilder {
+//     private c: number;
+//     private p: Buffer | undefined;
+//     private negativeOffset: number;
+
+//     public constructor() {
+//     this.c = 0;
+//     this.negativeOffset = 0;
+//     this.p = undefined;
+// }
+
+//     // Returns Request if completed request received, true for more data, or false if cancelled.
+//     public addByte(x: number): Request | boolean {
+
+// }
+// }
+
+// class SerialReader {
+//     private port: SerialPort;
+//     private buffers: Buffer[];
+//     private bufferPos: number;//always points into this.buffers[0]
+
+//     public constructor(port: SerialPort) {
+//         this.port = port;
+//         this.buffers = [];
+//         this.bufferPos = 0;
+//     }
+
+//     public async readUInt8(): Promise<number> {
+//         if (this.buffers.length === 0) {
+
+//         }
+//     }
+// }
+
+interface IReadWaiter {
+    resolve: (() => void) | undefined;
+    reject: ((error: any) => void) | undefined;
+}
+
+async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () => Promise<Server>, serialLog: utils.Log): Promise<void> {
+    serialLog.pn('Creating server...');
+    const server = await createServer();
+
+    serialLog.pn('Initialising serial device ``' + serialDevice.deviceName + '\'\', ' + serialDevice.baud + ' baud');
+
+    const port: SerialPort = new SerialPort(serialDevice.deviceName, { baudRate: serialDevice.baud, autoOpen: false });
+
+    await new Promise<void>((resolve, reject) => {
+        port.open((error) => {
+            if (error !== undefined && error !== null) {
+                reject(error);
+            } else {
+                resolve();
+            }
+        });
+    });
+
+    let readWaiter: IReadWaiter | undefined;
+    const readBuffers: Buffer[] = [];
+    let readIndex: 0;
+
+    port.on('data', (data: Buffer): void => {
+        readBuffers.push(data);
+        if (readWaiter !== undefined) {
+            const waiter = readWaiter;
+            readWaiter = undefined;
+
+            if (waiter.resolve !== undefined) {
+                waiter.resolve();
+            }
+        }
+    });
+
+    port.on('error', (error: any): void => {
+        if (readWaiter !== undefined) {
+            const waiter = readWaiter;
+            readWaiter = undefined;
+
+            if (waiter.reject !== undefined) {
+                waiter.reject(error);
+            }
+        }
+    });
+
+    async function readByte(): Promise<number> {
+        if (readBuffers.length === 0) {
+            await new Promise<void>((resolve, reject): void => {
+                readWaiter = { resolve, reject };
+            });
+        }
+
+        const byte = readBuffers[0][readIndex++];
+
+        if (readIndex === readBuffers[0].length) {
+            readBuffers.splice(0, 1);
+            readIndex = 0;
+        }
+
+        return byte;
+    }
+
+    async function readConfirmationByte(): Promise<boolean> {
+        const byte = await readByte();
+        return byte !== 0;
+    }
+
+    const numSyncZerosRequired = 500;
+
+    let synced = false;
+    for (; ;) {
+        // Sync loop.
+        port.removeAllListeners('drain');
+
+        // Sync steps 1 and 2 are carefully delineated in the notes, because
+        // it's relevant for the 6502. But for the server, because of all the
+        // buffering, the distinction isn't so important. Just write a pile of
+        // 0s, then a 1, and let it get sent at its own pace. Then just keep
+        // reading until it's clear the BBC is ready too.
+
+        const syncData = Buffer.alloc(numSyncZerosRequired + 1);
+        syncData[numSyncZerosRequired] = 1;
+
+        sync_loop:
+        do {
+            serialLog.pn(`Starting sync...`);
+
+            await new Promise((resolve, reject): void => {
+                function writeSyncZeros(): boolean {
+                    // Despite what the TypeScript definitions appear to say,
+                    // the JS code actually only seems to call the callback with
+                    // a single argument: an error, or undefined.
+                    return port.write(syncData, (error: any): void => {
+                        if (error !== undefined && error !== null) {
+                            reject(error);
+                        } else {
+                            resolve();
+                        }
+                    });
+                }
+
+                if (!writeSyncZeros()) {
+                    port.once('drain', writeSyncZeros);
+                }
+            });
+
+            let numZeros = 0;
+            while (numZeros < numSyncZerosRequired) {
+                const x = await readByte();
+                if (x !== 0) {
+                    numZeros = 0;
+                } else {
+                    ++numZeros;
+                }
+            }
+
+            serialLog.pn(`Received ${numZeros} 0 bytes.`);
+
+            // eat remaining sync 0s.
+            {
+                let x;
+                do {
+                    x = await readByte();
+                } while (x === 0);
+
+                if (x === 1) {
+                    synced = true;
+                } else {
+                    serialLog.pn(`No sync - bad sync value: ${x} (0x${utils.hex2(x)})`);
+                }
+            }
+        } while (!synced);
+
+        // Response/request loop.
+        response_request_loop:
+        for (; ;) {
+            const c = await readByte();
+
+            if (c === 0) {
+                // Special syntax.
+                continue;
+            }
+
+            let p: Buffer;
+            if ((c & 0x80) === 0) {
+                // 1-byte payload.
+                p = Buffer.alloc(1);
+                p[0] = await readByte();
+            } else {
+                // Variable-size payload.
+                const b0 = await readByte();
+                const b1 = await readByte();
+                const b2 = await readByte();
+                const b3 = await readByte();
+                const size = UInt32(b0, b1, b2, b3);
+
+                p = Buffer.alloc(size + (size >> 8) + 1);
+
+                for (let i = 0; i < size; ++i) {
+                    if (((size - i) & 0xff) === 0) {
+                        if (!await readConfirmationByte()) {
+                            break response_request_loop;
+                        }
+                    }
+
+                    p[i] = await readByte();
+                }
+            }
+
+            if (!await readConfirmationByte()) {
+                break response_request_loop;
+            }
+
+            const request = new Request(c & 0x7f, p);
+
+            const response = await server.handleRequest(request);
+
+            let responseData: Buffer;
+
+            if (response.p.length === 1) {
+                responseData = Buffer.alloc(3);
+
+                responseData[0] = response.c & 0x7f;
+                responseData[1] = response.p[1];
+                responseData[2] = 1;//confirmation byte
+            } else {
+                responseData = Buffer.alloc(1 + 4 + p.length + (p.length >> 8) + 1);
+
+                let destIdx = 0;
+
+                responseData[destIdx++] = response.c | 0x80;
+
+                responseData.writeUInt32LE(p.length, destIdx);
+                destIdx += 4;
+
+                for (let srcIdx = 0; srcIdx < p.length; ++srcIdx) {
+                    if (((p.length - srcIdx) & 0xff) === 0) {
+                        responseData[destIdx++] = 1;//confirmation byte
+                    }
+
+                    responseData[destIdx++] = p[srcIdx];
+                }
+
+                responseData[destIdx++] = 1;//confirmation byte
+
+                assert.strictEqual(destIdx, responseData.length);
+            }
+
+            {
+                const maxChunkSize = 512;//arbitrary.
+                let srcIdx = 0;
+                while (srcIdx < responseData.length) {
+                    const chunk = responseData.slice(srcIdx, srcIdx + maxChunkSize);
+
+                    let resolveResult: ((result: boolean) => void) | undefined;
+
+                    function callResolveResult(result: boolean): void {
+                        if (resolveResult !== undefined) {
+                            const r = resolveResult;
+                            resolveResult = undefined;
+
+                            r(result);
+                        }
+                    }
+
+                    readWaiter = {
+                        reject: undefined,
+                        resolve: (): void => {
+                            callResolveResult(false);
+                        },
+                    };
+
+                    const ok = await new Promise<boolean>((resolve, reject) => {
+                        resolveResult = resolve;
+
+                        function write(): boolean {
+                            return port.write(chunk, (error: any): void => {
+                                if (error !== null && error !== undefined) {
+                                    reject(error);
+                                } else {
+                                    callResolveResult(true);
+                                }
+                            });
+                        }
+
+                        if (!write()) {
+                            port.once('drain', write);
+                        }
+                    });
+
+                    if (!ok) {
+                        break response_request_loop;
+                    }
+
+                    srcIdx += maxChunkSize;
+                }
+            }
+        }
+    }
+}
+
 async function handleSerial(options: ICommandLineOptions, serialDevices: ISerialDevice[], createServer: () => Promise<Server>): Promise<void> {
     if (serialDevices.length === 0) {
         return;
@@ -1127,19 +1430,7 @@ async function handleSerial(options: ICommandLineOptions, serialDevices: ISerial
     const serialLog = new utils.Log('SERIAL', process.stdout, options.serial_verbose);
 
     for (const serialDevice of serialDevices) {
-        serialLog.pn('Initialising serial device ``' + serialDevice.deviceName + '\'\', ' + serialDevice.baud + ' baud');
-
-        const port: SerialPort = new SerialPort(serialDevice.deviceName, { baudRate: serialDevice.baud, autoOpen: false });
-
-        await new Promise<void>((resolve, reject) => {
-            port.open((error) => {
-                if (error !== undefined && error !== null) {
-                    reject(error);
-                } else {
-                    resolve();
-                }
-            });
-        });
+        void handleSerialDevice(serialDevice, createServer, serialLog);
     }
 }
 
@@ -1243,7 +1534,7 @@ function integer(s: string): number {
     parser.addArgument(['--serial-rom'], { metavar: 'FILE:', defaultValue: null, help: 'read BeebLink serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_SERIAL_ROM });
     parser.addArgument(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
     parser.addArgument(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
-    parser.addArgument(['--packet-verbose'], { action: 'storeTrue', help: 'dump incoming/outgoing request data' });
+    parser.addArgument(['--packet-verbose'], { action: 'storeTrue', help: 'dump incoming/outgoing request data (requires --server-verbose)' });
     parser.addArgument(['--usb-verbose'], { action: 'storeTrue', help: 'extra USB-related output' });
     parser.addArgument(['--libusb-debug-level'], { type: integer, metavar: 'LEVEL', help: 'if provided, set libusb debug logging level to %(metavar)s' });
     // don't use the argparse default mechanism here - this makes it easier to

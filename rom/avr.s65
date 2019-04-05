@@ -178,7 +178,16 @@ loop:
 
 ; beeblink_status_strings: strings_list ["no AVR","protocol not "..format("%02X",AVR_PROTOCOL_VERSION),"AVR not ready","no server","OK"]
 
-print_beeblink_status: .proc
+status_text: .block
+no_avr:
+                .text "No AVR",0
+avr_not_ready:
+                .text "AVR not ready",0
+wrong_protocol:
+                .text "Protocol not ",format("%02X",AVR_PROTOCOL_VERSION),0
+                .bend
+                
+link_startup: .proc
                 jsr reset
                 
                 jsr via_prepare
@@ -198,12 +207,10 @@ print_beeblink_status: .proc
 +
                 cmp #$10
                 beq check_avr_ready
-                
-                jsr pcprint
-                .text "no AVR",255
 
+                ldx #status_text.no_avr-status_text
                 sec
-                rts             
+                rts
 
 check_avr_ready:
                 lda #REQUEST_AVR
@@ -223,8 +230,7 @@ check_avr_ready:
                 beq check_avr_ready_2
 
 wrong_protocol:
-                jsr pcprint
-                .text "protocol not ",format("%02X",AVR_PROTOCOL_VERSION),255
+                ldx #status_text.wrong_protocol-status_text
                 sec
                 rts
 
@@ -232,20 +238,15 @@ check_avr_ready_2:
                 cpy #RESPONSE_YES
                 beq avr_ready
 
-                jsr pcprint
-                .text "AVR not ready",255
-
+                ldx #status_text.avr_not_ready-status_text
                 sec
                 rts
 
 avr_ready:
-                jsr pcprint
-                .text "OK",255
-                
                 clc
                 rts
 
-reset: .proc
+reset:
                 lda via+12
                 and #$1f
                 ora #$e0        ;CB2=1
@@ -263,7 +264,6 @@ reset2:
                 sta via+12
                 lda #19
                 jmp osbyte
-                .pend
                 
                 .pend
 
@@ -668,23 +668,39 @@ link_begin_recv=avr.via_begin_recv
 ; Put prepared link in send mode.
 link_begin_send=avr.via_begin_send
 
-; Send 1 raw byte over the link.
+; Send 1 byte over the link as part of the header: the type byte, or
+; one of the size bytes.
 ;
 ; Preserve X/Y.
-link_send_byte=avr.send_byte
+link_send_header_byte=avr.send_byte
 
-; Receive 1 raw byte over the link.
+; Send 1 byte over the link as part of the payload. 
+; scratch_payload_size is the byte's negated offset.
 ;
 ; Preserve X/Y.
-link_recv_byte=avr.recv_byte
+link_send_payload_byte=avr.send_byte
 
-; Determine link status and print it via oswrch. Set C=0 on exit if
-; link OK, C=1 if link not OK.
+; Receive 1 byte over the link as part of the header: the type byte,
+; or one of the size bytes.
 ;
-; This is called once, on startup, to print the ROM startup banner,
-; and decide whether to continue initialisation.
-link_print_status=avr.print_beeblink_status
+; Preserve X/Y.
+link_recv_header_byte=avr.recv_byte
 
+; Receive 1 byte over the link as part of the payload.
+; scratch_payload_size is the byte's negated offset.
+;
+; Preserve X/Y.
+link_recv_payload_byte=avr.recv_byte
+
+; Initialise link and determine status.
+;
+; exit: C=0 if link OK
+;       C=1 if link not OK
+;           X = offset into link_status_text of text describing status,
+;               terminated by 0 (this is indeed not consistent)
+link_startup=avr.link_startup
+link_status_text=avr.status_text
+                
 ; Send/receive file data from/to host/parasite memory.
 ;
 ; File data is whatever's left in the current packet according to
@@ -694,12 +710,12 @@ link_print_status=avr.print_beeblink_status
 ;
 ; May modify scratch_payload_size.
 ;
-; These are special-cased so that the transfer code can be inlined and/or unrolled - this made a meaningful difference to the AVR routines.
-;
-; But the link can alternatively defer to the link-agnostic
-; (send|recv)_file_data_(host|parasite). These will do everything with
-; calls to link_send_byte/link_recv_byte.
+; If not set, link-agnostic code will be used, that uses
+; link_(send|recv)_byte* for everything. (This will probably be a lot
+; less efficient! For the AVR, for example, the throughput is <25%
+; that of the link-specific versions.)
 link_send_file_data_parasite=avr.send_file_data_parasite_pagewise
 link_send_file_data_host=avr.send_file_data_host_pagewise
 link_recv_file_data_parasite=avr.recv_file_data_parasite_pagewise
 link_recv_file_data_host=avr.recv_file_data_host_pagewise
+

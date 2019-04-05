@@ -104,12 +104,25 @@ trap_disc_char='*'
 sf_ignore_disc=$10
 ignore_disc_char='I'
 
+; if set, link_startup succeeded, so no need to try again.
+sf_link_started_up=$08
+                
 sf_power_on_defaults=0
                 
 ;-------------------------------------------------------------------------
 
+; At some point I found that it might be useful for multiple versions
+; of the BeebLink FS to coexist, so that I can have a WIP version
+; (using one link type) and a LKG version (using another), without
+; conflicts. So there are a few spot hacks for this.
+                
+                .weak
+; Prefix for use with help subject and UTILS commands.
+blfs_prefix="BL"
+                
 ; FS number as per OSARGS A=0
 blfs_fs_number=93
+                .endweak
 
 ; FS number for DFS
 dfs_fs_number=4
@@ -134,7 +147,12 @@ roms_table=$DF0
 boot_key=100                    ;100=B
 
 ; Tube claimant ID.
-tube_claimant_id=35
+;
+; The value 58 is entirely arbitrary. When first writing the ROM, I
+; just decided that the filing system number would be 93, because that
+; was free, and the claimant ID would be 35 - because why not? It was
+; free too. And 58 is 93 - 35...
+tube_claimant_id=blfs_fs_number-58
 
 ; Number of chars to buffer up when printing the
 ; server's string.
@@ -170,6 +188,10 @@ command .macro name,value,routine
                 .dsection write_workspace
                 .cerror *>$b0,"*WRITE workspace overflow"
 
+*=$a8
+                .dsection link_startup_workspace
+                .cerror *>$b0,"Link startup workspace overflow"
+
 *=$b0
                 .dsection fs_scratch_workspace
                 .cerror *>$c0,"FS scratch workspace overflow"
@@ -204,6 +226,10 @@ write_image_data .fill 2
 
 ;-------------------------------------------------------------------------
 
+; The distinction between scratch and private workspace hasn't proven
+; terribly useful. And it's mostly moot for BeebLink anyway - all of
+; the persistent state is on the server or in the private ROM byte.
+                
                 .section fs_scratch_workspace
 scratch_payload_size .fill 4
 scratch_ptr .fill 2
@@ -261,28 +287,45 @@ rom_copyright:
 
                 .weak
 link_avr=false
+link_tube_serial=false
                 .endweak
                 
                 .if link_avr
                 .include "avr.s65"
+                .elsif link_tube_serial
+                .include "tube_serial.s65"
                 .else
                 .error "unknown link type"
                 .endif
 
 ;-------------------------------------------------------------------------
 
+; The link code can provide special case file data routines with the
+; transfer code inlined and/or unrolled. But if it doesn't, just use
+; the default (not very efficient) byte-by-byte routines, that just
+; call link_(send|recv)_byte(.*) repeatedly.
+                
+                .weak
+link_send_file_data_parasite=send_file_data_parasite_bytewise
+link_send_file_data_host=send_file_data_host_bytewise
+link_recv_file_data_parasite=recv_file_data_parasite_bytewise
+link_recv_file_data_host=recv_file_data_host_bytewise
+                .endweak
+
+;-------------------------------------------------------------------------
+
                 .section code
 
 help_subjects_commands:
-                .command "BLFS",0,svc_help.blfs
+                .command blfs_prefix.."FS",0,svc_help.blfs
                 .command "UTILS",0,svc_help.utils
                 .byte 255
 
 utils_commands:
-                .command "BLCONFIG",blconfig_syntax-syntaxes,blconfig_cmd
-                .command "BLFS",0,init_blfs
-                .command "BLSELFUPDATE",0,selfupdate_cmd
-                .command "BLVERSION",0,version_cmd
+                .command blfs_prefix.."CONFIG",blconfig_syntax-syntaxes,blconfig_cmd
+                .command blfs_prefix.."FS",0,init_blfs
+                .command blfs_prefix.."SELFUPDATE",0,selfupdate_cmd
+                .command blfs_prefix.."VERSION",0,version_cmd
                 .command "BUILD",build_syntax-syntaxes,build_cmd
                 .byte 255
 
@@ -309,23 +352,23 @@ build_syntax:
 
 ;-------------------------------------------------------------------------
 
+m128_fs_info_entry: .macro name,fs_number,first_handle,num_handles
+start:
+                .cerror len(\name)>8,"no"
+                .cerror \num_handles==0,"no"
+                .text \name
+                .fill 8-len(\name)," "
+                .byte \first_handle
+                .byte \first_handle+\num_handles-1
+                .byte \fs_number
+                .cerror (*-start)!=11,"oops"
+                .endm
+                
 m128_fs_info: .block
-                .text 'BLFS    '
-                .byte FIRST_FILE_HANDLE
-                .byte FIRST_FILE_HANDLE+NUM_FILE_HANDLES-1
-                .byte blfs_fs_number
-                .cerror (*-m128_fs_info)%11!=0,'oops'
+                .m128_fs_info_entry blfs_prefix.."FS",blfs_fs_number,FIRST_FILE_HANDLE,NUM_FILE_HANDLES
 blfs_end:
-                .text 'DISC    '
-                .byte FIRST_FILE_HANDLE
-                .byte FIRST_FILE_HANDLE+NUM_FILE_HANDLES-1
-                .byte dfs_fs_number
-                .cerror (*-m128_fs_info)%11!=0,'oops'
-                .text 'DISK    '
-                .byte FIRST_FILE_HANDLE
-                .byte FIRST_FILE_HANDLE+NUM_FILE_HANDLES-1
-                .byte dfs_fs_number
-                .cerror (*-m128_fs_info)%11!=0,'oops'
+                .m128_fs_info_entry "DISC",dfs_fs_number,FIRST_FILE_HANDLE,NUM_FILE_HANDLES
+                .m128_fs_info_entry "DISK",dfs_fs_number,FIRST_FILE_HANDLE,NUM_FILE_HANDLES
 end:
                 .bend
                 
@@ -357,12 +400,16 @@ done:
 ;
 svc_shut: .proc
                 pha
-                
-                jsr init_blfs
+
+                ; If anything goes wrong during FS reinitialisation,
+                ; just silently skip it.
+                jsr init_blfs_internal
+                bcs +
 
                 ldy #0          ;close all open files
                 jsr blfs_osfind.close
 
++
                 pla                
                 jmp svc.done
                 .pend
@@ -457,6 +504,14 @@ hard:
                 jsr set_vstatus
                 .endif
 done:
+
+                ; Whatever the reset type, always reset the link
+                ; status check flag.
+                ldx $f4
+                lda roms_table,x
+                and #(~sf_link_started_up)&$ff
+                sta roms_table,x
+                
                 pla
                 tay
                 lda #2
@@ -469,7 +524,7 @@ done:
 ; 
 svc_boot: .proc
                 tya
-                pha
+                pha             ;save autoboot flag
 
                 lda #$7a        ;keyboard scan, AUG 143
                 jsr osbyte
@@ -492,7 +547,7 @@ boot_fs:
                 .text " <SWR>",255
 +
 
-                lda #$ff
+                lda #sf_von|sf_act_as_dfs|sf_trap_disc|sf_ignore_disc
                 jsr get_rom_status_flag
                 bcc show_avr_status
                 
@@ -523,37 +578,10 @@ show_avr_status:
                 jsr pcprint
                 .text " - ",255
 
-                jsr link_print_status
+                jsr boot_init_blfs
+                bcs pass_on
 
-                php
-
-                jsr osnewl
-                jsr osnewl
-
-                plp
-
-                bcs pass_on     ;taken if link not ready
-
-                lda #253        ;get reset type in X (AUG 244)
-                jsr osbyte_x00_yff
-                
-                lda #REQUEST_RESET
-                jsr send_request_1
-
-                jsr recv_response
-
-                ; whatever it was, I'm sure it was fine...
-                jsr discard_remaining_payload
-
-                jsr init_blfs
-
-                lda #sf_trap_disc
-                jsr get_rom_status_flag
-                bcc +
-                jsr init_oscli_hack
-+
-
-                pla
+                pla             ;restore autoboot flag
                 bne booted
 
                 jsr boot
@@ -563,7 +591,7 @@ booted:
                 jmp svc.done
 
 pass_on:
-                pla
+                pla             ;restore autoboot flag
                 tay
                 lda #3
                 jmp svc.done
@@ -1191,6 +1219,15 @@ set_payload_size: .proc
                 rts
                 .pend
 
+set_payload_size_0: .proc
+                lda #0
+                sta scratch_payload_size
+                sta scratch_payload_size+1
+                sta scratch_payload_size+2
+                sta scratch_payload_size+3
+                rts
+                .pend
+                
 ;-------------------------------------------------------------------------
 ;
 ; Add Y to the payload size.
@@ -1363,7 +1400,7 @@ dobrk_loop:
                 beq dobrk_done
                 sta brkthunk,y
                 iny
-                cpy #32
+                cpy #brkthunk_max_size-1 ;-1 due to trailing 0
                 bne dobrk_loop
 
 dobrk_done:
@@ -1469,19 +1506,19 @@ send_request_n: .proc
                 ; send. But it's so annoying to check for.
                 ora #$80
 
-                jsr link_send_byte
+                jsr link_send_header_byte
 
                 lda scratch_payload_size+0
-                jsr link_send_byte
+                jsr link_send_header_byte
 
                 lda scratch_payload_size+1
-                jsr link_send_byte
+                jsr link_send_header_byte
                 
                 lda scratch_payload_size+2
-                jsr link_send_byte
+                jsr link_send_header_byte
 
                 lda scratch_payload_size+3
-                jsr link_send_byte
+                jsr link_send_header_byte
 
                 jsr negate_payload_size
 
@@ -1507,9 +1544,9 @@ send_payload_byte: .proc
                 rts
 
 more:
-                pla
-                jsr link_send_byte
                 jsr inc_payload_size
+                pla
+                jsr link_send_payload_byte
                 sec
                 rts
                 .pend
@@ -1530,9 +1567,13 @@ send_request_1: .proc
 without_prepare:
                 .debug_print ["send_request_1: T=&",DP_A," P=&",DP_X,"\r"]
 
-                jsr link_send_byte
+                jsr link_send_header_byte
+
+                ; negated offset of the single payload byte is 0.
+                jsr set_payload_size_0
+                
                 txa
-                jsr link_send_byte
+                jsr link_send_payload_byte
                 rts
                 .pend
 
@@ -1553,10 +1594,13 @@ send_request_1_recv_response_1: .block
                 jsr link_prepare
 
 without_prepare:
-                jsr link_send_byte
+                jsr link_send_header_byte
 send_payload:
+                ; negated offset of the single payload byte is 0.
+                jsr set_payload_size_0
+                
                 txa
-                jsr link_send_byte
+                jsr link_send_payload_byte
 
                 .bend
 
@@ -1564,12 +1608,15 @@ recv_response_1: .block
                 jsr link_begin_recv
 
 without_prepare:
-                jsr link_recv_byte
+                jsr link_recv_header_byte
                 bmi got_n
 
                 tax
+                
+                ; negated offset of the single payload byte is 0.
+                jsr set_payload_size_0
 
-                jsr link_recv_byte
+                jsr link_recv_payload_byte
                 rts
 
 got_n:
@@ -1629,7 +1676,7 @@ recv_response_and_discard_payload: .proc
 recv_response: .proc
                 jsr link_begin_recv
 
-                jsr link_recv_byte
+                jsr link_recv_header_byte
                 bmi got_n
 got_1:
                 pha
@@ -1647,13 +1694,13 @@ got_1:
 
 got_n:
                 pha
-                jsr link_recv_byte
+                jsr link_recv_header_byte
                 sta scratch_payload_size+0
-                jsr link_recv_byte
+                jsr link_recv_header_byte
                 sta scratch_payload_size+1
-                jsr link_recv_byte
+                jsr link_recv_header_byte
                 sta scratch_payload_size+2
-                jsr link_recv_byte
+                jsr link_recv_header_byte
                 sta scratch_payload_size+3
                 jsr negate_payload_size
                 pla
@@ -1685,7 +1732,7 @@ loop:
                 sta brkthunk,y
                 ;jsr print_hex_byte
                 iny
-                cpy #brkthunk_max_size
+                cpy #brkthunk_max_size-1
                 bne loop
 
 got_error_done:
@@ -1726,8 +1773,8 @@ recv_payload_byte: .proc
                 rts
 
 more:
-                jsr link_recv_byte
                 jsr inc_payload_size
+                jsr link_recv_payload_byte
                 sec
                 rts
                 .pend
@@ -1925,9 +1972,126 @@ ignore_disc_text:
 
 ;-------------------------------------------------------------------------
 ;
-; Initialise BLFS.
+; Initialise BLFS. Does a BRK if anything goes wrong.
 ;
 init_blfs: .proc
+                jsr init_blfs_internal
+                bcs not_ok
+                rts
+
+not_ok:
+                lda #0
+                sta brkthunk+0
+
+                lda #255
+                sta brkthunk+1
+
+                ldy #2
+-
+                lda link_status_text,x
+                beq +
+                sta brkthunk,y
+                inx
+                iny
+                cpy #brkthunk_max_size-1
+                bne -
++
+                lda #0
+                sta brkthunk,y
+
+                jmp brkthunk
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Initialise BLFS as part of ROM boot process. Prints status message, whatever it was (success or failure), followed by two newlines.
+;
+; On success, if the trap *DISC flag is set, initialise the trap *DISC
+; hack. (This could also be done as part of normal init - but it
+; isn't. Probably less confusing this way.)
+;
+; exit: C=0 if init succeeded
+;       C=1 if init failed
+;
+boot_init_blfs: .proc
+                jsr init_blfs_internal
+                bcs not_ok
+
+ok:
+                jsr pcprint
+                .text "OK",13,13,255
+
+                lda #sf_trap_disc
+                jsr get_rom_status_flag
+                bcc +
+                jsr init_oscli_hack
++
+                
+                clc
+                rts
+
+not_ok:
+                lda link_status_text,x
+                beq +
+                jsr oswrch
+                inx
+                bne not_ok
+
++
+                jsr osnewl
+                jsr osnewl
+                sec
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; Initialise BLFS. If link wasn't already started, attempts to start
+; it.
+;
+; Exit: C=0 if init succeeded
+;       C=1 if link startup failed (FS init never fails)
+;           X = offset into link_status_text of message
+init_blfs_internal: .proc
+                lda #sf_link_started_up
+                jsr get_rom_status_flag
+                bcc init_link
+
+                ; Just initialise FS and return with C=0.
+                jsr init_fs
+                clc
+                rts
+
+init_link:
+                jsr link_startup
+                bcc link_ok
+                rts
+
+link_ok:
+                ; indicate link started
+                ldx $f4
+                lda roms_table,x
+                ora #sf_link_started_up
+                sta roms_table,x
+
+                ; claim vectors and so on
+                jsr init_fs
+                
+                lda #253        ;get reset type in X (AUG 244)
+                jsr osbyte_x00_yff
+                
+                lda #REQUEST_RESET
+                jsr send_request_1
+
+                jsr recv_response
+
+                ; whatever it was, I'm sure it was fine...
+                jsr discard_remaining_payload
+
+                clc             ;init ok
+                rts
+                
+init_fs:
                 lda #6
                 jsr call_fsc
                 
@@ -3161,8 +3325,6 @@ done:
 ;-------------------------------------------------------------------------
 
 recv_file_data_host_bytewise: .proc
-
-                ldx #scratch_p_size
                 ldy #0
 loop:
                 jsr recv_payload_byte
@@ -3193,7 +3355,6 @@ recv_file_data_parasite_bytewise: .proc
                 lda #tube_multi_byte_host_to_parasite
                 jsr $406
 
-                ldx #scratch_p_size
 loop:
                 jsr recv_payload_byte
                 bcc done
@@ -3230,13 +3391,12 @@ send_file_data: .proc
 ; 
 send_file_data_host_bytewise: .proc
                 ldy #0
-                ldx #scratch_p_size
 send_host_loop:
                 ; this is currently rather inefficient.
 
                 ; check for zero first - don't touch any bytes outside
                 ; the transfer range.
-                jsr ldunionz32
+                jsr test_payload_size
                 beq send_host_done
                 
                 lda (scratch_load),y
@@ -3278,9 +3438,8 @@ send_file_data_parasite_bytewise: .proc
 
                 jsr delay_48_cycles
 
-                ldx #scratch_p_size
 send_tube_loop:
-                jsr ldunionz32
+                jsr test_payload_size
                 beq send_tube_done
 
                 lda $fee5
@@ -3542,8 +3701,8 @@ size_ok:
                 
 recv_rom:
                 jsr pcprint
-                .text 22,1      ;mode 1
-                .text 28,0,5,39,0 ;keep out of the way of $3f00
+                .text 22,0      ;mode 0
+                .text 28,0,5,79,0 ;keep out of the way of $3f00
                 .text 255
                 
                 sty abr_offset
@@ -4456,20 +4615,6 @@ version_cmd: .proc
                 .text "Git commit: ",COMMIT,13
                 .text "Build time: ",BUILD_TIME,13
                 .text 255
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-; Check if running on a Master of some description.
-;
-; exit: C=1 if Master, C=0 if not
-;
-is_master: .proc
-                lda #0
-                ldx #1
-                jsr osbyte
-
-                cpx #3
                 rts
                 .pend
 

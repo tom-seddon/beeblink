@@ -349,3 +349,172 @@ SERVER:   Recv: 69.06 KBytes/sec
 
 Going to keep this change anyway, because it's the right thing to do,
 even if it doesn't make much of a difference...
+* Boot notes
+
+Private workspace claim (request type 2) happens early on in the boot
+process, and it isn't claimed - so it's a good place to reset the
+link-started flag.
+
+ROM boot (request type 3) can be claimed, so there's no guarantee the
+BLFS ROM will receive it.
+
+* Serial protocol rambles
+
+The AVR has an OOB mechanism for resets: the USB stall that the BBC
+can induce by switching off write handshaking. This is how the BBC can
+cancel the current operation, whatever it was, after pressing BREAK,
+without things getting out of sync too often.
+
+The serial link needs something similar.
+
+Key thing: there is a certain run of bytes that will never occur
+during normal transmission. The server and BBC can just send this
+sequence to one another repeatedly until both sides have detected it,
+to ensure all buffers are flushed and everything is synced up.
+
+Note new serial-specific request type, 0x00:
+
+- =REQUEST_SERIAL_CANCEL= :: 0x00
+
+Special syntax, same as =REQUEST_AVR_PRESENCE=: it's a valid request
+just on its own, there's never any payload, and the server just
+ignores it.
+
+** sync mode
+
+Sync mode allows both sides to flush all necessary buffers (FTDI
+buffer for the BBC, FTDI buffer + various OS buffers for the server)
+and put themselves in a known state.
+
+Sync part 1:
+
+1. BBC and server emit a constant stream of 0 bytes
+
+2. Both sides keep count of runs of zeros seen, and discard anything
+   else (presumably just buffered-up junk). Once both have seen 259
+   consecutive zeros (which never occurs during ordinary
+   transmission), they switch to sync part 2
+
+Sync part 2:
+
+3. Both sides send a single non-0 byte
+
+4. Both sides keep reading until they get the non-0 byte
+
+At this point, fingers crossed, they're both in sync...
+
+260 bytes = 2,340 bits, or 0.02 sec at 115,200 baud (and actual
+transmit rate will be higher).
+
+** request formats
+
+Fixed size request: 1 byte type (bit 7 clear), 1 byte payload, 1 byte
+confirmation.
+
+Variable size request: 1 byte type (bit 7 set), 4 bytes LE payload
+size, N bytes of payload. The payload includes confirmation bytes (see
+below), which are not included in the size.
+
+Responses have the same format as requests, including confirmation
+bytes. The PC will always send a full request, and the data is always
+valid, so the confirmation bytes are never 0.
+
+** confirmation bytes
+
+Payloads include confirmation bytes at particular points. The
+confirmation bytes indicate whether there's more data to come (value
+1), or that the payload has been canceled (0 - i.e.,
+=REQUEST_SERIAL_CANCEL=).
+
+Requests include these bytes, so the BBC can indicate that it's
+canceling a request. (Canceling a request puts the server into sync
+mode.)
+
+The format for responses is the same. Responses are never canceled,
+but confirmation bytes are still included, to ensure there's never a
+long enough run of 0s.
+
+Confirmation bytes should also be included mid-payload based on each
+byte's negative offset: =(payload size)-(offset of byte)=. (The last
+byte's negative offset is =-1=, and the first byte's is =-(payload
+size)=.) If the LSB of the negative offset is 0, send a confirmation
+byte before sending the byte.
+
+The payload is also always followed by a confirmation byte.
+
+This arrangement is not super logical, just easy to handle efficiently
+from the 6502 side.
+
+** forcing a reset from the BBC side
+
+For use the first time the FS is activated after a reset.
+
+Just embark on sync mode from the BBC side...
+
+If a response was being sent, this will ensure the server eventually
+hits the point where it's expecting a confirmation byte, and then
+supply a 0 for that byte. Now the PC is in sync mode too.
+
+If a response was being received: the PC will be listening. If it
+receives a =REQUEST_SERIAL_CANCEL= byte while sending, it will go into
+sync mode. (It will do this immediately, as the BBC must know that
+it's done this and won't be listening for proper packet data any
+more.)
+
+Either way, eventually both will end up in sync part 1 at the same
+time, and then sync part 2.
+
+** is 259 enough?
+
+Worst case is a variable size 255 byte packet of 0s, with a run of 258
+0 bytes:
+
+: +000 xx (type)
+: +001 ff + size
+: +002 00 |
+: +003 00 |
+: +004 00 +
+: +005 00 (byte 0, negative offset 0xffffff01)
+: ..
+: +104 00 (byte fe, negative offset 0x00000000)
+: +105 01 confirmation byte
+
+Any payload with a size of $xxxxxxff will potentially start with 255
+0s, but larger sizes will have fewer 0s as part of the size.
+
+Payloads with size $xxxxxx00 (obviously $xxxxxx>=1...) have 254 0
+bytes in the worst case:
+
+: +000 xx (type)
+: +001 00 + size
+: +002 01 |
+: +003 00 |
+: +004 00 +
+: +005 00 (byte 0, negative offset 0xffffff00)
+: +006 01 (confirmation byte)
+: ..
+: +105 00 (byte ff, negative offset 0x00000000)
+: +106 01 confirmation byte
+
+* copy/paste fodder
+
+#+begin_src text
+          7   6   5   4   3   2   1   0
+        +---+---+---+---+---+---+---+---+
+  +0    | 0 | request type              |
+        +---+---+---+---+---+---+---+---+
+  +1    | size bits 0...7               |
+        +---+---+---+---+---+---+---+---+
+  +2    | size bits 8...15              |
+        +---+---+---+---+---+---+---+---+
+  +3    | size bits 16...23             |
+        +---+---+---+---+---+---+---+---+
+  +4    | size bits 24...31             |
+        +---+---+---+---+---+---+---+---+
+  +5    |   |   |   |   |   |   |   |   |
+        .   .   .   .   .   .   .   .   .
+  +N+5  |   |   |   |   |   |   |   |   |
+        +---+---+---+---+---+---+---+---+
+  +N+6  | SERIAL_YES                    |
+        +-------------------------------+
+#+end_src
