@@ -129,35 +129,35 @@ print: .macro items
                 txa
                 pha             ;101=x
                 tsx
-                .for i=0,i<len(\items),i+=1
+                .for print__item_index=0,print__item_index<len(\items),print__item_index+=1
 
-                .if type(\items[i])==str
+                .if type(\items[print__item_index])==str
 
-                .if \items[i]=="\r"
+                .if \items[print__item_index]=="\r"
                 jsr osnewl
-                .elsif len(\items[i])==1
-                lda #\items[i][0]
+                .elsif len(\items[print__item_index])==1
+                lda #\items[print__item_index][0]
                 jsr osasci
                 .else
                 jsr pcprint
-                .text \items[i],255
+                .text \items[print__item_index],255
                 .endif
                 
-                .elsif type(\items[i])==int||type(\items[i])==bits||type(\items[i])==code
+                .elsif type(\items[print__item_index])==int||type(\items[print__item_index])==bits||type(\items[print__item_index])==code
                 
-                .if \items[i]>=0&&\items[i]<=65535
-                lda \items[i]
+                .if \items[print__item_index]>=0&&\items[print__item_index]<=65535
+                lda \items[print__item_index]
                 jsr print_hex_byte
-                .elsif \items[i]==DP_A
+                .elsif \items[print__item_index]==DP_A
                 lda $102,x
                 jsr print_hex_byte
-                .elsif \items[i]==DP_X
+                .elsif \items[print__item_index]==DP_X
                 lda $101,x
                 jsr print_hex_byte
-                .elsif \items[i]==DP_Y
+                .elsif \items[print__item_index]==DP_Y
                 tya
                 jsr print_hex_byte
-                .elsif \items[i]==DP_P
+                .elsif \items[print__item_index]==DP_P
                 lda $103,x
                 jsr print_p
                 .else
@@ -166,7 +166,7 @@ print: .macro items
 
                 .else
 
-                .cerror true,"bad debug_print item: ",\items[i]," ",type(\items[i])
+                .cerror true,"bad debug_print item: ",\items[print__item_index]," ",type(\items[print__item_index])
 
                 .endif
                 
