@@ -368,17 +368,20 @@ without things getting out of sync too often.
 The serial link needs something similar.
 
 Key thing: there is a certain run of bytes that will never occur
-during normal transmission. The server and BBC can just send this
-sequence to one another repeatedly until both sides have detected it,
-to ensure all buffers are flushed and everything is synced up.
+during normal transmission. The BBC can just send this to the server
+repeatedly to indicate a reset, and then watch for the same response
+from the server. Once both sides have detected it, the buffers have
+been flushed, and they can send one another a single sync byte to
+indicate they are ready.
 
 Note new serial-specific request type, 0x00:
 
 - =REQUEST_SERIAL_CANCEL= :: 0x00
 
 Special syntax, same as =REQUEST_AVR_PRESENCE=: it's a valid request
-just on its own, there's never any payload, and the server just
-ignores it.
+just on its own (whether fixed- or variable-size payload), and there's
+never any payload. When received, it puts the server immediately into
+sync mode.
 
 ** sync mode
 
@@ -386,20 +389,34 @@ Sync mode allows both sides to flush all necessary buffers (FTDI
 buffer for the BBC, FTDI buffer + various OS buffers for the server)
 and put themselves in a known state.
 
-Sync part 1:
+Server side:
 
-1. BBC and server emit a constant stream of 0 bytes
+1. emit =num_required_0s= x $00 bytes followed by 1 x $01 byte. This
+   can be done as one lump, at the start of the process; the data will
+   be buffered up and will appear at the BBC end in due course
 
-2. Both sides keep count of runs of zeros seen, and discard anything
-   else (presumably just buffered-up junk). Once both have seen 259
-   consecutive zeros (which never occurs during ordinary
-   transmission), they switch to sync part 2
+2. read data from the BBC, counting runs of $00 bytes and discarding
+   everything else. When =num_required_0s= consecutive $00 bytes have
+   been received, go to step 3
 
-Sync part 2:
+3. read bytes from BBC: a $01 indicates sync complete, and it's done;
+   $00 bytes should be ignored; other values are an error
 
-3. Both sides send a single non-0 byte
+BBC side:
 
-4. Both sides keep reading until they get the non-0 byte
+1. emit a single $80 byte to break any run of $00s that might have
+   been in progress as part of a previous sync that was interrupted by
+   BREAK
+
+2. emit continuous $00 bytes while reading from the server. Count runs
+   of zeroes and discard everything else. When =num_required_0s=
+   consecutive $00 bytes have been received, go to step 2.
+
+3. continue emitting $00 bytes. Read bytes from server: a $01
+   indicates sync complete, so go to step 3; $00s can be ignored;
+   other values are an error
+
+4. emit a single $01 byte to indicate that sync is complete
 
 At this point, fingers crossed, they're both in sync...
 
@@ -416,31 +433,34 @@ size, N bytes of payload. The payload includes confirmation bytes (see
 below), which are not included in the size.
 
 Responses have the same format as requests, including confirmation
-bytes. The PC will always send a full request, and the data is always
-valid, so the confirmation bytes are never 0.
+bytes.
 
 ** confirmation bytes
 
 Payloads include confirmation bytes at particular points. The
-confirmation bytes indicate whether there's more data to come (value
-1), or that the payload has been canceled (0 - i.e.,
-=REQUEST_SERIAL_CANCEL=).
+confirmation bytes indicate whether there's more data to come, or that
+the request has been canceled. The payload is also always followed by
+a final confirmation byte, indicating that the request was valid or
+that it was canceled (at the last possible moment).
+
+To indicate cancelation, supply 0x00 or 0x80 (i.e.,
+=REQUEST_SERIAL_CANCEL=). Otherwise, supply 0x01. There's no real plan
+for additional values, but... maybe??
 
 Requests include these bytes, so the BBC can indicate that it's
 canceling a request. (Canceling a request puts the server into sync
 mode.)
 
-The format for responses is the same. Responses are never canceled,
-but confirmation bytes are still included, to ensure there's never a
-long enough run of 0s.
+Responses include these bytes, so that there's never a long enough run
+of 0x00 bytes to cause data to be confused with sync. But since the
+server never cancels a response, the confirmation bytes in a response
+are always 0x01 and the BBC can just ignore them.
 
-Confirmation bytes should also be included mid-payload based on each
-byte's negative offset: =(payload size)-(offset of byte)=. (The last
-byte's negative offset is =-1=, and the first byte's is =-(payload
-size)=.) If the LSB of the negative offset is 0, send a confirmation
-byte before sending the byte.
-
-The payload is also always followed by a confirmation byte.
+Mid-payload confirmation bytes should be included based on each byte's
+negative offset: =(payload size)-(offset of byte)=. (The last byte's
+negative offset is =-1=, and the first byte's is =-(payload size)=.)
+If the LSB of the negative offset is 0, send a confirmation byte
+before sending the byte.
 
 This arrangement is not super logical, just easy to handle efficiently
 from the 6502 side.
@@ -450,6 +470,9 @@ from the 6502 side.
 For use the first time the FS is activated after a reset.
 
 Just embark on sync mode from the BBC side...
+
+If the server was waiting for a response, it will get the =0= and go
+into syn mode straight away.
 
 If a response was being sent, this will ensure the server eventually
 hits the point where it's expecting a confirmation byte, and then
@@ -464,7 +487,10 @@ more.)
 Either way, eventually both will end up in sync part 1 at the same
 time, and then sync part 2.
 
-** is 259 enough?
+** what is the right value for =num_required_0s=?
+
+I think 259 is enough, so of course it's probably going to stay
+at 500.
 
 Worst case is a variable size 255 byte packet of 0s, with a run of 258
 0 bytes:

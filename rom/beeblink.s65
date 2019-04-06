@@ -56,7 +56,8 @@
 ;-------------------------------------------------------------------------
 
 ; Config toggles.
-                
+
+                .weak
 ; If true, set VON by default on hard reset.
 default_von=false
 
@@ -73,50 +74,17 @@ enable_debug_print=true
 ; Various verbosity flags.
 verbose_file_data=false
 
-; ; Use optimised or simplified version of send/receive file data
-; ; routines.
-; recv_file_data_optimised=true
-; send_file_data_optimised=true
-
 ; If true, include support for *BLSPEEDTEST command.
 enable_speed_test=true
 
 ; If true, extra logging when writing ADFS disks.
 write_adfs_verbose=false
-                
-;-------------------------------------------------------------------------
-
-; ROM status byte flags
-
-; if set, *VON.
-sf_von=$80
-von_char='V'
-
-; if set, pretend to be DFS.
-sf_act_as_dfs=$40
-act_as_dfs_char='D'
-
-; if set, (try to) trap *DISC/*DISK.
-sf_trap_disc=$20
-trap_disc_char='*'
-                
-; if set, ignore *DISC/*DISK.
-sf_ignore_disc=$10
-ignore_disc_char='I'
-
-; if set, link_startup succeeded, so no need to try again.
-sf_link_started_up=$08
-                
-sf_power_on_defaults=0
-                
-;-------------------------------------------------------------------------
 
 ; At some point I found that it might be useful for multiple versions
 ; of the BeebLink FS to coexist, so that I can have a WIP version
 ; (using one link type) and a LKG version (using another), without
 ; conflicts. So there are a few spot hacks for this.
-                
-                .weak
+
 ; Prefix for use with help subject and UTILS commands.
 blfs_prefix="BL"
                 
@@ -128,6 +96,8 @@ blfs_first_handle=DEFAULT_FIRST_FILE_HANDLE
 blfs_num_handles=DEFAULT_NUM_FILE_HANDLES
                 .endweak
 
+;-------------------------------------------------------------------------
+                
 ; FS number for DFS
 dfs_fs_number=4
 
@@ -165,6 +135,32 @@ server_string_buffer_size=20
                 .cerror server_string_buffer_size<1,"server string buffer must be 1+ bytes"
                 .cerror server_string_buffer_size>64,"string packet has to fit on the 6502 stack"
 
+;-------------------------------------------------------------------------
+
+; ROM status byte flags
+
+; if set, *VON.
+sf_von=$80
+von_char='V'
+
+; if set, pretend to be DFS.
+sf_act_as_dfs=$40
+act_as_dfs_char='D'
+
+; if set, (try to) trap *DISC/*DISK.
+sf_trap_disc=$20
+trap_disc_char='*'
+                
+; if set, ignore *DISC/*DISK.
+sf_ignore_disc=$10
+ignore_disc_char='I'
+
+; if set, link_startup succeeded, so no need to try again.
+sf_link_started_up=$08
+                
+sf_power_on_defaults=0
+                
+;-------------------------------------------------------------------------
 ;-------------------------------------------------------------------------
 ;
 ;
@@ -1708,7 +1704,7 @@ got_n:
                 jsr negate_payload_size
                 pla
                 and #$7f
-                jsr got_n_debug_print
+                .debug_print ["recv_response: T=&",DP_A," payload_size=&",scratch_payload_size+3,scratch_payload_size+2,scratch_payload_size+1,scratch_payload_size+0,"\r"]
                 cmp #RESPONSE_ERROR
                 beq got_error
                 clc
@@ -1747,11 +1743,6 @@ got_error_done:
                 jsr discard_remaining_payload
 
                 jmp brkthunk
-
-got_n_debug_print:
-                ; this is too many bytes to put inlined :(
-                .debug_print ["recv_response: T=&",DP_A," payload_size=&",scratch_payload_size+3,scratch_payload_size+2,scratch_payload_size+1,scratch_payload_size+0,"\r"]
-                rts
 
 dummy_error:
                 .text 0,255,"!",0
@@ -1980,9 +1971,11 @@ ignore_disc_text:
 init_blfs: .proc
                 jsr init_blfs_internal
                 bcs not_ok
+                .debug_print ['init_blfs succeeded\r']
                 rts
 
 not_ok:
+                .debug_print ['init_blfs failed: X=&',DP_X,'\r']
                 lda #0
                 sta brkthunk+0
 
@@ -2007,7 +2000,8 @@ not_ok:
 
 ;-------------------------------------------------------------------------
 ;
-; Initialise BLFS as part of ROM boot process. Prints status message, whatever it was (success or failure), followed by two newlines.
+; Initialise BLFS as part of ROM boot process. Prints status message,
+; whatever it was (success or failure), followed by two newlines.
 ;
 ; On success, if the trap *DISC flag is set, initialise the trap *DISC
 ; hack. (This could also be done as part of normal init - but it
@@ -2077,11 +2071,15 @@ link_ok:
                 ora #sf_link_started_up
                 sta roms_table,x
 
+                .debug_print ['i_b_i: initialising FS...\r']
+
                 ; claim vectors and so on
                 jsr init_fs
                 
                 lda #253        ;get reset type in X (AUG 244)
                 jsr osbyte_x00_yff
+
+                .debug_print ['i_b_i: sending REQUEST_RESET... (reset type: &',DP_X,')\r']
                 
                 lda #REQUEST_RESET
                 jsr send_request_1
@@ -2089,6 +2087,8 @@ link_ok:
                 ; whatever it was, I'm sure it was fine...
                 jsr recv_response_and_discard_payload
 
+                .debug_print ['i_b_i: sending REQUEST_SET_FILE_HANDLE_RANGE...\r']
+                
                 lda #2
                 jsr set_payload_size
 
@@ -2102,6 +2102,8 @@ link_ok:
                 jsr send_payload_byte
 
                 jsr recv_response_and_discard_payload
+
+                .debug_print ['i_b_i: OK, probably.\r']
 
                 clc             ;init ok
                 rts

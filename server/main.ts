@@ -1181,10 +1181,17 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
 
     let readWaiter: IReadWaiter | undefined;
     const readBuffers: Buffer[] = [];
-    let readIndex: 0;
+    let readIndex = 0;
+
+    const readByteLog = new utils.Log('SERIAL: readByte', serialLog.f, false);
 
     port.on('data', (data: Buffer): void => {
         readBuffers.push(data);
+
+        readByteLog.withIndent('Serial data: ', () => {
+            readByteLog.dumpBuffer(data);
+        });
+
         if (readWaiter !== undefined) {
             const waiter = readWaiter;
             readWaiter = undefined;
@@ -1193,9 +1200,11 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
                 waiter.resolve();
             }
         }
+
     });
 
     port.on('error', (error: any): void => {
+        serialLog.pn(`error: ${error}`);
         if (readWaiter !== undefined) {
             const waiter = readWaiter;
             readWaiter = undefined;
@@ -1208,11 +1217,16 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
 
     async function readByte(): Promise<number> {
         if (readBuffers.length === 0) {
+            readByteLog.pn(`readByte: waiting for more data...`);
+
             await new Promise<void>((resolve, reject): void => {
                 readWaiter = { resolve, reject };
             });
+
+            readByteLog.pn(`readByte: got some data`);
         }
 
+        readByteLog.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
         const byte = readBuffers[0][readIndex++];
 
         if (readIndex === readBuffers[0].length) {
@@ -1225,12 +1239,11 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
 
     async function readConfirmationByte(): Promise<boolean> {
         const byte = await readByte();
-        return byte !== 0;
+        return byte !== 1;
     }
 
     const numSyncZerosRequired = 500;
 
-    let synced = false;
     for (; ;) {
         // Sync loop.
         port.removeAllListeners('drain');
@@ -1243,6 +1256,8 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
 
         const syncData = Buffer.alloc(numSyncZerosRequired + 1);
         syncData[numSyncZerosRequired] = 1;
+
+        let synced = false;
 
         sync_loop:
         do {
@@ -1270,6 +1285,7 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
             let numZeros = 0;
             while (numZeros < numSyncZerosRequired) {
                 const x = await readByte();
+                serialLog.pn(`read server step 2 sync byte: ${x} (${numZeros} 0x00 bytes read)`);
                 if (x !== 0) {
                     numZeros = 0;
                 } else {
@@ -1281,12 +1297,16 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
 
             // eat remaining sync 0s.
             {
+                let n = 0;
                 let x;
                 do {
                     x = await readByte();
+                    ++n;
+                    serialLog.pn(`read server step 3 sync byte: ${x} (${n} bytes read)`);
                 } while (x === 0);
 
                 if (x === 1) {
+                    serialLog.pn(`Got 0x01 byte - now synced`);
                     synced = true;
                 } else {
                     serialLog.pn(`No sync - bad sync value: ${x} (0x${utils.hex2(x)})`);
@@ -1294,22 +1314,29 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
             }
         } while (!synced);
 
-        // Response/request loop.
-        response_request_loop:
+        // Request/response loop.
+        request_response_loop:
         for (; ;) {
-            const c = await readByte();
+            serialLog.pn(`Waiting for request...`);
+            const cmdByte = await readByte();
+
+            const c = cmdByte & 0x7f;
+            const variableSizeRequest = (cmdByte & 0x80) !== 0;
 
             if (c === 0) {
+                serialLog.pn(`Got command 0 - entering sync state`);
                 // Special syntax.
-                continue;
+                break request_response_loop;
             }
 
             let p: Buffer;
-            if ((c & 0x80) === 0) {
+            if (!variableSizeRequest) {
                 // 1-byte payload.
                 p = Buffer.alloc(1);
+                serialLog.pn(`Waiting for 1-byte payload...`);
                 p[0] = await readByte();
             } else {
+                serialLog.pn(`Waiting for payload size...`);
                 // Variable-size payload.
                 const b0 = await readByte();
                 const b1 = await readByte();
@@ -1317,12 +1344,13 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
                 const b3 = await readByte();
                 const size = UInt32(b0, b1, b2, b3);
 
-                p = Buffer.alloc(size + (size >> 8) + 1);
+                p = Buffer.alloc(size);
 
+                serialLog.pn(`Waiting for ${size} payload bytes...`);
                 for (let i = 0; i < size; ++i) {
                     if (((size - i) & 0xff) === 0) {
                         if (!await readConfirmationByte()) {
-                            break response_request_loop;
+                            break request_response_loop;
                         }
                     }
 
@@ -1331,10 +1359,10 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
             }
 
             if (!await readConfirmationByte()) {
-                break response_request_loop;
+                break request_response_loop;
             }
 
-            const request = new Request(c & 0x7f, p);
+            const request = new Request(c, p);
 
             const response = await server.handleRequest(request);
 
@@ -1370,6 +1398,8 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
             }
 
             {
+                serialLog.pn(`Sending ${responseData.length} bytes response data...`);
+
                 const maxChunkSize = 512;//arbitrary.
                 let srcIdx = 0;
                 while (srcIdx < responseData.length) {
@@ -1389,6 +1419,7 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
                     readWaiter = {
                         reject: undefined,
                         resolve: (): void => {
+                            serialLog.pn(`Received data while sending - returning to sync state`);
                             callResolveResult(false);
                         },
                     };
@@ -1412,12 +1443,14 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
                     });
 
                     if (!ok) {
-                        break response_request_loop;
+                        break request_response_loop;
                     }
 
                     srcIdx += maxChunkSize;
                 }
             }
+
+            serialLog.pn(`Done one request/response.`);
         }
     }
 }
@@ -1462,8 +1495,6 @@ async function main(options: ICommandLineOptions) {
         chalk.black,
     ];
 
-    // The USB connections and the HTTP connections just don't work in anything
-    // like the same ways, so there's been no attempt at all made to unify them.
     let nextConnectionId = 1;
 
     async function createServer(): Promise<Server> {

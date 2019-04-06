@@ -187,11 +187,9 @@ debug_print .macro items,enabled=true
                 .if \enabled
                 php             ;104=p
                 jsr get_vstatus
-                bcs +
-                jmp debug_print_done
-+
+                bcc +
                 print list(\items)
-debug_print_done:
++
                 plp
                 .endif
                 .endif

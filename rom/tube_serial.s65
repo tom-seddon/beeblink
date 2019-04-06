@@ -75,13 +75,12 @@ num_sync_zeros_required=500
 
                 .section link_startup_workspace
 num_sync_zeros_received: .fill 2
-num_sync_zeros_sent: .fill 2
                 .send link_startup_workspace
 
 ; The link startup workspace is a not-very-generous 8 bytes.
 startup_end_time=brkthunk+0
 startup_current_time=brkthunk+5
-startup_max_time=250 ;in centiseconds
+startup_max_time=1000 ;in centiseconds
                 
 ;-------------------------------------------------------------------------
 
@@ -90,36 +89,6 @@ startup_max_time=250 ;in centiseconds
 private_itu: .fill 1
                 .send fs_private_workspace
 
-;-------------------------------------------------------------------------
-; Set a 16-bit value in zero page to 0.
-;
-; entry: X = zero page address of 16-bit value
-; preserves X; Y
-
-clrz16: .proc
-                lda #0
-                sta 0,x
-                sta 1,x
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-; Compare a 16-bit value in zero page to num_sync_zeros_required.
-;
-; entry: X = zero page address of 16-bit value
-; exit: Z=1 if value is num_sync_zeros_required
-; preserves: X; Y
-cmp_num_sync_zeros_required_z16: .proc
-                lda 0,x
-                cmp #<num_sync_zeros_required
-                bne +
-
-                lda 1,x
-                cmp #>num_sync_zeros_required
-+
-                rts
-                .pend
-                
 ;-------------------------------------------------------------------------
 ; Check if ACCCON ITU needs resetting to access the FTDI device.
 ;
@@ -170,7 +139,7 @@ safe_read_status: .proc
                 rts
 
 +
-                .cpu "65c02"
+                .cpu '65c02'
                 phy
                 ldy #status-fifo
                 jsr m128_read_register
@@ -180,7 +149,7 @@ safe_read_status: .proc
                 .pend
 
 m128_read_register: .proc
-                .cpu "65c02"
+                .cpu '65c02'
                 php
                 sei
                 
@@ -192,7 +161,7 @@ m128_read_register: .proc
 
                 stx acccon
                 plp
-                .cpu "default"
+                .cpu 'default'
                 rts
                 .pend
 
@@ -220,7 +189,7 @@ got_data:
                 rts
 
 +
-                .cpu "65c02"
+                .cpu '65c02'
                 phy
                 ldy #fifo-fifo
                 jsr m128_read_register
@@ -257,7 +226,7 @@ got_space:
                 rts
 
 m128_write_fifo:
-                .cpu "65c02"
+                .cpu '65c02'
                 php
                 sei
 
@@ -279,7 +248,7 @@ m128_write_fifo:
 startup: .proc
 
                 ; jsr pcprint
-                ; .text "borkork",255
+                ; .text 'borkork',255
 
                 ; sec
                 ; rts
@@ -332,15 +301,16 @@ good:
                 ldy #>startup_end_time
                 jsr osword
 
-                .print ["Time now:  &",startup_end_time+4,startup_end_time+3,startup_end_time+2,startup_end_time+1,startup_end_time+0,"\r"]
+                .debug_print ['Time now: &',startup_end_time+4,startup_end_time+3,startup_end_time+2,startup_end_time+1,startup_end_time+0,'\r']
 
                 clc
-                lda startup_end_time
-                adc #startup_max_time
-                sta startup_end_time
+                lda startup_end_time+0
+                adc #<startup_max_time
+                sta startup_end_time+0
+                lda startup_end_time+1
+                adc #>startup_max_time
+                sta startup_end_time+1
                 bcc +
-                inc startup_end_time+1
-                bne +
                 inc startup_end_time+2
                 bne +
                 inc startup_end_time+3
@@ -348,25 +318,40 @@ good:
                 inc startup_end_time+4
 +
                 
-                .print ["End time: &",startup_end_time+4,startup_end_time+3,startup_end_time+2,startup_end_time+1,startup_end_time+0,"\r"]
+                .debug_print ['End time: &',startup_end_time+4,startup_end_time+3,startup_end_time+2,startup_end_time+1,startup_end_time+0,'\r']
 
 start_sync:
-                ldx #num_sync_zeros_received
-                jsr clrz16
+                lda #0
+                sta num_sync_zeros_received+0
+                sta num_sync_zeros_received+1
 
-                ldx #num_sync_zeros_sent
-                jsr clrz16
-
-sync_loop:
+                .block
+                .debug_print ['Sync step 1...\r']
+sync_step_1_loop:
                 jsr check_startup_timeout
                 bcs timed_out
                 
-                jsr send_sync_zero
+                lda #$80
+                jsr safe_write_fifo
+                bcc sync_step_1_loop
+                .bend
+
+                .block
+                .debug_print ['Sync step 2...\r']
+sync_step_2_loop:
+                ; .print ['&00: sent: &',num_sync_zeros_sent+1,num_sync_zeros_sent+0,'; received: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r']
+                jsr check_startup_timeout
+                bcs timed_out
+
+                ; Try to write $00. If it didn't get sent, no
+                ; problem... plenty more where that came from.
+                lda #$00
+                jsr safe_write_fifo
                 
                 ; Try to get more data. If none available, just carry
                 ; on looping.
                 jsr safe_read_fifo
-                bcc sync_loop
+                bcc sync_step_2_loop
 
                 ; If a non-0 was received, restart the sync process.
                 cmp #0
@@ -377,45 +362,55 @@ sync_loop:
                 jsr add1z16
 
                 ; Keep going if required number not reached.
-                jsr cmp_num_sync_zeros_required_z16
-                bne sync_loop
-                
-                ; Looks like server is definitely in sync mode. Ensure
-                ; that num_sync_zeros_required 0s get sent, so it
-                ; knows the ROM is in sync mode too.
-send_any_remaining_zeros_loop:
-                ldx #num_sync_zeros_sent
-                jsr cmp_num_sync_zeros_required_z16
-                beq send_non_zero
+                lda num_sync_zeros_received+0
+                cmp #<num_sync_zeros_required
+                bne sync_step_2_loop
 
-                jsr send_sync_zero
-                jmp send_any_remaining_zeros_loop
+                lda num_sync_zeros_received+1
+                cmp #>num_sync_zeros_required
+                bne sync_step_2_loop
+                .bend
 
-                ; Write a single non-zero byte.
-send_non_zero:
+                .block
+                ; Keep reading until the 1 byte is received. Continue
+                ; sending zeros meanwhile.
+                .debug_print ['Sync step 3...\r']
+sync_step_3_loop:
                 jsr check_startup_timeout
                 bcs timed_out
-                
-                lda #1
+
+                ; Try to write $00. If it didn't get sent, no
+                ; problem... plenty more where that came from.
+                lda #$00
                 jsr safe_write_fifo
-                bcc send_non_zero
 
-                ; Keep reading until a non-zero byte is encountered.
-                ; If it's 1, that's a successful sync; otherwise,
-                ; something's gone wrong.
-receive_zeros_loop:
-                jsr check_startup_timeout
-                bcs timed_out
-                
                 jsr safe_read_fifo
-                bcc receive_zeros_loop
+                bcc sync_step_3_loop
 
                 cmp #0
-                beq receive_zeros_loop
+                beq sync_step_3_loop
 
                 cmp #1
-                beq ok
+                bne failed
+                .bend
 
+                .block
+                ; Send a single non-zero byte.
+                .debug_print ['Sync step 4...\r']
+sync_step_4_loop:
+                jsr check_startup_timeout
+                bcs timed_out
+
+                lda #1
+                jsr safe_write_fifo
+                bcc sync_step_4_loop
+                .bend
+ok:
+                .debug_print ['Sync success (probably)\r']
+                clc             ;good
+                rts
+
+failed:
                 ldx #status_text.sync_failed-status_text
                 sec             ;no good
                 rts
@@ -425,22 +420,17 @@ timed_out:
                 sec
                 rts
 
-ok:
-                clc             ;good
-                rts
 
-reset_sync_counter:
-                rts
+; send_sync_zero:
+;                 lda #0
+; send_sync_byte:
+;                 jsr safe_write_fifo
+;                 bcc +           ;taken if write failed
 
-send_sync_zero:
-                lda #0
-                jsr safe_write_fifo
-                bcc +           ;taken if write failed
-
-                ldx #num_sync_zeros_sent
-                jsr add1z16
-+
-                rts
+;                 ; ldx #num_sync_zeros_sent
+;                 ; jsr add1z16
+; +
+;                 rts
 
 check_startup_timeout:
                 lda #1          ;read system clock
@@ -457,7 +447,7 @@ check_startup_timeout:
                 bpl no_timeout
 
 timeout:
-                .print ["Timeout time: &",startup_current_time+4,startup_current_time+3,startup_current_time+2,startup_current_time+1,startup_current_time+0,"\r"]
+                .debug_print ['Timeout time: &',startup_current_time+4,startup_current_time+3,startup_current_time+2,startup_current_time+1,startup_current_time+0,'\r']
                 sec
                 rts
 
@@ -487,7 +477,7 @@ prepare: .proc
                 ror private_itu
 
                 bcc +
-                .brk_error 255,"Internal Tube = TODO",255
+                .brk_error 255,'Internal Tube = TODO',255
 +
                 rts
                 .pend
@@ -503,7 +493,7 @@ unprepare: .proc
 ;-------------------------------------------------------------------------
 ; Placeholder for stuff I haven't done yet.              
 error: .proc
-                .brk_error 255,"Not supported"
+                .brk_error 255,'Tube serial transfer = TODO'
                 .pend
 
 ;-------------------------------------------------------------------------
@@ -521,7 +511,7 @@ nop: .proc
 
 ;-------------------------------------------------------------------------
                 
-link_name="Tube Serial"
+link_name='Tube Serial'
 link_prepare=tube_serial.prepare
 link_unprepare=tube_serial.unprepare
 
