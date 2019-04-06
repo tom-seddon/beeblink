@@ -124,14 +124,16 @@ cmp_num_sync_zeros_required_z16: .proc
 ; Check if ACCCON ITU needs resetting to access the FTDI device.
 ;
 ; In principle there's a race condition here, and ITU could become
-; set. But it looks like the MOS actually just leaves it alone, so
-; it's all quite safe(tm)...
+; set. But it looks like the MOS actually just leaves it alone after
+; initialisation, so it's all quite safe(tm)...
 ;
 ; exit: C=0 if no handling required (B/B+/M128 with ext Tube or no Tube)
 ;       C=1 if handling required (M128 with int Tube)
-; preserves: A; Y
+; preserves: A; X; Y
 
 is_itu: .proc
+                pha
+                txa
                 pha
                 
                 ; http://beebwiki.mdfs.net/OSBYTE_&00
@@ -150,6 +152,8 @@ is_itu: .proc
                 cmp #acccon.itu ;C=1 if int Tube
 +
 
+                pla
+                tax
                 pla
                 rts
                 .pend

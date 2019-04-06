@@ -67,11 +67,7 @@ via_begin_send: .proc
                 .pend
 
 ;-------------------------------------------------------------------------
-;
 ; Prepare VIA for use, setting it up for the initial send operation.
-;
-; preserves: A; X; Y; C
-
 via_prepare: .proc
                 pha
 
@@ -657,6 +653,8 @@ no_pages:
 link_name="AVR "..format("%04x",avr.via)
 
 ; Prepare link. Get everything ready and put it in send mode.
+;
+; Preserve A/X/Y.
 link_prepare=avr.via_prepare
 
 ; Unrepare link. Do whatever's necessary.
