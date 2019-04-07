@@ -2813,18 +2813,37 @@ get_osgbpb_address:
 
 blfs_osfind: .proc
                 cmp #0
-                bne open
+                bne open        ;taken if file open request
 
 close:
-                pha
                 txa
-                pha
+                pha             ;save X, not used
                 tya
-                pha
+                pha             ;save Y, file handle
 
-                lda #$77        ;close SPOOL/EXEC files (AUG 141)
+                beq close_handle ;taken if Y=0, so all files are to be
+                                 ;closed
+
+                sta private_request ;save file handle
+
+                lda #198        ;read/write *EXEC file handle (AUG
+                                ;203)
+                jsr osbyte_x00_yff
+                cpx private_request
+                beq close_spool_or_exec_handle ;taken if closing *EXEC
+                                               ;handle
+
+                lda #199        ;read/write *SPOOL file handle (AUG
+                                ;204)
+                jsr osbyte_x00_yff
+                cpx private_request
+                bne close_handle ;taken if not closing *SPOOL handle
+
+close_spool_or_exec_handle:
+                lda #$77        ;close *SPOOL/*EXEC handles (AUG 141)
                 jsr osbyte
-
+                
+close_handle:
                 pla             ;A = file handle
                 pha
                 tax
@@ -2834,11 +2853,10 @@ close:
                 jsr recv_response_and_discard_payload
 
                 pla
-                tay
+                tay             ;restore Y, file handle
                 pla
-                tax
-                pla
-                
+                tax             ;restore X, never used
+                lda #0          ;restore A
                 rts
 
 open:
@@ -3476,9 +3494,9 @@ send_tube_done:
 ;
 ; Print the server's string.
 ;
-; In principle there could be filing system changes during this, e.g.,
-; if you do *SPOOL -DISC-FRED and then *CAT. It correctly preserves
-; zero page, but maybe it ought to re-do the VIA initialisation?
+; On entry, the link must be prepared, but to cater for stuff like
+; *SPOOL -DISC-STUFF, *CAT (etc.), the link is unprepared before
+; printing anything and re-prepared afterwards.
 ;
 ; entry: -
 ; exit: -
@@ -3542,7 +3560,8 @@ recv_chars_done:
                 tax
                 ldy scratch_ptr
                 
-                
+                .block
+                jsr link_unprepare
 print_chars_loop:
                 cpx #0
                 beq print_chars_done
@@ -3551,8 +3570,10 @@ print_chars_loop:
                 iny
                 dex
                 jmp print_chars_loop
-
 print_chars_done:
+                jsr link_prepare
+                .bend
+                
                 ldy scratch_ptr
                 
                 pop32 scratch_payload_size
