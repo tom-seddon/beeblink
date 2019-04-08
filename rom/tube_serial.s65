@@ -48,6 +48,8 @@
 
                 .section code
 
+                .cerror NUM_SERIAL_SYNC_ZEROS<0||NUM_SERIAL_SYNC_ZEROS>65535,'NUM_SERIAL_SYNC_ZEROS must be a 16-bit uint'
+                
 ;-------------------------------------------------------------------------
                 
                 .virtual $fefe
@@ -69,12 +71,9 @@ tube_serial: .block
 
 ;-------------------------------------------------------------------------
 
-; The minimum is actually 259 (see the docs/notes.org), but more won't
-; hurt.
-num_sync_zeros_required=500
-
                 .section link_startup_workspace
 num_sync_zeros_received: .fill 2
+startup_itu: .fill 1
                 .send link_startup_workspace
 
 ; The link startup workspace is a not-very-generous 8 bytes.
@@ -89,7 +88,7 @@ startup_max_time=1000 ;in centiseconds
 private_itu: .fill 1
 private_send_value: .fill 1
                 .send fs_private_workspace
-
+                
 ;-------------------------------------------------------------------------
 ; Check if ACCCON ITU needs resetting to access the FTDI device.
 ;
@@ -129,36 +128,28 @@ is_itu: .proc
                 .pend
 
 ;-------------------------------------------------------------------------
-; Reads status register. Handles Tube palaver if required.
+; Reads status register during startup. Handles Tube palaver if
+; required.
 ;
 ; exit: A=value of status register
 ; preserves: Y
-safe_read_status: .proc
-                jsr is_itu
-                bcs +
+startup_read_status: .proc
+                bit startup_itu
+                bmi +
+
                 lda status
                 rts
 
 +
                 .cpu '65c02'
-                phy
-                ldy #status-fifo
-                jsr m128_read_register
-                ply
-                .cpu 'default'
-                rts
-                .pend
-
-m128_read_register: .proc
-                .cpu '65c02'
                 php
                 sei
-                
+
                 ldx acccon
                 lda #acccon.itu
                 trb acccon
-                
-                lda fifo,y
+
+                lda status
 
                 stx acccon
                 plp
@@ -167,87 +158,108 @@ m128_read_register: .proc
                 .pend
 
 ;-------------------------------------------------------------------------
-; Reads FIFO. Handles Tube palaver if required.
+; Read FIFO during startup. Handles Tube palaver if required.
 ;
 ; exit: C=0 if no data was available
 ;       C=1 if data was available, A = value read
 ; preserves: Y
-safe_read_fifo: .proc
-                jsr safe_read_status
+startup_read_fifo: .proc
+                bit startup_itu
+                bmi itu
+
+read_fifo:
+                lda status
                 and #status.rx_data
                 bne got_data
 
 no_data:
-                clc             ;no data available
+                clc
                 rts
 
 got_data:
-                jsr is_itu
-                bcs +
-                
                 lda fifo
                 sec
                 rts
 
-+
+itu:
                 .cpu '65c02'
-                phy
-                ldy #fifo-fifo
-                jsr m128_read_register
-                sec
-                rts
+                php
+                sei
+
+                ldx acccon
+
+                lda #acccon.itu
+                trb acccon
+
+                jsr read_fifo
+
+                stx acccon
+                plp
                 .cpu 'default'
+                rts
                 .pend
 
 ;-------------------------------------------------------------------------
-; Writes FIFO. Handles Tube palaver if required.
+; Write FIFO during startup. Handles Tube palaver if required.
 ;
 ; entry: A=value to write
 ; exit: C=0 if no space
 ;       C=1 if data was written
 ; preserves Y
-safe_write_fifo: .proc
-                pha
-                jsr safe_read_status
+startup_write_fifo: .proc
+                tax
+                bit startup_itu
+
+write_x_fifo:
+                lda status
                 and #status.tx_space
-                bne got_space
+                bne space
 
 no_space:
-                pla
-                clc             ;no space available
+                clc
                 rts
 
-got_space:
-                jsr is_itu
-                bcs m128_write_fifo
-
-                pla
-                sta fifo
+space:
+                stx fifo
                 sec
                 rts
 
-m128_write_fifo:
+itu:
                 .cpu '65c02'
                 php
                 sei
 
-                ldx acccon
                 lda #acccon.itu
                 trb acccon
 
-                pla
-                sta fifo
+                jsr write_x_fifo
 
-                stx acccon
+                lda #acccon.itu
+                tsb acccon
+
+                ror a           ;save carry
+                
                 plp
                 .cpu 'default'
+
+                asl a           ;restore carry
                 rts
                 .pend
                 
 ;-------------------------------------------------------------------------
 
 startup: .proc
+                jsr is_itu
+                ror startup_itu
 
+                bit startup_itu
+                bpl +
+
+                ldx #status_text.itu_not_supported-status_text
+                sec
+                rts
+
++
                 ; Initialise startup end time.
                 lda #1          ;read system clock
                 ldx #<startup_end_time
@@ -276,7 +288,7 @@ startup: .proc
 wait_for_device_ready_loop:
                 jsr check_startup_timeout
                 bcs not_ready
-                jsr safe_read_status
+                jsr startup_read_status
                 
                 ; wait for bit 3 to become set.
                 and #status.configured
@@ -308,11 +320,11 @@ sync_step_1_loop:
                 ; Try to write $00. If it didn't get sent, no
                 ; problem... plenty more where that came from.
                 lda #$00
-                jsr safe_write_fifo
+                jsr startup_write_fifo
                 
                 ; Try to get more data. If none available, just carry
                 ; on looping.
-                jsr safe_read_fifo
+                jsr startup_read_fifo
                 bcc sync_step_1_loop
 
                 ; If a non-0 was received, restart the sync process.
@@ -325,11 +337,11 @@ sync_step_1_loop:
 
                 ; Keep going if required number not reached.
                 lda num_sync_zeros_received+0
-                cmp #<num_sync_zeros_required
+                cmp #<NUM_SERIAL_SYNC_ZEROS
                 bne sync_step_1_loop
 
                 lda num_sync_zeros_received+1
-                cmp #>num_sync_zeros_required
+                cmp #>NUM_SERIAL_SYNC_ZEROS
                 bne sync_step_1_loop
                 .bend
 
@@ -344,9 +356,9 @@ sync_step_2_loop:
                 ; Try to write $00. If it didn't get sent, no
                 ; problem... plenty more where that came from.
                 lda #$00
-                jsr safe_write_fifo
+                jsr startup_write_fifo
 
-                jsr safe_read_fifo
+                jsr startup_read_fifo
                 bcc sync_step_2_loop
 
                 cmp #0
@@ -364,7 +376,7 @@ sync_step_3_loop:
                 bcs timed_out
 
                 lda #1
-                jsr safe_write_fifo
+                jsr startup_write_fifo
                 bcc sync_step_3_loop
                 .bend
 ok:
@@ -430,6 +442,8 @@ sync_failed:
                 .text 'Sync failed',0
 sync_timed_out:
                 .text 'Sync timeout',0
+itu_not_supported:
+                .text 'Internal Tube not supported',0
                 .bend
                 
 ;-------------------------------------------------------------------------

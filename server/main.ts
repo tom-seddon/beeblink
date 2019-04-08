@@ -1248,11 +1248,9 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: (ad
         }
     }
 
-    const numSyncZerosRequired = 500;
-
     async function writeSyncData(): Promise<void> {
-        const syncData = Buffer.alloc(numSyncZerosRequired + 1);
-        syncData[numSyncZerosRequired] = 1;
+        const syncData = Buffer.alloc(beeblink.NUM_SERIAL_SYNC_ZEROS + 1);
+        syncData[beeblink.NUM_SERIAL_SYNC_ZEROS] = 1;
 
         await new Promise((resolve, reject): void => {
             function writeSyncZeros(): boolean {
@@ -1293,7 +1291,7 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: (ad
             serialLog.pn(`Starting sync...`);
 
             let numZeros = 0;
-            while (numZeros < numSyncZerosRequired) {
+            while (numZeros < beeblink.NUM_SERIAL_SYNC_ZEROS) {
                 const x = await readByte();
                 serialLog.pn(`read server step 1 sync byte: ${x} (${numZeros} 0x00 bytes read)`);
                 if (x !== 0) {
@@ -1317,7 +1315,7 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: (ad
                     ++n;
                     serialLog.pn(`read server step 3 sync byte: ${x} (${n} bytes read)`);
 
-                    // if (n > 5 * numSyncZerosRequired) {
+                    // if (n > 5 * beeblink.NUM_SERIAL_SYNC_ZEROS) {
                     //     // a previous sync was probably interrupted, so send the sync data again.
                     //     serialLog.pn(`taking too long! - sending server step 1 sync data again...`);
                     //     await writeSyncData();
