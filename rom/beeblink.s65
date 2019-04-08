@@ -271,13 +271,14 @@ private_old_cliv .fill 2
 
                 .byte $82       ;has service entry
                 .byte rom_copyright&$ff
+rom_version_number:
                 .byte 0         ;version
 rom_name:
                 .text "BeebLink (",link_name,")"
                 .if default_von
                 .text " (VON)"
                 .endif
-rom_version:
+rom_version_string:
                 .text 0
 rom_version_text:
                 .text VERSION
@@ -566,7 +567,7 @@ svc_boot: .proc
 
 boot_fs:
                 ldx #<rom_name
-                ldy #rom_version-rom_name
+                ldy #rom_version_string-rom_name
                 jsr print_rom_header_text
 
                 jsr is_sideways_ram
@@ -3838,12 +3839,12 @@ copy_relocator_loop:
 is_rom:
                 ; after call, BNE will be taken if RAM, BEQ taken if
                 ; ROM.
-                lda selfupdate_cmd
+                lda rom_version_number
                 tax
                 eor #$ff
-                sta selfupdate_cmd
-                cpx selfupdate_cmd
-                stx selfupdate_cmd
+                sta rom_version_number
+                cpx rom_version_number
+                stx rom_version_number
                 rts
 
                 ; In principle the relocator could be part of the ROM,
