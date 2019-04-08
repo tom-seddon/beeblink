@@ -74,9 +74,6 @@ enable_debug_print=true
 ; Various verbosity flags.
 verbose_file_data=false
 
-; If true, include support for *BLSPEEDTEST command.
-enable_speed_test=true
-
 ; If true, extra logging when writing ADFS disks.
 write_adfs_verbose=false
 
@@ -3267,8 +3264,8 @@ special:
 
 special_routines=[
                 volumes_browser_special,
-                enable_speed_test?speed_test_special:not_supported,
-                enable_speed_test?speed_test_special.sure:not_supported,
+                speed_test_special,
+                speed_test_special.sure,
                 write_dfs_image_special,
                 write_adfs_image_special,
                 ]
@@ -4142,8 +4139,6 @@ inactive:
 ;
 ; *BLSPEEDTEST.
 ; 
-                .if enable_speed_test
-                
 speed_test_special: .proc
 
 parasite_oshwm_page=$08              ;you just have to assume...
@@ -4463,8 +4458,6 @@ get_TIME: .proc
                 .pend
 
                 .pend
-
-                .endif
 
 ;-------------------------------------------------------------------------
 ;
