@@ -244,20 +244,6 @@ Change ROM options. See below.
 
 Activate BLFS.
 
-### `BLSELFUPDATE`
-
-**If you answer `Y` to the prompt, it will overwrite I/O processor
-memory from &3000 onwards!**
-
-Attempt to update the ROM, if it's loaded into sideways RAM. If it
-looks like it might be loaded into a write-protected ABR cartridge, it
-will attempt to unlock the ABR and lock it again afterwards.
-
-The server must be able to find the ROM file - see
-[the bootstrap process](./bootstrap.md).
-
-This is mainly for my benefit when working on the ROM code.
-
 ### `BLVERSION`
 
 Shows BeebLink ROM version, Git commit and build date/time.
@@ -350,6 +336,20 @@ Create a new volume.
 ### `RENAME <old fsp> <new fsp>`
 
 Rename file.
+
+### `SELFUPDATE`
+
+**If you answer `Y` to the prompt, it will overwrite I/O processor
+memory from &3000 onwards!**
+
+Attempt to update the ROM, if it's loaded into sideways RAM. If it
+looks like it might be loaded into a write-protected ABR cartridge, it
+will attempt to unlock the ABR and lock it again afterwards.
+
+The server must be able to find the ROM file - see
+[the bootstrap process](./bootstrap.md).
+
+This is mainly for my benefit when working on the ROM code.
 
 ### `SPEEDTEST`
 
