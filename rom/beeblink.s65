@@ -379,6 +379,11 @@ end:
 ;-------------------------------------------------------------------------
 
 svc: .proc
+;                 cmp #0
+;                 beq +
+;                 jsr print_hex_byte
+; +
+
                 cmp #$02
                 beq svc_claim_private_workspace
                 cmp #$03
@@ -390,9 +395,11 @@ svc: .proc
                 cmp #$12
                 beq svc_fs_init
                 cmp #$25
-                beq svc_get_m128_fs_info
+                beq svc_get_fs_info_m128
                 cmp #$26
-                beq svc_shut
+                beq svc_shut_m128
+                cmp #$27
+                beq svc_inform_reset_m128
 done:
                 ldx $f4
                 rts
@@ -400,9 +407,13 @@ done:
                 
 ;-------------------------------------------------------------------------
 ;
+; $26 - Close all open files
 ;
+; "This call is a request for all filing system with open files to
+; select themselves and close all their open files . It is used by
+; *SHUT. This call should not be claimed."
 ;
-svc_shut: .proc
+svc_shut_m128: .proc
                 pha
 
                 ; If anything goes wrong during FS reinitialisation,
@@ -418,6 +429,26 @@ svc_shut: .proc
                 jmp svc.done
                 .pend
 
+;-------------------------------------------------------------------------
+;
+; $27 - Inform reset
+; 
+; "A reset has occurred and paged ROMs should initialise themselves.
+; This call is required because the MOS does not offer workspace on
+; soft break and should not be claimed."
+svc_inform_reset_m128: .proc
+                pha
+
+                ; There's a very good chance the flag was already
+                ; reset by one of the other service calls, but this
+                ; will catch any remaining cases. If BLFS was a temp
+                ; filing system, for example, I'm not sure it'll get
+                ; any useful messages on a BREAK...
+                jsr reset_link_started_up_flag
+                
+                pla
+                jmp svc.done
+                .pend
 ;-------------------------------------------------------------------------
 ;
 ;
@@ -446,7 +477,7 @@ init:
 ;-------------------------------------------------------------------------
 ;
 ;
-svc_get_m128_fs_info: .proc
+svc_get_fs_info_m128: .proc
                 lda $a8
                 pha
 
@@ -508,13 +539,10 @@ hard:
                 jsr set_vstatus
                 .endif
 done:
-
-                ; Whatever the reset type, always reset the link
-                ; status check flag.
-                ldx $f4
-                lda roms_table,x
-                and #(~sf_link_started_up)&$ff
-                sta roms_table,x
+                ; Ensure link startup flag is reset on Ctrl+BREAK on
+                ; B/B+. (The flag will get reset again later on a
+                ; Master, but no problem.)
+                jsr reset_link_started_up_flag
                 
                 pla
                 tay
@@ -958,6 +986,21 @@ get_rom_status_flag_routine: .macro
 get_vstatus: .get_rom_status_flag_routine sf_von
 ; get_act_as_dfs: .get_rom_status_flag_routine sf_act_as_dfs
 ; get_trap_disc: .get_rom_status_flag_routine sf_trap_disc
+
+;-------------------------------------------------------------------------
+;
+; Clears the sf_link_started_up flag.
+;
+; preservers: Y
+reset_link_started_up_flag: .proc
+                ; Whatever the reset type, always reset the link
+                ; status check flag.
+                ldx $f4
+                lda roms_table,x
+                and #(~sf_link_started_up)&$ff
+                sta roms_table,x
+                rts
+                .pend
                 
 ;-------------------------------------------------------------------------
 ;
@@ -2004,8 +2047,10 @@ not_ok:
 
 ;-------------------------------------------------------------------------
 ;
-; Initialise BLFS as part of ROM boot process. Prints status message,
-; whatever it was (success or failure), followed by two newlines.
+; Initialise BLFS as part of ROM boot process, resetting the link
+; startup flag first so that full link setup is done. Prints status
+; message, whatever it was (success or failure), followed by two
+; newlines.
 ;
 ; On success, if the trap *DISC flag is set, initialise the trap *DISC
 ; hack. (This could also be done as part of normal init - but it
@@ -2015,6 +2060,9 @@ not_ok:
 ;       C=1 if init failed
 ;
 boot_init_blfs: .proc
+                ; Always do a full link startup on boot.
+                jsr reset_link_started_up_flag
+                
                 jsr init_blfs_internal
                 bcs not_ok
 
