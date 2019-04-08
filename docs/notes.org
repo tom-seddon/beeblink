@@ -391,32 +391,28 @@ and put themselves in a known state.
 
 Server side:
 
-1. emit =num_required_0s= x $00 bytes followed by 1 x $01 byte. This
+1. read data from the BBC, counting runs of $00 bytes, and discarding
+   everything else. When =num_required_0s= consecutive $00 bytes have
+   been received, go to step 2
+
+2. emit =num_required_0s= x $00 bytes followed by 1 x $01 byte. This
    can be done as one lump, at the start of the process; the data will
    be buffered up and will appear at the BBC end in due course
-
-2. read data from the BBC, counting runs of $00 bytes and discarding
-   everything else. When =num_required_0s= consecutive $00 bytes have
-   been received, go to step 3
 
 3. read bytes from BBC: a $01 indicates sync complete, and it's done;
    $00 bytes should be ignored; other values are an error
 
 BBC side:
 
-1. emit a single $80 byte to break any run of $00s that might have
-   been in progress as part of a previous sync that was interrupted by
-   BREAK
-
-2. emit continuous $00 bytes while reading from the server. Count runs
+1. emit continuous $00 bytes while reading from the server. Count runs
    of zeroes and discard everything else. When =num_required_0s=
-   consecutive $00 bytes have been received, go to step 2.
+   consecutive $00 bytes have been received, go to step 2
 
-3. continue emitting $00 bytes. Read bytes from server: a $01
-   indicates sync complete, so go to step 3; $00s can be ignored;
+2. continue emitting $00 bytes. Read bytes from server: a $01
+   indicates sync complete, so go to step 2; $00s can be ignored;
    other values are an error
 
-4. emit a single $01 byte to indicate that sync is complete
+3. emit a single $01 byte to indicate that sync is complete
 
 At this point, fingers crossed, they're both in sync...
 
@@ -432,38 +428,37 @@ Variable size request: 1 byte type (bit 7 set), 4 bytes LE payload
 size, N bytes of payload. The payload includes confirmation bytes (see
 below), which are not included in the size.
 
-Responses have the same format as requests, including confirmation
-bytes.
+Responses have a similar format to requests, including confirmation
+bytes, though the details differ.
 
 ** confirmation bytes
 
-Payloads include confirmation bytes at particular points. The
-confirmation bytes indicate whether there's more data to come, or that
-the request has been canceled. The payload is also always followed by
-a final confirmation byte, indicating that the request was valid or
-that it was canceled (at the last possible moment).
+Non-empty request payloads include confirmation bytes at particular
+points, based on the LSB of the byte's negative offset:
+=-((payload_size)-1-(offset of byte))=. (The first byte's negative
+offset is =-((payload size)-1)= and the last byte's is =0=.)
 
-To indicate cancelation, supply 0x00 or 0x80 (i.e.,
+For BBC->server payloads, the confirmation bytes indicate whether
+there's more data to come, or that the request has been canceled. When
+the LSB of the byte's negative offset is 0x00, send a confirmation
+byte after sending the byte. This ensures the request ends with a
+confirmation byte.
+
+For server->BBC payloads, when the LSB of the byte's negative offset
+is 0x00, send a confirmation byte before sending the byte. The
+response might not end with a confirmation byte, but that's fine -
+they're sent only to avoid runs of 0x00 bytes that might get confused
+with a sync. The server isn't allowed to cancel responses and the
+confirmation bytes are always 0x01.
+
+To indicate a canceled request, the BBC may supply 0x00 or 0x80 (i.e.,
 =REQUEST_SERIAL_CANCEL=). Otherwise, supply 0x01. There's no real plan
 for additional values, but... maybe??
 
-Requests include these bytes, so the BBC can indicate that it's
-canceling a request. (Canceling a request puts the server into sync
-mode.)
-
-Responses include these bytes, so that there's never a long enough run
-of 0x00 bytes to cause data to be confused with sync. But since the
-server never cancels a response, the confirmation bytes in a response
-are always 0x01 and the BBC can just ignore them.
-
-Mid-payload confirmation bytes should be included based on each byte's
-negative offset: =(payload size)-(offset of byte)=. (The last byte's
-negative offset is =-1=, and the first byte's is =-(payload size)=.)
-If the LSB of the negative offset is 0, send a confirmation byte
-before sending the byte.
-
-This arrangement is not super logical, just easy to handle efficiently
-from the 6502 side.
+When sending or receiving data, the LSB of the byte's negative offset
+can be found in =scratch_payload_size+0=. (The payload size is in
+principle a 32-bit value, but only the bottom 8 bits promise to be
+always valid.)
 
 ** forcing a reset from the BBC side
 
@@ -472,25 +467,26 @@ For use the first time the FS is activated after a reset.
 Just embark on sync mode from the BBC side...
 
 If the server was waiting for a response, it will get the =0= and go
-into syn mode straight away.
+into sync mode straight away.
 
-If a response was being sent, this will ensure the server eventually
-hits the point where it's expecting a confirmation byte, and then
-supply a 0 for that byte. Now the PC is in sync mode too.
+If a response was being sent, the additional bytes will ensure the
+server eventually hits the point where it's expecting a confirmation
+byte, and then supply a 0 for that byte. Now the PC is in sync mode
+too.
 
 If a response was being received: the PC will be listening. If it
-receives a =REQUEST_SERIAL_CANCEL= byte while sending, it will go into
-sync mode. (It will do this immediately, as the BBC must know that
-it's done this and won't be listening for proper packet data any
-more.)
+receives any data while sending, it will go into sync mode. (It will
+do this immediately, as the BBC must know that it's done this and
+won't be listening for proper packet data any more.)
 
-Either way, eventually both will end up in sync part 1 at the same
-time, and then sync part 2.
+Either way, eventually both sides will figure it out.
 
 ** what is the right value for =num_required_0s=?
 
-I think 259 is enough, so of course it's probably going to stay
-at 500.
+It's currently 500, but the minimum will be a bit more than 256...
+
+_the format has changed slightly since the notes below, which need
+redoing_
 
 Worst case is a variable size 255 byte packet of 0s, with a run of 258
 0 bytes:

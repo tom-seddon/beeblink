@@ -231,6 +231,11 @@ write_image_data .fill 2
 ; the persistent state is on the server or in the private ROM byte.
                 
                 .section fs_scratch_workspace
+
+; Size of payload to be sent.
+;
+; During payload receive/send, holds the negative offset of the last
+; byte sent.
 scratch_payload_size .fill 4
 scratch_ptr .fill 2
                 
@@ -1218,15 +1223,6 @@ set_payload_size: .proc
                 rts
                 .pend
 
-set_payload_size_0: .proc
-                lda #0
-                sta scratch_payload_size
-                sta scratch_payload_size+1
-                sta scratch_payload_size+2
-                sta scratch_payload_size+3
-                rts
-                .pend
-                
 ;-------------------------------------------------------------------------
 ;
 ; Add Y to the payload size.
@@ -1520,7 +1516,9 @@ send_request_n: .proc
                 jsr link_send_header_byte
 
                 jsr negate_payload_size
+                bne done
 
+done:
                 rts
 
                 .pend
@@ -1568,11 +1566,13 @@ without_prepare:
 
                 jsr link_send_header_byte
 
-                ; negated offset of the single payload byte is 0.
-                jsr set_payload_size_0
-                
+                ; known LSB of byte's negative offset
+                lda #0
+                sta scratch_payload_size+0
+
                 txa
                 jsr link_send_payload_byte
+                
                 rts
                 .pend
 
@@ -1586,7 +1586,7 @@ without_prepare:
 ;
 ; entry: A = request C (bit 7 clear)
 ;        X = request P
-; exit: A = response P (*not* T!) (0 if response payload was 0 bytes)
+; exit: A = response P (*not* C!) (0 if response payload was 0 bytes)
 ;       X = response C (*not* P!)
 
 send_request_1_recv_response_1: .block
@@ -1595,12 +1595,14 @@ send_request_1_recv_response_1: .block
 without_prepare:
                 jsr link_send_header_byte
 send_payload:
-                ; negated offset of the single payload byte is 0.
-                jsr set_payload_size_0
+                ; known LSB of byte's negative offset
+                lda #0
+                sta scratch_payload_size+0
                 
                 txa
                 jsr link_send_payload_byte
 
+                ; fall through to recv_response_1
                 .bend
 
 recv_response_1: .block
@@ -1610,12 +1612,14 @@ without_prepare:
                 jsr link_recv_header_byte
                 bmi got_n
 
-                tax
+                tax             ;save response C
                 
-                ; negated offset of the single payload byte is 0.
-                jsr set_payload_size_0
-
+                ; known LSB of byte's negative offset
+                lda #0
+                sta scratch_payload_size+0
+                
                 jsr link_recv_payload_byte
+
                 rts
 
 got_n:

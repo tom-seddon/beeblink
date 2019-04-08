@@ -777,7 +777,7 @@ function findDefaultVolume(options: ICommandLineOptions, volumes: beebfs.BeebVol
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function handleHTTP(options: ICommandLineOptions, createServer: () => Promise<Server>): void {
+function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefix: string) => Promise<Server>): void {
     if (!options.http) {
         return;
     }
@@ -846,7 +846,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: () => Promise<Se
             // Find the Server for this sender id.
             let server = serverBySenderId.get(senderId);
             if (server === undefined) {
-                server = await createServer();
+                server = await createServer('HTTP');
                 serverBySenderId.set(senderId, server);
             }
 
@@ -897,7 +897,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: () => Promise<Se
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function handleUSB(options: ICommandLineOptions, createServer: () => Promise<Server>): Promise<void> {
+async function handleUSB(options: ICommandLineOptions, createServer: (additionalPrefix: string) => Promise<Server>): Promise<void> {
     const usbLog = new utils.Log('USB', process.stdout, options.usb_verbose);
 
     const blUSBDevices: usb.Device[] = [];
@@ -961,7 +961,7 @@ async function handleUSB(options: ICommandLineOptions, createServer: () => Promi
             // try to find the server. Make a new one, if none found.
             let server = serversByUSBSerial.get(blDevice.usbSerial);
             if (server === undefined) {
-                server = await createServer();
+                server = await createServer('USB');
                 serversByUSBSerial.set(blDevice.usbSerial, server);
             }
 
@@ -1161,11 +1161,11 @@ interface IReadWaiter {
     reject: ((error: any) => void) | undefined;
 }
 
-async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () => Promise<Server>, serialLog: utils.Log): Promise<void> {
+async function handleSerialDevice(serialDevice: ISerialDevice, createServer: (additionalPrefix: string) => Promise<Server>, serialLog: utils.Log): Promise<void> {
     serialLog.pn('Creating server...');
-    const server = await createServer();
+    const server = await createServer('SERIAL');
 
-    serialLog.pn('Initialising serial device ``' + serialDevice.deviceName + '\'\', ' + serialDevice.baud + ' baud');
+    process.stderr.write(`Serial device: \`\`${serialDevice.deviceName}'', baud rate: ${serialDevice.baud}\n`);
 
     const port: SerialPort = new SerialPort(serialDevice.deviceName, { baudRate: serialDevice.baud, autoOpen: false });
 
@@ -1239,23 +1239,52 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
 
     async function readConfirmationByte(): Promise<boolean> {
         const byte = await readByte();
-        return byte !== 1;
+
+        if (byte === 1) {
+            return true;
+        } else {
+            serialLog.pn(`Got confirmation byte: ${byte}  - returning to sync state`);
+            return false;
+        }
     }
 
     const numSyncZerosRequired = 500;
 
+    async function writeSyncData(): Promise<void> {
+        const syncData = Buffer.alloc(numSyncZerosRequired + 1);
+        syncData[numSyncZerosRequired] = 1;
+
+        await new Promise((resolve, reject): void => {
+            function writeSyncZeros(): boolean {
+
+                // Despite what the TypeScript definitions appear to say,
+                // the JS code actually only seems to call the callback with
+                // a single argument: an error, or undefined.
+                return port.write(syncData, (error: any): void => {
+                    if (error !== undefined && error !== null) {
+                        reject(error);
+                    } else {
+                        resolve();
+                    }
+                });
+            }
+
+            if (!writeSyncZeros()) {
+                port.once('drain', writeSyncZeros);
+            }
+        });
+    }
+
+    function getNegativeOffsetLSB(index: number, payload: Buffer): number {
+        assert.ok(index >= 0 && index < payload.length);
+
+        // 
+        return (-(payload.length - 1 - index)) & 0xff;
+    }
+
     for (; ;) {
         // Sync loop.
         port.removeAllListeners('drain');
-
-        // Sync steps 1 and 2 are carefully delineated in the notes, because
-        // it's relevant for the 6502. But for the server, because of all the
-        // buffering, the distinction isn't so important. Just write a pile of
-        // 0s, then a 1, and let it get sent at its own pace. Then just keep
-        // reading until it's clear the BBC is ready too.
-
-        const syncData = Buffer.alloc(numSyncZerosRequired + 1);
-        syncData[numSyncZerosRequired] = 1;
 
         let synced = false;
 
@@ -1263,29 +1292,10 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
         do {
             serialLog.pn(`Starting sync...`);
 
-            await new Promise((resolve, reject): void => {
-                function writeSyncZeros(): boolean {
-                    // Despite what the TypeScript definitions appear to say,
-                    // the JS code actually only seems to call the callback with
-                    // a single argument: an error, or undefined.
-                    return port.write(syncData, (error: any): void => {
-                        if (error !== undefined && error !== null) {
-                            reject(error);
-                        } else {
-                            resolve();
-                        }
-                    });
-                }
-
-                if (!writeSyncZeros()) {
-                    port.once('drain', writeSyncZeros);
-                }
-            });
-
             let numZeros = 0;
             while (numZeros < numSyncZerosRequired) {
                 const x = await readByte();
-                serialLog.pn(`read server step 2 sync byte: ${x} (${numZeros} 0x00 bytes read)`);
+                serialLog.pn(`read server step 1 sync byte: ${x} (${numZeros} 0x00 bytes read)`);
                 if (x !== 0) {
                     numZeros = 0;
                 } else {
@@ -1295,6 +1305,9 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
 
             serialLog.pn(`Received ${numZeros} 0 bytes.`);
 
+            serialLog.pn(`write server step 2 sync data`);
+            await writeSyncData();
+
             // eat remaining sync 0s.
             {
                 let n = 0;
@@ -1303,6 +1316,13 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
                     x = await readByte();
                     ++n;
                     serialLog.pn(`read server step 3 sync byte: ${x} (${n} bytes read)`);
+
+                    // if (n > 5 * numSyncZerosRequired) {
+                    //     // a previous sync was probably interrupted, so send the sync data again.
+                    //     serialLog.pn(`taking too long! - sending server step 1 sync data again...`);
+                    //     await writeSyncData();
+                    //     n = 0;
+                    // }
                 } while (x === 0);
 
                 if (x === 1) {
@@ -1320,85 +1340,93 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
             serialLog.pn(`Waiting for request...`);
             const cmdByte = await readByte();
 
-            const c = cmdByte & 0x7f;
-            const variableSizeRequest = (cmdByte & 0x80) !== 0;
+            let request: Request;
+            {
+                const c = cmdByte & 0x7f;
+                const variableSizeRequest = (cmdByte & 0x80) !== 0;
 
-            if (c === 0) {
-                serialLog.pn(`Got command 0 - entering sync state`);
-                // Special syntax.
-                break request_response_loop;
-            }
+                if (c === 0) {
+                    serialLog.pn(`Got command 0 - returning to sync state`);
+                    // Special syntax.
+                    break request_response_loop;
+                }
 
-            let p: Buffer;
-            if (!variableSizeRequest) {
-                // 1-byte payload.
-                p = Buffer.alloc(1);
-                serialLog.pn(`Waiting for 1-byte payload...`);
-                p[0] = await readByte();
-            } else {
-                serialLog.pn(`Waiting for payload size...`);
-                // Variable-size payload.
-                const b0 = await readByte();
-                const b1 = await readByte();
-                const b2 = await readByte();
-                const b3 = await readByte();
-                const size = UInt32(b0, b1, b2, b3);
+                let p: Buffer;
+                if (!variableSizeRequest) {
+                    // 1-byte payload.
+                    p = Buffer.alloc(1);
+                } else {
+                    serialLog.pn(`Waiting for payload size...`);
+                    // Variable-size payload.
+                    const b0 = await readByte();
+                    const b1 = await readByte();
+                    const b2 = await readByte();
+                    const b3 = await readByte();
+                    const size = UInt32(b0, b1, b2, b3);
 
-                p = Buffer.alloc(size);
+                    p = Buffer.alloc(size);
+                }
 
-                serialLog.pn(`Waiting for ${size} payload bytes...`);
-                for (let i = 0; i < size; ++i) {
-                    if (((size - i) & 0xff) === 0) {
+                serialLog.pn(`Got request 0x${utils.hex2(c)}. Waiting for ${p.length} payload bytes...`);
+
+                for (let i = 0; i < p.length; ++i) {
+                    p[i] = await readByte();
+
+                    const j = getNegativeOffsetLSB(i, p);
+
+                    serialLog.pn(`    index ${i} (-ve LSB=0x${utils.hex2(j)}): value=${p[i]} (0x${utils.hex2(p[i])})`);
+
+                    if (j === 0) {
                         if (!await readConfirmationByte()) {
                             break request_response_loop;
                         }
                     }
-
-                    p[i] = await readByte();
                 }
-            }
 
-            if (!await readConfirmationByte()) {
-                break request_response_loop;
+                request = new Request(c, p);
             }
-
-            const request = new Request(c, p);
 
             const response = await server.handleRequest(request);
 
             let responseData: Buffer;
 
+            serialLog.withIndent('response: ', () => {
+                serialLog.pn(`c=0x${utils.hex2(response.c)}`);
+                serialLog.withIndent(`p=`, () => {
+                    serialLog.dumpBuffer(response.p, 10);
+                });
+            });
+
+            let destIdx = 0;
+
             if (response.p.length === 1) {
                 responseData = Buffer.alloc(3);
 
-                responseData[0] = response.c & 0x7f;
-                responseData[1] = response.p[1];
-                responseData[2] = 1;//confirmation byte
+                responseData[destIdx++] = response.c & 0x7f;
+                responseData[destIdx++] = 1;//confirmation byte
+                responseData[destIdx++] = response.p[0];
             } else {
-                responseData = Buffer.alloc(1 + 4 + p.length + (p.length >> 8) + 1);
-
-                let destIdx = 0;
+                responseData = Buffer.alloc(1 + 4 + response.p.length + ((response.p.length + 255) >> 8));
 
                 responseData[destIdx++] = response.c | 0x80;
 
-                responseData.writeUInt32LE(p.length, destIdx);
+                responseData.writeUInt32LE(response.p.length, destIdx);
                 destIdx += 4;
 
-                for (let srcIdx = 0; srcIdx < p.length; ++srcIdx) {
-                    if (((p.length - srcIdx) & 0xff) === 0) {
+                for (let srcIdx = 0; srcIdx < response.p.length; ++srcIdx) {
+                    if (getNegativeOffsetLSB(srcIdx, response.p) === 0) {
                         responseData[destIdx++] = 1;//confirmation byte
                     }
 
-                    responseData[destIdx++] = p[srcIdx];
+                    responseData[destIdx++] = response.p[srcIdx];
                 }
-
-                responseData[destIdx++] = 1;//confirmation byte
-
-                assert.strictEqual(destIdx, responseData.length);
             }
+
+            assert.strictEqual(destIdx, responseData.length);
 
             {
                 serialLog.pn(`Sending ${responseData.length} bytes response data...`);
+                serialLog.dumpBuffer(responseData, 10);
 
                 const maxChunkSize = 512;//arbitrary.
                 let srcIdx = 0;
@@ -1450,12 +1478,12 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: () 
                 }
             }
 
-            serialLog.pn(`Done one request/response.`);
+            serialLog.pn(`Done one request / response.`);
         }
     }
 }
 
-async function handleSerial(options: ICommandLineOptions, serialDevices: ISerialDevice[], createServer: () => Promise<Server>): Promise<void> {
+async function handleSerial(options: ICommandLineOptions, serialDevices: ISerialDevice[], createServer: (additionalPrefix: string) => Promise<Server>): Promise<void> {
     if (serialDevices.length === 0) {
         return;
     }
@@ -1497,12 +1525,12 @@ async function main(options: ICommandLineOptions) {
 
     let nextConnectionId = 1;
 
-    async function createServer(): Promise<Server> {
+    async function createServer(additionalPrefix: string): Promise<Server> {
         const connectionId = nextConnectionId++;
         const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
 
         const bfsLogPrefix = options.fs_verbose ? 'FS' + connectionId : undefined;
-        const serverLogPrefix = options.server_verbose ? 'SRV' + connectionId : undefined;
+        const serverLogPrefix = options.server_verbose ? additionalPrefix + 'SRV' + connectionId : undefined;
 
         const bfs = new beebfs.BeebFS(bfsLogPrefix, options.folders, colours, gaManipulator);
 

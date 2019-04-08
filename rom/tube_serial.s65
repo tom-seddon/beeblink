@@ -87,6 +87,7 @@ startup_max_time=1000 ;in centiseconds
                 .section fs_private_workspace
                 ; bit 7 set if M128, using internal Tube.
 private_itu: .fill 1
+private_send_value: .fill 1
                 .send fs_private_workspace
 
 ;-------------------------------------------------------------------------
@@ -325,20 +326,20 @@ start_sync:
                 sta num_sync_zeros_received+0
                 sta num_sync_zeros_received+1
 
+;                 .block
+;                 .debug_print ['Sync step 1...\r']
+; sync_step_1_loop:
+;                 jsr check_startup_timeout
+;                 bcs timed_out
+                
+;                 lda #$80
+;                 jsr safe_write_fifo
+;                 bcc sync_step_1_loop
+;                 .bend
+
                 .block
                 .debug_print ['Sync step 1...\r']
 sync_step_1_loop:
-                jsr check_startup_timeout
-                bcs timed_out
-                
-                lda #$80
-                jsr safe_write_fifo
-                bcc sync_step_1_loop
-                .bend
-
-                .block
-                .debug_print ['Sync step 2...\r']
-sync_step_2_loop:
                 ; .print ['&00: sent: &',num_sync_zeros_sent+1,num_sync_zeros_sent+0,'; received: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r']
                 jsr check_startup_timeout
                 bcs timed_out
@@ -351,7 +352,7 @@ sync_step_2_loop:
                 ; Try to get more data. If none available, just carry
                 ; on looping.
                 jsr safe_read_fifo
-                bcc sync_step_2_loop
+                bcc sync_step_1_loop
 
                 ; If a non-0 was received, restart the sync process.
                 cmp #0
@@ -364,18 +365,18 @@ sync_step_2_loop:
                 ; Keep going if required number not reached.
                 lda num_sync_zeros_received+0
                 cmp #<num_sync_zeros_required
-                bne sync_step_2_loop
+                bne sync_step_1_loop
 
                 lda num_sync_zeros_received+1
                 cmp #>num_sync_zeros_required
-                bne sync_step_2_loop
+                bne sync_step_1_loop
                 .bend
 
                 .block
                 ; Keep reading until the 1 byte is received. Continue
                 ; sending zeros meanwhile.
-                .debug_print ['Sync step 3...\r']
-sync_step_3_loop:
+                .debug_print ['Sync step 2...\r']
+sync_step_2_loop:
                 jsr check_startup_timeout
                 bcs timed_out
 
@@ -385,10 +386,10 @@ sync_step_3_loop:
                 jsr safe_write_fifo
 
                 jsr safe_read_fifo
-                bcc sync_step_3_loop
+                bcc sync_step_2_loop
 
                 cmp #0
-                beq sync_step_3_loop
+                beq sync_step_2_loop
 
                 cmp #1
                 bne failed
@@ -396,14 +397,14 @@ sync_step_3_loop:
 
                 .block
                 ; Send a single non-zero byte.
-                .debug_print ['Sync step 4...\r']
-sync_step_4_loop:
+                .debug_print ['Sync step 3...\r']
+sync_step_3_loop:
                 jsr check_startup_timeout
                 bcs timed_out
 
                 lda #1
                 jsr safe_write_fifo
-                bcc sync_step_4_loop
+                bcc sync_step_3_loop
                 .bend
 ok:
                 .debug_print ['Sync success (probably)\r']
@@ -502,6 +503,90 @@ nop: .proc
                 rts
                 .pend
 
+;-------------------------------------------------------------------------
+
+wait_for_rx_data: .macro
+                lda #status.rx_data
+-
+                bit status
+                beq -
+                .endm
+
+wait_for_tx_space: .macro
+                lda #status.tx_space
+-
+                bit status
+                beq -
+                .endm
+                
+;-------------------------------------------------------------------------
+
+send_header_byte: .proc
+                sta private_send_value
+                .wait_for_tx_space
+                lda private_send_value
+                sta fifo
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+send_payload_byte: .proc
+                sta private_send_value
+                ; .debug_print ['tube_serial.s_p_b: value=&',private_send_value,'; LSB -offset=&',scratch_payload_size+0,'\r']
+                
+                .wait_for_tx_space
+                lda private_send_value
+                sta fifo
+
+                lda scratch_payload_size+0
+                bne +
+                
+                ; .debug_print ['tube_serial.s_p_b: wait for TX space for confirmation byte\r']
+                .wait_for_tx_space
+
+                lda #1
+                sta fifo
++
+                ; .debug_print ['tube_serial.s_p_b: sent &',private_send_value,'\r']
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+recv_header_byte: .proc
+                ; receive data byte
+                .wait_for_rx_data
+                lda fifo
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+recv_payload_byte: .proc
+                ;.debug_print ['tube_serial.r_p_b: &',scratch_payload_size+0,'\r']
+                lda scratch_payload_size+0
+                bne +
+
+                ;.debug_print ['tube_serial.r_p_b: await confirmation byte: &']
+
+                ; receive and discard confirmation byte
+                .wait_for_rx_data
+                lda fifo
+
+                ;.debug_print [DP_A,'\r']
+
++
+                ;.debug_print ['tube_serial.r_p_b: await data byte\r']
+
+                ; receive data byte
+                .wait_for_rx_data
+                lda fifo
+                
+                ;.debug_print ['tube_serial.r_p_b: got: &',DP_A,'\r']
+                
+                rts
+                .pend
                 
 ;-------------------------------------------------------------------------
 
@@ -518,10 +603,10 @@ link_unprepare=tube_serial.unprepare
 link_begin_recv=tube_serial.nop
 link_begin_send=tube_serial.nop
 
-link_send_header_byte=tube_serial.error
-link_send_payload_byte=tube_serial.error
-link_recv_header_byte=tube_serial.error
-link_recv_payload_byte=tube_serial.error
+link_send_header_byte=tube_serial.send_header_byte
+link_send_payload_byte=tube_serial.send_payload_byte
+link_recv_header_byte=tube_serial.recv_header_byte
+link_recv_payload_byte=tube_serial.recv_payload_byte
                 
 link_startup=tube_serial.startup
 link_status_text=tube_serial.status_text

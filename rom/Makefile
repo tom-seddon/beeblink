@@ -25,7 +25,7 @@ build:
 	$(MAKE) _rom SUFFIX=avr_fe60 "EXTRA_ARGS=-Dlink_avr=true -Dlink_avr_via=65120"
 
 # 192 = $c0
-	$(MAKE) _rom SUFFIX=tube_serial "EXTRA_ARGS=-Dlink_tube_serial=true -Dblfs_prefix=\\\"TSBL\\\" -Dblfs_fs_number=94 -Dblfs_first_handle=192"
+	$(MAKE) _rom SUFFIX=tube_serial "EXTRA_ARGS=-Dlink_tube_serial=true -Dblfs_prefix=\\\"TSBL\\\" -Dblfs_fs_number=94 -Dblfs_first_handle=192 -Ddefault_von=false"
 
 	cp .build/beeblink_tube_serial.rom ../volumes/beeblink/0/R.TS
 	touch ../volumes/beeblink/0/R.TS.inf
