@@ -360,6 +360,8 @@ BLFS ROM will receive it.
 
 * Serial protocol rambles
 
+Stardot thread: https://stardot.org.uk/forums/viewtopic.php?f=3&t=14398
+
 The AVR has an OOB mechanism for resets: the USB stall that the BBC
 can induce by switching off write handshaking. This is how the BBC can
 cancel the current operation, whatever it was, after pressing BREAK,

@@ -248,55 +248,7 @@ m128_write_fifo:
 
 startup: .proc
 
-                ; jsr pcprint
-                ; .text 'borkork',255
-
-                ; sec
-                ; rts
-
-                ldx #25         ;# vsyncs to wait
-loop:
-                txa
-                pha
-                
-                lda #19
-                jsr osbyte
-
-                jsr safe_read_status
-                
-                ; bit 7 of $feff seems to be reliably set if the Tube
-                ; serial board isn't connected.
-                cmp #$80
-                bcc maybe_present
-
-                pla             ;discard
-                jmp not_present
-
-maybe_present:
-                ; wait for bit 3 to become set.
-                and #status.configured
-                cmp #status.configured ;C=1 if bit 3 set
-
-                pla
-                tax
-
-                bcs good
-
-                dex
-                bne loop
-                
-not_ready:
-                ldx #status_text.device_not_ready-status_text
-                sec             ;no good
-                rts
-
-not_present:
-                ldx #status_text.device_not_present-status_text
-                sec             ;no good
-                rts
-
-good:
-
+                ; Initialise startup end time.
                 lda #1          ;read system clock
                 ldx #<startup_end_time
                 ldy #>startup_end_time
@@ -320,6 +272,15 @@ good:
 +
                 
                 .debug_print ['End time: &',startup_end_time+4,startup_end_time+3,startup_end_time+2,startup_end_time+1,startup_end_time+0,'\r']
+
+wait_for_device_ready_loop:
+                jsr check_startup_timeout
+                bcs not_ready
+                jsr safe_read_status
+                
+                ; wait for bit 3 to become set.
+                and #status.configured
+                beq wait_for_device_ready_loop
 
 start_sync:
                 lda #0
@@ -421,6 +382,10 @@ timed_out:
                 sec
                 rts
 
+not_ready:
+                ldx #status_text.device_not_ready-status_text
+                sec             ;no good
+                rts
 
 ; send_sync_zero:
 ;                 lda #0
@@ -461,8 +426,6 @@ no_timeout:
 status_text: .block
 device_not_ready:
                 .text 'Device not ready',0
-device_not_present:
-                .text 'Device not present',0
 sync_failed:
                 .text 'Sync failed',0
 sync_timed_out:
