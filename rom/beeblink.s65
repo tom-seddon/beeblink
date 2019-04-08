@@ -1533,7 +1533,7 @@ reg:
 ;
 ; entry: A = packet T (bit 7 must be clear)
 ; exit: Request payload size negated
-; preserves: X; Y
+; preserves: X
 ;
 send_request_n: .proc
                 jsr link_prepare
@@ -1572,7 +1572,7 @@ done:
 ;
 ; exit: C = 1: byte sent
 ;       C = 0: payload overflow
-; preserves: X; Y
+; preserves: X
 ;
 send_payload_byte: .proc
                 pha
@@ -1688,7 +1688,6 @@ got_n:
 ; (and it doesn't really matter what exactly).
 ;
 ; exit: X = response type
-; preserves: Y
 ;
 recv_response_and_discard_payload: .proc
                 .push32 scratch_payload_size
@@ -3578,8 +3577,6 @@ push_stack_loop:
                 ; $101,y is the string buffer.
 
 loop:
-                jsr link_begin_send
-
                 lda #REQUEST_READ_STRING
                 jsr get_vstatus
                 bcc +

@@ -668,31 +668,28 @@ link_unprepare=avr.via_unprepare
 ; Put prepared link in receive mode.
 link_begin_recv=avr.via_begin_recv
 
-; Put prepared link in send mode.
-link_begin_send=avr.via_begin_send
-
 ; Send 1 byte over the link as part of the header: the type byte, or
 ; one of the size bytes.
 ;
-; Preserve X/Y.
+; Preserve X.
 link_send_header_byte=avr.send_byte
 
 ; Send 1 byte over the link as part of the payload. 
 ; scratch_payload_size is the byte's negated offset.
 ;
-; Preserve X/Y.
+; Preserve X.
 link_send_payload_byte=avr.send_byte
 
 ; Receive 1 byte over the link as part of the header: the type byte,
 ; or one of the size bytes.
 ;
-; Preserve X/Y.
+; Preserve X.
 link_recv_header_byte=avr.recv_byte
 
 ; Receive 1 byte over the link as part of the payload.
 ; scratch_payload_size is the byte's negated offset.
 ;
-; Preserve X/Y.
+; Preserve X.
 link_recv_payload_byte=avr.recv_byte
 
 ; Initialise link and determine status.
