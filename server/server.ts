@@ -210,20 +210,36 @@ export class Server {
     }
 
     public async handleRequest(request: Request): Promise<Response> {
-        this.dumpPacket('Request', request.c, request.p);
+        this.dumpPacket(request);
 
         const response = await this.handleRequestInternal(request);
 
-        this.dumpPacket('Response', response.c, response.p);
+        this.dumpPacket(response);
 
         return response;
     }
 
-    private dumpPacket(type: string, c: number, p: Buffer): void {
+    private dumpPacket(packet: Request | Response): void {
         if (this.dumpPackets) {
-            this.log.withIndent(type + ': ', () => {
-                this.log.pn('Type: ' + c + ' (0x' + utils.hex2(c) + ')');
-                this.log.dumpBuffer(p, 10);
+            let desc: string | undefined;
+            let typeName: string;
+
+            if (packet instanceof Request) {
+                desc = utils.getRequestTypeName(packet.c);
+                typeName = 'Request';
+            } else {
+                desc = utils.getResponseTypeName(packet.c);
+                typeName = 'Response';
+            }
+
+            this.log.withIndent(`${typeName}: `, () => {
+                this.log.p(`Type: ${packet.c} (0x${utils.hex2(packet.c)})`);
+                if (desc !== undefined) {
+                    this.log.p(` (${desc})`);
+                }
+                this.log.pn('');
+
+                this.log.dumpBuffer(packet.p, 10);
             });
         }
     }
