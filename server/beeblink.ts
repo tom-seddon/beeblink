@@ -471,6 +471,9 @@ export const RESPONSE_SPECIAL_WRITE_DFS_IMAGE = 3;
 // ensure that current disk is the right format)
 export const RESPONSE_SPECIAL_WRITE_ADFS_IMAGE = 4;
 
+// Do a *SELFUPDATE.
+export const RESPONSE_SPECIAL_SELFUPDATE = 5;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 

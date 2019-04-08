@@ -326,7 +326,6 @@ help_subjects_commands:
 utils_commands:
                 .command blfs_prefix.."CONFIG",blconfig_syntax-syntaxes,blconfig_cmd
                 .command blfs_prefix.."FS",0,init_blfs
-                .command blfs_prefix.."SELFUPDATE",0,selfupdate_cmd
                 .command blfs_prefix.."VERSION",0,version_cmd
                 .command "BUILD",build_syntax-syntaxes,build_cmd
                 .byte 255
@@ -3268,6 +3267,7 @@ special_routines=[
                 speed_test_special.sure,
                 write_dfs_image_special,
                 write_adfs_image_special,
+                selfupdate_special,
                 ]
                 
 special_routines_l:
@@ -3748,9 +3748,10 @@ yes:
 
 ;-------------------------------------------------------------------------
 ;
-; Self-update thing for use when running from sideways RAM.
+; *SELFUPDATE.
 ;
-selfupdate_cmd: .proc
+selfupdate_special: .proc
+                jsr discard_remaining_payload
                 
                 lda #$77        ;close *SPOOL/*EXEC handles (AUG 141)
                 jsr osbyte

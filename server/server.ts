@@ -166,6 +166,7 @@ export class Server {
             new Command('LOCATE', '<afsp>', this.locateCommand),
             new Command('NEWVOL', '<vsp>', this.newvolCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
+            new Command('SELFUPDATE', undefined, this.selfupdateCommand),
             new Command('SPEEDTEST', undefined, this.speedtestCommand),
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
@@ -1265,6 +1266,10 @@ export class Server {
         await this.bfs.rename(oldFQN, newFQN);
 
         return newResponse(beeblink.RESPONSE_YES, 0);
+    }
+
+    private async selfupdateCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+        return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_SELFUPDATE);
     }
 
     private async speedtestCommand(commandLine: beebfs.CommandLine): Promise<Response> {
