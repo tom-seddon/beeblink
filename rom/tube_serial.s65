@@ -69,6 +69,10 @@ configured=$08
 
 tube_serial: .block
 
+txdp: .macro items
+                ; .debug_print \items
+                .endm
+                
 ;-------------------------------------------------------------------------
 
                 .section link_startup_workspace
@@ -83,11 +87,13 @@ startup_max_time=1000 ;in centiseconds
                 
 ;-------------------------------------------------------------------------
 
-                .section fs_private_workspace
+                .section fs_zp_workspace
                 ; bit 7 set if M128, using internal Tube.
-private_itu: .fill 1
-private_send_value: .fill 1
-                .send fs_private_workspace
+                ; bit 6 set if this flag is valid.
+link_itu: .fill 1
+link_old_y: .fill 1
+link_value: .fill 1
+                .send fs_zp_workspace
                 
 ;-------------------------------------------------------------------------
 ; Check if ACCCON ITU needs resetting to access the FTDI device.
@@ -96,12 +102,11 @@ private_send_value: .fill 1
 ; set. But it looks like the MOS actually just leaves it alone after
 ; initialisation, so it's all quite safe(tm)...
 ;
-; exit: C=0 if no handling required (B/B+/M128 with ext Tube or no Tube)
-;       C=1 if handling required (M128 with int Tube)
-; preserves: A; X; Y
+; exit: A=$40 if no handling required (B/B+/M128 with ext Tube or no Tube)
+;       A=$c0 if handling required (M128 with int Tube)
+; preserves: X; Y
 
 is_itu: .proc
-                pha
                 txa
                 pha
                 
@@ -123,7 +128,10 @@ is_itu: .proc
 
                 pla
                 tax
-                pla
+
+                lda #$80
+                ror a
+                
                 rts
                 .pend
 
@@ -132,7 +140,6 @@ is_itu: .proc
 ; required.
 ;
 ; exit: A=value of status register
-; preserves: Y
 startup_read_status: .proc
                 bit startup_itu
                 bmi +
@@ -162,7 +169,6 @@ startup_read_status: .proc
 ;
 ; exit: C=0 if no data was available
 ;       C=1 if data was available, A = value read
-; preserves: Y
 startup_read_fifo: .proc
                 bit startup_itu
                 bmi itu
@@ -202,15 +208,14 @@ itu:
 ;-------------------------------------------------------------------------
 ; Write FIFO during startup. Handles Tube palaver if required.
 ;
-; entry: A=value to write
+; entry: Y=value to write
 ; exit: C=0 if no space
 ;       C=1 if data was written
-; preserves Y
 startup_write_fifo: .proc
-                tax
                 bit startup_itu
+                bmi itu
 
-write_x_fifo:
+write_y_fifo:
                 lda status
                 and #status.tx_space
                 bne space
@@ -220,7 +225,7 @@ no_space:
                 rts
 
 space:
-                stx fifo
+                sty fifo
                 sec
                 rts
 
@@ -232,7 +237,7 @@ itu:
                 lda #acccon.itu
                 trb acccon
 
-                jsr write_x_fifo
+                jsr write_y_fifo
 
                 lda #acccon.itu
                 tsb acccon
@@ -250,16 +255,8 @@ itu:
 
 startup: .proc
                 jsr is_itu
-                ror startup_itu
+                sta startup_itu
 
-                bit startup_itu
-                bpl +
-
-                ldx #status_text.itu_not_supported-status_text
-                sec
-                rts
-
-+
                 ; Initialise startup end time.
                 lda #1          ;read system clock
                 ldx #<startup_end_time
@@ -319,7 +316,7 @@ sync_step_1_loop:
 
                 ; Try to write $00. If it didn't get sent, no
                 ; problem... plenty more where that came from.
-                lda #$00
+                ldy #$00
                 jsr startup_write_fifo
                 
                 ; Try to get more data. If none available, just carry
@@ -355,7 +352,7 @@ sync_step_2_loop:
 
                 ; Try to write $00. If it didn't get sent, no
                 ; problem... plenty more where that came from.
-                lda #$00
+                ldy #$00
                 jsr startup_write_fifo
 
                 jsr startup_read_fifo
@@ -375,7 +372,7 @@ sync_step_3_loop:
                 jsr check_startup_timeout
                 bcs timed_out
 
-                lda #1
+                ldy #$01
                 jsr startup_write_fifo
                 bcc sync_step_3_loop
                 .bend
@@ -442,25 +439,27 @@ sync_failed:
                 .text 'Sync failed',0
 sync_timed_out:
                 .text 'Sync timeout',0
-itu_not_supported:
-                .text 'Internal Tube not supported',0
                 .bend
                 
 ;-------------------------------------------------------------------------
+;
 ; Prepare link.
 ;
 ; Set Master 128 ITU flag... and anything else???
 prepare: .proc
+                bit link_itu
+                bvs +
+                pha
                 jsr is_itu
-                ror private_itu
-
-                bcc +
-                .brk_error 255,'Internal Tube = TODO',255
+                sta link_itu
+                pla
 +
+                .txdp ['link_prepare: &',link_itu,'\r']
                 rts
                 .pend
 
 ;-------------------------------------------------------------------------
+;
 ; Unprepare link.
 ;
 ; (Nothing needs to be done for the Tube serial.)
@@ -469,78 +468,198 @@ unprepare: .proc
                 .pend
 
 ;-------------------------------------------------------------------------
-; Placeholder for stuff I haven't done yet.              
+;
+; Placeholder for stuff I haven't done yet.
+;
 error: .proc
                 .brk_error 255,'Tube serial transfer = TODO'
                 .pend
 
 ;-------------------------------------------------------------------------
+;
 ; Placeholder for stuff that doesn't need doing.
+;
 nop: .proc
                 rts
                 .pend
 
 ;-------------------------------------------------------------------------
+;
+; Send a byte on B/B+/M128 with no Tube/ext Tube.
+;
+; entry: Y = value to send
+; preserves: X
+send_byte: .macro
+                .txdp ['send_byte: sending &',DP_Y]
 
-wait_for_rx_data: .macro
-                lda #status.rx_data
--
-                bit status
-                beq -
-                .endm
-
-wait_for_tx_space: .macro
                 lda #status.tx_space
 -
                 bit status
                 beq -
+                sty fifo
+                .txdp ['\r']
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Receive a byte on B/B+/M128 with no Tube/ext Tube.
+;
+; entry:
+; exit: A = byte received
+; preserves: X
+
+recv_byte: .macro
+                .txdp ['recv_byte: received &']
+                lda #status.rx_data
+-
+                bit status
+                beq -
+                lda fifo
+                .txdp [DP_A,'\r']
                 .endm
                 
 ;-------------------------------------------------------------------------
+;
+; Send a byte on Master 128 when the internal Tube is active.
+;
+; The loop is arranged so it doesn't just spin with interrupts
+; disabled the whole time. This makes it less efficient than necessary
+; when it loops, but the assumption is that this will be quite rare.
+;
+; entry: Y = value to send
+; preserves: X
+itu_send_byte: .macro
+                .txdp ['itu_send_byte: sending &',DP_Y]
+                .cpu '65c02'
+-
+                php
+                sei
+                lda #acccon.itu
+                trb acccon
+                lda status
+                and #status.tx_space
+                bne +
+                lda #acccon.itu
+                tsb acccon
+                plp
+                bra -
++
+                sty fifo
+                lda #acccon.itu
+                tsb acccon
+                plp
+                .txdp ['\r']
+                .cpu 'default'
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Receive a byte on Master 128 when the internal Tube is active.
+;
+; exit: ?link_value = byte received
+; preserves: X/Y
+itu_recv_byte: .macro
+                .txdp ['itu_recv_byte: received &']
+                .cpu '65c02'
+-
+                php
+                sei
+                lda #acccon.itu
+                trb acccon
+                lda status
+                and #status.rx_data
+                bne +
+                lda #acccon.itu
+                tsb acccon
+                plp
+                bra -
++
+                lda fifo
+                sta link_value
+                lda #acccon.itu
+                tsb acccon
+                plp
+                .txdp [DP_A,'\r']
+                .endm
+
+;-------------------------------------------------------------------------
 
 send_header_byte: .proc
-                sta private_send_value
-                .wait_for_tx_space
-                lda private_send_value
-                sta fifo
+                sty link_old_y
+                tay
+                
+                bit link_itu
+                bmi itu
+
+                .send_byte
+                ldy link_old_y
+                rts
+
+itu:
+                .itu_send_byte
+                ldy link_old_y
                 rts
                 .pend
 
 ;-------------------------------------------------------------------------
 
 send_payload_byte: .proc
-                sta private_send_value
-                ; .debug_print ['tube_serial.s_p_b: value=&',private_send_value,'; LSB -offset=&',scratch_payload_size+0,'\r']
+                sty link_old_y
                 
-                .wait_for_tx_space
-                lda private_send_value
-                sta fifo
+                tay
+                
+                bit link_itu
+                bmi itu
+
+                .send_byte
 
                 lda scratch_payload_size+0
                 bne +
-                
-                ; .debug_print ['tube_serial.s_p_b: wait for TX space for confirmation byte\r']
-                .wait_for_tx_space
 
-                lda #1
-                sta fifo
+                ldy #1
+                .send_byte
+
 +
-                ; .debug_print ['tube_serial.s_p_b: sent &',private_send_value,'\r']
+                ldy link_old_y
+                rts
+
+itu:
+                .itu_send_byte
+
+                lda scratch_payload_size+0
+                bne +
+
+                ldy #1
+                .itu_send_byte
+
++
+                ldy link_old_y
                 rts
                 .pend
 
 ;-------------------------------------------------------------------------
 
 recv_header_byte: .proc
+                bit link_itu
+                bmi itu
+                
                 ; receive data byte
-                .wait_for_rx_data
-                lda fifo
+                .recv_byte
                 rts
+
+itu:
+                .itu_recv_byte
+                lda link_value
+                rts
+                
                 .pend
 
 ;-------------------------------------------------------------------------
 
 recv_payload_byte: .proc
+                bit link_itu
+                bmi itu
+                
                 ;.debug_print ['tube_serial.r_p_b: &',scratch_payload_size+0,'\r']
                 lda scratch_payload_size+0
                 bne +
@@ -548,8 +667,7 @@ recv_payload_byte: .proc
                 ;.debug_print ['tube_serial.r_p_b: await confirmation byte: &']
 
                 ; receive and discard confirmation byte
-                .wait_for_rx_data
-                lda fifo
+                .recv_byte
 
                 ;.debug_print [DP_A,'\r']
 
@@ -557,12 +675,24 @@ recv_payload_byte: .proc
                 ;.debug_print ['tube_serial.r_p_b: await data byte\r']
 
                 ; receive data byte
-                .wait_for_rx_data
-                lda fifo
+                .recv_byte
                 
                 ;.debug_print ['tube_serial.r_p_b: got: &',DP_A,'\r']
                 
                 rts
+
+itu:
+                lda scratch_payload_size+0
+                bne +
+
+                ; receive and discard confirmation byte
+                .itu_recv_byte
+
++
+                .itu_recv_byte
+                lda link_value
+                rts
+                
                 .pend
                 
 ;-------------------------------------------------------------------------

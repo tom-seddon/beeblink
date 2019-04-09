@@ -542,3 +542,15 @@ bytes in the worst case:
   +N+6  | SERIAL_YES                    |
         +-------------------------------+
 #+end_src
+
+** speed ver 1
+
+Int Tube:
+
+H: S 10.78 R 13.10
+P: S 10.97 R 13.50
+
+Ext Tube:
+
+H: S 12.75 R 17.20
+P: S 13.03 R 17.87

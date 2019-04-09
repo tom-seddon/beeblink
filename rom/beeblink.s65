@@ -190,12 +190,9 @@ command .macro name,value,routine
                 .cerror *>$b0,"Link startup workspace overflow"
 
 *=$b0
-                .dsection fs_scratch_workspace
-                .cerror *>$c0,"FS scratch workspace overflow"
-
-*=$c0
-                .dsection fs_private_workspace
-                .cerror *>$d0,"FS private workspace overflow"
+fs_zp_workspace_start:
+                .dsection fs_zp_workspace
+                .cerror *>$d0,"FS zero page workspace overflow"
 
 ;-------------------------------------------------------------------------
 
@@ -223,11 +220,12 @@ write_image_data .fill 2
 
 ;-------------------------------------------------------------------------
 
-; The distinction between scratch and private workspace hasn't proven
-; terribly useful. And it's mostly moot for BeebLink anyway - all of
-; the persistent state is on the server or in the private ROM byte.
+; $Bx is scratch workspace, and $Cx is private workspace, but the
+; distinction never proved very useful. It's mostly moot for BeebLink
+; anyway - all of the persistent state is on the server or in the
+; private ROM byte.
                 
-                .section fs_scratch_workspace
+                .section fs_zp_workspace
 
 ; Size of payload to be sent.
 ;
@@ -242,11 +240,6 @@ scratch_load .fill 4
 scratch_exec .fill 4
                 .cerror scratch_load!=scratch_command_line_tail_offset+1,"Scratch space load must follow command line tail offset"
                 .cerror scratch_exec!=scratch_load+4,"Scratch space exec must follow load"
-                .send fs_scratch_workspace
-                
-;-------------------------------------------------------------------------
-
-                .section fs_private_workspace
 private_ptr .fill 2
 private_request .fill 1
 private_response .fill 1
@@ -254,7 +247,7 @@ private_x .fill 1
 private_y .fill 1
 private_command_line_ptr .fill 2
 private_old_cliv .fill 2
-                .send fs_private_workspace
+                .send fs_zp_workspace
 
 ;-------------------------------------------------------------------------
 
@@ -2201,6 +2194,14 @@ loop:
                 ldx #$0F
                 ldy #0
                 jsr osbyte ;vectors claimed (AUG p167, p324)
+
+                ; clear FS zero page.
+                ldx #$1f
+                lda #0
+-
+                sta fs_zp_workspace_start,x
+                dex
+                bpl -
 
                 rts
 
