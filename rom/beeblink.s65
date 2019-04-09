@@ -246,7 +246,6 @@ private_response .fill 1
 private_x .fill 1
 private_y .fill 1
 private_command_line_ptr .fill 2
-private_old_cliv .fill 2
                 .send fs_zp_workspace
 
 ;-------------------------------------------------------------------------
