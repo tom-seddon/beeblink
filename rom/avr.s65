@@ -704,9 +704,10 @@ link_status_text=avr.status_text
 ; Send/receive file data from/to host/parasite memory.
 ;
 ; File data is whatever's left in the current packet according to
-; scratch_payload_size. The data is read/written starting at
-; scratch_load (a 32-bit address that's already known to point into
-; host/parasite memory as appropriate).
+; scratch_payload_size, the non-zero negated number of bytes left. The
+; data is read/written starting at scratch_load (a 32-bit address
+; that's already known to point into host/parasite memory as
+; appropriate).
 ;
 ; May modify scratch_payload_size.
 ;
