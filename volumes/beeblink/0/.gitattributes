@@ -4,3 +4,6 @@ $.BOOTSTRAP2 diff=bbcbasic
 $.FS-TEST diff=bbcbasic
 $.HELLO diff=bbcbasic
 $.ROMS diff=bbcbasic
+B.AVR diff=bbcbasic
+B.AVR2 diff=bbcbasic
+B.TUBE diff=bbcbasic

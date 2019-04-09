@@ -9,20 +9,46 @@ limitations.
 
 ## Run server on PC
 
-Unzip the server zip file somewhere on your PC. There are various
-options, but for starters run it like this from the command line:
+Unzip the server zip file somewhere on your PC. The command line
+options are slightly different depending on whether you're using the
+Tube serial interface or an AVR.
+
+### Tube Serial
+
+Run with `--list-devices` to get a list of serial devices the server
+can communicate with. You'll just have to guess which is the right
+one, as there's no autodetection process yet...
+
+OS X/Linux: `./beeblink_server --list-devices`
+
+Windows: `beeblink_server --list-devices`
+
+Then run the server as follows, replacing `DEVICE_NAME` with the name
+of the device from the list. On my Mac, for example, this is
+`/dev/tty.usbserial-FT33WLVU`.
+
+OS X/Linux: `./beeblink_server --serial-device=DEVICE_NAME`
+
+Windows: `beeblink_server --serial-device=DEVICE_NAME`
+
+### AVR
+
+Run it like this from the command line:
 
 OS X/Linux: `./beeblink_server --default-volume beeblink ./volumes`
 
 Windows: `beeblink_server --default-volume beeblink ./volumes`
+
+Any AVR devices you have connected will be autodetected. 
 
 After a moment you should get a `Server running...` message.
 
 ## Load ROM on BBC
 
 If you've got some way of getting files onto your BBC already, copy
-the ROM across and load it into sideways RAM or EEPROM or what have
-you.
+`beeblink_tube_serial.rom` (Tube serial) or `beeblink_avr_fe60.rom`
+(AVR) from the firmware zip to your BBC, and load it into sideways RAM
+or EEPROM or what have you.
 
 Otherwise, you can use the [bootstrap process](./bootstrap.md).
 
@@ -34,7 +60,7 @@ BeebLink banner.
 
     Acorn MOS
 	
-	BeebLink - OK
+	BeebLink (AVR) - OK
 	
 	BASIC
 	
@@ -178,7 +204,8 @@ do this (or reset the AVR) then the BBC will just hang up on the next
 filing system operation.
 
 CTRL+BREAK should sort it out. The startup message will say something
-like `BeebLink - no AVR`.
+like `BeebLink (AVR) - No AVR` or `BeebLink (Tube Serial) - Sync timed
+out`.
 
 ## Running from sideways RAM
 

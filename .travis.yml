@@ -39,7 +39,8 @@ script:
   - (cd ./server && 7z a ../$SERVER_ZIP_NAME beeblink-server)
   - (7z a $SERVER_ZIP_NAME ./volumes)
   - (cd ./firmware && 7z a ../$FIRMWARE_ZIP_NAME *.hex)
-  - (cd ./rom/.build && 7z a ../../$FIRMWARE_ZIP_NAME beeblink.rom)
+  - (cd ./rom/.build && 7z a ../../$FIRMWARE_ZIP_NAME beeblink_avr_fe60.rom)
+  - (cd ./rom/.build && 7z a ../../$FIRMWARE_ZIP_NAME beeblink_tube_serial.rom)
 
 before_deploy:
   - pwd

@@ -296,16 +296,17 @@ start_sync:
                 sta num_sync_zeros_received+0
                 sta num_sync_zeros_received+1
 
-;                 .block
-;                 .debug_print ['Sync step 1...\r']
-; sync_step_1_loop:
-;                 jsr check_startup_timeout
-;                 bcs timed_out
-                
-;                 lda #$80
-;                 jsr safe_write_fifo
-;                 bcc sync_step_1_loop
-;                 .bend
+                .block
+                .debug_print ['Sync step 0...\r']
+sync_step_0_loop:
+                jsr check_startup_timeout
+                bcs timed_out
+
+                lda #$80
+                jsr startup_write_fifo
+
+                bcc sync_step_0_loop
+                .bend
 
                 .block
                 .debug_print ['Sync step 1...\r']

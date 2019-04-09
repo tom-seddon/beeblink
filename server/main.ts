@@ -777,7 +777,7 @@ function findDefaultVolume(options: ICommandLineOptions, volumes: beebfs.BeebVol
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefix: string) => Promise<Server>): void {
+function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): void {
     if (!options.http) {
         return;
     }
@@ -846,7 +846,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
             // Find the Server for this sender id.
             let server = serverBySenderId.get(senderId);
             if (server === undefined) {
-                server = await createServer('HTTP');
+                server = await createServer('HTTP', options.avr_rom);
                 serverBySenderId.set(senderId, server);
             }
 
@@ -897,7 +897,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function handleUSB(options: ICommandLineOptions, createServer: (additionalPrefix: string) => Promise<Server>): Promise<void> {
+async function handleUSB(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): Promise<void> {
     const usbLog = new utils.Log('USB', process.stdout, options.usb_verbose);
 
     const blUSBDevices: usb.Device[] = [];
@@ -961,7 +961,7 @@ async function handleUSB(options: ICommandLineOptions, createServer: (additional
             // try to find the server. Make a new one, if none found.
             let server = serversByUSBSerial.get(blDevice.usbSerial);
             if (server === undefined) {
-                server = await createServer('USB');
+                server = await createServer('USB', options.avr_rom);
                 serversByUSBSerial.set(blDevice.usbSerial, server);
             }
 
@@ -1161,9 +1161,9 @@ interface IReadWaiter {
     reject: ((error: any) => void) | undefined;
 }
 
-async function handleSerialDevice(serialDevice: ISerialDevice, createServer: (additionalPrefix: string) => Promise<Server>, serialLog: utils.Log): Promise<void> {
+async function handleSerialDevice(options: ICommandLineOptions, serialDevice: ISerialDevice, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>, serialLog: utils.Log): Promise<void> {
     serialLog.pn('Creating server...');
-    const server = await createServer('SERIAL');
+    const server = await createServer('SERIAL', options.serial_rom);
 
     process.stderr.write(`Serial device: \`\`${serialDevice.deviceName}'', baud rate: ${serialDevice.baud}\n`);
 
@@ -1481,7 +1481,7 @@ async function handleSerialDevice(serialDevice: ISerialDevice, createServer: (ad
     }
 }
 
-async function handleSerial(options: ICommandLineOptions, serialDevices: ISerialDevice[], createServer: (additionalPrefix: string) => Promise<Server>): Promise<void> {
+async function handleSerial(options: ICommandLineOptions, serialDevices: ISerialDevice[], createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): Promise<void> {
     if (serialDevices.length === 0) {
         return;
     }
@@ -1489,7 +1489,7 @@ async function handleSerial(options: ICommandLineOptions, serialDevices: ISerial
     const serialLog = new utils.Log('SERIAL', process.stdout, options.serial_verbose);
 
     for (const serialDevice of serialDevices) {
-        void handleSerialDevice(serialDevice, createServer, serialLog);
+        void handleSerialDevice(options, serialDevice, createServer, serialLog);
     }
 }
 
@@ -1523,7 +1523,7 @@ async function main(options: ICommandLineOptions) {
 
     let nextConnectionId = 1;
 
-    async function createServer(additionalPrefix: string): Promise<Server> {
+    async function createServer(additionalPrefix: string, romPath: string | null): Promise<Server> {
         const connectionId = nextConnectionId++;
         const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
 
@@ -1536,7 +1536,7 @@ async function main(options: ICommandLineOptions) {
             await bfs.mount(defaultVolume);
         }
 
-        const server = new Server(options.avr_rom, bfs, serverLogPrefix, colours, options.packet_verbose);
+        const server = new Server(romPath, bfs, serverLogPrefix, colours, options.packet_verbose);
         return server;
     }
 

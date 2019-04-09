@@ -30,6 +30,9 @@ build:
 	cp .build/beeblink_tube_serial.rom ../volumes/beeblink/0/R.TS
 	touch ../volumes/beeblink/0/R.TS.inf
 
+	cp .build/beeblink_avr_fe60.rom ../volumes/beeblink/0/R.AVR-FE60
+	touch ../volumes/beeblink/0/R.AVR-FE60.inf
+
 .PHONY:_rom
 _rom:
 	$(TASS) beeblink.s65 -L$(DEST)/beeblink_$(SUFFIX).lst -o$(DEST)/beeblink_$(SUFFIX).rom "-DVERSION=\"$(VER)\"" "-DBUILD_TIME=\"$(BUILD_TIME)\"" "-DCOMMIT=\"$(COMMIT)\"" $(EXTRA_ARGS)

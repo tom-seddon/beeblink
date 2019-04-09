@@ -402,16 +402,19 @@ Server side:
    be buffered up and will appear at the BBC end in due course
 
 3. read bytes from BBC: a $01 indicates sync complete, and it's done;
-   $00 bytes should be ignored; other values are an error
+   $00 bytes should be ignored; other values are an error, so go back
+   to step 1
 
 BBC side:
+
+0. emit 1 $80 byte, in case the server is still waiting in step 3
 
 1. emit continuous $00 bytes while reading from the server. Count runs
    of zeroes and discard everything else. When =num_required_0s=
    consecutive $00 bytes have been received, go to step 2
 
 2. continue emitting $00 bytes. Read bytes from server: a $01
-   indicates sync complete, so go to step 2; $00s can be ignored;
+   indicates sync complete, so go to step 3; $00s can be ignored;
    other values are an error
 
 3. emit a single $01 byte to indicate that sync is complete
@@ -420,6 +423,25 @@ At this point, fingers crossed, they're both in sync...
 
 260 bytes = 2,340 bits, or 0.02 sec at 115,200 baud (and actual
 transmit rate will be higher).
+
+Other sync notes:
+
+- not sure that the BBC actually needs to continue emitting $00s
+  during BBC step 2. It won't receive anything until the server gets
+  to server step 2, which won't happen until server step 1 has read
+  enough $00s.
+
+  If the server starts out in step 3, additional $00s won't help, but
+  this is what the leading $80 is intended to fix.
+
+  If the server starts out in some other state, no problem.
+
+- because the server sends all data as a big lump, there could
+  conceivably be a lot to work through in BBC step 1 (though unlikely
+  to be an issue for any of the 8-bit stuff). Server should just try
+  to flush the OS serial buffer unsent (like termios =tcflush=) when
+  the BBC cancels something, or perhaps just always when starting sync
+  mode.
 
 ** request formats
 
