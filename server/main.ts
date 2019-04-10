@@ -80,7 +80,6 @@ interface ICommandLineOptions {
     server_verbose: boolean;
     default_volume: string | null;
     no_retry_device: boolean;
-    send_verbose: boolean;
     fatal_verbose: boolean;
     folders: string[];
     avr_verbose: boolean;
@@ -91,11 +90,13 @@ interface ICommandLineOptions {
     git: boolean;
     git_verbose: boolean;
     http: boolean;
-    packet_verbose: boolean;
+    server_data_verbose: boolean;
     http_all_interfaces: boolean;
     libusb_debug_level: number | null;
     serial_device: string[] | null;
     serial_verbose: boolean;
+    serial_sync_verbose: boolean;
+    serial_data_verbose: boolean;
     list_serial_devices: boolean;
 }
 
@@ -1183,13 +1184,15 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
     const readBuffers: Buffer[] = [];
     let readIndex = 0;
 
-    const readByteLog = new utils.Log('SERIAL: readByte', serialLog.f, false);
+    const dataInLog = new utils.Log('SERIAL:', serialLog.f, options.serial_data_verbose);
+    const dataOutLog = new utils.Log('SERIAL:', serialLog.f, options.serial_data_verbose);
+    const syncLog = new utils.Log('SERIAL: sync', serialLog.f, options.serial_sync_verbose);
 
     port.on('data', (data: Buffer): void => {
         readBuffers.push(data);
 
-        readByteLog.withIndent('Serial data: ', () => {
-            readByteLog.dumpBuffer(data);
+        dataInLog.withIndent('data in: ', () => {
+            dataInLog.dumpBuffer(data);
         });
 
         if (readWaiter !== undefined) {
@@ -1217,16 +1220,16 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
 
     async function readByte(): Promise<number> {
         if (readBuffers.length === 0) {
-            readByteLog.pn(`readByte: waiting for more data...`);
+            dataInLog.pn(`readByte: waiting for more data...`);
 
             await new Promise<void>((resolve, reject): void => {
                 readWaiter = { resolve, reject };
             });
 
-            readByteLog.pn(`readByte: got some data`);
+            dataInLog.pn(`readByte: got some data`);
         }
 
-        readByteLog.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
+        dataInLog.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
         const byte = readBuffers[0][readIndex++];
 
         if (readIndex === readBuffers[0].length) {
@@ -1293,7 +1296,7 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
             let numZeros = 0;
             while (numZeros < beeblink.NUM_SERIAL_SYNC_ZEROS) {
                 const x = await readByte();
-                serialLog.pn(`read server step 1 sync byte: ${x} (${numZeros} 0x00 bytes read)`);
+                syncLog.pn(`read server step 1 sync byte: ${x} (${numZeros} 0x00 bytes read)`);
                 if (x !== 0) {
                     numZeros = 0;
                 } else {
@@ -1301,7 +1304,7 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
                 }
             }
 
-            serialLog.pn(`Received ${numZeros} 0 bytes.`);
+            serialLog.pn(`Received ${numZeros} 0 sync bytes.`);
 
             serialLog.pn(`write server step 2 sync data`);
             await writeSyncData();
@@ -1313,7 +1316,7 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
                 do {
                     x = await readByte();
                     ++n;
-                    serialLog.pn(`read server step 3 sync byte: ${x} (${n} bytes read)`);
+                    syncLog.pn(`read server step 3 sync byte: ${x} (${n} bytes read)`);
 
                     // if (n > 5 * beeblink.NUM_SERIAL_SYNC_ZEROS) {
                     //     // a previous sync was probably interrupted, so send the sync data again.
@@ -1388,12 +1391,12 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
 
             let responseData: Buffer;
 
-            serialLog.withIndent('response: ', () => {
-                serialLog.pn(`c=0x${utils.hex2(response.c)}`);
-                serialLog.withIndent(`p=`, () => {
-                    serialLog.dumpBuffer(response.p, 10);
-                });
-            });
+            // serialLog.withIndent('response: ', () => {
+            //     serialLog.pn(`c=0x${utils.hex2(response.c)}`);
+            //     serialLog.withIndent(`p=`, () => {
+            //         serialLog.dumpBuffer(response.p, 10);
+            //     });
+            // });
 
             let destIdx = 0;
 
@@ -1422,9 +1425,15 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
 
             assert.strictEqual(destIdx, responseData.length);
 
+            // This doesn't seem to work terribly well! - should probably just
+            // write the whole lot in one big lump and then use the JS analogue
+            // of tcflush, whatever it is (assuming there is one, and it's
+            // Windows-friendly).
             {
                 serialLog.pn(`Sending ${responseData.length} bytes response data...`);
-                serialLog.dumpBuffer(responseData, 10);
+                dataInLog.withIndent('data out: ', () => {
+                    dataInLog.dumpBuffer(responseData);
+                });
 
                 const maxChunkSize = 512;//arbitrary.
                 let srcIdx = 0;
@@ -1536,7 +1545,7 @@ async function main(options: ICommandLineOptions) {
             await bfs.mount(defaultVolume);
         }
 
-        const server = new Server(romPath, bfs, serverLogPrefix, colours, options.packet_verbose);
+        const server = new Server(romPath, bfs, serverLogPrefix, colours, options.server_data_verbose);
         return server;
     }
 
@@ -1591,14 +1600,13 @@ function integer(s: string): number {
     parser.addArgument(['--serial-rom'], { metavar: 'FILE:', defaultValue: null, help: 'read BeebLink serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_SERIAL_ROM });
     parser.addArgument(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
     parser.addArgument(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
-    parser.addArgument(['--packet-verbose'], { action: 'storeTrue', help: 'dump incoming/outgoing request data (requires --server-verbose)' });
+    parser.addArgument(['--server-data-verbose'], { action: 'storeTrue', help: 'dump request/response data (requires --server-verbose)' });
     parser.addArgument(['--usb-verbose'], { action: 'storeTrue', help: 'extra USB-related output' });
     parser.addArgument(['--libusb-debug-level'], { type: integer, metavar: 'LEVEL', help: 'if provided, set libusb debug logging level to %(metavar)s' });
     // don't use the argparse default mechanism here - this makes it easier to
     // later detect the absence of --default-volume.
     parser.addArgument(['--default-volume'], { metavar: 'DEFAULT-VOLUME', help: 'load volume %(metavar)s on startup' });
     parser.addArgument(['--no-retry-device'], { action: 'storeTrue', help: 'don\'t try to rediscover device if it goes away' });
-    parser.addArgument(['--send-verbose'], { action: 'storeTrue', help: 'dump data sent to device' });
     parser.addArgument(['--fatal-verbose'], { action: 'storeTrue', help: 'print debugging info on a fatal error' });
     parser.addArgument(['--avr-verbose'], { action: 'storeTrue', help: 'enable AVR serial output' });
     parser.addArgument(['--load-config'], { metavar: 'FILE', help: 'load config from %(metavar)s' });
@@ -1611,6 +1619,8 @@ function integer(s: string): number {
     parser.addArgument(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
     parser.addArgument(['--serial-device'], { action: 'append', metavar: 'DEVICE(:BAUD)', help: 'listen on serial port DEVICE (optionally, with baud rate BAUD - default is ' + DEFAULT_SERIAL_BAUD_RATE + ')' });
     parser.addArgument(['--serial-verbose'], { action: 'storeTrue', help: 'extra serial-related output' });
+    parser.addArgument(['--serial-sync-verbose'], { action: 'storeTrue', help: 'extra serial sync-related output (requires --serial-verbose)' });
+    parser.addArgument(['--serial-data-verbose'], { action: 'storeTrue', help: 'dump raw serial data sent/received (requires --serial-verbose)' });
     parser.addArgument(['--list-serial-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
     //parser.addArgument(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
 

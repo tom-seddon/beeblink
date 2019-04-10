@@ -234,7 +234,13 @@ export class Log {
         this.p('\n');
     }
 
-    public dumpBuffer(data: Buffer, maxNumLines?: number) {
+    public dumpBuffer(data: Buffer, maxNumLines?: number): void {
+        if (!this.enabled) {
+            // this function does enough stuff that it's probably worth
+            // skipping...
+            return;
+        }
+
         const numColumns = 16;
 
         if (data.length === 0) {
