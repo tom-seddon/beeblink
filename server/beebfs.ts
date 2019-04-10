@@ -561,7 +561,7 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public static async findAllVolumes(folders: string[], log: utils.Log): Promise<BeebVolume[]> {
+    public static async findAllVolumes(folders: string[], log: utils.Log | undefined): Promise<BeebVolume[]> {
         return await BeebFS.findVolumes('*', folders, log);
     }
 
@@ -703,20 +703,26 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private static async findVolumes(afsp: string, folders: string[], log: utils.Log): Promise<BeebVolume[]> {
+    // Logging for this probably isn't proving especially useful. Maybe it
+    // should go away?
+    private static async findVolumes(afsp: string, folders: string[], log: utils.Log | undefined): Promise<BeebVolume[]> {
         const volumes: BeebVolume[] = [];
 
         const re = utils.getRegExpFromAFSP(afsp);
 
         const findVolumesMatchingRecursive = async (folderPath: string, indent: string): Promise<void> => {
-            log.pn(indent + 'Looking in: ' + folderPath + '...');
+            if (log !== undefined) {
+                log.pn(indent + 'Looking in: ' + folderPath + '...');
+            }
 
             let names: string[];
             try {
                 names = await utils.fsReaddir(folderPath);
             } catch (error) {
                 process.stderr.write('WARNING: failed to read files in folder: ' + folderPath + '\n');
-                log.pn('Error was: ' + error);
+                if (log !== undefined) {
+                    log.pn('Error was: ' + error);
+                }
                 return;
             }
 
@@ -746,7 +752,9 @@ export class BeebFS {
 
                         if (BeebFS.isValidVolumeName(volumeName)) {
                             const volume = new BeebVolume(fullName, volumeName);
-                            log.pn('Found volume ' + volume.path + ': ' + volume.name);
+                            if (log !== undefined) {
+                                log.pn('Found volume ' + volume.path + ': ' + volume.name);
+                            }
 
                             if (re.exec(volume.name) !== null) {
                                 volumes.push(volume);
@@ -1129,7 +1137,7 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     public async findVolumesMatching(afsp: string): Promise<BeebVolume[]> {
-        return await BeebFS.findVolumes(afsp, this.folders, this.log);
+        return await BeebFS.findVolumes(afsp, this.folders, undefined);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1447,6 +1455,8 @@ export class BeebFS {
             BeebFS.throwError(ErrorCode.BadName);
         }
 
+        this.log.pn('OSFIND: mode=$' + utils.hex2(mode) + ' nameString=``' + nameString + '\'\'');
+
         const index = this.openFiles.indexOf(undefined);
         if (index < 0) {
             return BeebFS.throwError(ErrorCode.TooManyOpen);
@@ -1460,10 +1470,12 @@ export class BeebFS {
 
         // Files can be opened once for write, or multiple times for read.
         {
-            for (const openFile of this.openFiles) {
+            for (let othIndex = 0; othIndex < this.openFiles.length; ++othIndex) {
+                const openFile = this.openFiles[othIndex];
                 if (openFile !== undefined) {
                     if (openFile.hostPath === hostPath) {
                         if (openFile.write || write) {
+                            this.log.pn(`        already open: handle=0x${this.firstFileHandle + othIndex}`);
                             return BeebFS.throwError(ErrorCode.Open);
                         }
                     }
@@ -1474,7 +1486,6 @@ export class BeebFS {
         let contentsBuffer: Buffer | undefined;
         const file = await this.getBeebFileInternal(fqn, read && !write, false);
         if (file !== undefined) {
-            this.log.pn('OSFIND: mode=$' + utils.hex2(mode) + ' nameString=``' + nameString + '\'\'');
             this.log.pn('        hostPath=``' + file.hostPath + '\'\'');
             this.log.pn('        text=' + file.text);
 
@@ -1528,7 +1539,9 @@ export class BeebFS {
         }
 
         this.openFiles[index] = new OpenFile(hostPath, fqn, read, write, contents);
-        return this.firstFileHandle + index;
+        const handle = this.firstFileHandle + index;
+        this.log.pn(`        handle=0x${handle}`);
+        return handle;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1802,7 +1815,7 @@ export class BeebFS {
             const volumes = await this.findVolumesMatching(fsp.volumeName);
             if (volumes.length === 0) {
                 throw new BeebError(ErrorCode.FileNotFound, 'Volume not found');
-            } else if(volumes.length>1) {
+            } else if (volumes.length > 1) {
                 throw new BeebError(ErrorCode.BadName, 'Ambiguous volume');
             }
 

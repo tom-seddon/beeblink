@@ -24,14 +24,15 @@ build:
 # making a mess...
 	$(MAKE) _rom SUFFIX=avr_fe60 "EXTRA_ARGS=-Dlink_avr=true -Dlink_avr_via=65120"
 
+# 160 = $a0
 # 192 = $c0
-	$(MAKE) _rom SUFFIX=tube_serial "EXTRA_ARGS=-Dlink_tube_serial=true -Dblfs_prefix=\\\"TSBL\\\" -Dblfs_fs_number=94 -Dblfs_first_handle=192 -Ddefault_von=false"
+	$(MAKE) _rom SUFFIX=tube_serial "EXTRA_ARGS=-Dlink_tube_serial=true -Dblfs_prefix=\\\"TSBL\\\" -Dblfs_fs_number=94 -Dblfs_first_handle=160 -Ddefault_von=false"
 
-	cp .build/beeblink_tube_serial.rom ../volumes/beeblink/0/R.TS
-	touch ../volumes/beeblink/0/R.TS.inf
+	cp .build/beeblink_tube_serial.rom ../volumes/beeblink/1/R.TS
+	touch ../volumes/beeblink/1/R.TS.inf
 
-	cp .build/beeblink_avr_fe60.rom ../volumes/beeblink/0/R.AVR-FE60
-	touch ../volumes/beeblink/0/R.AVR-FE60.inf
+	cp .build/beeblink_avr_fe60.rom ../volumes/beeblink/1/R.AVR-FE60
+	touch ../volumes/beeblink/1/R.AVR-FE60.inf
 
 .PHONY:_rom
 _rom:

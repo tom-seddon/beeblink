@@ -1184,8 +1184,8 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
     const readBuffers: Buffer[] = [];
     let readIndex = 0;
 
-    const dataInLog = new utils.Log('SERIAL:', serialLog.f, options.serial_data_verbose);
-    const dataOutLog = new utils.Log('SERIAL:', serialLog.f, options.serial_data_verbose);
+    const dataInLog = new utils.Log('SERIAL', serialLog.f, options.serial_data_verbose);
+    const dataOutLog = new utils.Log('SERIAL', serialLog.f, options.serial_data_verbose);
     const syncLog = new utils.Log('SERIAL: sync', serialLog.f, options.serial_sync_verbose);
 
     port.on('data', (data: Buffer): void => {
@@ -1220,16 +1220,16 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
 
     async function readByte(): Promise<number> {
         if (readBuffers.length === 0) {
-            dataInLog.pn(`readByte: waiting for more data...`);
+            //dataInLog.pn(`readByte: waiting for more data...`);
 
             await new Promise<void>((resolve, reject): void => {
                 readWaiter = { resolve, reject };
             });
 
-            dataInLog.pn(`readByte: got some data`);
+            //dataInLog.pn(`readByte: got some data`);
         }
 
-        dataInLog.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
+        //dataInLog.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
         const byte = readBuffers[0][readIndex++];
 
         if (readIndex === readBuffers[0].length) {
@@ -1375,7 +1375,7 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
 
                     const j = getNegativeOffsetLSB(i, p);
 
-                    serialLog.pn(`    index ${i} (-ve LSB=0x${utils.hex2(j)}): value=${p[i]} (0x${utils.hex2(p[i])})`);
+                    //serialLog.pn(`    index ${i} (-ve LSB=0x${utils.hex2(j)}): value=${p[i]} (0x${utils.hex2(p[i])})`);
 
                     if (j === 0) {
                         if (!await readConfirmationByte()) {
@@ -1431,8 +1431,8 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
             // Windows-friendly).
             {
                 serialLog.pn(`Sending ${responseData.length} bytes response data...`);
-                dataInLog.withIndent('data out: ', () => {
-                    dataInLog.dumpBuffer(responseData);
+                dataOutLog.withIndent('data out: ', () => {
+                    dataOutLog.dumpBuffer(responseData);
                 });
 
                 const maxChunkSize = 512;//arbitrary.
