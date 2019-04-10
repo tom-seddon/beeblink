@@ -109,12 +109,7 @@ roms_table=$DF0
 boot_key=100                    ;100=B
 
 ; Tube claimant ID.
-;
-; The value 58 is entirely arbitrary. When first writing the ROM, I
-; just decided that the filing system number would be 93, because that
-; was free, and the claimant ID would be 35 - because why not? It was
-; free too. And 58 is 93 - 35...
-tube_claimant_id=blfs_fs_number-58
+tube_claimant_id=35
 
 ; Number of chars to buffer up when printing the
 ; server's string.
