@@ -18,7 +18,16 @@
 ; <https://www.gnu.org/licenses/>.
 ;
 ;-------------------------------------------------------------------------
-
+; Random notes
+;-------------------------------------------------------------------------
+;
+; The little handshaking loops that wait for IFR bit 4 to become set
+; only ever seem to run for one iteration - as intended, because the
+; AVR is fast and the 6502 can't do back-to-back reads that quickly.
+;
+; Could probably do the check once every 256 bytes in the pagewise
+; mode...? Not sure I'm brave enough for that though.
+;
 ;-------------------------------------------------------------------------
 
                 .section fs_zp_workspace
