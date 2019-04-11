@@ -487,7 +487,7 @@ export class Server {
         p.copy(data, 0, i);
 
         this.log.pn('Name: ``' + nameString + '\'\'');
-        this.log.pn('Input: A=0x' + utils.hex2(a) + ', , ' + data.length + ' data byte(s)');
+        this.log.pn('Input: A=0x' + utils.hex2(a) + ', ' + data.length + ' data byte(s)');
 
         const osfileResult = await this.bfs.OSFILE(a, nameString, block, data);
 

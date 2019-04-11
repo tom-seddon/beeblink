@@ -557,10 +557,10 @@ itu_send_byte: .macro
 ;
 ; Receive a byte on Master 128 when the internal Tube is active.
 ;
-; exit: ?link_value = byte received
+; exit: if \dest>=0, ?\dest = byte received
 ; preserves: X/Y
-itu_recv_byte: .macro
-                .txdp ['itu_recv_byte: received &']
+itu_recv_byte: .macro dest
+                .txdp ['itu_recv_byte: received ']
                 .cpu '65c02'
 -
                 php
@@ -576,11 +576,17 @@ itu_recv_byte: .macro
                 bra -
 +
                 lda fifo
-                sta link_value
+                .if \dest>=0
+                sta \dest
+                .endif
                 lda #acccon.itu
                 tsb acccon
                 plp
-                .txdp [DP_A,'\r']
+                .if \dest>=0
+                .txdp ['&',\dest,'\r']
+                .else
+                .txdp ['??\r']
+                .endif
                 .endm
 
 ;-------------------------------------------------------------------------
@@ -649,7 +655,7 @@ recv_header_byte: .proc
                 rts
 
 itu:
-                .itu_recv_byte
+                .itu_recv_byte link_value
                 lda link_value
                 rts
                 
@@ -660,37 +666,35 @@ itu:
 recv_payload_byte: .proc
                 bit link_itu
                 bmi itu
-                
-                ;.debug_print ['tube_serial.r_p_b: &',scratch_payload_size+0,'\r']
+
                 lda scratch_payload_size+0
-                bne +
+                beq recv_status_byte
 
-                ;.debug_print ['tube_serial.r_p_b: await confirmation byte: &']
+recv_data_byte:
+                .recv_byte
+                rts
 
-                ; receive and discard confirmation byte
+recv_status_byte:
+                jsr recv_data_byte
+                pha             ;save data byte
+
                 .recv_byte
 
-                ;.debug_print [DP_A,'\r']
-
-+
-                ;.debug_print ['tube_serial.r_p_b: await data byte\r']
-
-                ; receive data byte
-                .recv_byte
-                
-                ;.debug_print ['tube_serial.r_p_b: got: &',DP_A,'\r']
-                
+                pla             ;restore data byte
                 rts
 
 itu:
                 lda scratch_payload_size+0
-                bne +
+                beq itu_recv_status_byte
 
-                ; receive and discard confirmation byte
-                .itu_recv_byte
+itu_recv_data_byte:
+                .itu_recv_byte link_value
+                lda link_value
+                rts
 
-+
-                .itu_recv_byte
+itu_recv_status_byte:
+                jsr itu_recv_data_byte
+                .itu_recv_byte -1
                 lda link_value
                 rts
                 

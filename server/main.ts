@@ -1404,8 +1404,8 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
                 responseData = Buffer.alloc(3);
 
                 responseData[destIdx++] = response.c & 0x7f;
-                responseData[destIdx++] = 1;//confirmation byte
                 responseData[destIdx++] = response.p[0];
+                responseData[destIdx++] = 1;//confirmation byte
             } else {
                 responseData = Buffer.alloc(1 + 4 + response.p.length + ((response.p.length + 255) >> 8));
 
@@ -1415,11 +1415,11 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
                 destIdx += 4;
 
                 for (let srcIdx = 0; srcIdx < response.p.length; ++srcIdx) {
+                    responseData[destIdx++] = response.p[srcIdx];
+
                     if (getNegativeOffsetLSB(srcIdx, response.p) === 0) {
                         responseData[destIdx++] = 1;//confirmation byte
                     }
-
-                    responseData[destIdx++] = response.p[srcIdx];
                 }
             }
 

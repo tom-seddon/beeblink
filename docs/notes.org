@@ -446,43 +446,39 @@ Other sync notes:
 ** request formats
 
 Fixed size request: 1 byte type (bit 7 clear), 1 byte payload, 1 byte
-confirmation.
+status.
 
 Variable size request: 1 byte type (bit 7 set), 4 bytes LE payload
-size, N bytes of payload. The payload includes confirmation bytes (see
+size, N bytes of payload. The payload includes status bytes (see
 below), which are not included in the size.
 
-Responses have a similar format to requests, including confirmation
+Responses have a similar format to requests, including status
 bytes, though the details differ.
 
-** confirmation bytes
+** status bytes
 
-Non-empty request payloads include confirmation bytes at particular
-points, based on the LSB of the byte's negative offset:
+Non-empty request payloads include status bytes at particular points,
+based on the LSB of the byte's negative offset:
 =-((payload_size)-1-(offset of byte))=. (The first byte's negative
 offset is =-((payload size)-1)= and the last byte's is =0=.)
 
-For BBC->server payloads, the confirmation bytes indicate whether
-there's more data to come, or that the request has been canceled. When
-the LSB of the byte's negative offset is 0x00, send a confirmation
-byte after sending the byte. This ensures the request ends with a
-confirmation byte.
+When the LSB of the byte's negative offset is 0x00, the byte sent
+should be followed by a status byte.
 
-For server->BBC payloads, when the LSB of the byte's negative offset
-is 0x00, send a confirmation byte before sending the byte. The
-response might not end with a confirmation byte, but that's fine -
-they're sent only to avoid runs of 0x00 bytes that might get confused
-with a sync. The server isn't allowed to cancel responses and the
-confirmation bytes are always 0x01.
+For BBC->server payloads, the status bytes indicate whether there's
+more data to come, or that the request has been canceled. To indicate
+a canceled request, the BBC may supply 0x00 or 0x80 (i.e.,
+=REQUEST_SERIAL_CANCEL=) - otherwise, supply 0x01. There's no real
+plan for additional values, but... maybe??
 
-To indicate a canceled request, the BBC may supply 0x00 or 0x80 (i.e.,
-=REQUEST_SERIAL_CANCEL=). Otherwise, supply 0x01. There's no real plan
-for additional values, but... maybe??
+For server->BBC payloads, the status bytes are always 0x01, as the
+server isn't allowed to cancel responses. These values do still serve
+a purpose: they avoid runs of 0x00 bytes that could otherwise be
+confused with a sync.
 
-When sending or receiving data, the LSB of the byte's negative offset
-can be found in =scratch_payload_size+0=. (The payload size is in
-principle a 32-bit value, but only the bottom 8 bits promise to be
-always valid.)
+When transferring data, the LSB of the byte's negative offset can be
+found in =scratch_payload_size+0=. When =link_recv_payload_byte= or
+=link_send_payload_byte= are called, only the bottom 8 bits are valid.
 
 ** forcing a reset from the BBC side
 
@@ -494,7 +490,7 @@ If the server was waiting for a response, it will get the =0= and go
 into sync mode straight away.
 
 If a response was being sent, the additional bytes will ensure the
-server eventually hits the point where it's expecting a confirmation
+server eventually hits the point where it's expecting a status
 byte, and then supply a 0 for that byte. Now the PC is in sync mode
 too.
 
@@ -523,7 +519,7 @@ Worst case is a variable size 255 byte packet of 0s, with a run of 258
 : +005 00 (byte 0, negative offset 0xffffff01)
 : ..
 : +104 00 (byte fe, negative offset 0x00000000)
-: +105 01 confirmation byte
+: +105 01 status byte
 
 Any payload with a size of $xxxxxxff will potentially start with 255
 0s, but larger sizes will have fewer 0s as part of the size.
@@ -537,10 +533,10 @@ bytes in the worst case:
 : +003 00 |
 : +004 00 +
 : +005 00 (byte 0, negative offset 0xffffff00)
-: +006 01 (confirmation byte)
+: +006 01 (status byte)
 : ..
 : +105 00 (byte ff, negative offset 0x00000000)
-: +106 01 confirmation byte
+: +106 01 status byte
 
 * copy/paste fodder
 
