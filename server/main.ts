@@ -1291,7 +1291,18 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
 
         sync_loop:
         do {
-            serialLog.pn(`Starting sync...`);
+            serialLog.pn(`Sync: flushing buffers...`);
+            await new Promise<void>((resolve, reject) => {
+                port.flush((error: any) => {
+                    if (error !== undefined && error !== null) {
+                        reject(error);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
+
+            serialLog.pn(`Sync: Waiting for ${beeblink.NUM_SERIAL_SYNC_ZEROS} sync 0x00 bytes...`);
 
             let numZeros = 0;
             while (numZeros < beeblink.NUM_SERIAL_SYNC_ZEROS) {
@@ -1306,7 +1317,7 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
 
             serialLog.pn(`Received ${numZeros} 0 sync bytes.`);
 
-            serialLog.pn(`write server step 2 sync data`);
+            serialLog.pn(`sync: write server step 2 sync data`);
             await writeSyncData();
 
             // eat remaining sync 0s.
