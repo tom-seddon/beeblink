@@ -18,7 +18,14 @@
 ; <https://www.gnu.org/licenses/>.
 ;
 ;-------------------------------------------------------------------------
-;
+; random notes
+;-------------------------------------------------------------------------
+; Macros with names ending in '_routine' generate entire routines,
+; that finish with an rts.
+;-------------------------------------------------------------------------
+; Routines with an itu_ prefix only run on a Master when internal Tube
+; is active. 65c02 code is OK.
+;-------------------------------------------------------------------------
 ; The Master host code just gets straight to poking the Tube I/O as
 ; part of its EVENTV handler:
 ; 
@@ -40,11 +47,31 @@
 ; 0696 8D E1 FE    .a~  STA &FEE1
 ; 0699 60          `    RTS
 ; 
-; So the Tube select bit of ACCCON needs some careful handling. If the
-; ITU bit had to be disabled to gain access to the FTDI board, the
-; access has to be performed with interrupts disabled.
+; So if the ITU bit had to be disabled to gain access to the FTDI
+; board, the transfer has to be performed with interrupts disabled. To
+; avoid keeping IRQs disabled for too long, the transfer routine will
+; enable IRQs while waiting if it has to wait for the appropriate FIFO
+; status, but in the best case it will do the entire transfer with
+; IRQs disabled.
+; 
+; (The intention is that IRQs are disabled for no more than ~4ms at a
+; time - this is not ideal, but should at least mean that TIME doesn't
+; go too wrong.)
 ;
+; If there's an NMI during a transfer.. bang, probably? I don't think
+; this is fixable. Not an issue with disc though.
+;-------------------------------------------------------------------------
+; There are 16 transfer cases: all combinations of (send, recv) and
+; (host, parasite), (ITU, non-ITU), (bytes, page).
 ;
+; 12 of these cases are regular enough that it's worth generating by
+; macro, and the remaining 4 (parasite + ITU) are hand-written.
+;
+; There is also a macro for generating the driver code that calls a
+; bytes routine 0/1 time, a page routine 0-N time, updates the
+; src/dest address and looks after claiming the Tube and setting up
+; transfer modes.
+; -------------------------------------------------------------------------
 
                 .section code
 
@@ -486,6 +513,70 @@ nop: .proc
 
 ;-------------------------------------------------------------------------
 ;
+; Select int Tube.
+;
+; exit: int Tube selected
+; preserves: X/y
+itu_int_tube: .proc
+                .cpu '65c02'
+                lda #acccon.itu
+                tsb acccon
+                rts
+                .cpu 'default'
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; Selects int Tube, enables IRQs, disables IRQs, then re-selects
+; ext tube.
+;
+; exit: I=1
+;       ext Tube selected
+; preserves: X/Y
+itu_cli_briefly: .proc
+                jsr itu_int_tube
+                cli
+                .cerror *!=itu_sei_ext_tube,'oops'
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Disable IRQs and select ext Tube.
+;
+; Call takes 22 cycles.
+;
+; exit: I=1
+;       ext Tube selected
+; preserves: X/Y
+itu_sei_ext_tube: .block
+                .cpu '65c02'
+                sei             ;6 +2
+                lda #acccon.itu ;8 +2
+                trb acccon      ;10 +6
+                rts             ;16 +6 = 22
+                .cpu 'default'
+                .bend
+
+;-------------------------------------------------------------------------
+; 
+; Wait for the RX data/TX space status flag to become set. Keeps IRQs
+; enabled as much as possible.
+;
+; entry:
+; exit: I=1
+;       FIFO in hoped-for state
+;       ext Tube selected
+itu_wait_for_status: .proc
+                pha
+                jsr itu_cli_briefly
+                pla
+                bit status.rx_data
+                beq itu_wait_for_status
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
 ; Send a byte on B/B+/M128 with no Tube/ext Tube.
 ;
 ; entry: Y = value to send
@@ -699,6 +790,701 @@ itu_recv_status_byte:
                 rts
                 
                 .pend
+
+;-------------------------------------------------------------------------
+;
+; Transfer mode stuff.
+;
+
+; Fake enum. Supply these to the dir argument of any of the
+; transfer-related macros.
+send=1
+recv=2
+
+; Crude dir validity check.
+check_dir: .macro dir
+                .cerror \dir!=send&&\dir!=recv,'bad send/recv dir'
+                .endm
+
+; Get appropriate status register flag for dir.
+get_status_flag_for_dir: .function dir
+                .check_dir dir
+                .endf dir==send?status.tx_space:status.rx_data
+                
+;-------------------------------------------------------------------------
+;
+; Generates driver routine for transferring file data. Sends N lead-up
+; bytes, followed by a confirmation byte; then some number of pages,
+; each followed by a confirmation byte.
+;
+; If \tube_dir is 0, no Tube code will be generated; if send or recv,
+; Tube handling will be included.
+;
+; \bytes_routine is the bytes transfer routine to call.
+;
+; \page_routine is the page transfer routine to call. If 0,
+; \bytes_routine will be called instead, with X=0 each time, to
+; transfer 256 bytes.
+; 
+transfer_file_data_driver_routine: .macro tube_dir,bytes_routine,page_routine,name
+                .if \tube_dir!=0
+                .check_dir \tube_dir
+                jsr claim_tube
+                .endif
+
+                jsr negate_payload_size
+                
+                .txdp [\name,': &',scratch_payload_size+0,' bytes, &',scratch_payload_size+3,scratch_payload_size+2,scratch_payload_size+1,' pages\r']
+
+                ; need to copy any bytes?
+                lda scratch_payload_size+0
+                beq bytes_done
+
+                .if \tube_dir!=0
+                ldx #<scratch_load
+                ldy #>scratch_load
+                lda #\tube_dir==send?tube_multi_byte_parasite_to_host:tube_multi_byte_host_to_parasite
+                jsr $406
+                .endif
+
+                ldx scratch_payload_size+0
+                jsr \bytes_routine
+
+                ; update dest pointer
+                clc
+                lda scratch_load+0
+                adc scratch_payload_size+0
+                sta scratch_load+0
+                bcc +
+                inc scratch_load+1
+                bne +
+                inc scratch_load+2
+                bne +
+                inc scratch_load+3
++
+
+bytes_done:
+                ; need to copy any pages?
+                lda #0
+                sta scratch_payload_size+0
+                jsr test_payload_size
+                beq done
+
+                jsr negate_payload_size
+                ; scratch_payload_size bits 8-31 is the negative page
+                ; count.
+pages_loop:
+                .if \page_routine!=0
+                
+                .if \tube_dir!=0
+                ldx #<scratch_load
+                ldy #>scratch_load
+                lda #\tube_dir==send?tube_256_byte_parasite_to_host:tube_256_byte_host_to_parasite
+                jsr $406
+                .endif
+
+                jsr \page_routine
+                
+                .else
+
+                ; (can continue to use existing Tube transfer mode, if
+                ; any)
+                
+                ldx #0          ;transfer 256 bytes
+                jsr \bytes_routine
+                
+                .endif
+
+                inc scratch_load+1
+                bne +
+                inc scratch_load+2
+                bne +
+                inc scratch_load+3
++
+
+                inc scratch_payload_size+1 ;page count bits 0-7
+                bne pages_loop
+                inc scratch_payload_size+2 ;page count bits 8-15
+                bne pages_loop
+                inc scratch_payload_size+3 ;page count bits 16-23
+                bne pages_loop
+                
+done:
+                .if \tube_dir!=0
+                jsr release_tube
+                .endif
+
+                rts
+
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Generate code to wait for appropriate FIFO readiness for the given
+; direction.
+;
+; 8 cycles when straight through.
+;
+; exit: FIFO in hoped-for state
+; preserves: X/Y
+transfer_wait_for_status: .macro dir
+                .check_dir \dir
+                
+                lda #get_status_flag_for_dir(\dir)
+-
+                bit status
+                beq -
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Generate code to wait for appropriate FIFO readiness for the given
+; direction.
+;
+; 9 cycles when straight through.
+;
+; exit: FIFO in hoped-for state
+; preserves: X/Y
+itu_transfer_wait_for_status: .macro dir
+                .check_dir \dir
+
+                lda #get_status_flag_for_dir(\dir)
+                bit status
+                bne +
+                jsr itu_wait_for_status
++
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Generate code to transfer a data byte between (scratch_load),y in
+; host memory and FIFO.
+;
+; Send = 9/10 cycles
+; Recv = 10 cycles
+;
+; entry: (scratch_load),y = host address
+;        FIFO = in appropriate state for send/recv
+; preserves: X/Y
+transfer_host_data_byte: .macro dir
+                .check_dir \dir
+                
+                .if \dir==send
+                lda (scratch_load),y
+                sta fifo
+                .else
+                lda fifo
+                sta (scratch_load),y
+                .endif
+                
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Generate code to transfer a data byte between Tube FIFO and FTDI
+; FIFO.
+;
+; Send = 8 cycles, Tube access on cycle +3
+; Recv = 8 cycles, Tube access on cycle +7
+;
+; entry: FIFOs in appropriate state
+; preserves: X
+
+transfer_parasite_data_byte: .macro dir
+                .check_dir \dir
+
+                .if \dir==send
+                ldy tube_fifo3_data
+                sty fifo
+                .else
+                ldy fifo
+                sty tube_fifo3_data
+                .endif
+
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Generate code to transfer a status byte.
+;
+; entry: FIFO = in appropriate state
+; preserves: X/Y
+transfer_status_byte: .macro dir
+                .check_dir \dir
+
+                .if \dir==send
+                lda #1
+                sta fifo
+                .else
+                lda fifo        ;and discard it
+                .endif
+
+                .endm
+                
+;-------------------------------------------------------------------------
+;
+; Generate host bytes transfer routine.
+;
+transfer_host_bytes_routine: .macro dir
+                .check_dir \dir
+
+                ldy #0
+loop:
+                .transfer_wait_for_status \dir ;0 +8
+                .transfer_host_data_byte \dir  ;8 +8
+
+                iny             ;16 +2
+                dex             ;18 +2
+                bne loop        ;20 +3 = 23
+
+                .transfer_wait_for_status \dir
+                .transfer_status_byte \dir
+
+                rts
+                
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Generate ITU=1 host bytes transfer routine.
+;
+itu_transfer_host_bytes_routine: .macro dir
+                .check_dir \dir
+
+                ldy #0
+                php
+                jsr itu_sei_ext_tube
+loop:
+                .itu_transfer_wait_for_status \dir ;0 +9
+                .transfer_host_data_byte \dir      ;9 +10
+
+                iny             ;19 +2
+                dex             ;21 +2
+                bne loop        ;23 +3 = 26
+
+                .itu_transfer_wait_for_status \dir
+                .transfer_status_byte \dir
+
+                jsr itu_int_tube
+                plp
+                rts
+                
+                .cpu 'default'
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Generate host page transfer routine.
+;
+transfer_host_page_routine: .macro dir
+                .check_dir \dir
+
+bytes_per_iteration=8
+                .cerror 256%bytes_per_iteration!=0,'no'
+
+                ldy #0
+loop:
+                .rept bytes_per_iteration
+                .transfer_wait_for_status \dir ;+8  8
+                .transfer_host_data_byte \dir  ;+10 18
+                iny                            ;+2  20
+                .next                          ;20n
+
+                bne loop
+
+                .transfer_wait_for_status \dir
+                .transfer_status_byte \dir
+
+                rts
+                
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Generate ITU=1 host page transfer routine.
+;
+itu_transfer_host_page_routine: .macro dir
+                .cpu '65c02'
+                .check_dir \dir
+
+bytes_per_iteration=8
+                .cerror 256%bytes_per_iteration!=0,'no'
+
+                ldy #0
+                php
+
+                jsr itu_sei_ext_tube
+
+loop:
+                .rept bytes_per_iteration
+                .itu_transfer_wait_for_status \dir ;0 +9
+                .transfer_host_data_byte \dir      ;9 +10
+                iny                                ;19 +2
+                .next                              ;21n
+
+                bne loop
+
+                .itu_transfer_wait_for_status \dir
+                .transfer_status_byte \dir
+
+                jsr itu_int_tube
+                plp
+                rts
+                
+                .cpu 'default'
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Generate parasite bytes transfer routine.
+;
+; Min 24 usec/48 cycles per byte.
+;
+; entry: Tube FIFO ready for transfer mode 0/1
+;        (recv) X+1 bytes incoming - X data bytes, 1 confirmation byte
+transfer_parasite_bytes_routine: .macro dir
+                .check_dir \dir
+
+                .if \dir==send
+                ; Combined with the jsr required to call the routine,
+                ; this will give the required initial 48 cycle delay
+                ; before the first Tube FIFO access.
+                nop             ;6 +2
+                bit $70         ;8 +3
+                .endif
+                
+loop:
+                .transfer_wait_for_status \dir    ;0 +8
+                jsr delay_24_cycles               ;8 +24
+                bit $70                           ;32 +3
+                .transfer_parasite_data_byte \dir ;35 +8
+                dex                               ;43 +2
+                bne loop                          ;45 +3
+
+                .transfer_wait_for_status \dir
+                .transfer_status_byte \dir
+                
+                rts
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; Generate parasite page transfer routine.
+;
+; Min 10 usec/20 cycles per byte.
+;
+; In the send direction, first Tube FIFO access is at cycle +14.
+;
+transfer_parasite_page_routine: .macro dir
+                .check_dir \dir
+
+                .if \dir==send
+                ; Combined with the jsr required to call the routine,
+                ; this will give the required initial 38 cycle delay
+                ; before the first Tube FIFO access.
+                jsr delay_12_cycles ;+12 18
+                bit $70             ;+3  21
+                bit $70             ;+3  24
+                .endif
+
+                ldx #0                             ;+2 
+                lda #get_status_flag_for_dir(\dir) ;+2 
+loop:
+                bit status                        ;+4 4
+                bne transfer                      ;+3 7
+                beq loop                          ;...
+transfer:                                         ;...
+                .transfer_parasite_data_byte \dir ;+8 15
+                inx                               ;+2 17
+                bne loop                          ;+3 20
+
+                .transfer_wait_for_status \dir
+                .transfer_status_byte \dir
+                
+                rts
+                .endm
+                
+;-------------------------------------------------------------------------
+;
+; Instantiations of the various macro-generated transfer routines.
+;
+recv_host_bytes: .proc
+                .transfer_host_bytes_routine recv
+                .pend
+
+send_host_bytes: .proc
+                .transfer_host_bytes_routine send
+                .pend
+                
+recv_host_page: .proc
+                .transfer_host_page_routine recv
+                .pend
+
+send_host_page: .proc
+                .transfer_host_page_routine send
+                .pend
+
+itu_recv_host_bytes: .proc
+                .itu_transfer_host_bytes_routine recv
+                .pend
+
+itu_send_host_bytes: .proc
+                .itu_transfer_host_bytes_routine send
+                .pend
+                
+itu_recv_host_page: .proc
+                .itu_transfer_host_page_routine recv
+                .pend
+
+itu_send_host_page: .proc
+                .itu_transfer_host_page_routine send
+                .pend
+
+recv_parasite_bytes: .proc
+                .transfer_parasite_bytes_routine recv
+                .pend
+
+send_parasite_bytes: .proc
+                .transfer_parasite_bytes_routine send
+                 .pend
+
+recv_parasite_page: .proc
+                .transfer_parasite_page_routine recv
+                .pend
+
+send_parasite_page: .proc
+                .transfer_parasite_page_routine send
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; ITU=1 host->parasite bytes transfer.
+; 
+itu_recv_parasite_bytes: .proc
+                .cpu '65c02'
+                php
+                jsr itu_sei_ext_tube
+
+loop:
+                lda #get_status_flag_for_dir(send) ;0 +2
+                bit status                         ;2 +4
+                bne +                              ;6 +3
+                jsr itu_wait_for_status            ;...
++                                                  ;
+                ldy fifo                           ;9 +4
+                lda #acccon.itu                    ;13 +2
+                tsb acccon                         ;15 +6
+                sty tube_fifo3_data                ;21 +4
+                trb acccon                         ;25 +6
+                jsr delay_12_cycles                ;31 +12
+                dex                                ;43 +2
+                bne loop                           ;45 +3
+                
+                .itu_transfer_wait_for_status recv
+                .transfer_status_byte recv
+
+                jsr itu_int_tube
+                plp
+                rts
+                .cpu 'default'
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; ITU=1 host->parasite page transfer.
+;
+itu_recv_parasite_page: .proc
+                .cpu '65c02'
+                
+bytes_per_iteration=8
+                .cerror (256%bytes_per_iteration)!=0,'no'
+
+                php
+                jsr itu_sei_ext_tube
+                jsr get_acccon
+                
+                lda #256/bytes_per_iteration
+                sta link_value
+
+loop:
+                .rept bytes_per_iteration
+
+                stx acccon                         ;+4 4
+                lda #get_status_flag_for_dir(recv) ;+2 6
+                bit status                         ;+4 10
+                bne +                              ;+3 13
+                jsr wait_status                    ;...
++                                                  ;...
+                lda fifo                           ;+4 17
+                sty acccon                         ;+4 21
+                sta tube_fifo3_data                ;+4 25
+
+                .next
+
+                dec link_value
+                bne loop
+
+                .itu_transfer_wait_for_status recv
+                .transfer_status_byte recv
+                
+                jsr itu_int_tube
+                plp
+                rts
+
+                ; update ACCCON values on exit, in case they got
+                ; changed
+wait_status:
+                jsr itu_wait_for_status
+get_acccon:
+                lda acccon
+                tax             ;X = ext Tube
+                ora #acccon.itu
+                tay             ;Y = int Tube
+                rts
+                .cpu 'default'
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; ITU=1 parasite->host bytes transfer.
+;
+; The 48 cycle initial delay is included in the setup.
+;
+itu_send_parasite_bytes: .proc
+                .cpu '65c02'
+                php                  ;6 +3
+                jsr itu_sei_ext_tube ;9 +22 = 31
+
+loop:
+                lda #acccon.itu                    ;0 +2
+                tsb acccon                         ;2 +6
+                ldy tube_fifo3_data                ;8 +4 
+                trb acccon                         ;12 +6
+                lda #get_status_flag_for_dir(send) ;18 +2
+                bit status                         ;20 +3
+                .page                              ;
+                bne +                              ;23 +2 
+                jsr itu_wait_for_status            ;
++                                                  ;
+                .endp                              ;
+                sty fifo                           ;25 +4
+                jsr delay_12_cycles                ;29 +12
+                nop                                ;41 +2
+                dex                                ;43 +2
+                bne loop                           ;45 +3
+
+                .itu_transfer_wait_for_status send
+                .transfer_status_byte send
+
+                jsr itu_int_tube
+                plp
+                rts
+                .cpu 'default'
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; ITU=1 parasite->host page transfer.
+;
+; The 38 cycle initial delay is included in the setup.
+;
+itu_send_parasite_page: .proc
+                .cpu '65c02'
+bytes_per_iteration=8
+                .cerror (256%bytes_per_iteration)!=0,'no'
+
+                ; Y holds ACCCON with ITU=1.
+                ; ?acccon_xtu = value of ACCCON with ITU=0.
+acccon_xtu=link_old_y
+                
+                php                  ;6 +3
+                jsr itu_sei_ext_tube ;9 +22
+                jsr get_acccon       ;31 +(>=12) = >=38
+
+                lda #256/bytes_per_iteration
+                sta link_value
+
+loop:
+                .rept bytes_per_iteration
+
+                sty acccon                         ;0 +4
+                ldx tube_fifo3_data                ;4 +4
+                lda acccon_xtu                     ;8 +3
+                sta acccon                         ;11 +4
+                lda #get_status_flag_for_dir(send) ;15 +2
+                bit status                         ;17 +4
+                bne +                              ;21 +3
+                jsr wait_status                    ;...
++                                                  ;...
+                stx fifo                           ;24 +4 = 28
+                .next
+
+                dec link_value
+                bne loop
+
+                .itu_transfer_wait_for_status send
+                .transfer_status_byte send
+                
+                jsr itu_int_tube
+                plp
+                rts
+
+                ; update ACCCON values on exit, in case they got
+                ; changed
+wait_status:
+                jsr itu_wait_for_status
+get_acccon:
+                lda acccon
+                sta acccon_xtu  ;?acccon_xtu = ext Tube
+                ora #acccon.itu
+                tay             ;Y = int tube
+                rts
+                .cpu 'default'
+                .pend
+
+
+;-------------------------------------------------------------------------
+
+recv_file_data_host: .proc
+                bit link_itu
+                bmi itu
+
+                .transfer_file_data_driver_routine 0,recv_host_bytes,recv_host_page,'recv_file_data_host'
+
+itu:
+                .transfer_file_data_driver_routine 0,itu_recv_host_bytes,itu_recv_host_page,'recv_file_data_host'
+                
+                .pend
+
+send_file_data_host: .proc
+                bit link_itu
+                bmi itu
+
+                .transfer_file_data_driver_routine 0,send_host_bytes,send_host_page,'send_file_data_host'
+                
+itu:
+                .transfer_file_data_driver_routine 0,itu_send_host_bytes,itu_send_host_page,'send_file_data_host'
+                .pend
+
+recv_file_data_parasite: .proc
+                bit link_itu
+                bmi itu
+
+                .transfer_file_data_driver_routine recv,recv_parasite_bytes,recv_parasite_page,'recv_file_data_parasite'
+
+itu:
+                .transfer_file_data_driver_routine recv,itu_recv_parasite_bytes,itu_recv_parasite_page,'recv_file_data_parasite'
+                .pend
+
+send_file_data_parasite: .proc
+                bit link_itu
+                bmi itu
+
+                .transfer_file_data_driver_routine send,send_parasite_bytes,send_parasite_page,'send_file_data_parasite'
+                
+itu:
+                .transfer_file_data_driver_routine send,itu_send_parasite_bytes,itu_send_parasite_page,'send_file_data_parasite'
+                .pend
                 
 ;-------------------------------------------------------------------------
 
@@ -723,7 +1509,10 @@ link_recv_payload_byte=tube_serial.recv_payload_byte
 link_startup=tube_serial.startup
 link_status_text=tube_serial.status_text
                 
-link_send_file_data_parasite=send_file_data_parasite_bytewise
-link_send_file_data_host=send_file_data_host_bytewise
-link_recv_file_data_parasite=recv_file_data_parasite_bytewise
-link_recv_file_data_host=recv_file_data_host_bytewise
+link_send_file_data_parasite=tube_serial.send_file_data_parasite
+
+link_send_file_data_host=tube_serial.send_file_data_host
+
+link_recv_file_data_parasite=tube_serial.recv_file_data_parasite
+
+link_recv_file_data_host=tube_serial.recv_file_data_host
