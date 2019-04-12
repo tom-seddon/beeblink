@@ -423,7 +423,7 @@ export const RESPONSE_EOF = 0x0a;
 //
 // If OSBGET_EOF, P = (bogus) byte read, and C set on exit.
 export const RESPONSE_OSBGET = 0x0b;
-export const RESPONSE_OSBEGT_EOF = 0x0c;
+export const RESPONSE_OSBGET_EOF = 0x0c;
 
 // Respond to an OSGBPB.
 //

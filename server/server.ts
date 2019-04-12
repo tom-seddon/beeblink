@@ -582,7 +582,7 @@ export class Server {
 
         if (byte === undefined) {
             // 254 is what the Master 128 DFS returns, and who am I to argue?
-            return newResponse(beeblink.RESPONSE_OSBEGT_EOF, 254);
+            return newResponse(beeblink.RESPONSE_OSBGET_EOF, 254);
         } else {
             return newResponse(beeblink.RESPONSE_OSBGET, byte);
         }

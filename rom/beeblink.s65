@@ -2672,45 +2672,64 @@ channel_brk: .proc
                 .brk_error 222,"Channel",0
                 .pend
 
-; -------------------------------------------------------------------------
-
+;-------------------------------------------------------------------------
+;
+; OSBGET.
+;
+; OSBGET ought to be somewhat reentranct with respect to the rest of
+; the ROM, as the ROM calls OSRDCH in a couple of places, and *EXEC
+; could be filling up the keyboard buffer.
+;
+; The rest of the ROM is careful not to call OSRDCH when there's a
+; request/response going on, so the send_request stuff is safe.
+; 
 blfs_osbget: .proc
-                stx private_x
-                sty private_y
+                pha             ;placeholder for byte read
+                txa
+                pha             ;old X... whatever it was
+                tya
+                pha             ;file handle
 
+                tax             ;X = file handle
                 lda #REQUEST_OSBGET
-                ldx private_y   ;handle
-                jsr send_request_1
+                jsr send_request_1_recv_response_1
 
-                jsr recv_response
+                .cerror RESPONSE_OSBGET_EOF<RESPONSE_OSBGET,'oops'
+                cpx #RESPONSE_OSBGET_EOF ;C=1 if EOF
 
+                tsx
+                sta $103,x      ;replace placeholder with byte read
+                
+                pla             ;file handle
                 tay
-                jsr recv_payload_byte
-                jsr discard_remaining_payload
-
-                cpy #RESPONSE_OSBGET
-                beq ok
-
-eof:
-                sec
-                ldx private_x
-                ldy private_y
-                rts
-
-ok:
-                clc
-                ldx private_x
-                ldy private_y
+                pla             ;old X
+                tax
+                pla             ;byte read
                 rts
                 .pend
 
 ;-------------------------------------------------------------------------
-
+;
+; OSBPUT.
+;
+; OSBPUT has to be somewhat reentrant with respect to the rest of the
+; ROM, as it can be called during OSWRCH when there's a *SPOOL going
+; on :(
+;
+; The rest of the ROM is careful not to call OSWRCH when there's a
+; request/response going on, so the send_request stuff is safe.
+; 
 blfs_osbput: .proc
-                sta private_request
-                stx private_x
-                sty private_y
+                pha
+                txa
+                pha
+                tya
+                pha
 
+                ; $101,x = old Y
+                ; $102,x = old X
+                ; $103,x = old A
+                
                 ; Ugh. A 2-byte payload is the worst possible case.
                 lda #2
                 jsr set_payload_size
@@ -2718,17 +2737,21 @@ blfs_osbput: .proc
                 lda #REQUEST_OSBPUT
                 jsr send_request_n
 
-                lda private_y ;handle
+                tsx
+                
+                lda $101,x      ;file handle
                 jsr send_payload_byte
 
-                lda private_request
+                lda $103,x      ;value
                 jsr send_payload_byte ;value
 
                 jsr recv_response_and_discard_payload
 
-                ldy private_y
-                ldx private_x
-                lda private_request
+                pla
+                tay
+                pla
+                tax
+                pla
                 rts
                 .pend
 
@@ -4206,19 +4229,19 @@ speed_test:
                 ldx #scratch_load
                 jsr print_hex_z32
 
-                jsr pcprint
-                .text ": ",255
+                lda #':'
+                jsr oswrch
                 
 start:
                 lda #num_iterations
                 sta private_x   ;# iterations
 
 loop:
+                lda #' '
+                jsr oswrch
+                
                 lda private_x
                 jsr print_hex_byte
-
-                jsr pcprint
-                .text 8,8,255
                 
                 plp
                 php
