@@ -159,80 +159,91 @@ command .macro name,value,routine
 
 ;-------------------------------------------------------------------------
 
-*=$a8
-                .dsection misc_workspace
-                .cerror *>$b0,"Misc workspace overflow"
+struct_section: .macro
+                .struct
+                .dsection \1
+                .ends
+                .endm
                 
-*=$a8
-                .dsection build_workspace
-                .cerror *>$b0,"*BUILD workspace overflow"
-                
-*=$a8
-                .dsection write_workspace
-                .cerror *>$b0,"*WRITE workspace overflow"
+;-------------------------------------------------------------------------
 
 *=$a8
-                .dsection link_startup_workspace
-                .cerror *>$b0,"Link startup workspace overflow"
+                .union
+                .struct_section misc_workspace
+                .struct_section build_workspace
+                .struct_section link_startup_workspace
+                .endu
+
+                .cerror *>$b0,'* command workspace overflow'
+
+;-------------------------------------------------------------------------
 
 *=$b0
-fs_zp_workspace_start:
-                .dsection fs_zp_workspace
-                .cerror *>$d0,"FS zero page workspace overflow"
+fs_scratch_workspace_start:
+                .dsection fs_scratch_workspace
+
+                .union
+                .struct_section osfile_workspace
+                .struct_section osargs_workspace
+                .struct_section osgbpb_workspace
+                .struct_section osfind_workspace
+                .struct_section init_workspace
+                .struct_section write_workspace
+                .struct_section osfsc_workspace
+                .struct_section star_command_workspace
+                .struct_section volumes_browser_workspace
+                .struct_section speed_test_workspace
+                .endu
+                
+                .cerror *>$c0,"FS scratch workspace overflow"
+
+;-------------------------------------------------------------------------
+
+*=$c0
+fs_workspace_start:
+                .dsection fs_workspace
+
+                .cerror *>$d0,'FS workspace overflow'
 
 ;-------------------------------------------------------------------------
 
                 .section misc_workspace
-print_ptr .fill 0
-cmd_ptr .fill 0
-brk_ptr .fill 0
+print_ptr: .fill 0
+cmd_ptr: .fill 0
+brk_ptr: .fill 0
                 .fill 2
                 .send misc_workspace
 
 ;-------------------------------------------------------------------------
 
-                .section build_workspace
-build_handle .fill 1
-build_line .fill 2
-build_osword0_block .fill 5
-                .send build_workspace
-
-;-------------------------------------------------------------------------
-
                 .section write_workspace
-write_image_temp .fill 2
-write_image_data .fill 2
+write_image_temp: .fill 2
+write_image_data: .fill 2
                 .send write_workspace
 
 ;-------------------------------------------------------------------------
 
-; $Bx is scratch workspace, and $Cx is private workspace, but the
-; distinction never proved very useful. It's mostly moot for BeebLink
-; anyway - all of the persistent state is on the server or in the
-; private ROM byte.
-                
-                .section fs_zp_workspace
+                .section fs_scratch_workspace
+                .send fs_scratch_workspace
 
+;-------------------------------------------------------------------------
+
+                .section fs_workspace
+                
 ; Holds payload size on entry to send_request_n.
 ;
 ; During payload receive/send, holds the negative offset of the last
 ; byte sent.
-payload_counter .fill 4
-scratch_ptr .fill 2
+payload_counter: .fill 4
+
+; Address to transfer payload data to/from. 32-bit address in host
+; (top 16 bits set) or parasite memory.
+payload_addr: .fill 4
+
+command_line_ptr: .fill 2
                 
-scratch_run_metadata:
-scratch_command_line_tail_offset .fill 1
-scratch_load .fill 4
-scratch_exec .fill 4
-                .cerror scratch_load!=scratch_command_line_tail_offset+1,"Scratch space load must follow command line tail offset"
-                .cerror scratch_exec!=scratch_load+4,"Scratch space exec must follow load"
-private_ptr .fill 2
-private_request .fill 1
-private_response .fill 1
-private_x .fill 1
-private_y .fill 1
-private_command_line_ptr .fill 2
-                .send fs_zp_workspace
+server_string_buffer_offset: .fill 1
+                .send fs_workspace
 
 ;-------------------------------------------------------------------------
 
@@ -2076,6 +2087,11 @@ not_ok:
 ;       C=1 if link startup failed (FS init never fails)
 ;           X = offset into link_status_text of message
 init_blfs_internal: .proc
+
+                .section init_workspace
+ptr: .fill 2
+                .send init_workspace
+                
                 lda #sf_link_started_up
                 jsr get_rom_status_flag
                 bcc init_link
@@ -2143,8 +2159,8 @@ init_fs:
                 jsr osbyte_x00_yff
                 
                 ;YX=extended vector table
-                stx private_ptr+0
-                sty private_ptr+1
+                stx ptr+0
+                sty ptr+1
                 ldx #0
                 
                 ;offset from $212/fsvectors
@@ -2161,13 +2177,13 @@ loop:
                 
                 ;store actual address in extended vector table
                 lda fsvectors+0,x
-                sta (private_ptr),y
+                sta (ptr),y
                 iny 
                 lda fsvectors+1,x
-                sta (private_ptr),y
+                sta (ptr),y
                 iny 
                 lda $F4
-                sta (private_ptr),y
+                sta (ptr),y
                 iny
                 inx
                 inx
@@ -2181,10 +2197,11 @@ loop:
                 jsr osbyte ;vectors claimed (AUG p167, p324)
 
                 ; clear FS zero page.
-                ldx #$1f
+                ldx #$f
                 lda #0
 -
-                sta fs_zp_workspace_start,x
+                sta fs_workspace_start,x
+                sta fs_scratch_workspace_start,x
                 dex
                 bpl -
 
@@ -2399,9 +2416,18 @@ end:
 ;-------------------------------------------------------------------------
 
 blfs_osfile: .proc
-                stx private_ptr+0
-                sty private_ptr+1
-                sta private_request
+
+                .section osfile_workspace
+block: .fill 2
+reason: .fill 1
+name_ptr: .fill 2
+name_len: .fill 1
+result: .fill 1     
+                .send osfile_workspace
+                
+                stx block+0
+                sty block+1
+                sta reason
 
                 ; Packet size starts out at 0.
                 lda #0
@@ -2409,7 +2435,7 @@ blfs_osfile: .proc
 
                 ; If the request was $00, the size of the data to save
                 ; needs to be handled.
-                lda private_request
+                lda reason
                 bne not_save
 
                 ; Add end address to total.
@@ -2419,7 +2445,7 @@ blfs_osfile: .proc
                 php
 add_end_loop:
                 plp
-                lda (private_ptr),y
+                lda (block),y
                 adc payload_counter,x
                 sta payload_counter,x
                 php
@@ -2438,12 +2464,12 @@ add_end_loop:
 subtract_start_loop:
                 plp
                 lda payload_counter,x
-                sbc (private_ptr),y
+                sbc (block),y
                 sta payload_counter,x
                 php
                 
-                lda (private_ptr),y
-                sta scratch_load,x
+                lda (block),y
+                sta payload_addr,x
 
                 iny
                 inx
@@ -2461,16 +2487,16 @@ not_save:
 
                 ; Add length of file name.
                 ldy #0
-                lda (private_ptr),y
-                sta scratch_ptr+0
+                lda (block),y
+                sta name_ptr+0
                 iny
-                lda (private_ptr),y
-                sta scratch_ptr+1
+                lda (block),y
+                sta name_ptr+1
 
-                ldx #scratch_ptr
+                ldx #name_ptr
                 jsr strlen_cr
                 
-                sty private_y
+                sty name_len
 
                 jsr add_y_to_payload_counter
 
@@ -2481,12 +2507,12 @@ not_save:
                 lda #REQUEST_OSFILE
                 jsr send_request_n
 
-                lda private_request
+                lda reason
                 jsr send_payload_byte
 
                 ldy #2
 send_block_loop:
-                lda (private_ptr),y
+                lda (block),y
                 jsr send_payload_byte
                 iny
                 cpy #18
@@ -2494,9 +2520,9 @@ send_block_loop:
 
                 ldy #0
 send_name_loop:
-                cpy private_y
+                cpy name_len
                 beq send_name_done
-                lda (scratch_ptr),y
+                lda (name_ptr),y
                 jsr send_payload_byte
                 iny
                 jmp send_name_loop
@@ -2514,40 +2540,40 @@ send_name_done:
 
                 ; Get result A.
                 jsr recv_payload_byte
-                sta private_response
+                sta result
 
                 ; Get result parameter block.
                 ldy #2
 recv_block_loop:
                 jsr recv_payload_byte
-                sta (private_ptr),y
+                sta (block),y
                 iny
                 cpy #18
                 bne recv_block_loop
 
                 ; If the request was $FF, there's data to handle.
-                lda private_request
+                lda reason
                 cmp #$ff
                 beq recv_data
 
 done:
-                lda private_response
+                lda result
                 rts
 
 recv_data:
                 ; Read the data address.
                 jsr recv_payload_byte
-                sta scratch_load+0
+                sta payload_addr+0
                 jsr recv_payload_byte
-                sta scratch_load+1
+                sta payload_addr+1
                 jsr recv_payload_byte
-                sta scratch_load+2
+                sta payload_addr+2
                 jsr recv_payload_byte
-                sta scratch_load+3
+                sta payload_addr+3
 
                 .if enable_debug_print
                 jsr negate_payload_counter
-                .debug_print ["Receive &",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0," @ &",scratch_load+3,scratch_load+2,scratch_load+1,scratch_load+0,"\r"]
+                .debug_print ["Receive &",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0," @ &",payload_addr+3,payload_addr+2,payload_addr+1,payload_addr+0,"\r"]
                 jsr negate_payload_counter
                 .endif
 
@@ -2562,6 +2588,12 @@ recv_data:
 ;-------------------------------------------------------------------------
 
 blfs_osargs: .proc
+                .section osargs_workspace
+old_a: .fill 1
+old_x: .fill 1
+old_y: .fill 1
+                .send osargs_workspace
+                
                 cpy #0
                 bne handle
 
@@ -2578,10 +2610,10 @@ blfs_osargs: .proc
                 rts
 
 number:
-                stx private_x
+                stx old_x
                 lda #sf_act_as_dfs
                 jsr get_rom_status_flag
-                ldx private_x
+                ldx old_x
                 
                 lda #blfs_fs_number
                 bcc number_done
@@ -2589,11 +2621,11 @@ number:
 number_done:
                 rts
 
-command_line_ptr:
+get_command_line_ptr:
                 pha
-                lda private_command_line_ptr+0
+                lda command_line_ptr+0
                 sta 0,x
-                lda private_command_line_ptr+1
+                lda command_line_ptr+1
                 sta 1,x
                 lda #$ff
                 sta 2,x
@@ -2602,11 +2634,11 @@ command_line_ptr:
                 rts
 
 handle:
-                sta private_request
-                stx private_x
-                sty private_y
+                sta old_a
+                stx old_x
+                sty old_y
 
-                ldx private_x
+                ldx old_x
                 lda 3,x
                 pha
                 lda 2,x
@@ -2623,10 +2655,10 @@ handle:
                 lda #REQUEST_OSARGS
                 jsr send_request_n
 
-                lda private_request
+                lda old_a
                 jsr send_payload_byte
 
-                lda private_y
+                lda old_y
                 jsr send_payload_byte
 
                 ldy #4
@@ -2647,7 +2679,7 @@ recv_value_loop:
 
                 jsr discard_remaining_payload
 
-                ldx private_x
+                ldx old_x
                 pla
                 sta 3,x
                 pla
@@ -2657,8 +2689,8 @@ recv_value_loop:
                 pla
                 sta 0,x
 
-                ldy private_y
-                lda private_request
+                ldy old_y
+                lda old_a
                 
                 rts
                 
@@ -2758,21 +2790,26 @@ blfs_osbput: .proc
 ;-------------------------------------------------------------------------
 
 blfs_osgbpb: .proc
+                .section osgbpb_workspace
+block: .fill 2
+reason: .fill 1
+                .send osgbpb_workspace
+                
                 cmp #9
                 bcc +
                 ; Unrecognised request.
                 rts
 +
-                sta private_request
-                stx private_ptr+0
-                sty private_ptr+1
+                sta reason
+                stx block+0
+                sty block+1
 
                 ; Account for reason code and parameter block.
                 lda #14
                 jsr set_payload_counter
 
                 ; Account for any file data.
-                lda private_request
+                lda reason
                 cmp #1
                 beq write
                 cmp #2
@@ -2783,19 +2820,19 @@ write:
                 ; size.
                 ldy #5
                 clc
-                lda (private_ptr),y
+                lda (block),y
                 adc payload_counter+0
                 sta payload_counter+0
                 iny
-                lda (private_ptr),y
+                lda (block),y
                 adc payload_counter+1
                 sta payload_counter+1
                 iny
-                lda (private_ptr),y
+                lda (block),y
                 adc payload_counter+2
                 sta payload_counter+2
                 iny
-                lda (private_ptr),y
+                lda (block),y
                 adc payload_counter+3
                 sta payload_counter+3
 
@@ -2805,13 +2842,13 @@ read_or_write:
                 jsr send_request_n
 
                 ; Send reason code.
-                lda private_request
+                lda reason
                 jsr send_payload_byte
 
                 ; Send parameter block.
                 ldy #0
 send_block_loop:
-                lda (private_ptr),y
+                lda (block),y
                 jsr send_payload_byte
                 iny
                 cpy #13
@@ -2831,7 +2868,7 @@ send_block_loop:
                 ldy #0
 recv_block_loop:
                 jsr recv_payload_byte
-                sta (private_ptr),y
+                sta (block),y
                 iny
                 cpy #13
                 bne recv_block_loop
@@ -2841,27 +2878,27 @@ recv_block_loop:
                 pla
                 cmp #1          ;set carry flag
 
-                ldy private_ptr+1
-                ldx private_ptr+0
-                lda private_request
+                ldy block+1
+                ldx block+0
+                lda reason
 
                 rts
 
                 ; Copy OSGBPB parameter block address to
-                ; !scratch_p_load.
+                ; !payload_addr.
 get_osgbpb_address:
                 ldy #1
-                lda (private_ptr),y
-                sta scratch_load+0
+                lda (block),y
+                sta payload_addr+0
                 iny
-                lda (private_ptr),y
-                sta scratch_load+1
+                lda (block),y
+                sta payload_addr+1
                 iny
-                lda (private_ptr),y
-                sta scratch_load+2
+                lda (block),y
+                sta payload_addr+2
                 iny
-                lda (private_ptr),y
-                sta scratch_load+3
+                lda (block),y
+                sta payload_addr+3
                 rts
 
                 .pend
@@ -2869,6 +2906,11 @@ get_osgbpb_address:
 ;-------------------------------------------------------------------------
 
 blfs_osfind: .proc
+                .section osfind_workspace
+handle: .fill 1
+name_ptr: .fill 2
+                .send osfind_workspace
+                
                 cmp #0
                 bne open        ;taken if file open request
 
@@ -2881,19 +2923,19 @@ close:
                 beq close_handle ;taken if Y=0, so all files are to be
                                  ;closed
 
-                sta private_request ;save file handle
+                sta handle      ;save file handle
 
                 lda #198        ;read/write *EXEC file handle (AUG
                                 ;203)
                 jsr osbyte_x00_yff
-                cpx private_request
+                cpx handle
                 beq close_spool_or_exec_handle ;taken if closing *EXEC
                                                ;handle
 
                 lda #199        ;read/write *SPOOL file handle (AUG
                                 ;204)
                 jsr osbyte_x00_yff
-                cpx private_request
+                cpx handle
                 bne close_handle ;taken if not closing *SPOOL handle
 
 close_spool_or_exec_handle:
@@ -2917,16 +2959,16 @@ close_handle:
                 rts
 
 open:
-                sta private_request
-                stx scratch_ptr+0
-                sty scratch_ptr+1
+                pha             ;save open mode
+                stx name_ptr+0
+                sty name_ptr+1
 
                 ; Account for the open mode.
                 lda #1
                 jsr set_payload_counter
 
                 ; Account for the file name.                
-                ldx #scratch_ptr
+                ldx #name_ptr
                 jsr strlen_cr
 
                 jsr add_y_to_payload_counter
@@ -2934,12 +2976,12 @@ open:
                 lda #REQUEST_OSFIND_OPEN
                 jsr send_request_n
 
-                lda private_request
+                pla             ;open mode
                 jsr send_payload_byte
 
                 ldy #0
 send_name_loop:
-                lda (scratch_ptr),y
+                lda (name_ptr),y
                 jsr send_payload_byte
                 bcc send_name_done
 
@@ -2952,16 +2994,21 @@ send_name_done:
                 jsr recv_payload_byte
                 jsr discard_remaining_payload
 
-                ldx scratch_ptr+0
-                ldy scratch_ptr+1
+                ldx name_ptr+0
+                ldy name_ptr+1
                 rts
                 .pend
 
 ;-------------------------------------------------------------------------
 ;
-    
+
                 
 blfs_osfsc: .proc
+                .section osfsc_workspace
+ptr: .fill 2
+old_x: .fill 1
+                .send osfsc_workspace
+                
 fsc_routines=[
                 fsc_opt,
                 fsc_eof,
@@ -2980,23 +3027,21 @@ fsc_routines=[
                 cmp #len(fsc_routines)
                 bcc +
                 rts
+                
 +
-                stx scratch_ptr+0
+                stx old_x
                 
                 tax
-                lda fsc_routines_l,x
-                pha
-                lda fsc_routines_h,x
-                pha
-
-                ldx scratch_ptr+0
-
-                pla
-                sta scratch_ptr+1
-                pla
-                sta scratch_ptr+0
                 
-                jmp (scratch_ptr)
+                lda fsc_routines_l,x
+                sta ptr+0
+
+                lda fsc_routines_h,x
+                sta ptr+1
+
+                ldx old_x
+
+                jmp (ptr)
 
 fsc_routines_l:
                 .byte <fsc_routines
@@ -3164,19 +3209,25 @@ fsc_lib_run: .proc
 ; exit:
 ; modifies: scratch_ptr, scratch_p_size
 communicate_star_command: .proc
+
+                .section star_command_workspace
+ptr: .fill 2
+exec: .fill 4
+                .send star_command_workspace
+                
                 pha
-                stx scratch_ptr+0
-                sty scratch_ptr+1
+                stx ptr+0
+                sty ptr+1
 
                 lda #0
                 jsr set_payload_counter
 
-                .debug_print ["scratch_ptr=&",scratch_ptr+1,scratch_ptr+0,"\r"]
+                .debug_print ["ptr=&",ptr+1,ptr+0,"\r"]
 
-                ldx #scratch_ptr
+                ldx #ptr
                 jsr strlen_cr
 
-                .debug_print ["scratch_ptr=&",scratch_ptr+1,scratch_ptr+0,", len=",DP_Y,"\r"]
+                .debug_print ["_ptr=&",ptr+1,ptr+0,", len=",DP_Y,"\r"]
 
                 sty payload_counter+0
 
@@ -3185,7 +3236,7 @@ communicate_star_command: .proc
 
                 ldy #0
 send_loop:
-                lda (scratch_ptr),y
+                lda (ptr),y
                 jsr send_payload_byte
                 bcc send_done
                 iny
@@ -3218,40 +3269,63 @@ text:
                 rts
 
 run:
-                ldy #0
-recv_run_metadata_loop:
+
+                ; Receive run metadata.
+
+                ; Add command line tail offset, and save it off for
+                ; OSARGS.
                 jsr recv_payload_byte
-                bcc bad_response_brk
-                sta scratch_run_metadata,y ;abs,Y :(
-                iny
-                cpy #9
-                bne recv_run_metadata_loop
-
-                ; save off the command line pointer for OSARGS.
+                pha
                 clc
-                tya
-                lda scratch_ptr+0
-                adc scratch_command_line_tail_offset
-                sta private_command_line_ptr+0
+                adc ptr+0
+                sta command_line_ptr+0
 
-                lda scratch_ptr+1
+                lda ptr+1
                 adc #0
-                sta private_command_line_ptr+1
+                sta command_line_ptr+1
 
+                ; Receive load address.
+                jsr recv_payload_byte
+                sta payload_addr+0
+                
+                jsr recv_payload_byte
+                sta payload_addr+1
+                
+                jsr recv_payload_byte
+                sta payload_addr+2
+                
+                jsr recv_payload_byte
+                sta payload_addr+3
+
+                ; Receive execution address.
+                jsr recv_payload_byte
+                sta exec+0
+                
+                jsr recv_payload_byte
+                sta exec+1
+                
+                jsr recv_payload_byte
+                sta exec+2
+                
+                jsr recv_payload_byte
+                sta exec+3
+
+                ; Receive file data.
                 jsr recv_file_data
 
-                ldx #scratch_exec
+                ldx #exec
                 jsr is_parasite_address
                 bcs exec_parasite
 
-                ldy scratch_command_line_tail_offset
-                jmp (scratch_exec)
+                pla
+                tay
+                jmp (exec)
 
 exec_parasite:
                 jsr claim_tube
 
-                ldx #<scratch_exec
-                ldy #>scratch_exec
+                ldx #<exec
+                ldy #>exec
                 lda #tube_execute
                 jmp $406
 
@@ -3264,12 +3338,12 @@ special:
 
                 tay
                 lda special_routines_l,y
-                sta private_ptr+0
+                sta exec+0
 
                 lda special_routines_h,y
-                sta private_ptr+1
+                sta exec+1
 
-                jmp (private_ptr)
+                jmp (exec)
 
 special_routines=[
                 volumes_browser_special,
@@ -3396,14 +3470,14 @@ is_tube_active: .proc
 ; Receive file data: whatever is left of the current payload.
 ;
 ; entry: !scratch_p_size = negated amount of data left
-;        !scratch_load = where to write the data to
+;        !payload_addr = where to write the data to
 ;
 recv_file_data: .proc
                 jsr test_payload_counter
                 bne +
                 rts
 +
-                ldx #scratch_load
+                ldx #payload_addr
                 jsr is_parasite_address
                 bcc +
                 jsr link_recv_file_data_parasite
@@ -3423,15 +3497,15 @@ loop:
                 jsr recv_payload_byte
                 bcc done
 
-                sta (scratch_load),y
+                sta (payload_addr),y
                 iny
                 bne loop
 
-                inc scratch_load+1
+                inc payload_addr+1
                 jmp loop
 
 done:
-                ldx #scratch_load
+                ldx #payload_addr
                 jsr addyz16
                 rts
                 
@@ -3443,8 +3517,8 @@ recv_file_data_parasite_bytewise: .proc
 
                 jsr claim_tube
 
-                ldx #<scratch_load
-                ldy #>scratch_load
+                ldx #<payload_addr
+                ldy #>payload_addr
                 lda #tube_multi_byte_host_to_parasite
                 jsr $406
 
@@ -3465,14 +3539,14 @@ done:
 ; Send file data: whatever is left of the current payload.
 ;
 ; entry: !scratch_p_size = negated amount of data left
-;        !scratch_load = where to read the data from
+;        !payload_addr = where to read the data from
 ;
 send_file_data: .proc
                 jsr test_payload_counter
                 bne +
                 rts
 +
-                ldx #scratch_load
+                ldx #payload_addr
                 jsr is_parasite_address
                 bcc link_send_file_data_host
                 jmp link_send_file_data_parasite
@@ -3492,13 +3566,13 @@ send_host_loop:
                 jsr test_payload_counter
                 beq send_host_done
                 
-                lda (scratch_load),y
+                lda (payload_addr),y
                 jsr send_payload_byte
 
                 iny
                 bne send_host_loop
 
-                inc scratch_load+1
+                inc payload_addr+1
                 jmp send_host_loop
 
 done:
@@ -3518,8 +3592,8 @@ send_file_data_parasite_bytewise: .proc
                 jsr claim_tube
 
                 .debug_print ["  initiating transfer\r"],verbose_file_data
-                ldx #<scratch_load
-                ldy #>scratch_load
+                ldx #<payload_addr
+                ldy #>payload_addr
                 lda #tube_multi_byte_parasite_to_host
                 jsr $406
 
@@ -3552,9 +3626,9 @@ send_tube_done:
 ;
 ; Print the server's string.
 ;
-; On entry, the link must be prepared, but to cater for stuff like
-; *SPOOL -DISC-STUFF, *CAT (etc.), the link is unprepared before
-; printing anything and re-prepared afterwards.
+; If the *SPOOL file is using a temporary filing system, it seems the
+; MOS will close it when a * command is handled - so this routine
+; doesn't have to be super careful about the OSWRCH calls.
 ;
 ; entry: -
 ; exit: -
@@ -3569,9 +3643,6 @@ print_server_string: .proc
                 
                 .endif
 
-                ; This routine is fiddly, as it tries to preserve zero
-                ; page between OSASCI calls...
-
                 ldx #server_string_buffer_size
 push_stack_loop:
                 pha
@@ -3579,9 +3650,7 @@ push_stack_loop:
                 bne push_stack_loop
 
                 tsx
-                txa
-                tay
-                ; $101,y is the string buffer.
+                stx server_string_buffer_offset
 
 loop:
                 lda #REQUEST_READ_STRING
@@ -3592,16 +3661,12 @@ loop:
                 ldx #server_string_buffer_size
                 jsr send_request_1
 
-                push8 scratch_ptr
-                push32 payload_counter
-                
-                sty scratch_ptr
-
                 jsr recv_response
 
                 cmp #RESPONSE_DATA
                 bne done
 
+                ldy server_string_buffer_offset
 recv_chars_loop:
                 jsr recv_payload_byte
                 bcc recv_chars_done
@@ -3612,12 +3677,13 @@ recv_chars_loop:
 recv_chars_done:
                 tya
                 sec
-                sbc scratch_ptr
+                sbc server_string_buffer_offset
                 tax
-                ldy scratch_ptr
                 
-                .block
-                jsr link_unprepare
+                ldy server_string_buffer_offset
+                
+                ; .block
+                ; jsr link_unprepare
 print_chars_loop:
                 cpx #0
                 beq print_chars_done
@@ -3627,14 +3693,11 @@ print_chars_loop:
                 dex
                 jmp print_chars_loop
 print_chars_done:
-                jsr link_prepare
-                .bend
+                ; jsr link_prepare
+                ; .bend
                 
-                ldy scratch_ptr
+                ; ldy server_string_buffer_offset
                 
-                pop32 payload_counter
-                pop8 scratch_ptr
-
                 bit $ff
                 bmi done2
                 
@@ -3643,9 +3706,6 @@ print_chars_done:
 done:
                 ; the packet is still incoming - discard it.
                 jsr discard_remaining_payload
-
-                pop32 payload_counter ;restore
-                pop8 scratch_ptr     ;restore
 
 done2:
                 
@@ -3803,12 +3863,12 @@ recv_rom:
                 sty abr_offset
                 
                 lda #<new_rom
-                sta scratch_load+0
+                sta payload_addr+0
                 lda #>new_rom
-                sta scratch_load+1
+                sta payload_addr+1
                 lda #$ff
-                sta scratch_load+2
-                sta scratch_load+3
+                sta payload_addr+2
+                sta payload_addr+3
 
                 jsr recv_file_data
                 
@@ -3913,6 +3973,12 @@ relocator_end:
 ; *VOLBROWSER.
 ; 
 volumes_browser_special: .proc
+                
+                .section volumes_browser_workspace
+old_cursors_mode: .fill 1
+old_escape_mode: .fill 1                
+                .send volumes_browser_workspace
+                
                 jsr discard_remaining_payload
 
                 lda #3          ;switch off printer
@@ -3966,12 +4032,12 @@ send_text_window_loop:
                 lda #4
                 ldx #1
                 jsr osbyte
-                stx private_x   ;old cursors setting.
+                stx old_cursors_mode
 
                 ; Make Escape return 27.
                 lda #229
                 jsr osbyte_x00_yff
-                stx private_y   ;old escape setting.
+                stx old_escape_mode
                 
                 lda #229
                 ldx #1
@@ -4043,13 +4109,13 @@ done:
                 jsr flush_keyboard_buffer
 
                 ; Restore Escape.
-                ldx private_y
+                ldx old_escape_mode
                 ldy #0
                 lda #229
                 jsr osbyte
 
                 ; Restore cursor keys.
-                ldx private_x
+                ldx old_cursors_mode
                 lda #4
                 jsr osbyte
 
@@ -4152,9 +4218,14 @@ inactive:
 ; 
 speed_test_special: .proc
 
+                .section speed_test_workspace
+time: .fill 5
+send_time: .fill 5
+counter: .fill 1
+payload_size: .fill 4
+                .send speed_test_workspace
+
 parasite_oshwm_page=$08              ;you just have to assume...
-time=$a8
-send_time=$ad
 num_iterations=10
                 .cerror num_iterations%2!=0,"no"
 
@@ -4226,7 +4297,7 @@ speed_test:
                 php
                 jsr init_test_address
                 
-                ldx #scratch_load
+                ldx #payload_addr
                 jsr print_hex_z32
 
                 lda #':'
@@ -4234,13 +4305,13 @@ speed_test:
                 
 start:
                 lda #num_iterations
-                sta private_x   ;# iterations
+                sta counter   ;# iterations
 
 loop:
                 lda #' '
                 jsr oswrch
                 
-                lda private_x
+                lda counter
                 jsr print_hex_byte
                 
                 plp
@@ -4269,13 +4340,13 @@ loop:
                 ; Save off the (positive) payload size.
                 jsr negate_payload_counter
                 lda payload_counter+0
-                sta scratch_exec+0
+                sta payload_size+0
                 lda payload_counter+1
-                sta scratch_exec+1
+                sta payload_size+1
                 lda payload_counter+2
-                sta scratch_exec+2
+                sta payload_size+2
                 lda payload_counter+3
-                sta scratch_exec+3
+                sta payload_size+3
                 jsr negate_payload_counter
 
                 ; Time sending of everything else.
@@ -4327,13 +4398,13 @@ loop:
                 jsr send_payload_byte
 
                 ; Send payload size.
-                lda scratch_exec+0
+                lda payload_size+0
                 jsr send_payload_byte
-                lda scratch_exec+1
+                lda payload_size+1
                 jsr send_payload_byte
-                lda scratch_exec+2
+                lda payload_size+2
                 jsr send_payload_byte
-                lda scratch_exec+3
+                lda payload_size+3
                 jsr send_payload_byte
 
                 ; Send send time.
@@ -4350,7 +4421,7 @@ loop:
 
                 jsr recv_response_and_discard_payload
 
-                dec private_x
+                dec counter
                 beq +
                 jmp loop
 +
@@ -4360,34 +4431,34 @@ loop:
 
                 rts
 ;
-; set up scratch_load for send or receive operation. C=0 for host
+; set up payload_addr for send or receive operation. C=0 for host
 ; memory or C=1 for parasite memory.
 ; 
 init_test_address: .proc
-                ; set up scratch_load. C=0 for host, C=1 for parasite.
+                ; set up payload_addr. C=0 for host, C=1 for parasite.
                 lda #0
-                sta scratch_load+0
-                sta scratch_load+1
-                sta scratch_load+2
-                sta scratch_load+3
+                sta payload_addr+0
+                sta payload_addr+1
+                sta payload_addr+2
+                sta payload_addr+3
 
                 bcs parasite_address
 
 host_address:
                 lda #131        ;read OSHWM (AUG 155)
                 jsr osbyte
-                stx scratch_load+0
-                sty scratch_load+1
+                stx payload_addr+0
+                sty payload_addr+1
 
                 ; $ffffxxxx
-                dec scratch_load+2
-                dec scratch_load+3
+                dec payload_addr+2
+                dec payload_addr+3
                 
                 rts
 
 parasite_address:
                 lda #parasite_oshwm_page
-                sta scratch_load+1
+                sta payload_addr+1
                 rts
                 .pend
                 
@@ -4585,6 +4656,13 @@ done:
 ; super-careful about the MOS command workspace.
 ;
 build_cmd: .proc
+                
+                .section build_workspace
+build_handle: .fill 1
+build_line: .fill 2
+build_osword0_block: .fill 5
+                .send build_workspace
+                
 buf_size=50
                 clc
                 tya
@@ -5013,12 +5091,12 @@ recv_next_disk_image_part: .proc
 +
                 ; receive disk image part in data buffer.
                 lda write_image_data+0
-                sta scratch_load+0
+                sta payload_addr+0
                 lda write_image_data+1
-                sta scratch_load+1
+                sta payload_addr+1
                 lda #$ff
-                sta scratch_load+2
-                sta scratch_load+3
+                sta payload_addr+2
+                sta payload_addr+3
                 jsr recv_file_data
 
                 ; restore DFS/ADFS workspace.

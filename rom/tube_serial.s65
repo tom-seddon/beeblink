@@ -114,13 +114,13 @@ startup_max_time=1000 ;in centiseconds
                 
 ;-------------------------------------------------------------------------
 
-                .section fs_zp_workspace
+                .section fs_workspace
                 ; bit 7 set if M128, using internal Tube.
                 ; bit 6 set if this flag is valid.
 link_itu: .fill 1
 link_old_y: .fill 1
 link_value: .fill 1
-                .send fs_zp_workspace
+                .send fs_workspace
                 
 ;-------------------------------------------------------------------------
 ; Check if ACCCON ITU needs resetting to access the FTDI device.
@@ -841,8 +841,8 @@ transfer_file_data_driver_routine: .macro tube_dir,bytes_routine,page_routine,na
                 beq bytes_done
 
                 .if \tube_dir!=0
-                ldx #<scratch_load
-                ldy #>scratch_load
+                ldx #<payload_addr
+                ldy #>payload_addr
                 lda #\tube_dir==send?tube_multi_byte_parasite_to_host:tube_multi_byte_host_to_parasite
                 jsr $406
                 .endif
@@ -852,15 +852,15 @@ transfer_file_data_driver_routine: .macro tube_dir,bytes_routine,page_routine,na
 
                 ; update dest pointer
                 clc
-                lda scratch_load+0
+                lda payload_addr+0
                 adc payload_counter+0
-                sta scratch_load+0
+                sta payload_addr+0
                 bcc +
-                inc scratch_load+1
+                inc payload_addr+1
                 bne +
-                inc scratch_load+2
+                inc payload_addr+2
                 bne +
-                inc scratch_load+3
+                inc payload_addr+3
 +
 
 bytes_done:
@@ -877,8 +877,8 @@ pages_loop:
                 .if \page_routine!=0
                 
                 .if \tube_dir!=0
-                ldx #<scratch_load
-                ldy #>scratch_load
+                ldx #<payload_addr
+                ldy #>payload_addr
                 lda #\tube_dir==send?tube_256_byte_parasite_to_host:tube_256_byte_host_to_parasite
                 jsr $406
                 .endif
@@ -895,11 +895,11 @@ pages_loop:
                 
                 .endif
 
-                inc scratch_load+1
+                inc payload_addr+1
                 bne +
-                inc scratch_load+2
+                inc payload_addr+2
                 bne +
-                inc scratch_load+3
+                inc payload_addr+3
 +
 
                 inc payload_counter+1 ;page count bits 0-7
@@ -957,24 +957,24 @@ itu_transfer_wait_for_status: .macro dir
 
 ;-------------------------------------------------------------------------
 ;
-; Generate code to transfer a data byte between (scratch_load),y in
+; Generate code to transfer a data byte between (payload_addr),y in
 ; host memory and FIFO.
 ;
 ; Send = 9/10 cycles
 ; Recv = 10 cycles
 ;
-; entry: (scratch_load),y = host address
+; entry: (payload_addr),y = host address
 ;        FIFO = in appropriate state for send/recv
 ; preserves: X/Y
 transfer_host_data_byte: .macro dir
                 .check_dir \dir
                 
                 .if \dir==send
-                lda (scratch_load),y
+                lda (payload_addr),y
                 sta fifo
                 .else
                 lda fifo
-                sta (scratch_load),y
+                sta (payload_addr),y
                 .endif
                 
                 .endm

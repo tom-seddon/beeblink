@@ -30,9 +30,9 @@
 ;
 ;-------------------------------------------------------------------------
 
-                .section fs_zp_workspace
+                .section fs_workspace
 scratch_old_acr: .fill 1
-                .send fs_zp_workspace
+                .send fs_workspace
 
 ;-------------------------------------------------------------------------
 
@@ -298,7 +298,7 @@ one_page_loop:
                 beq -
 
                 lda via+0
-                sta (scratch_load),y
+                sta (payload_addr),y
 
                 iny
 
@@ -306,7 +306,7 @@ one_page_loop:
                 
                 bne one_page_loop
 
-                inc scratch_load+1
+                inc payload_addr+1
                 
                 inc payload_counter+1
                 bne one_page_loop
@@ -329,13 +329,13 @@ last_page_loop:
                 beq -
 
                 lda via+0
-                sta (scratch_load),y
+                sta (payload_addr),y
 
                 iny
                 inx
                 bne last_page_loop
 
-                ; ldx #scratch_load
+                ; ldx #payload_addr
                 ; jsr addyz16
 done:
                 
@@ -352,8 +352,8 @@ recv_file_data_parasite_pagewise: .proc
                 bcc last_page
 
 first_pages:
-                ldx #<scratch_load
-                ldy #>scratch_load
+                ldx #<payload_addr
+                ldy #>payload_addr
                 lda #tube_256_byte_host_to_parasite
                 jsr $406
 
@@ -389,11 +389,11 @@ one_page_loop:
                 dey
                 bne one_page_loop
 
-                inc scratch_load+1
+                inc payload_addr+1
                 bne +
-                inc scratch_load+2
+                inc payload_addr+2
                 bne +
-                inc scratch_load+3
+                inc payload_addr+3
 +
 
                 inc payload_counter+1
@@ -407,8 +407,8 @@ last_page:
                 lda payload_counter+0
                 beq done
 
-                ldx #<scratch_load
-                ldy #>scratch_load
+                ldx #<payload_addr
+                ldy #>payload_addr
                 lda #tube_multi_byte_host_to_parasite
                 jsr $406
 
@@ -457,8 +457,8 @@ send_file_data_parasite_pagewise: .proc
                 bcc last_page
 
 first_pages:
-                ldx #<scratch_load
-                ldy #>scratch_load
+                ldx #<payload_addr
+                ldy #>payload_addr
                 lda #tube_256_byte_parasite_to_host
                 jsr $406
 
@@ -490,11 +490,11 @@ one_page_loop:
                 bne one_page_loop
                 ;bne one_page_loop ;+19
 
-                inc scratch_load+1
+                inc payload_addr+1
                 bne +
-                inc scratch_load+2
+                inc payload_addr+2
                 bne +
-                inc scratch_load+3
+                inc payload_addr+3
 +
 
                 inc payload_counter+1
@@ -508,8 +508,8 @@ last_page:
                 lda payload_counter+0
                 beq done
 
-                ldx #<scratch_load
-                ldy #>scratch_load
+                ldx #<payload_addr
+                ldy #>payload_addr
                 lda #tube_multi_byte_parasite_to_host
                 jsr $406
 
@@ -565,7 +565,7 @@ one_page_loop:
 
                 .rept num_unrolls
                 
-                lda (scratch_load),y
+                lda (payload_addr),y
                 sta via+0
 
                 lda #$10
@@ -579,7 +579,7 @@ one_page_loop:
                 
                 bne one_page_loop
 
-                inc scratch_load+1
+                inc payload_addr+1
 
                 inc payload_counter+1
                 bne one_page_loop
@@ -593,7 +593,7 @@ last_page:
 
                 ldy #0
 last_page_loop:
-                lda (scratch_load),y
+                lda (payload_addr),y
                 sta via+0
 -
                 lda via+13
@@ -713,10 +713,9 @@ link_status_text=avr.status_text
 ; Send/receive file data from/to host/parasite memory.
 ;
 ; File data is whatever's left in the current packet according to
-; payload_counter, the non-zero negated number of bytes left. The
-; data is read/written starting at scratch_load (a 32-bit address
-; that's already known to point into host/parasite memory as
-; appropriate).
+; payload_counter, the non-zero negated number of bytes left. The data
+; is read/written starting at payload_addr (a 32-bit address that's
+; already known to point into host/parasite memory as appropriate).
 ;
 ; May modify payload_counter.
 ;
