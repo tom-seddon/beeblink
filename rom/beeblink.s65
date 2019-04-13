@@ -228,6 +228,10 @@ write_image_data: .fill 2
 
 ;-------------------------------------------------------------------------
 
+; Strictly speaking, the payload stuff could go in the scratch
+; workspace. But it's 8 bytes, and this doesn't leave much space for
+; all the other stuff...
+                
                 .section fs_workspace
                 
 ; Holds payload size on entry to send_request_n.
@@ -4220,9 +4224,9 @@ speed_test_special: .proc
 
                 .section speed_test_workspace
 time: .fill 5
-send_time: .fill 5
+send_time: .fill 2
 counter: .fill 1
-payload_size: .fill 4
+parasite: .fill 1
                 .send speed_test_workspace
 
 parasite_oshwm_page=$08              ;you just have to assume...
@@ -4239,8 +4243,8 @@ sure:
 
                 jsr pcprint
                 .text "Host",255
-                
-                clc
+
+                lda #$00                
                 jsr speed_test
 
                 jsr is_tube_active
@@ -4248,8 +4252,8 @@ sure:
 
                 jsr pcprint
                 .text "Parasite",255
-                
-                sec
+
+                lda #$ff                
                 jsr speed_test
 
 test_done:
@@ -4264,11 +4268,10 @@ done:
                 rts
 
 ;
-; do one round of speed tests. C=0 for host<->server, C=1 for
-; parasite<->server.
+; do one round of speed tests. A=0 for host or A=$ff for server.
 ; 
 speed_test:
-                php
+                sta parasite
 
                 ; print some info
                 jsr pcprint
@@ -4280,8 +4283,6 @@ speed_test:
                 jsr pcprint
                 .text " x ",255
                 
-                plp
-                php
                 jsr init_test_size
 
                 lda #"&"
@@ -4293,8 +4294,6 @@ speed_test:
                 jsr pcprint
                 .text " bytes @ &",255
 
-                plp
-                php
                 jsr init_test_address
                 
                 ldx #payload_addr
@@ -4314,8 +4313,6 @@ loop:
                 lda counter
                 jsr print_hex_byte
                 
-                plp
-                php
                 jsr init_test_size
 
                 ; Account for the request sub-type and host/parasite
@@ -4332,26 +4329,23 @@ loop:
                 jsr send_payload_byte
 
                 ; Send host/parasite flag.
-                pla
-                pha
+                lda parasite
                 and #$01
                 jsr send_payload_byte
 
                 ; Save off the (positive) payload size.
                 jsr negate_payload_counter
-                lda payload_counter+0
-                sta payload_size+0
-                lda payload_counter+1
-                sta payload_size+1
-                lda payload_counter+2
-                sta payload_size+2
                 lda payload_counter+3
-                sta payload_size+3
+                pha             ;size bits 24-31
+                lda payload_counter+2
+                pha             ;size bits 16-23
+                lda payload_counter+1
+                pha             ;size bits 8-15
+                lda payload_counter+0
+                pha             ;size bits 0-7
                 jsr negate_payload_counter
 
                 ; Time sending of everything else.
-                plp
-                php
                 jsr init_test_address
 
                 jsr reset_TIME
@@ -4372,8 +4366,6 @@ loop:
                 ; jsr recv_payload_byte
 
                 ; Time receiving of everything else.
-                plp
-                php
                 jsr init_test_address
 
                 jsr reset_TIME
@@ -4392,19 +4384,18 @@ loop:
                 jsr send_payload_byte
 
                 ; Send host/parasite flag.
-                pla
-                pha
+                lda parasite
                 and #$01
                 jsr send_payload_byte
 
                 ; Send payload size.
-                lda payload_size+0
+                pla             ;size bits 0-7
                 jsr send_payload_byte
-                lda payload_size+1
+                pla             ;size bits 8-15
                 jsr send_payload_byte
-                lda payload_size+2
+                pla             ;size bits 16-23
                 jsr send_payload_byte
-                lda payload_size+3
+                pla             ;size bits 24-31
                 jsr send_payload_byte
 
                 ; Send send time.
@@ -4425,7 +4416,6 @@ loop:
                 beq +
                 jmp loop
 +
-                pla             ;discard saved P
                 
                 jsr osnewl
 
@@ -4442,7 +4432,8 @@ init_test_address: .proc
                 sta payload_addr+2
                 sta payload_addr+3
 
-                bcs parasite_address
+                bit parasite
+                bmi parasite_address
 
 host_address:
                 lda #131        ;read OSHWM (AUG 155)
@@ -4481,7 +4472,8 @@ init_test_size_2:
                 lda #0
                 jsr set_payload_counter
 
-                bcs parasite_size
+                bit parasite
+                bmi parasite_size
 
 host_size:
                 lda #131        ;read OSHWM (AUG 155)

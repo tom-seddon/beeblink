@@ -114,13 +114,12 @@ startup_max_time=1000 ;in centiseconds
                 
 ;-------------------------------------------------------------------------
 
-                .section fs_workspace
+                .section fs_scratch_workspace
                 ; bit 7 set if M128, using internal Tube.
-                ; bit 6 set if this flag is valid.
 link_itu: .fill 1
 link_old_y: .fill 1
 link_value: .fill 1
-                .send fs_workspace
+                .send fs_scratch_workspace
                 
 ;-------------------------------------------------------------------------
 ; Check if ACCCON ITU needs resetting to access the FTDI device.
@@ -156,7 +155,7 @@ is_itu: .proc
                 pla
                 tax
 
-                lda #$80
+                lda #0
                 ror a
                 
                 rts
@@ -475,14 +474,14 @@ sync_timed_out:
 ;
 ; Set Master 128 ITU flag... and anything else???
 prepare: .proc
-                bit link_itu
-                bvs +
+                ; bit link_itu
+                ; bvs +
                 pha
                 jsr is_itu
                 sta link_itu
                 pla
-+
-                .txdp ['link_prepare: &',link_itu,'\r']
+; +
+;                 .txdp ['link_prepare: &',link_itu,'\r']
                 rts
                 .pend
 
