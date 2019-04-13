@@ -1496,6 +1496,16 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
                 }
             }
 
+            await new Promise((resolve, reject) => {
+                port.drain((error: any) => {
+                    if (error !== null && error !== undefined) {
+                        reject(error);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
+
             serialLog.pn(`Done one request / response.`);
         }
     }
