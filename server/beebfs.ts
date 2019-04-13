@@ -1796,13 +1796,13 @@ export class BeebFS {
                 } catch (error) {
                     this.log.pn(`Ignoring closeAllFiles error: ${error}`);
                 }
-            }
 
-            this.firstFileHandle = firstFileHandle;
+                this.firstFileHandle = firstFileHandle;
 
-            this.openFiles = [];
-            for (let i = 0; i < numFileHandles; ++i) {
-                this.openFiles.push(undefined);
+                this.openFiles = [];
+                for (let i = 0; i < numFileHandles; ++i) {
+                    this.openFiles.push(undefined);
+                }
             }
         }
     }
