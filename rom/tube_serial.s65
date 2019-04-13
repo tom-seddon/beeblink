@@ -711,7 +711,7 @@ send_payload_byte: .proc
 
                 .send_byte
 
-                lda scratch_payload_size+0
+                lda payload_counter+0
                 bne +
 
                 ldy #1
@@ -724,7 +724,7 @@ send_payload_byte: .proc
 itu:
                 .itu_send_byte
 
-                lda scratch_payload_size+0
+                lda payload_counter+0
                 bne +
 
                 ldy #1
@@ -758,7 +758,7 @@ recv_payload_byte: .proc
                 bit link_itu
                 bmi itu
 
-                lda scratch_payload_size+0
+                lda payload_counter+0
                 beq recv_status_byte
 
 recv_data_byte:
@@ -775,7 +775,7 @@ recv_status_byte:
                 rts
 
 itu:
-                lda scratch_payload_size+0
+                lda payload_counter+0
                 beq itu_recv_status_byte
 
 itu_recv_data_byte:
@@ -832,12 +832,12 @@ transfer_file_data_driver_routine: .macro tube_dir,bytes_routine,page_routine,na
                 jsr claim_tube
                 .endif
 
-                jsr negate_payload_size
+                jsr negate_payload_counter
                 
-                .txdp [\name,': &',scratch_payload_size+0,' bytes, &',scratch_payload_size+3,scratch_payload_size+2,scratch_payload_size+1,' pages\r']
+                .txdp [\name,': &',payload_counter+0,' bytes, &',payload_counter+3,payload_counter+2,payload_counter+1,' pages\r']
 
                 ; need to copy any bytes?
-                lda scratch_payload_size+0
+                lda payload_counter+0
                 beq bytes_done
 
                 .if \tube_dir!=0
@@ -847,13 +847,13 @@ transfer_file_data_driver_routine: .macro tube_dir,bytes_routine,page_routine,na
                 jsr $406
                 .endif
 
-                ldx scratch_payload_size+0
+                ldx payload_counter+0
                 jsr \bytes_routine
 
                 ; update dest pointer
                 clc
                 lda scratch_load+0
-                adc scratch_payload_size+0
+                adc payload_counter+0
                 sta scratch_load+0
                 bcc +
                 inc scratch_load+1
@@ -866,12 +866,12 @@ transfer_file_data_driver_routine: .macro tube_dir,bytes_routine,page_routine,na
 bytes_done:
                 ; need to copy any pages?
                 lda #0
-                sta scratch_payload_size+0
-                jsr test_payload_size
+                sta payload_counter+0
+                jsr test_payload_counter
                 beq done
 
-                jsr negate_payload_size
-                ; scratch_payload_size bits 8-31 is the negative page
+                jsr negate_payload_counter
+                ; payload_counter bits 8-31 is the negative page
                 ; count.
 pages_loop:
                 .if \page_routine!=0
@@ -902,11 +902,11 @@ pages_loop:
                 inc scratch_load+3
 +
 
-                inc scratch_payload_size+1 ;page count bits 0-7
+                inc payload_counter+1 ;page count bits 0-7
                 bne pages_loop
-                inc scratch_payload_size+2 ;page count bits 8-15
+                inc payload_counter+2 ;page count bits 8-15
                 bne pages_loop
-                inc scratch_payload_size+3 ;page count bits 16-23
+                inc payload_counter+3 ;page count bits 16-23
                 bne pages_loop
                 
 done:

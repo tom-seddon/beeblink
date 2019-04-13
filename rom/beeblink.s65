@@ -213,11 +213,11 @@ write_image_data .fill 2
                 
                 .section fs_zp_workspace
 
-; Size of payload to be sent.
+; Holds payload size on entry to send_request_n.
 ;
 ; During payload receive/send, holds the negative offset of the last
 ; byte sent.
-scratch_payload_size .fill 4
+payload_counter .fill 4
 scratch_ptr .fill 2
                 
 scratch_run_metadata:
@@ -1232,12 +1232,12 @@ addyz16_done:
 ; entry: A = 8-bit value to set
 ; exit: 
 ; preserves: X; Y; C
-set_payload_size: .proc
-                sta scratch_payload_size
+set_payload_counter: .proc
+                sta payload_counter
                 lda #0
-                sta scratch_payload_size+1
-                sta scratch_payload_size+2
-                sta scratch_payload_size+3
+                sta payload_counter+1
+                sta payload_counter+2
+                sta payload_counter+3
                 rts
                 .pend
 
@@ -1248,17 +1248,17 @@ set_payload_size: .proc
 ; entry: Y = value to add
 ; preserves: X; Y
 ;
-add_y_to_payload_size: .proc
+add_y_to_payload_counter: .proc
                 clc
                 tya
-                adc scratch_payload_size+0
-                sta scratch_payload_size+0
+                adc payload_counter+0
+                sta payload_counter+0
                 bcc done
-                inc scratch_payload_size+1
+                inc payload_counter+1
                 bne done
-                inc scratch_payload_size+2
+                inc payload_counter+2
                 bne done
-                inc scratch_payload_size+3
+                inc payload_counter+3
 done:
                 rts
                 .pend
@@ -1269,11 +1269,11 @@ done:
 ; exit: A = a|b|c|d
 ; takes: 22 cycles
 ;
-test_payload_size: .proc
-                lda scratch_payload_size+0
-                ora scratch_payload_size+1
-                ora scratch_payload_size+2
-                ora scratch_payload_size+3
+test_payload_counter: .proc
+                lda payload_counter+0
+                ora payload_counter+1
+                ora payload_counter+2
+                ora payload_counter+3
                 rts
                 .pend
 
@@ -1284,25 +1284,25 @@ test_payload_size: .proc
 ; exit: Z set as per new value
 ; preserves: A; Y
 ;
-negate_payload_size: .proc
-                lda scratch_payload_size+0
+negate_payload_counter: .proc
+                lda payload_counter+0
                 eor #$ff
-                sta scratch_payload_size+0
+                sta payload_counter+0
                 
-                lda scratch_payload_size+1
+                lda payload_counter+1
                 eor #$ff
-                sta scratch_payload_size+1
+                sta payload_counter+1
 
-                lda scratch_payload_size+2
+                lda payload_counter+2
                 eor #$ff
-                sta scratch_payload_size+2
+                sta payload_counter+2
 
-                lda scratch_payload_size+3
+                lda payload_counter+3
                 eor #$ff
-                sta scratch_payload_size+3
+                sta payload_counter+3
 
-                ; fall through to inc_payload_size
-                .cerror *!=inc_payload_size,"oops"
+                ; fall through to inc_payload_counter
+                .cerror *!=inc_payload_counter,"oops"
                 .pend
                 
 ;-------------------------------------------------------------------------
@@ -1312,14 +1312,14 @@ negate_payload_size: .proc
 ; exit: Z set as per new value
 ; preserves: A; X; Y; C
 ;
-inc_payload_size: .block
-                inc scratch_payload_size+0
+inc_payload_counter: .block
+                inc payload_counter+0
                 bne done
-                inc scratch_payload_size+1
+                inc payload_counter+1
                 bne done
-                inc scratch_payload_size+2
+                inc payload_counter+2
                 bne done
-                inc scratch_payload_size+3
+                inc payload_counter+3
 done:
                 rts
                 .bend
@@ -1513,7 +1513,7 @@ reg:
 send_request_n: .proc
                 jsr link_prepare
 
-                .debug_print ["send_request_n: Request: T=&",DP_A," payload_size=&",scratch_payload_size+3,scratch_payload_size+2,scratch_payload_size+1,scratch_payload_size+0,"\r"]
+                .debug_print ["send_request_n: Request: T=&",DP_A," payload_size=&",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,"\r"]
 
                 ; If payload size is 1, it could just do a 2-byte
                 ; send. But it's so annoying to check for.
@@ -1521,19 +1521,19 @@ send_request_n: .proc
 
                 jsr link_send_header_byte
 
-                lda scratch_payload_size+0
+                lda payload_counter+0
                 jsr link_send_header_byte
 
-                lda scratch_payload_size+1
+                lda payload_counter+1
                 jsr link_send_header_byte
                 
-                lda scratch_payload_size+2
+                lda payload_counter+2
                 jsr link_send_header_byte
 
-                lda scratch_payload_size+3
+                lda payload_counter+3
                 jsr link_send_header_byte
 
-                jsr negate_payload_size
+                jsr negate_payload_counter
                 bne done
 
 done:
@@ -1551,7 +1551,7 @@ done:
 ;
 send_payload_byte: .proc
                 pha
-                jsr test_payload_size
+                jsr test_payload_counter
                 bne more
 
                 pla
@@ -1559,7 +1559,7 @@ send_payload_byte: .proc
                 rts
 
 more:
-                jsr inc_payload_size
+                jsr inc_payload_counter
                 pla
                 jsr link_send_payload_byte
                 sec
@@ -1586,7 +1586,7 @@ without_prepare:
 
                 ; known LSB of byte's negative offset
                 lda #0
-                sta scratch_payload_size+0
+                sta payload_counter+0
 
                 txa
                 jsr link_send_payload_byte
@@ -1615,7 +1615,7 @@ without_prepare:
 send_payload:
                 ; known LSB of byte's negative offset
                 lda #0
-                sta scratch_payload_size+0
+                sta payload_counter+0
                 
                 txa
                 jsr link_send_payload_byte
@@ -1634,14 +1634,14 @@ without_prepare:
                 
                 ; known LSB of byte's negative offset
                 lda #0
-                sta scratch_payload_size+0
+                sta payload_counter+0
                 
                 jsr link_recv_payload_byte
 
                 rts
 
 got_n:
-                .push32 scratch_payload_size
+                .push32 payload_counter
                 jsr recv_response.got_n
                 pha             ;response C
                 jsr recv_payload_byte
@@ -1651,7 +1651,7 @@ got_n:
                 tay             ;response P
                 pla
                 tax             ;response C
-                .pop32 scratch_payload_size
+                .pop32 payload_counter
                 tya             ;response P
                 rts
                 .bend
@@ -1665,7 +1665,7 @@ got_n:
 ; exit: X = response type
 ;
 recv_response_and_discard_payload: .proc
-                .push32 scratch_payload_size
+                .push32 payload_counter
 
                 jsr link_begin_recv
 
@@ -1675,7 +1675,7 @@ recv_response_and_discard_payload: .proc
 
                 tax
                 
-                .pop32 scratch_payload_size
+                .pop32 payload_counter
                 
                 rts
                 .pend
@@ -1701,10 +1701,10 @@ recv_response: .proc
 got_1:
                 pha
                 lda #$ff
-                sta scratch_payload_size+0
-                sta scratch_payload_size+1
-                sta scratch_payload_size+2
-                sta scratch_payload_size+3
+                sta payload_counter+0
+                sta payload_counter+1
+                sta payload_counter+2
+                sta payload_counter+3
                 pla
                 .debug_print ["recv_response: T=&",DP_A," p_size=1\r"]
                 cmp #RESPONSE_ERROR
@@ -1715,17 +1715,17 @@ got_1:
 got_n:
                 pha
                 jsr link_recv_header_byte
-                sta scratch_payload_size+0
+                sta payload_counter+0
                 jsr link_recv_header_byte
-                sta scratch_payload_size+1
+                sta payload_counter+1
                 jsr link_recv_header_byte
-                sta scratch_payload_size+2
+                sta payload_counter+2
                 jsr link_recv_header_byte
-                sta scratch_payload_size+3
-                jsr negate_payload_size
+                sta payload_counter+3
+                jsr negate_payload_counter
                 pla
                 and #$7f
-                .debug_print ["recv_response: T=&",DP_A," payload_size=&",scratch_payload_size+3,scratch_payload_size+2,scratch_payload_size+1,scratch_payload_size+0,"\r"]
+                .debug_print ["recv_response: T=&",DP_A," payload_size=&",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,"\r"]
                 cmp #RESPONSE_ERROR
                 beq got_error
                 clc
@@ -1778,7 +1778,7 @@ dummy_error_end:
 ;       C = 1: A = byte read from payload
 ; 
 recv_payload_byte: .proc
-                jsr test_payload_size
+                jsr test_payload_counter
                 bne more
 
                 jsr link_unprepare
@@ -1788,7 +1788,7 @@ recv_payload_byte: .proc
                 rts
 
 more:
-                jsr inc_payload_size
+                jsr inc_payload_counter
                 jsr link_recv_payload_byte
                 sec
                 rts
@@ -2116,7 +2116,7 @@ link_ok:
                 .debug_print ['i_b_i: sending REQUEST_SET_FILE_HANDLE_RANGE...\r']
                 
                 lda #2
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 lda #REQUEST_SET_FILE_HANDLE_RANGE
                 jsr send_request_n
@@ -2405,7 +2405,7 @@ blfs_osfile: .proc
 
                 ; Packet size starts out at 0.
                 lda #0
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 ; If the request was $00, the size of the data to save
                 ; needs to be handled.
@@ -2420,8 +2420,8 @@ blfs_osfile: .proc
 add_end_loop:
                 plp
                 lda (private_ptr),y
-                adc scratch_payload_size,x
-                sta scratch_payload_size,x
+                adc payload_counter,x
+                sta payload_counter,x
                 php
                 iny
                 inx
@@ -2437,9 +2437,9 @@ add_end_loop:
                 php
 subtract_start_loop:
                 plp
-                lda scratch_payload_size,x
+                lda payload_counter,x
                 sbc (private_ptr),y
-                sta scratch_payload_size,x
+                sta payload_counter,x
                 php
                 
                 lda (private_ptr),y
@@ -2451,13 +2451,13 @@ subtract_start_loop:
                 bne subtract_start_loop
                 pla
                 
-                lda scratch_payload_size+3
+                lda payload_counter+3
                 jsr check_size_msbyte
 
 not_save:
                 ; Account for parameter block and A value.
                 ldy #17
-                jsr add_y_to_payload_size
+                jsr add_y_to_payload_counter
 
                 ; Add length of file name.
                 ldy #0
@@ -2472,10 +2472,10 @@ not_save:
                 
                 sty private_y
 
-                jsr add_y_to_payload_size
+                jsr add_y_to_payload_counter
 
                 ; Account for the terminating CR.
-                jsr inc_payload_size
+                jsr inc_payload_counter
 
                 ; Send the request.
                 lda #REQUEST_OSFILE
@@ -2546,9 +2546,9 @@ recv_data:
                 sta scratch_load+3
 
                 .if enable_debug_print
-                jsr negate_payload_size
-                .debug_print ["Receive &",scratch_payload_size+3,scratch_payload_size+2,scratch_payload_size+1,scratch_payload_size+0," @ &",scratch_load+3,scratch_load+2,scratch_load+1,scratch_load+0,"\r"]
-                jsr negate_payload_size
+                jsr negate_payload_counter
+                .debug_print ["Receive &",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0," @ &",scratch_load+3,scratch_load+2,scratch_load+1,scratch_load+0,"\r"]
+                jsr negate_payload_counter
                 .endif
 
                 ; Get the file data.
@@ -2618,7 +2618,7 @@ handle:
 
                 ; Account for A, Y, and the 4-byte control block.
                 lda #6
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 lda #REQUEST_OSARGS
                 jsr send_request_n
@@ -2732,7 +2732,7 @@ blfs_osbput: .proc
                 
                 ; Ugh. A 2-byte payload is the worst possible case.
                 lda #2
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 lda #REQUEST_OSBPUT
                 jsr send_request_n
@@ -2769,7 +2769,7 @@ blfs_osgbpb: .proc
 
                 ; Account for reason code and parameter block.
                 lda #14
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 ; Account for any file data.
                 lda private_request
@@ -2784,20 +2784,20 @@ write:
                 ldy #5
                 clc
                 lda (private_ptr),y
-                adc scratch_payload_size+0
-                sta scratch_payload_size+0
+                adc payload_counter+0
+                sta payload_counter+0
                 iny
                 lda (private_ptr),y
-                adc scratch_payload_size+1
-                sta scratch_payload_size+1
+                adc payload_counter+1
+                sta payload_counter+1
                 iny
                 lda (private_ptr),y
-                adc scratch_payload_size+2
-                sta scratch_payload_size+2
+                adc payload_counter+2
+                sta payload_counter+2
                 iny
                 lda (private_ptr),y
-                adc scratch_payload_size+3
-                sta scratch_payload_size+3
+                adc payload_counter+3
+                sta payload_counter+3
 
 read_or_write:
                 
@@ -2923,13 +2923,13 @@ open:
 
                 ; Account for the open mode.
                 lda #1
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 ; Account for the file name.                
                 ldx #scratch_ptr
                 jsr strlen_cr
 
-                jsr add_y_to_payload_size
+                jsr add_y_to_payload_counter
 
                 lda #REQUEST_OSFIND_OPEN
                 jsr send_request_n
@@ -3015,7 +3015,7 @@ fsc_opt: .proc
                 pha
 
                 lda #2
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 lda #REQUEST_OPT
                 jsr send_request_n
@@ -3169,7 +3169,7 @@ communicate_star_command: .proc
                 sty scratch_ptr+1
 
                 lda #0
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 .debug_print ["scratch_ptr=&",scratch_ptr+1,scratch_ptr+0,"\r"]
 
@@ -3178,7 +3178,7 @@ communicate_star_command: .proc
 
                 .debug_print ["scratch_ptr=&",scratch_ptr+1,scratch_ptr+0,", len=",DP_Y,"\r"]
 
-                sty scratch_payload_size+0
+                sty payload_counter+0
 
                 pla
                 jsr send_request_n
@@ -3399,7 +3399,7 @@ is_tube_active: .proc
 ;        !scratch_load = where to write the data to
 ;
 recv_file_data: .proc
-                jsr test_payload_size
+                jsr test_payload_counter
                 bne +
                 rts
 +
@@ -3468,7 +3468,7 @@ done:
 ;        !scratch_load = where to read the data from
 ;
 send_file_data: .proc
-                jsr test_payload_size
+                jsr test_payload_counter
                 bne +
                 rts
 +
@@ -3489,7 +3489,7 @@ send_host_loop:
 
                 ; check for zero first - don't touch any bytes outside
                 ; the transfer range.
-                jsr test_payload_size
+                jsr test_payload_counter
                 beq send_host_done
                 
                 lda (scratch_load),y
@@ -3532,7 +3532,7 @@ send_file_data_parasite_bytewise: .proc
                 jsr delay_48_cycles
 
 send_tube_loop:
-                jsr test_payload_size
+                jsr test_payload_counter
                 beq send_tube_done
 
                 lda $fee5
@@ -3593,7 +3593,7 @@ loop:
                 jsr send_request_1
 
                 push8 scratch_ptr
-                push32 scratch_payload_size
+                push32 payload_counter
                 
                 sty scratch_ptr
 
@@ -3632,7 +3632,7 @@ print_chars_done:
                 
                 ldy scratch_ptr
                 
-                pop32 scratch_payload_size
+                pop32 payload_counter
                 pop8 scratch_ptr
 
                 bit $ff
@@ -3644,7 +3644,7 @@ done:
                 ; the packet is still incoming - discard it.
                 jsr discard_remaining_payload
 
-                pop32 scratch_payload_size ;restore
+                pop32 payload_counter ;restore
                 pop8 scratch_ptr     ;restore
 
 done2:
@@ -3925,7 +3925,7 @@ volumes_browser_special: .proc
                 jsr oswrch
 
                 lda #5
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 lda #REQUEST_VOLUME_BROWSER
                 jsr send_request_n
@@ -3998,7 +3998,7 @@ getch:
                 pha             ;non-0 if SHIFT pressed
 
                 lda #3
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 lda #REQUEST_VOLUME_BROWSER
                 jsr send_request_n
@@ -4216,7 +4216,7 @@ speed_test:
                 lda #"&"
                 jsr oswrch
                 
-                ldx #scratch_payload_size
+                ldx #payload_counter
                 jsr print_hex_z32
 
                 jsr pcprint
@@ -4250,7 +4250,7 @@ loop:
                 ; Account for the request sub-type and host/parasite
                 ; flag.
                 ldy #2
-                jsr add_y_to_payload_size
+                jsr add_y_to_payload_counter
 
                 ; Initiate request.
                 lda #REQUEST_SPEED_TEST
@@ -4267,16 +4267,16 @@ loop:
                 jsr send_payload_byte
 
                 ; Save off the (positive) payload size.
-                jsr negate_payload_size
-                lda scratch_payload_size+0
+                jsr negate_payload_counter
+                lda payload_counter+0
                 sta scratch_exec+0
-                lda scratch_payload_size+1
+                lda payload_counter+1
                 sta scratch_exec+1
-                lda scratch_payload_size+2
+                lda payload_counter+2
                 sta scratch_exec+2
-                lda scratch_payload_size+3
+                lda payload_counter+3
                 sta scratch_exec+3
-                jsr negate_payload_size
+                jsr negate_payload_counter
 
                 ; Time sending of everything else.
                 plp
@@ -4311,7 +4311,7 @@ loop:
 
                 ; Account for response.
                 lda #10
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 ; Tell the server what happened.
                 lda #REQUEST_SPEED_TEST
@@ -4401,14 +4401,14 @@ init_test_size: .proc
 
                 ; Subtract 1, so there's a 255-byte range at the end
                 ; to exercise the straggling bytes loop.
-                jsr negate_payload_size
-                jsr inc_payload_size
-                jsr negate_payload_size
+                jsr negate_payload_counter
+                jsr inc_payload_counter
+                jsr negate_payload_counter
                 rts
 
 init_test_size_2:
                 lda #0
-                jsr set_payload_size
+                jsr set_payload_counter
 
                 bcs parasite_size
 
@@ -4416,8 +4416,8 @@ host_size:
                 lda #131        ;read OSHWM (AUG 155)
                 jsr osbyte
                 
-                stx scratch_payload_size+0
-                sty scratch_payload_size+1
+                stx payload_counter+0
+                sty payload_counter+1
                 
                 lda #132        ;read HIMEM (AUG 156)
                 jsr osbyte
@@ -4427,17 +4427,17 @@ host_size:
 
                 sec
                 txa
-                sbc scratch_payload_size+0
-                sta scratch_payload_size+0
+                sbc payload_counter+0
+                sta payload_counter+0
 
                 tya
-                sbc scratch_payload_size+1
-                sta scratch_payload_size+1
+                sbc payload_counter+1
+                sta payload_counter+1
                 rts
 
 parasite_size:
                 lda #$80-parasite_oshwm_page ;another assumption...
-                sta scratch_payload_size+1
+                sta payload_counter+1
                 rts
                 .pend
 

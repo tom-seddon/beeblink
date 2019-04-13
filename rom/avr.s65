@@ -308,15 +308,15 @@ one_page_loop:
 
                 inc scratch_load+1
                 
-                inc scratch_payload_size+1
+                inc payload_counter+1
                 bne one_page_loop
-                inc scratch_payload_size+2
+                inc payload_counter+2
                 bne one_page_loop
-                inc scratch_payload_size+3
+                inc payload_counter+3
                 bne one_page_loop
 
 last_page:
-                ldx scratch_payload_size+0
+                ldx payload_counter+0
                 beq done
                 
                 ldy #0
@@ -396,15 +396,15 @@ one_page_loop:
                 inc scratch_load+3
 +
 
-                inc scratch_payload_size+1
+                inc payload_counter+1
                 bne first_pages
-                inc scratch_payload_size+2
+                inc payload_counter+2
                 bne first_pages
-                inc scratch_payload_size+3
+                inc payload_counter+3
                 bne first_pages
 
 last_page:
-                lda scratch_payload_size+0
+                lda payload_counter+0
                 beq done
 
                 ldx #<scratch_load
@@ -412,7 +412,7 @@ last_page:
                 lda #tube_multi_byte_host_to_parasite
                 jsr $406
 
-                ldx scratch_payload_size+0
+                ldx payload_counter+0
 
                 ; inter-byte delay is 24 uS, or 48 cycles
 
@@ -497,15 +497,15 @@ one_page_loop:
                 inc scratch_load+3
 +
 
-                inc scratch_payload_size+1
+                inc payload_counter+1
                 bne first_pages
-                inc scratch_payload_size+2
+                inc payload_counter+2
                 bne first_pages
-                inc scratch_payload_size+3
+                inc payload_counter+3
                 bne first_pages
 
 last_page:
-                lda scratch_payload_size+0
+                lda payload_counter+0
                 beq done
 
                 ldx #<scratch_load
@@ -517,7 +517,7 @@ last_page:
                 jsr delay_48_cycles
 
                 ldy #0
-                ldx scratch_payload_size+0
+                ldx payload_counter+0
                 
                 ; inter-byte delay is 24 uS, or 48 cycles
 last_page_loop:
@@ -581,14 +581,14 @@ one_page_loop:
 
                 inc scratch_load+1
 
-                inc scratch_payload_size+1
+                inc payload_counter+1
                 bne one_page_loop
-                inc scratch_payload_size+2
+                inc payload_counter+2
                 bne one_page_loop
-                inc scratch_payload_size+2
+                inc payload_counter+2
 
 last_page:
-                ldx scratch_payload_size+0
+                ldx payload_counter+0
                 beq done
 
                 ldy #0
@@ -621,31 +621,31 @@ done:
 ;           page count is in scratch_p_size+1..3 (a 24-bit value).
 ;
 fix_up_packet_size_for_pagewise_transfer: .proc
-                ldy scratch_payload_size+0
+                ldy payload_counter+0
 
-                jsr negate_payload_size
+                jsr negate_payload_counter
                 
-                lda scratch_payload_size+1
-                ora scratch_payload_size+2
-                ora scratch_payload_size+3
+                lda payload_counter+1
+                ora payload_counter+2
+                ora payload_counter+3
                 beq no_pages
 
 some_pages:
                 lda #0
-                sta scratch_payload_size+0
-                jsr negate_payload_size
-                sty scratch_payload_size+0
+                sta payload_counter+0
+                jsr negate_payload_counter
+                sty payload_counter+0
                 sec
                 rts
 
 no_pages:
-                sty scratch_payload_size+0
+                sty payload_counter+0
                 clc
                 rts
 
 
                 
-                jsr negate_payload_size
+                jsr negate_payload_counter
                 pla
                 rts
                 .pend
@@ -684,7 +684,7 @@ link_begin_recv=avr.via_begin_recv
 link_send_header_byte=avr.send_byte
 
 ; Send 1 byte over the link as part of the payload. 
-; scratch_payload_size is the byte's negated offset.
+; payload_counter is the byte's negated offset.
 ;
 ; Preserve X/Y.
 link_send_payload_byte=avr.send_byte
@@ -696,7 +696,7 @@ link_send_payload_byte=avr.send_byte
 link_recv_header_byte=avr.recv_byte
 
 ; Receive 1 byte over the link as part of the payload.
-; scratch_payload_size is the byte's negated offset.
+; payload_counter is the byte's negated offset.
 ;
 ; Preserve X/Y.
 link_recv_payload_byte=avr.recv_byte
@@ -713,12 +713,12 @@ link_status_text=avr.status_text
 ; Send/receive file data from/to host/parasite memory.
 ;
 ; File data is whatever's left in the current packet according to
-; scratch_payload_size, the non-zero negated number of bytes left. The
+; payload_counter, the non-zero negated number of bytes left. The
 ; data is read/written starting at scratch_load (a 32-bit address
 ; that's already known to point into host/parasite memory as
 ; appropriate).
 ;
-; May modify scratch_payload_size.
+; May modify payload_counter.
 ;
 ; If not set, link-agnostic code will be used, that uses
 ; link_(send|recv)_byte* for everything. (This will probably be a lot
