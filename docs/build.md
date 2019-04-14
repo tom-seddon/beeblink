@@ -1,4 +1,4 @@
-# Build AVR firmware
+# Build AVR firmware (OS X/Linux)
 
 Prerequisites:
 
@@ -12,23 +12,28 @@ Steps:
 
 1. Run `make`
 
-# Build BBC ROM
+# Build BBC ROM (Windows/OS X/Linux)
 
-Prerequisites:
+Prerequisites (all):
+
+* Python 2.x on PATH
+
+Prerequisites (OS X/Linux):
 
 * GNU make
 * [64tass](https://sourceforge.net/projects/tass64/) on the PATH
-* Python 2.x on PATH
+
+Prerequisites
 
 Steps:
 
 0. Change to `rom` folder
 
-1. Run `make`
+1. On OS X/Linux, run `make`; on Windows, run `..\tools\snmake.exe`.
 
-The ROM is built to `rom/.build/beeblink.rom`.
+The ROM files are build to the `rom/.build` folder.
 
-# Build and run server
+# Build and run server (Windows/OS X/Linux)
 
 Prerequisites:
 

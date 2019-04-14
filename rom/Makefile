@@ -1,6 +1,19 @@
+ifeq ($(OS),Windows_NT)
+TASS?=..\tools\64tass.exe
+else
+TASS?=64tass
+endif
+
+PYTHON?=python
+
+##########################################################################
+##########################################################################
+
 DEST:=.build
-TASS:=64tass --m65xx --nostart -Wall -Wno-implied-reg -C --line-numbers --long-branch
+TASSCMD:=$(TASS) --m65xx --nostart -Wall -Wno-implied-reg -C --line-numbers --long-branch
 GIT_VER:=$(shell git log -1 '--format=%cd-%h' '--date=format:%Y%m%d-%H%M%S')
+
+SHELLCMD:=$(PYTHON) ../tools/shellcmd.py
 
 # mashup of git log -1 and git describe --dirty, which git doesn't
 # seem to be able to do on its own :(
@@ -20,10 +33,10 @@ endif
 COMMIT:=$(shell git log -1 '--format=%H')
 
 .PHONY:build
-build: BUILD_TIME:=$(shell date '+%Y-%m-%d %H:%M:%S')
+build: BUILD_TIME:=$(shell $(SHELLCMD) strftime -d * '*Y-*m-*d *H:*M:*S')
 build:
-	mkdir -p $(DEST)
-	python ../tools/make_constants.py -o $(DEST)/beeblink_constants.s65 ../server/beeblink.ts 6502
+	$(SHELLCMD) mkdir $(DEST)
+	$(PYTHON) ../tools/make_constants.py -o $(DEST)/beeblink_constants.s65 ../server/beeblink.ts 6502
 
 # 65120 = $fe60 - can't figure out how to get the $ through without
 # making a mess...
@@ -33,18 +46,20 @@ build:
 # 192 = $c0
 	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" SUFFIX=tube_serial "EXTRA_ARGS=-Dlink_tube_serial=true -Dblfs_prefix=\\\"TSBL\\\" -Dblfs_fs_number=94 -Dblfs_first_handle=160 -Ddefault_von=false"
 
-	cp .build/beeblink_tube_serial.rom ../volumes/beeblink/1/R.TS
-	touch ../volumes/beeblink/1/R.TS.inf
+	$(SHELLCMD) mkdir ../volumes/beeblink/1/
 
-	cp .build/beeblink_avr_fe60.rom ../volumes/beeblink/1/R.AVR-FE60
-	touch ../volumes/beeblink/1/R.AVR-FE60.inf
+	$(SHELLCMD) copy-file .build/beeblink_tube_serial.rom ../volumes/beeblink/1/R.TS
+	$(SHELLCMD) touch ../volumes/beeblink/1/R.TS.inf
 
-	@echo
-	@python ../tools/sha1sum.py -x '$(VER)' -x '$(BUILD_TIME)' -x '$(COMMIT)' .build/beeblink_tube_serial.rom .build/beeblink_avr_fe60.rom
+	$(SHELLCMD) copy-file .build/beeblink_avr_fe60.rom ../volumes/beeblink/1/R.AVR-FE60
+	$(SHELLCMD) touch ../volumes/beeblink/1/R.AVR-FE60.inf
+
+	@echo ---
+	@$(PYTHON) ../tools/sha1sum.py -x '$(VER)' -x '$(BUILD_TIME)' -x '$(COMMIT)' .build/beeblink_tube_serial.rom .build/beeblink_avr_fe60.rom
 
 .PHONY:_rom
 _rom:
-	$(TASS) beeblink.s65 -L$(DEST)/beeblink_$(SUFFIX).lst -o$(DEST)/beeblink_$(SUFFIX).rom "-DVERSION=\"$(VER)\"" "-DBUILD_TIME=\"$(BUILD_TIME)\"" "-DCOMMIT=\"$(COMMIT)\"" $(EXTRA_ARGS)
+	$(TASSCMD) beeblink.s65 -L$(DEST)/beeblink_$(SUFFIX).lst -o$(DEST)/beeblink_$(SUFFIX).rom "-DVERSION=\"$(VER)\"" "-DBUILD_TIME=\"$(BUILD_TIME)\"" "-DCOMMIT=\"$(COMMIT)\"" $(EXTRA_ARGS)
 
 # # (Hack, for my benefit, on my computer - make a second copy of the
 # # BeebLink ROM for my BBC B that has some extra stuff in it.)
@@ -60,4 +75,4 @@ _rom:
 
 .PHONY:clean
 clean:
-	rm -Rf $(DEST)
+	$(SHELLCMD) rm-tree $(DEST)
