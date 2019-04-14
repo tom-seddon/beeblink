@@ -33,7 +33,7 @@ endif
 COMMIT:=$(shell git log -1 '--format=%H')
 
 .PHONY:build
-build: BUILD_TIME:=$(shell $(SHELLCMD) strftime -d * '*Y-*m-*d *H:*M:*S')
+build: BUILD_TIME:=$(shell $(SHELLCMD) strftime -d _ '_Y-_m-_d _H:_M:_S')
 build:
 	$(SHELLCMD) mkdir $(DEST)
 	$(PYTHON) ../tools/make_constants.py -o $(DEST)/beeblink_constants.s65 ../server/beeblink.ts 6502
