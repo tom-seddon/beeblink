@@ -641,7 +641,33 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         const portInfos = await SerialPort.list();
         process.stdout.write(portInfos.length + ' serial devices:\n');
         for (let i = 0; i < portInfos.length; ++i) {
-            process.stdout.write('  ' + i + '. ' + portInfos[i].comName + '\n');
+            const p = portInfos[i];
+
+            const attrs: string[] = [];
+
+            if (p.manufacturer !== undefined) {
+                attrs.push(`Manufacturer: ${p.manufacturer}`);
+            }
+
+            if (p.serialNumber !== undefined) {
+                attrs.push(`Serial number: ${p.serialNumber}`);
+            }
+
+            if (p.vendorId !== undefined) {
+                attrs.push(`Vendor ID: ${p.vendorId}`);
+            }
+
+            if (p.productId !== undefined) {
+                attrs.push(`Product ID: ${p.productId}`);
+            }
+
+            let description = `${p.comName}`;
+            if (attrs.length > 0) {
+                description += ` (${attrs.join('; ')})`;
+            }
+
+            process.stdout.write(`    ${i}. ${description}\n`);
+
         }
 
         return false;
