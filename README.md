@@ -11,12 +11,12 @@ B, and will be improving it over time...
 
 # Requirements
 
-* [Tube 6502decode FTDI232H board](https://stardot.org.uk/forums/viewtopic.php?f=3&t=14398) -
+* **Recommended**
+  [Tube 6502decode FTDI232H board](https://stardot.org.uk/forums/viewtopic.php?f=3&t=14398) -
   see https://stardot.org.uk/forums/viewtopic.php?f=8&t=14849 (you'll
-  need the CPLD so it can operate in serial mode)
-  
-  **Recommended - this is beta functionality, so there may be minor
-  issues, but it's super easy to set up**
+  need the CPLD so it can operate in serial mode) - **this is beta
+  functionality, so there may be minor issues, but it's super easy to
+  set up**
 
   OR
 
@@ -27,7 +27,7 @@ B, and will be improving it over time...
 * PC running OS X, Windows or Linux
 * BBC Micro(s) with some good way of loading the ROM image (i.e., with
   something like EEPROM or write-protected battery-backed sideways
-  RAM... it's no fun having to reload it on each boot and/or have it
+  RAM... it's no fun having to reload it on each boot and/or having it
   zapped by careless programs)
 
 # Installation and setup
@@ -59,6 +59,15 @@ the AVR.)
 
 If using Linux, you'll need to
 [set up udev rules for the BeebLink device](./docs/udev.md).
+
+## BBC setup
+
+If you've got some way of getting files onto your BBC already, copy
+`beeblink_tube_serial.rom` (Tube serial) or `beeblink_avr_fe60.rom`
+(AVR) from the firmware zip to your BBC, and load it into sideways RAM
+or EEPROM or what have you.
+
+Otherwise, you can use the [bootstrap process](./docs/bootstrap.md).
 
 # Using BeebLink
 

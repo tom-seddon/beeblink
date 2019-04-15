@@ -43,15 +43,6 @@ Any AVR devices you have connected will be autodetected.
 
 After a moment you should get a `Server running...` message.
 
-## Load ROM on BBC
-
-If you've got some way of getting files onto your BBC already, copy
-`beeblink_tube_serial.rom` (Tube serial) or `beeblink_avr_fe60.rom`
-(AVR) from the firmware zip to your BBC, and load it into sideways RAM
-or EEPROM or what have you.
-
-Otherwise, you can use the [bootstrap process](./bootstrap.md).
-
 ## Whirlwind tour
 
 With the server running and the ROM installed, press CTRL+B+BREAK.

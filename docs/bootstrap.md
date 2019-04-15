@@ -1,12 +1,16 @@
 # Tube serial bootstrap process
 
-If you've got no way of getting files from your PC to your BBC, copy
-the `beeblink_tube_serial.rom` file to the same place you run the
-server from, type in the following program, and run it (with Tube
-off) to get a copy of the ROM transferred from the server.
+If you've got no other way of getting files from your PC to your BBC,
+you can copy the ROM to the same place you run the server from, and
+run a program on the BBC to get a copy of the ROM transferred over.
 
 This assumes you've got a disc drive, so it just saves the ROM (max
 16K) to a file for use with your usual ROM tools.
+
+## Tube serial bootstrap ##
+
+Copy `beeblink_tube_serial.rom` to the same folder you run the server
+from.
 
     10REM>B.TUBE
     20MODE1:VDU28,0,5,39,0:DEST%=&3F00
@@ -51,15 +55,10 @@ This assumes you've got a disc drive, so it just saves the ROM (max
     410PRINTO$
     420OSCLIO$
 
-# AVR bootstrap process
+## AVR bootstrap ##
 
-If you've got no way of getting files from your PC to your BBC, copy
-the `beeblink_avr_fe60.rom` file to the same place you run the server
-from, type in the following program, and run it to get a copy of the
-ROM transferred from the server.
-
-This assumes you've got a disc drive, so it just saves the ROM (max
-16K) to a file for use with your usual ROM tools.
+Copy `beeblink_avr_fe60.rom` to the same folder you run the server
+from.
 
     10REM>B.AVR
     20MODE7
