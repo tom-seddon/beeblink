@@ -58,6 +58,11 @@ const BEEBLINK_SENDER_ID = 'beeblink-sender-id';
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+const isWindows = process.platform === 'win32';
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 interface IConfigFile {
     folders: string[] | undefined;
     defaultVolume: string | undefined;
@@ -1210,6 +1215,15 @@ interface IReadWaiter {
 }
 
 async function setFTDILatencyTimer(serialDevice: ISerialDevice, serialLog: utils.Log): Promise<void> {
+    if(isWindows) {
+        // The device open fails with LIBUSB_ERROR_UNSUPPORTED. See, e.g.,
+        // https://stackoverflow.com/questions/17350177/
+        //
+        // But it's not a huge problem, as the latency timer can be set
+        // manually, and the setting is persistent.
+        return;
+    }
+
     if (serialDevice.portInfo === undefined || serialDevice.portInfo.vendorId === undefined || serialDevice.portInfo.productId === undefined) {
         serialLog.pn(`No PortInfo for device, or no USB VID/PID - assuming non-FTDI device.`);
         return;
@@ -1326,6 +1340,7 @@ function isFTDISerialDevice(serialDevice: ISerialDevice): boolean {
 // connection... though with a 2MHz 6502, you probably wouldn't want to.
 async function handleSerialDevice(options: ICommandLineOptions, serialDevice: ISerialDevice, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>, serialLog: utils.Log): Promise<void> {
     process.stderr.write(`Serial device: \`\`${serialDevice.deviceName}''\n`);
+
     await setFTDILatencyTimer(serialDevice, serialLog);
 
     serialLog.pn('Creating server...');
