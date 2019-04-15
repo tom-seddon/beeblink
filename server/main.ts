@@ -246,81 +246,31 @@ async function deviceControlTransfer(device: usb.Device, bmRequestType: number, 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function getEndpointDescription(endpoint: usb.Endpoint): string {
-    return 'bEndpointAddress=' + utils.hexdec(endpoint.descriptor.bEndpointAddress) + ', wMaxPacketSize=' + endpoint.descriptor.wMaxPacketSize;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-interface IBeebLinkDevice {
-    usbDevice: usb.Device;
-    usbSerial: string;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-async function findBeebLinkUSBDevices(log: utils.Log | undefined): Promise<IBeebLinkDevice[]> {
-    const usbDevices = usb.getDeviceList().filter(isBeebLinkDevice);
-
-    const devices: IBeebLinkDevice[] = [];
-    for (const usbDevice of usbDevices) {
-        try {
-            usbDevice.open(false);
-        } catch (error) {
-            if (log !== undefined) {
-                log.pn(getDeviceDescription(usbDevice) + ': failed to open: ' + error);
-            }
-            continue;
-        }
-
-        let buffer: Buffer | undefined;
-        try {
-            buffer = await new Promise<Buffer | undefined>((resolve, reject) => {
-                usbDevice.getStringDescriptor(usbDevice.deviceDescriptor.iSerialNumber,
-                    (error, buf) => {
-                        if (error !== undefined) {
-                            reject(error);
-                        } else {
-                            resolve(buf);
-                        }
-                    });
-            });
-        } catch (error) {
-            if (log !== undefined) {
-                log.pn(getDeviceDescription(usbDevice) + ': failed to get serial number: ' + error);
-            }
-            usbDevice.close();
-        }
-
-        // let open = true;
-        // let numCloseAttempts = 0;
-        // while (open) {
-        //     try {
-        //         ++numCloseAttempts;
-        //         usbDevice.close();
-        //         open = false;
-        //     } catch (error) {
-        //         if (log !== undefined) {
-        //             log.pn(getDeviceDescription(usbDevice) + ': failed to close on attempt ' + numCloseAttempts + ' (will retry): ' + error);
-        //         }
-
-        //         // hopefully very transient...
-        //         await delayMS(10);
-        //     }
-        // }
-        if (buffer === undefined) {
-            continue;
-        }
-
-        devices.push({
-            usbDevice,
-            usbSerial: buffer.toString('utf16le'),
-        });
+async function getUSBDeviceStringDescriptor(device: usb.Device, iIdentifier: number): Promise<string | undefined> {
+    if (iIdentifier === 0) {
+        return undefined;
     }
 
-    return devices;
+    let stringBuffer;
+    try {
+        stringBuffer = await new Promise<Buffer | undefined>((resolve, reject) => {
+            device.getStringDescriptor(iIdentifier, (error, buffer) => {
+                if (error !== undefined && error !== null) {
+                    reject(error);
+                } else {
+                    resolve(buffer);
+                }
+            });
+        });
+    } catch (error) {
+        return undefined;//`<<usb.Device.getStringDescriptor failed: ${error}>>`;
+    }
+
+    if (stringBuffer === undefined) {
+        return undefined;//`<<usb.Device.getStringDescriptor retured nothing>>`;
+    }
+
+    return stringBuffer.toString(`utf16le`);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -401,7 +351,7 @@ async function setDeviceSerialNumber(serial: number): Promise<void> {
         throw new Error('serial number must be between 0 and 65535 inclusive');
     }
 
-    const devices = await findBeebLinkUSBDevices(undefined);
+    const devices = usb.getDeviceList().filter(isBeebLinkDevice);
 
     if (devices.length === 0) {
         throw new Error('no BeebLink devices found');
@@ -409,7 +359,7 @@ async function setDeviceSerialNumber(serial: number): Promise<void> {
         throw new Error('multiple BeebLink devices found - serial number can only be set when a single device is plugged in');
     }
 
-    const usbDevice = devices[0].usbDevice;
+    const usbDevice = devices[0];
 
     usbDevice.open(false);
 
@@ -488,28 +438,10 @@ class BeebLinkDevice {
             return undefined;
         }
 
-        // The callback for usb.Device.getStringDescription returns a string, but
-        // the typings have it as a buffer. Anyway, it seems to work as it is...
-        let usbSerialBuffer: Buffer | undefined;
-        try {
-            usbSerialBuffer = await new Promise<Buffer | undefined>((resolve, reject) => {
-                device.getStringDescriptor(device.deviceDescriptor.iSerialNumber, (error, buffer) => {
-                    if (error !== undefined && error !== null) {
-                        reject(error);
-                    } else {
-                        resolve(buffer);
-                    }
-                });
-            });
-
-            if (usbSerialBuffer === undefined) {
-                throw new Error('usb.Device.getStringDescriptor returned nothing');
-            }
-        } catch (error) {
-            return await closeDevice(error, 'failed to get serial number');
+        const usbSerial = await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iSerialNumber);
+        if (usbSerial === undefined) {
+            return await closeDevice(undefined, 'failed to get serial number');
         }
-
-        const usbSerial = usbSerialBuffer.toString('utf16le');
 
         d = getDeviceDescription(device, usbSerial);
 
@@ -664,36 +596,6 @@ async function listSerialDevices(): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function getUSBDeviceStringDescriptor(device: usb.Device, iIdentifier: number): Promise<string> {
-    if (iIdentifier === 0) {
-        return `<<no string>>`;
-    }
-
-    let stringBuffer;
-    try {
-        stringBuffer = await new Promise<Buffer | undefined>((resolve, reject) => {
-            device.getStringDescriptor(iIdentifier, (error, buffer) => {
-                if (error !== undefined && error !== null) {
-                    reject(error);
-                } else {
-                    resolve(buffer);
-                }
-            });
-        });
-    } catch (error) {
-        return `<<usb.Device.getStringDescriptor failed: ${error}>>`;
-    }
-
-    if (stringBuffer === undefined) {
-        return `<<usb.Device.getStringDescriptor retured nothing>>`;
-    }
-
-    return stringBuffer.toString(`utf16le`);
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 async function listUSBDevices(): Promise<void> {
     const devices = usb.getDeviceList();
 
@@ -781,12 +683,6 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         };
 
         await utils.fsMkdirAndWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
-    }
-
-    if (!options.http) {
-        if ((await findBeebLinkUSBDevices(undefined)).length === 0) {
-            throw new Error('no BeebLink devices found');
-        }
     }
 
     return true;
@@ -1200,7 +1096,7 @@ interface IReadWaiter {
 }
 
 async function setFTDILatencyTimer(serialDevice: ISerialDevice, serialLog: utils.Log): Promise<void> {
-    if(isWindows) {
+    if (isWindows) {
         // The device open fails with LIBUSB_ERROR_UNSUPPORTED. See, e.g.,
         // https://stackoverflow.com/questions/17350177/
         //
