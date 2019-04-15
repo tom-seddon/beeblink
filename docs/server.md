@@ -25,11 +25,25 @@ Use `--rom` to tell the server where to find the BLFS ROM image. It
 will then try to load it from this location, not the current folder,
 when using the bootstrap program or `*BLSELFUPDATE`.
 
+The server will autodetect and open any FTDI devices thet look like
+they might be a Tube serial board. If it's opening any such devices
+that you aren't using for BeebLink, use `--serial-exclude` to have
+them excluded. The exclusion is by device serial number (as seen in
+the output) so that it stays excluded if the COM port assignments
+change.
+
 # Using a config file
 
-You can create a config file to avoid having to specify folders on the
-command line each time. The server will try to load this automatically
-on startup each time.
+You can create a JSON config file to avoid having to specify folders
+on the command line each time. The config file stores the settings for
+the following command-line flags:
+
+* list of folders to search for volumes
+* `--git`
+* `--default-volume`
+* `--avr-rom`
+* `--serial-rom`
+* `--serial-exclude`
 
 The server can create the config file for you based on the command
 line options you provide. Use the `--save-config` option to do this.

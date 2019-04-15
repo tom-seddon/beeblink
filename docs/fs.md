@@ -9,37 +9,15 @@ limitations.
 
 ## Run server on PC
 
-Unzip the server zip file somewhere on your PC. The command line
-options are slightly different depending on whether you're using the
-Tube serial interface or an AVR.
-
-### Tube Serial
-
-Run with `--list-devices` to get a list of serial devices the server
-can communicate with. You'll just have to guess which is the right
-one, as there's no autodetection process yet...
-
-OS X/Linux: `./beeblink_server --list-devices`
-
-Windows: `beeblink_server --list-devices`
-
-Then run the server as follows, replacing `DEVICE_NAME` with the name
-of the device from the list. On my Mac, for example, this is
-`/dev/tty.usbserial-FT33WLVU`.
-
-OS X/Linux: `./beeblink_server --serial-device=DEVICE_NAME`
-
-Windows: `beeblink_server --serial-device=DEVICE_NAME`
-
-### AVR
-
-Run it like this from the command line:
+Unzip the server zip file somewhere on your PC, and run it like this
+from the command line:
 
 OS X/Linux: `./beeblink_server --default-volume beeblink ./volumes`
 
 Windows: `beeblink_server --default-volume beeblink ./volumes`
 
-Any AVR devices you have connected will be autodetected. 
+The AVR or Tube serial devices you have connected will be
+autodetected.
 
 After a moment you should get a `Server running...` message.
 
@@ -202,8 +180,9 @@ out`.
 
 If you're running the filing system from writeable sideways RAM, the
 banner will read `BeebLink <SWR>`. There's no problem doing this, but
-the ROM is intended for use from EEPROM or write-protected sideways
-RAM, so it doesn't have to be reloaded each time.
+the ROM is intended for use from EEPROM, or battery-backed
+write-protected sideways RAM, so it doesn't have to be reloaded each
+time and won't get overwritten by careless programs.
 
 The message is mainly there for my benefit, in case I switch off the
 write protection and then forget...
@@ -279,8 +258,7 @@ not much else...
 Activate BLFS.
 
 These commands handle the case where there is no DFS installed, for
-compatibility with (the large amount of) software that does a `*DISC`
-at some point.
+compatibility with software that does a `*DISC` at some point.
 
 (If you have a DFS installed, you can still have BLFS handle `*DISC`,
 if you prefer. See the `BLCONFIG options` section.)

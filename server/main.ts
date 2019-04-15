@@ -65,10 +65,11 @@ const isWindows = process.platform === 'win32';
 
 interface IConfigFile {
     folders: string[] | undefined;
-    defaultVolume: string | undefined;
+    defaultVolume: string | undefined;//ugh, why is this named wrongly? :(
     avr_rom: string | undefined;
     serial_rom: string | undefined;
     git: boolean | undefined;
+    serial_exclude: string[] | undefined;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -95,12 +96,12 @@ interface ICommandLineOptions {
     server_data_verbose: boolean;
     http_all_interfaces: boolean;
     libusb_debug_level: number | null;
-    serial_device: string[] | null;
     serial_verbose: boolean;
     serial_sync_verbose: boolean;
     serial_data_verbose: boolean;
     list_serial_devices: boolean;
     list_usb_devices: boolean;
+    serial_exclude: string[] | null;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -338,6 +339,16 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
     options.serial_rom = getROM(options.serial_rom, config.serial_rom, DEFAULT_BEEBLINK_SERIAL_ROM);
 
     options.git = options.git || config.git === true;
+
+    if (config.serial_exclude !== undefined) {
+        if (options.serial_exclude === null) {
+            options.serial_exclude = [];
+        }
+
+        for (const e of config.serial_exclude) {
+            options.serial_exclude.push(e);
+        }
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -589,7 +600,6 @@ async function listSerialDevices(): Promise<void> {
         }
 
         process.stdout.write(`${i}. ${description}\n`);
-
     }
 }
 
@@ -680,6 +690,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
             avr_rom: options.avr_rom !== null ? options.avr_rom : undefined,
             serial_rom: options.serial_rom !== null ? options.serial_rom : undefined,
             git: options.git !== null ? options.git : undefined,
+            serial_exclude: options.serial_exclude !== null ? options.serial_exclude : undefined,
         };
 
         await utils.fsMkdirAndWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
@@ -1065,37 +1076,7 @@ async function handleUSB(options: ICommandLineOptions, createServer: (additional
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-interface ISerialDevice {
-    deviceName: string;
-    portInfo: SerialPort.PortInfo | undefined;
-}
-
-async function getSerialDevices(options: ICommandLineOptions): Promise<ISerialDevice[]> {
-    const serialDevices: ISerialDevice[] = [];
-
-    const portInfos = await SerialPort.list();
-
-    if (options.serial_device !== null) {
-        for (const deviceName of options.serial_device) {
-            serialDevices.push({
-                deviceName,
-                portInfo: portInfos.find((portInfo: SerialPort.PortInfo) => portInfo.comName === deviceName),
-            });
-        }
-    }
-
-    return serialDevices;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-interface IReadWaiter {
-    resolve: (() => void) | undefined;
-    reject: ((error: any) => void) | undefined;
-}
-
-async function setFTDILatencyTimer(serialDevice: ISerialDevice, serialLog: utils.Log): Promise<void> {
+async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, serialLog: utils.Log): Promise<void> {
     if (isWindows) {
         // The device open fails with LIBUSB_ERROR_UNSUPPORTED. See, e.g.,
         // https://stackoverflow.com/questions/17350177/
@@ -1105,46 +1086,27 @@ async function setFTDILatencyTimer(serialDevice: ISerialDevice, serialLog: utils
         return;
     }
 
-    if (serialDevice.portInfo === undefined || serialDevice.portInfo.vendorId === undefined || serialDevice.portInfo.productId === undefined) {
-        serialLog.pn(`No PortInfo for device, or no USB VID/PID - assuming non-FTDI device.`);
-        return;
-    }
-
-    // Check it's one of the recognised devices.
-    {
-        const p = serialDevice.portInfo;
-        serialLog.pn(`USB VID/PID: ${p.vendorId}/${p.productId}`);
-        if (p.vendorId === '0403' && p.productId === '6014') {
-            // FTDI 232H
-            serialLog.pn(`FT-2323H`);
-        } else {
-            serialLog.pn(`Not recognised`);
-            return;
-        }
-    }
-
     // Try to find the corresponding usb device in the device list.
     let usbDevice: usb.Device | undefined;
     {
-        const idProduct = Number.parseInt(serialDevice.portInfo.productId, 16);//why not a number?
-        const idVendor = Number.parseInt(serialDevice.portInfo.vendorId, 16);//why not a number?
+        const idProduct = Number.parseInt(portInfo.productId!, 16);//why not a number?
+        const idVendor = Number.parseInt(portInfo.vendorId!, 16);//why not a number?
         const usbDevices = usb.getDeviceList();
         for (const d of usbDevices) {
             if (d.deviceDescriptor.idProduct === idProduct && d.deviceDescriptor.idVendor === idVendor) {
-                serialLog.pn(`Found device with matching VID/PID...`);
                 try {
                     d.open(false);
                 } catch (error) {
                     // oh well...
-                    serialLog.pn(`Failed to open device: ${error}`);
+                    process.stderr.write(`Error opening USB device corresponding to ${portInfo.comName}: ${error}`);
                     continue;
                 }
 
                 const serialNumber = await getUSBDeviceStringDescriptor(d, d.deviceDescriptor.iSerialNumber);
                 serialLog.pn(`Device USB serial number: ${serialNumber}`);
 
-                if (serialNumber === serialDevice.portInfo.serialNumber) {
-                    serialLog.pn(`Found FTDI USB device corresponding to serial device.`);
+                if (serialNumber === portInfo.serialNumber) {
+                    serialLog.pn(`Found corresponding USB device.`);
                     usbDevice = d;
                     break;
                 }
@@ -1155,6 +1117,7 @@ async function setFTDILatencyTimer(serialDevice: ISerialDevice, serialLog: utils
     }
 
     if (usbDevice === undefined) {
+        serialLog.pn(`Didn't find corresponding USB device.`);
         return;
     }
 
@@ -1197,39 +1160,33 @@ async function setFTDILatencyTimer(serialDevice: ISerialDevice, serialLog: utils
 
         serialLog.pn(`Done... hopefully.`);
     } catch (error) {
-        process.stderr.write(`Error setting FTDI latency timer: ${error}\n`);
+        process.stderr.write(`Error setting FTDI latency timer for ${portInfo.comName}: ${error}\n`);
     } finally {
         usbDevice.close();
     }
 }
 
-function isFTDISerialDevice(serialDevice: ISerialDevice): boolean {
-    if (serialDevice.portInfo !== undefined) {
-        const p = serialDevice.portInfo;
-
-        if (p.vendorId === '0403' && p.productId === '6014') {
-            return true;
-        }
-    }
-
-    return false;
+interface IReadWaiter {
+    resolve: (() => void) | undefined;
+    reject: ((error: any) => void) | undefined;
 }
 
-// This is completely designed for use with the FT-232H Tube serial device, but
-// I've tried to leave the code at least somewhat general, as in principle you
-// could use it with anything, and it could presumably work with a real serial
-// connection... though with a 2MHz 6502, you probably wouldn't want to.
-async function handleSerialDevice(options: ICommandLineOptions, serialDevice: ISerialDevice, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>, serialLog: utils.Log): Promise<void> {
-    process.stderr.write(`Serial device: \`\`${serialDevice.deviceName}''\n`);
+function getPortDescription(portInfo: SerialPort.PortInfo): string {
+    return `Device ${portInfo.comName} Serial ${portInfo.serialNumber!}`;
+}
 
-    await setFTDILatencyTimer(serialDevice, serialLog);
+async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>, serialLog: utils.Log): Promise<void> {
+    await setFTDILatencyTimer(portInfo, serialLog);
+
+    const prefix = portInfo.serialNumber!;
 
     serialLog.pn('Creating server...');
-    const server = await createServer('SERIAL', options.serial_rom);
-
+    const server = await createServer(prefix, options.serial_rom);
 
     // The baud rate doesn't actually seem to matter.
-    const port: SerialPort = new SerialPort(serialDevice.deviceName, { baudRate: 115200, autoOpen: false });
+    const port: SerialPort = new SerialPort(portInfo.comName, { baudRate: 115200, autoOpen: false });
+
+    process.stderr.write(`${getPortDescription(portInfo)}: serving.\n`);
 
     await new Promise<void>((resolve, reject) => {
         port.open((error) => {
@@ -1245,9 +1202,9 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
     const readBuffers: Buffer[] = [];
     let readIndex = 0;
 
-    const dataInLog = new utils.Log('SERIAL', serialLog.f, options.serial_data_verbose);
-    const dataOutLog = new utils.Log('SERIAL', serialLog.f, options.serial_data_verbose);
-    const syncLog = new utils.Log('SERIAL: sync', serialLog.f, options.serial_sync_verbose);
+    const dataInLog = new utils.Log(prefix, serialLog.f, options.serial_data_verbose);
+    const dataOutLog = new utils.Log(prefix, serialLog.f, options.serial_data_verbose);
+    const syncLog = new utils.Log(`${prefix}: sync`, serialLog.f, options.serial_sync_verbose);
 
     port.on('data', (data: Buffer): void => {
         readBuffers.push(data);
@@ -1572,15 +1529,19 @@ async function handleSerialDevice(options: ICommandLineOptions, serialDevice: IS
     }
 }
 
-async function handleSerial(options: ICommandLineOptions, serialDevices: ISerialDevice[], createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): Promise<void> {
-    if (serialDevices.length === 0) {
-        return;
-    }
-
+async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): Promise<void> {
     const serialLog = new utils.Log('SERIAL', process.stdout, options.serial_verbose);
 
-    for (const serialDevice of serialDevices) {
-        void handleSerialDevice(options, serialDevice, createServer, serialLog);
+    for (const portInfo of await SerialPort.list()) {
+        if (portInfo.serialNumber !== undefined) {
+            if (portInfo.vendorId === '0403' && portInfo.productId === '6014') {
+                if (options.serial_exclude !== null && options.serial_exclude.indexOf(portInfo.serialNumber) >= 0) {
+                    process.stderr.write(`${getPortDescription(portInfo)}: excluded, so not serving.\n`);
+                } else {
+                    void handleTubeSerialDevice(options, portInfo, createServer, serialLog);
+                }
+            }
+        }
     }
 }
 
@@ -1600,8 +1561,6 @@ async function main(options: ICommandLineOptions) {
     const gaManipulator = await createGitattributesManipulator(options, volumes);
 
     const defaultVolume = findDefaultVolume(options, volumes);
-
-    const serialDevices = await getSerialDevices(options);
 
     // 
     const logPalette = [
@@ -1635,7 +1594,7 @@ async function main(options: ICommandLineOptions) {
 
     void handleUSB(options, createServer);
 
-    void handleSerial(options, serialDevices, createServer);
+    void handleSerial(options, createServer);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -1685,7 +1644,7 @@ function integer(s: string): number {
     parser.addArgument(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output' });
     parser.addArgument(['--http'], { action: 'storeTrue', help: 'enable HTTP server' });
     parser.addArgument(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
-    parser.addArgument(['--serial-device'], { action: 'append', metavar: 'DEVICE', help: 'listen on serial port DEVICE' });
+    parser.addArgument(['--serial-exclude'], { action: 'append', metavar: 'DEVICE', help: 'don\'t listen on serial port DEVICE' });
     parser.addArgument(['--serial-verbose'], { action: 'storeTrue', help: 'extra serial-related output' });
     parser.addArgument(['--serial-sync-verbose'], { action: 'storeTrue', help: 'extra serial sync-related output (requires --serial-verbose)' });
     parser.addArgument(['--serial-data-verbose'], { action: 'storeTrue', help: 'dump raw serial data sent/received (requires --serial-verbose)' });

@@ -43,7 +43,7 @@ run. There are no binary releases for these platforms.)
 ## Tube serial setup
 
 Connect Tube serial board to BBC's Tube connector, use the jumper to
-select Cooms mode, and connect the device to your PC.
+select Comms mode, and connect the device to your PC.
 
 If using Windows,
 [you'll want to tweak the device settings](./docs/ftdi_latency_timer.md).
