@@ -55,8 +55,6 @@ const HTTP_LISTEN_PORT = 48875;//0xbeeb;
 
 const BEEBLINK_SENDER_ID = 'beeblink-sender-id';
 
-const DEFAULT_SERIAL_BAUD_RATE = 115200;
-
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -98,6 +96,7 @@ interface ICommandLineOptions {
     serial_sync_verbose: boolean;
     serial_data_verbose: boolean;
     list_serial_devices: boolean;
+    list_usb_devices: boolean;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -631,6 +630,100 @@ async function handleStallError(blDevice: BeebLinkDevice, endpoint: usb.Endpoint
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+async function listSerialDevices(): Promise<void> {
+    const portInfos = await SerialPort.list();
+    process.stdout.write(portInfos.length + ' serial devices:\n');
+
+    for (let i = 0; i < portInfos.length; ++i) {
+        const p = portInfos[i];
+
+        const attrs: string[] = [];
+
+        function attr(value: string | undefined, name: string): void {
+            if (value !== undefined) {
+                attrs.push(`${name}: ${value}`);
+            }
+        }
+
+        attr(p.manufacturer, `Manufacturer`);
+        attr(p.serialNumber, `Serial number`);
+        attr(p.vendorId, `Vendor ID`);
+        attr(p.productId, `Product ID`);
+        attr(p.locationId, `Location ID`);
+        attr(p.pnpId, `PNP ID`);
+
+        let description = `${p.comName}`;
+        if (attrs.length > 0) {
+            description += ` (${attrs.join('; ')})`;
+        }
+
+        process.stdout.write(`${i}. ${description}\n`);
+
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+async function getUSBDeviceStringDescriptor(device: usb.Device, iIdentifier: number): Promise<string> {
+    if (iIdentifier === 0) {
+        return `<<no string>>`;
+    }
+
+    let stringBuffer;
+    try {
+        stringBuffer = await new Promise<Buffer | undefined>((resolve, reject) => {
+            device.getStringDescriptor(iIdentifier, (error, buffer) => {
+                if (error !== undefined && error !== null) {
+                    reject(error);
+                } else {
+                    resolve(buffer);
+                }
+            });
+        });
+    } catch (error) {
+        return `<<usb.Device.getStringDescriptor failed: ${error}>>`;
+    }
+
+    if (stringBuffer === undefined) {
+        return `<<usb.Device.getStringDescriptor retured nothing>>`;
+    }
+
+    return stringBuffer.toString(`utf16le`);
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+async function listUSBDevices(): Promise<void> {
+    const devices = usb.getDeviceList();
+
+    process.stdout.write(`${devices.length} USB devices:\n`);
+    for (let i = 0; i < devices.length; ++i) {
+        const device: usb.Device = devices[i];
+
+        process.stdout.write(`${i}. busNumber=${device.busNumber}\n`);
+        process.stdout.write(`    DeviceAddress=${device.deviceAddress}\n`);
+        process.stdout.write(`    PID=${utils.hex4(device.deviceDescriptor.idProduct)} VID=${utils.hex4(device.deviceDescriptor.idVendor)}\n`);
+        process.stdout.write(`    serial=${device.deviceDescriptor.iSerialNumber}\n`);
+
+        try {
+            device.open(false);
+
+            process.stdout.write(`    Serial: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iSerialNumber)}\n`);
+            process.stdout.write(`    Product: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iProduct)}\n`);
+            process.stdout.write(`    Manufacturer: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iManufacturer)}\n`);
+
+            device.close();
+        } catch (error) {
+            process.stdout.write(`   Failed to open device: ${error}\n`);
+        }
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 async function handleCommandLineOptions(options: ICommandLineOptions, log: utils.Log): Promise<boolean> {
     if (options.set_serial !== null) {
         await setDeviceSerialNumber(options.set_serial);
@@ -638,38 +731,12 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     }
 
     if (options.list_serial_devices) {
-        const portInfos = await SerialPort.list();
-        process.stdout.write(portInfos.length + ' serial devices:\n');
-        for (let i = 0; i < portInfos.length; ++i) {
-            const p = portInfos[i];
+        await listSerialDevices();
+        return false;
+    }
 
-            const attrs: string[] = [];
-
-            if (p.manufacturer !== undefined) {
-                attrs.push(`Manufacturer: ${p.manufacturer}`);
-            }
-
-            if (p.serialNumber !== undefined) {
-                attrs.push(`Serial number: ${p.serialNumber}`);
-            }
-
-            if (p.vendorId !== undefined) {
-                attrs.push(`Vendor ID: ${p.vendorId}`);
-            }
-
-            if (p.productId !== undefined) {
-                attrs.push(`Product ID: ${p.productId}`);
-            }
-
-            let description = `${p.comName}`;
-            if (attrs.length > 0) {
-                description += ` (${attrs.join('; ')})`;
-            }
-
-            process.stdout.write(`    ${i}. ${description}\n`);
-
-        }
-
+    if (options.list_usb_devices) {
+        await listUSBDevices();
         return false;
     }
 
@@ -1114,31 +1181,20 @@ async function handleUSB(options: ICommandLineOptions, createServer: (additional
 
 interface ISerialDevice {
     deviceName: string;
-    baud: number;
+    portInfo: SerialPort.PortInfo | undefined;
 }
 
-function getSerialDevices(options: ICommandLineOptions): ISerialDevice[] {
+async function getSerialDevices(options: ICommandLineOptions): Promise<ISerialDevice[]> {
     const serialDevices: ISerialDevice[] = [];
 
+    const portInfos = await SerialPort.list();
+
     if (options.serial_device !== null) {
-        for (const serialDeviceString of options.serial_device) {
-            const parts = serialDeviceString.split(':');
-
-            let serialDevice: ISerialDevice;
-            if (parts.length === 1) {
-                serialDevice = { deviceName: parts[0], baud: DEFAULT_SERIAL_BAUD_RATE };
-            } else if (parts.length === 2) {
-                const baud = parseInt(parts[1], undefined);
-                if (Number.isNaN(baud)) {
-                    throw new Error('invalid baud rate: ' + parts[1]);
-                }
-
-                serialDevice = { deviceName: parts[0], baud };
-            } else {
-                throw new Error('invalid serial device syntax: ' + serialDeviceString);
-            }
-
-            serialDevices.push(serialDevice);
+        for (const deviceName of options.serial_device) {
+            serialDevices.push({
+                deviceName,
+                portInfo: portInfos.find((portInfo: SerialPort.PortInfo) => portInfo.comName === deviceName),
+            });
         }
     }
 
@@ -1148,53 +1204,136 @@ function getSerialDevices(options: ICommandLineOptions): ISerialDevice[] {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// class SerialRequestBuilder {
-//     private c: number;
-//     private p: Buffer | undefined;
-//     private negativeOffset: number;
-
-//     public constructor() {
-//     this.c = 0;
-//     this.negativeOffset = 0;
-//     this.p = undefined;
-// }
-
-//     // Returns Request if completed request received, true for more data, or false if cancelled.
-//     public addByte(x: number): Request | boolean {
-
-// }
-// }
-
-// class SerialReader {
-//     private port: SerialPort;
-//     private buffers: Buffer[];
-//     private bufferPos: number;//always points into this.buffers[0]
-
-//     public constructor(port: SerialPort) {
-//         this.port = port;
-//         this.buffers = [];
-//         this.bufferPos = 0;
-//     }
-
-//     public async readUInt8(): Promise<number> {
-//         if (this.buffers.length === 0) {
-
-//         }
-//     }
-// }
-
 interface IReadWaiter {
     resolve: (() => void) | undefined;
     reject: ((error: any) => void) | undefined;
 }
 
+async function setFTDILatencyTimer(serialDevice: ISerialDevice, serialLog: utils.Log): Promise<void> {
+    if (serialDevice.portInfo === undefined || serialDevice.portInfo.vendorId === undefined || serialDevice.portInfo.productId === undefined) {
+        serialLog.pn(`No PortInfo for device, or no USB VID/PID - assuming non-FTDI device.`);
+        return;
+    }
+
+    // Check it's one of the recognised devices.
+    {
+        const p = serialDevice.portInfo;
+        serialLog.pn(`USB VID/PID: ${p.vendorId}/${p.productId}`);
+        if (p.vendorId === '0403' && p.productId === '6014') {
+            // FTDI 232H
+            serialLog.pn(`FT-2323H`);
+        } else {
+            serialLog.pn(`Not recognised`);
+            return;
+        }
+    }
+
+    // Try to find the corresponding usb device in the device list.
+    let usbDevice: usb.Device | undefined;
+    {
+        const idProduct = Number.parseInt(serialDevice.portInfo.productId, 16);//why not a number?
+        const idVendor = Number.parseInt(serialDevice.portInfo.vendorId, 16);//why not a number?
+        const usbDevices = usb.getDeviceList();
+        for (const d of usbDevices) {
+            if (d.deviceDescriptor.idProduct === idProduct && d.deviceDescriptor.idVendor === idVendor) {
+                serialLog.pn(`Found device with matching VID/PID...`);
+                try {
+                    d.open(false);
+                } catch (error) {
+                    // oh well...
+                    serialLog.pn(`Failed to open device: ${error}`);
+                    continue;
+                }
+
+                const serialNumber = await getUSBDeviceStringDescriptor(d, d.deviceDescriptor.iSerialNumber);
+                serialLog.pn(`Device USB serial number: ${serialNumber}`);
+
+                if (serialNumber === serialDevice.portInfo.serialNumber) {
+                    serialLog.pn(`Found FTDI USB device corresponding to serial device.`);
+                    usbDevice = d;
+                    break;
+                }
+
+                d.close();
+            }
+        }
+    }
+
+    if (usbDevice === undefined) {
+        return;
+    }
+
+    try {
+        process.stderr.write(`Setting FTDI latency timer to 1ms.\n`);
+
+        // logic copied out of libftdi's ftdi_usb_open_dev.
+        serialLog.pn(`Setting USB device configuration...`);
+        if (usbDevice.configDescriptor.bConfigurationValue !== usbDevice.allConfigDescriptors[0].bConfigurationValue) {
+            await new Promise<void>((resolve, reject) => {
+                usbDevice!.setConfiguration(usbDevice!.allConfigDescriptors[0].bConfigurationValue, (err) => {
+                    if (err !== undefined) {
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
+        }
+
+        const FTDI_DEVICE_OUT_REQTYPE = usb.LIBUSB_REQUEST_TYPE_VENDOR | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_OUT;
+        const SIO_SET_LATENCY_TIMER_REQUEST = 0x09;
+
+        // values corresponding to ftdi->interface and ftdi->index. 1 =
+        // INTERFACE_A. (No idea, just copying code here.)
+        const ftdiInterface = 0;
+        const ftdiIndex = 1;
+
+        // 1 = INTERFACE_A.
+        serialLog.pn(`Claiming USB device interface...`);
+        usbDevice.__claimInterface(ftdiInterface);
+
+        serialLog.pn(`Setting latency timer...`);
+        await deviceControlTransfer(usbDevice,
+            FTDI_DEVICE_OUT_REQTYPE,
+            SIO_SET_LATENCY_TIMER_REQUEST,
+            1,//1 = 1ms
+            ftdiIndex,
+            undefined);
+
+        serialLog.pn(`Done... hopefully.`);
+    } catch (error) {
+        process.stderr.write(`Error setting FTDI latency timer: ${error}\n`);
+    } finally {
+        usbDevice.close();
+    }
+}
+
+function isFTDISerialDevice(serialDevice: ISerialDevice): boolean {
+    if (serialDevice.portInfo !== undefined) {
+        const p = serialDevice.portInfo;
+
+        if (p.vendorId === '0403' && p.productId === '6014') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// This is completely designed for use with the FT-232H Tube serial device, but
+// I've tried to leave the code at least somewhat general, as in principle you
+// could use it with anything, and it could presumably work with a real serial
+// connection... though with a 2MHz 6502, you probably wouldn't want to.
 async function handleSerialDevice(options: ICommandLineOptions, serialDevice: ISerialDevice, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>, serialLog: utils.Log): Promise<void> {
+    process.stderr.write(`Serial device: \`\`${serialDevice.deviceName}''\n`);
+    await setFTDILatencyTimer(serialDevice, serialLog);
+
     serialLog.pn('Creating server...');
     const server = await createServer('SERIAL', options.serial_rom);
 
-    process.stderr.write(`Serial device: \`\`${serialDevice.deviceName}'', baud rate: ${serialDevice.baud}\n`);
 
-    const port: SerialPort = new SerialPort(serialDevice.deviceName, { baudRate: serialDevice.baud, autoOpen: false });
+    // The baud rate doesn't actually seem to matter.
+    const port: SerialPort = new SerialPort(serialDevice.deviceName, { baudRate: 115200, autoOpen: false });
 
     await new Promise<void>((resolve, reject) => {
         port.open((error) => {
@@ -1566,7 +1705,7 @@ async function main(options: ICommandLineOptions) {
 
     const defaultVolume = findDefaultVolume(options, volumes);
 
-    const serialDevices = getSerialDevices(options);
+    const serialDevices = await getSerialDevices(options);
 
     // 
     const logPalette = [
@@ -1664,11 +1803,12 @@ function integer(s: string): number {
     parser.addArgument(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output' });
     parser.addArgument(['--http'], { action: 'storeTrue', help: 'enable HTTP server' });
     parser.addArgument(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
-    parser.addArgument(['--serial-device'], { action: 'append', metavar: 'DEVICE(:BAUD)', help: 'listen on serial port DEVICE (optionally, with baud rate BAUD - default is ' + DEFAULT_SERIAL_BAUD_RATE + ')' });
+    parser.addArgument(['--serial-device'], { action: 'append', metavar: 'DEVICE', help: 'listen on serial port DEVICE' });
     parser.addArgument(['--serial-verbose'], { action: 'storeTrue', help: 'extra serial-related output' });
     parser.addArgument(['--serial-sync-verbose'], { action: 'storeTrue', help: 'extra serial sync-related output (requires --serial-verbose)' });
     parser.addArgument(['--serial-data-verbose'], { action: 'storeTrue', help: 'dump raw serial data sent/received (requires --serial-verbose)' });
     parser.addArgument(['--list-serial-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
+    parser.addArgument(['--list-usb-devices'], { action: 'storeTrue', help: 'list available USB devices, then exit' });
     //parser.addArgument(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
 
     const options = parser.parseArgs();
