@@ -65,7 +65,7 @@ const isWindows = process.platform === 'win32';
 
 interface IConfigFile {
     folders: string[] | undefined;
-    defaultVolume: string | undefined;//ugh, why is this named wrongly? :(
+    default_volume: string | undefined;
     avr_rom: string | undefined;
     serial_rom: string | undefined;
     git: boolean | undefined;
@@ -294,8 +294,15 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
     const str = data.toString('utf-8');
     const config = JSON.parse(str) as IConfigFile;
 
-    if (config.defaultVolume !== undefined && options.default_volume === null) {
-        options.default_volume = config.defaultVolume;
+    if (options.default_volume === null) {
+        if (config.default_volume !== undefined) {
+            options.default_volume = config.default_volume;
+        } else {
+            // Handle inconsistent spelling that didn't get fixed for a while.
+            if ((config as any).defaultVolume !== undefined) {
+                options.default_volume = (config as any).defaultVolume;
+            }
+        }
     }
 
     // Keep config folders first.
@@ -685,7 +692,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
 
     if (options.save_config !== null) {
         const config: IConfigFile = {
-            defaultVolume: options.default_volume !== null ? options.default_volume : undefined,
+            default_volume: options.default_volume !== null ? options.default_volume : undefined,
             folders: options.folders,
             avr_rom: options.avr_rom !== null ? options.avr_rom : undefined,
             serial_rom: options.serial_rom !== null ? options.serial_rom : undefined,
