@@ -41,8 +41,8 @@ import * as SerialPort from 'serialport';
 /////////////////////////////////////////////////////////////////////////
 
 // pain to do this properly with argparse.
-const DEFAULT_USB_VID = 0x1209;
-const DEFAULT_USB_PID = 0xbeeb;
+const BEEBLINK_USB_VID = 0x1209;
+const BEEBLINK_USB_PID = 0xbeeb;
 
 const DEVICE_RETRY_DELAY_MS = 1000;
 
@@ -76,7 +76,6 @@ interface IConfigFile {
 
 interface ICommandLineOptions {
     verbose: boolean;
-    device: number[];
     avr_rom: string | null;
     serial_rom: string | null;
     fs_verbose: boolean;
@@ -190,7 +189,7 @@ class InEndpointReader {
 /////////////////////////////////////////////////////////////////////////
 
 function isBeebLinkDevice(device: usb.Device): boolean {
-    return device.deviceDescriptor.idVendor === gBeebLinkDeviceVID && device.deviceDescriptor.idProduct === gBeebLinkDevicePID;
+    return device.deviceDescriptor.idVendor === BEEBLINK_USB_VID && device.deviceDescriptor.idProduct === BEEBLINK_USB_PID;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -262,13 +261,8 @@ interface IBeebLinkDevice {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-let gBeebLinkDeviceVID = DEFAULT_USB_VID;
-let gBeebLinkDevicePID = DEFAULT_USB_PID;
-
 async function findBeebLinkUSBDevices(log: utils.Log | undefined): Promise<IBeebLinkDevice[]> {
-    const usbDevices = usb.getDeviceList().filter((device) => {
-        return device.deviceDescriptor.idVendor === gBeebLinkDeviceVID && device.deviceDescriptor.idProduct === gBeebLinkDevicePID;
-    });
+    const usbDevices = usb.getDeviceList().filter(isBeebLinkDevice);
 
     const devices: IBeebLinkDevice[] = [];
     for (const usbDevice of usbDevices) {
@@ -760,15 +754,6 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
 
     //log.pn('load_config: ``' + options.load_config + '\'\'');
     log.pn('save_config: ``' + options.save_config + '\'\'');
-
-    if (Number.isNaN(options.device[0]) || Number.isNaN(options.device[1])) {
-        throw new Error('invalid USB VID/PID specified');
-    }
-
-    gBeebLinkDeviceVID = options.device[0];
-    gBeebLinkDevicePID = options.device[1];
-    log.pn('BeebLink device VID: 0x' + utils.hex4(gBeebLinkDeviceVID));
-    log.pn('BeebLink device PID: 0x' + utils.hex4(gBeebLinkDevicePID));
 
     if (options.folders.length === 0) {
         throw new Error('no folders specified');
@@ -1760,19 +1745,6 @@ async function main(options: ICommandLineOptions) {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// crap name for it, but argparse pops the actual function name in the error
-// string, so it would be nice to have something meaningful.
-//
-// https://github.com/nodeca/argparse/pull/45
-function usbVIDOrPID(s: string): number {
-    const x = parseInt(s, undefined);
-    if (Number.isNaN(x)) {
-        throw new Error('invalid number provided: "' + s + '"');
-    }
-
-    return x;
-}
-
 // argparse calls parseInt with a radix of 10.
 function integer(s: string): number {
     const x = parseInt(s, undefined);
@@ -1796,7 +1768,6 @@ function integer(s: string): number {
     });
 
     parser.addArgument(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });
-    parser.addArgument(['--device'], { nargs: 2, metavar: 'ID', type: usbVIDOrPID, defaultValue: [DEFAULT_USB_VID, DEFAULT_USB_PID], help: 'set USB device VID/PID. Default: 0x' + utils.hex4(DEFAULT_USB_VID) + ' 0x' + utils.hex4(DEFAULT_USB_PID) });
     parser.addArgument(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink AVR ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM });
     parser.addArgument(['--serial-rom'], { metavar: 'FILE:', defaultValue: null, help: 'read BeebLink serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_SERIAL_ROM });
     parser.addArgument(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
