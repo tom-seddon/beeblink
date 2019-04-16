@@ -1205,60 +1205,64 @@ transfer:                                         ;...
                 
 ;-------------------------------------------------------------------------
 ;
-; Instantiations of the various macro-generated transfer routines.
+; Instantiations of the various macro-generated transfer routines, and
+; some hand-written stuff.
 ;
+; This is all just in any old order, whatever's necessary to fit each
+; routine into 1 page so that the branch cycle counts are predictable
+; :(
+
+;-------------------------------------------------------------------------
+
+                .align 256
+                
+;-------------------------------------------------------------------------
+
+                .page
 recv_host_bytes: .proc
                 .transfer_host_bytes_routine recv
                 .pend
+                .endp
 
+                .page
 send_host_bytes: .proc
                 .transfer_host_bytes_routine send
                 .pend
+                .endp
                 
-recv_host_page: .proc
-                .transfer_host_page_routine recv
-                .pend
-
-send_host_page: .proc
-                .transfer_host_page_routine send
-                .pend
-
+                .page
 itu_recv_host_bytes: .proc
                 .itu_transfer_host_bytes_routine recv
                 .pend
+                .endp
 
+                .page
 itu_send_host_bytes: .proc
                 .itu_transfer_host_bytes_routine send
                 .pend
-                
-itu_recv_host_page: .proc
-                .itu_transfer_host_page_routine recv
-                .pend
+                .endp
 
-itu_send_host_page: .proc
-                .itu_transfer_host_page_routine send
-                .pend
-
+                .page
 recv_parasite_bytes: .proc
                 .transfer_parasite_bytes_routine recv
                 .pend
+                .endp
 
+                .page
 send_parasite_bytes: .proc
                 .transfer_parasite_bytes_routine send
                  .pend
+                .endp
 
-recv_parasite_page: .proc
-                .transfer_parasite_page_routine recv
-                .pend
+;-------------------------------------------------------------------------
 
-send_parasite_page: .proc
-                .transfer_parasite_page_routine send
-                .pend
+                .align 256
 
 ;-------------------------------------------------------------------------
 ;
 ; ITU=1 host->parasite bytes transfer.
-; 
+;
+                .page
 itu_recv_parasite_bytes: .proc
                 .cpu '65c02'
                 php
@@ -1287,11 +1291,100 @@ loop:
                 rts
                 .cpu 'default'
                 .pend
+                .endp
 
+;-------------------------------------------------------------------------
+;
+; ITU=1 parasite->host bytes transfer.
+;
+; The 48 cycle initial delay is included in the setup.
+;
+itu_send_parasite_bytes: .proc
+                .cpu '65c02'
+                php                  ;6 +3
+                jsr itu_sei_ext_tube ;9 +22 = 31
+
+loop:
+                lda #acccon.itu                    ;0 +2
+                tsb acccon                         ;2 +6
+                ldy tube_fifo3_data                ;8 +4 
+                trb acccon                         ;12 +6
+                lda #get_status_flag_for_dir(send) ;18 +2
+                bit status                         ;20 +4
+                .page                              ;
+                bne +                              ;24 +3
+                jsr itu_wait_for_status            ;
++                                                  ;
+                .endp                              ;
+                sty fifo                           ;27 +4
+                jsr delay_12_cycles                ;31 +12
+                dex                                ;43 +2
+                bne loop                           ;45 +3
+
+                .itu_transfer_wait_for_status send
+                .transfer_status_byte send
+
+                jsr itu_int_tube
+                plp
+                rts
+                .cpu 'default'
+                .pend
+
+                .page
+recv_host_page: .proc
+                .transfer_host_page_routine recv
+                .pend
+                .endp
+
+;-------------------------------------------------------------------------
+
+                .align 256
+                
+;-------------------------------------------------------------------------
+
+                .page
+send_host_page: .proc
+                .transfer_host_page_routine send
+                .pend
+                .endp
+
+                .align 256
+                
+                .page
+itu_recv_host_page: .proc
+                .itu_transfer_host_page_routine recv
+                .pend
+                .endp
+
+                .align 256
+
+                .page
+itu_send_host_page: .proc
+                .itu_transfer_host_page_routine send
+                .pend
+                .endp
+
+                .page
+recv_parasite_page: .proc
+                .transfer_parasite_page_routine recv
+                .pend
+                .endp
+
+                .page
+send_parasite_page: .proc
+                .transfer_parasite_page_routine send
+                .pend
+                .endp
+
+;-------------------------------------------------------------------------
+
+                .align 256
+                
 ;-------------------------------------------------------------------------
 ;
 ; ITU=1 host->parasite page transfer.
 ;
+                .page
 itu_recv_parasite_page: .proc
                 .cpu '65c02'
                 
@@ -1342,44 +1435,7 @@ get_acccon:
                 rts
                 .cpu 'default'
                 .pend
-
-;-------------------------------------------------------------------------
-;
-; ITU=1 parasite->host bytes transfer.
-;
-; The 48 cycle initial delay is included in the setup.
-;
-itu_send_parasite_bytes: .proc
-                .cpu '65c02'
-                php                  ;6 +3
-                jsr itu_sei_ext_tube ;9 +22 = 31
-
-loop:
-                lda #acccon.itu                    ;0 +2
-                tsb acccon                         ;2 +6
-                ldy tube_fifo3_data                ;8 +4 
-                trb acccon                         ;12 +6
-                lda #get_status_flag_for_dir(send) ;18 +2
-                bit status                         ;20 +3
-                .page                              ;
-                bne +                              ;23 +2 
-                jsr itu_wait_for_status            ;
-+                                                  ;
-                .endp                              ;
-                sty fifo                           ;25 +4
-                jsr delay_12_cycles                ;29 +12
-                nop                                ;41 +2
-                dex                                ;43 +2
-                bne loop                           ;45 +3
-
-                .itu_transfer_wait_for_status send
-                .transfer_status_byte send
-
-                jsr itu_int_tube
-                plp
-                rts
-                .cpu 'default'
-                .pend
+                .endp
 
 ;-------------------------------------------------------------------------
 ;
