@@ -36,6 +36,11 @@ import * as http from 'http';
 import { Request } from './request';
 import { Response } from './response';
 import * as SerialPort from 'serialport';
+import * as os from 'os';
+
+// ugly workaround for lack of type definitions.
+
+const ioctl: (fd: number, request: number, data?: Buffer | number) => void = require('ioctl');//tslint:disable-line:no-var-requires
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -54,11 +59,6 @@ const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
 const HTTP_LISTEN_PORT = 48875;//0xbeeb;
 
 const BEEBLINK_SENDER_ID = 'beeblink-sender-id';
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-const isWindows = process.platform === 'win32';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -1084,92 +1084,150 @@ async function handleUSB(options: ICommandLineOptions, createServer: (additional
 /////////////////////////////////////////////////////////////////////////
 
 async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, serialLog: utils.Log): Promise<void> {
-    if (isWindows) {
-        // The device open fails with LIBUSB_ERROR_UNSUPPORTED. See, e.g.,
+    if (process.platform === 'win32') {
+        // When trying to open the device with libusb, the device open
+        // fails with LIBUSB_ERROR_UNSUPPORTED. See, e.g.,
         // https://stackoverflow.com/questions/17350177/
         //
         // But it's not a huge problem, as the latency timer can be set
         // manually, and the setting is persistent.
-        return;
-    }
+    } else if(process.platform==='darwin') {
+        // Send USB control request to set the latency timer.
+        
+        // Try to find the corresponding usb device in the device list.
+        let usbDevice: usb.Device | undefined;
+        {
+            const idProduct = Number.parseInt(portInfo.productId!, 16);//why not a number?
+            const idVendor = Number.parseInt(portInfo.vendorId!, 16);//why not a number?
+            const usbDevices = usb.getDeviceList();
+            for (const d of usbDevices) {
+                if (d.deviceDescriptor.idProduct === idProduct && d.deviceDescriptor.idVendor === idVendor) {
+                    try {
+                        d.open(false);
+                    } catch (error) {
+                        // oh well...
+                        process.stderr.write(`Error opening USB device corresponding to ${portInfo.comName}: ${error}\n`);
+                        continue;
+                    }
 
-    // Try to find the corresponding usb device in the device list.
-    let usbDevice: usb.Device | undefined;
-    {
-        const idProduct = Number.parseInt(portInfo.productId!, 16);//why not a number?
-        const idVendor = Number.parseInt(portInfo.vendorId!, 16);//why not a number?
-        const usbDevices = usb.getDeviceList();
-        for (const d of usbDevices) {
-            if (d.deviceDescriptor.idProduct === idProduct && d.deviceDescriptor.idVendor === idVendor) {
-                try {
-                    d.open(false);
-                } catch (error) {
-                    // oh well...
-                    process.stderr.write(`Error opening USB device corresponding to ${portInfo.comName}: ${error}`);
-                    continue;
+                    const serialNumber = await getUSBDeviceStringDescriptor(d, d.deviceDescriptor.iSerialNumber);
+                    serialLog.pn(`Device USB serial number: ${serialNumber}`);
+
+                    if (serialNumber === portInfo.serialNumber) {
+                        serialLog.pn(`Found corresponding USB device.`);
+                        usbDevice = d;
+                        break;
+                    }
+
+                    d.close();
                 }
-
-                const serialNumber = await getUSBDeviceStringDescriptor(d, d.deviceDescriptor.iSerialNumber);
-                serialLog.pn(`Device USB serial number: ${serialNumber}`);
-
-                if (serialNumber === portInfo.serialNumber) {
-                    serialLog.pn(`Found corresponding USB device.`);
-                    usbDevice = d;
-                    break;
-                }
-
-                d.close();
             }
         }
-    }
 
-    if (usbDevice === undefined) {
-        serialLog.pn(`Didn't find corresponding USB device.`);
-        return;
-    }
-
-    try {
-        process.stderr.write(`Setting FTDI latency timer to 1ms.\n`);
-
-        // logic copied out of libftdi's ftdi_usb_open_dev.
-        serialLog.pn(`Setting USB device configuration...`);
-        if (usbDevice.configDescriptor.bConfigurationValue !== usbDevice.allConfigDescriptors[0].bConfigurationValue) {
-            await new Promise<void>((resolve, reject) => {
-                usbDevice!.setConfiguration(usbDevice!.allConfigDescriptors[0].bConfigurationValue, (err) => {
-                    if (err !== undefined) {
-                        reject(err);
-                    } else {
-                        resolve();
-                    }
-                });
-            });
+        if (usbDevice === undefined) {
+            serialLog.pn(`Didn't find corresponding USB device.`);
+            return;
         }
 
-        const FTDI_DEVICE_OUT_REQTYPE = usb.LIBUSB_REQUEST_TYPE_VENDOR | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_OUT;
-        const SIO_SET_LATENCY_TIMER_REQUEST = 0x09;
+        try {
+            process.stderr.write(`Setting FTDI latency timer to 1ms.\n`);
 
-        // values corresponding to ftdi->interface and ftdi->index. 1 =
-        // INTERFACE_A. (No idea, just copying code here.)
-        const ftdiInterface = 0;
-        const ftdiIndex = 1;
+            // logic copied out of libftdi's ftdi_usb_open_dev.
+            serialLog.pn(`Setting USB device configuration...`);
+            if (usbDevice.configDescriptor.bConfigurationValue !== usbDevice.allConfigDescriptors[0].bConfigurationValue) {
+                await new Promise<void>((resolve, reject) => {
+                    usbDevice!.setConfiguration(usbDevice!.allConfigDescriptors[0].bConfigurationValue, (err) => {
+                        if (err !== undefined) {
+                            reject(err);
+                        } else {
+                            resolve();
+                        }
+                    });
+                });
+            }
 
-        // 1 = INTERFACE_A.
-        serialLog.pn(`Claiming USB device interface...`);
-        usbDevice.__claimInterface(ftdiInterface);
+            const FTDI_DEVICE_OUT_REQTYPE = usb.LIBUSB_REQUEST_TYPE_VENDOR | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_OUT;
+            const SIO_SET_LATENCY_TIMER_REQUEST = 0x09;
 
-        serialLog.pn(`Setting latency timer...`);
-        await deviceControlTransfer(usbDevice,
-            FTDI_DEVICE_OUT_REQTYPE,
-            SIO_SET_LATENCY_TIMER_REQUEST,
-            1,//1 = 1ms
-            ftdiIndex,
-            undefined);
+            // values corresponding to ftdi->interface and ftdi->index. 1 =
+            // INTERFACE_A. (No idea, just copying code here.)
+            const ftdiInterface = 0;
+            const ftdiIndex = 1;
 
-        serialLog.pn(`Done... hopefully.`);
-    } catch (error) {
-        process.stderr.write(`Error setting FTDI latency timer for ${portInfo.comName}: ${error}\n`);
-    } finally {
-        usbDevice.close();
+            // 1 = INTERFACE_A.
+            serialLog.pn(`Claiming USB device interface...`);
+            usbDevice.__claimInterface(ftdiInterface);
+
+            serialLog.pn(`Setting latency timer...`);
+            await deviceControlTransfer(usbDevice,
+                                        FTDI_DEVICE_OUT_REQTYPE,
+                                        SIO_SET_LATENCY_TIMER_REQUEST,
+                                        1,//1 = 1ms
+                                        ftdiIndex,
+                                        undefined);
+
+            serialLog.pn(`Done... hopefully.`);
+        } catch (error) {
+            process.stderr.write(`Error setting FTDI latency timer for ${portInfo.comName}: ${error}\n`);
+        } finally {
+            usbDevice.close();
+        }
+    } else if(process.platform==='linux') {
+        // The latency timer value can be found in the file
+        // /sys/bus/usb-serial/devices/<<DEVICE>>/latency_timer, only
+        // writeable by root.
+        //
+        // The latency timer value can't be set directly, but you can
+        // use ioctl to set the ASYNC_LOW_LATENCY bit of the serial
+        // port, which sets it to 1ms.
+        //
+        // See https://www.linuxjournal.com/article/6226 for some
+        // notes about TIOCGSERIAL.
+        //
+        // Regarding ASYNC_LOW_LATENCY, see, e.g.,
+        // https://stackoverflow.com/questions/13126138/,
+        // https://github.com/pyserial/pyserial/issues/287
+        //
+        // Once set, ASYNC_LOW_LATENCY seems to stick until the device
+        // is unplugged.
+        
+        const TIOCGSERIAL=0x541e;// /usr/include/asm-generic/ioctls.h
+        const TIOCSSERIAL=0x541f;// /usr/include/asm-generic/ioctls.h
+        const ASYNC_LOW_LATENCY=1<<13;// /usr/include/linux/tty_flags.h
+        const flagsOffset=16;// offsetof(serial_struct,flags)
+
+        const le=os.endianness()==='LE';//but who am I kidding here.
+        
+        let fd=-1;
+        try {
+            fd=await utils.fsOpen(portInfo.comName,'r+');
+
+            const buf=Buffer.alloc(1000);//exact size doesn't really matter.
+
+            // This call seems to fill the struct mostly with zeros,
+            // which I'm a bit unsure about. But setting the
+            // ASYNC_LOW_LATENCY bit does appear to work.
+            ioctl(fd,TIOCGSERIAL,buf);
+
+            let flags=le?buf.readUInt32LE(16):buf.readUInt32BE(flagsOffset);
+            flags|=ASYNC_LOW_LATENCY;
+            if(le) {
+                buf.writeUInt32LE(flags,flagsOffset);
+            } else {
+                buf.writeUInt32BE(flags,flagsOffset);
+            }
+
+            ioctl(fd,TIOCSSERIAL,buf);
+        } catch(error) {
+            process.stderr.write(`Error setting low latency mode for ${portInfo.comName}: ${error}\n`);
+        } finally {
+            if(fd>=0) {
+                await utils.fsClose(fd);
+                fd=-1;
+            }
+        }
+    } else {
+        // Answers on a postcard...
     }
 }
 
