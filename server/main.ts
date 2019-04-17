@@ -1091,9 +1091,9 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, serialLog: uti
         //
         // But it's not a huge problem, as the latency timer can be set
         // manually, and the setting is persistent.
-    } else if(process.platform==='darwin') {
+    } else if (process.platform === 'darwin') {
         // Send USB control request to set the latency timer.
-        
+
         // Try to find the corresponding usb device in the device list.
         let usbDevice: usb.Device | undefined;
         {
@@ -1160,11 +1160,11 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, serialLog: uti
 
             serialLog.pn(`Setting latency timer...`);
             await deviceControlTransfer(usbDevice,
-                                        FTDI_DEVICE_OUT_REQTYPE,
-                                        SIO_SET_LATENCY_TIMER_REQUEST,
-                                        1,//1 = 1ms
-                                        ftdiIndex,
-                                        undefined);
+                FTDI_DEVICE_OUT_REQTYPE,
+                SIO_SET_LATENCY_TIMER_REQUEST,
+                1,//1 = 1ms
+                ftdiIndex,
+                undefined);
 
             serialLog.pn(`Done... hopefully.`);
         } catch (error) {
@@ -1172,7 +1172,7 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, serialLog: uti
         } finally {
             usbDevice.close();
         }
-    } else if(process.platform==='linux') {
+    } else if (process.platform === 'linux') {
         // The latency timer value can be found in the file
         // /sys/bus/usb-serial/devices/<<DEVICE>>/latency_timer, only
         // writeable by root.
@@ -1190,40 +1190,40 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, serialLog: uti
         //
         // Once set, ASYNC_LOW_LATENCY seems to stick until the device
         // is unplugged.
-        
-        const TIOCGSERIAL=0x541e;// /usr/include/asm-generic/ioctls.h
-        const TIOCSSERIAL=0x541f;// /usr/include/asm-generic/ioctls.h
-        const ASYNC_LOW_LATENCY=1<<13;// /usr/include/linux/tty_flags.h
-        const flagsOffset=16;// offsetof(serial_struct,flags)
 
-        const le=os.endianness()==='LE';//but who am I kidding here.
-        
-        let fd=-1;
+        const TIOCGSERIAL = 0x541e;// /usr/include/asm-generic/ioctls.h
+        const TIOCSSERIAL = 0x541f;// /usr/include/asm-generic/ioctls.h
+        const ASYNC_LOW_LATENCY = 1 << 13;// /usr/include/linux/tty_flags.h
+        const flagsOffset = 16;// offsetof(serial_struct,flags)
+
+        const le = os.endianness() === 'LE';//but who am I kidding here.
+
+        let fd = -1;
         try {
-            fd=await utils.fsOpen(portInfo.comName,'r+');
+            fd = await utils.fsOpen(portInfo.comName, 'r+');
 
-            const buf=Buffer.alloc(1000);//exact size doesn't really matter.
+            const buf = Buffer.alloc(1000);//exact size doesn't really matter.
 
             // This call seems to fill the struct mostly with zeros,
             // which I'm a bit unsure about. But setting the
             // ASYNC_LOW_LATENCY bit does appear to work.
-            ioctl(fd,TIOCGSERIAL,buf);
+            ioctl(fd, TIOCGSERIAL, buf);
 
-            let flags=le?buf.readUInt32LE(16):buf.readUInt32BE(flagsOffset);
-            flags|=ASYNC_LOW_LATENCY;
-            if(le) {
-                buf.writeUInt32LE(flags,flagsOffset);
+            let flags = le ? buf.readUInt32LE(16) : buf.readUInt32BE(flagsOffset);
+            flags |= ASYNC_LOW_LATENCY;
+            if (le) {
+                buf.writeUInt32LE(flags, flagsOffset);
             } else {
-                buf.writeUInt32BE(flags,flagsOffset);
+                buf.writeUInt32BE(flags, flagsOffset);
             }
 
-            ioctl(fd,TIOCSSERIAL,buf);
-        } catch(error) {
+            ioctl(fd, TIOCSSERIAL, buf);
+        } catch (error) {
             process.stderr.write(`Error setting low latency mode for ${portInfo.comName}: ${error}\n`);
         } finally {
-            if(fd>=0) {
+            if (fd >= 0) {
                 await utils.fsClose(fd);
-                fd=-1;
+                fd = -1;
             }
         }
     } else {
