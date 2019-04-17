@@ -115,12 +115,12 @@ startup_counter: .fill 2
                 
 ;-------------------------------------------------------------------------
 
-                .section fs_scratch_workspace
+                .section link_workspace
                 ; bit 7 set if M128, using internal Tube.
 link_itu: .fill 1
 link_old_y: .fill 1
 link_value: .fill 1
-                .send fs_scratch_workspace
+                .send link_workspace
                 
 ;-------------------------------------------------------------------------
 ; Check if ACCCON ITU needs resetting to access the FTDI device.

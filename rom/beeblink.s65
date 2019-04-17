@@ -180,19 +180,24 @@ struct_section: .macro
 
 *=$b0
 fs_scratch_workspace_start:
-                .dsection fs_scratch_workspace
-
+                ; Workspace for general stuff and/or OS routine
+                ; handlers.
                 .union
                 .struct_section osfile_workspace
                 .struct_section osargs_workspace
                 .struct_section osgbpb_workspace
                 .struct_section osfind_workspace
                 .struct_section init_workspace
-                .struct_section write_workspace
                 .struct_section osfsc_workspace
+                .endu
+
+                ; Workspace for specific * commands.
+                .union
                 .struct_section star_command_workspace
+                .struct_section write_workspace
                 .struct_section volumes_browser_workspace
                 .struct_section speed_test_workspace
+                .struct_section srload_workspace
                 .endu
                 
                 .cerror *>$c0,"FS scratch workspace overflow"
@@ -202,6 +207,7 @@ fs_scratch_workspace_start:
 *=$c0
 fs_workspace_start:
                 .dsection fs_workspace
+                .dsection link_workspace
 
                 .cerror *>$d0,'FS workspace overflow'
 
@@ -223,11 +229,6 @@ write_image_data: .fill 2
 
 ;-------------------------------------------------------------------------
 
-                .section fs_scratch_workspace
-                .send fs_scratch_workspace
-
-;-------------------------------------------------------------------------
-
 ; Strictly speaking, the payload stuff could go in the scratch
 ; workspace. But it's 8 bytes, and this doesn't leave much space for
 ; all the other stuff...
@@ -244,8 +245,13 @@ payload_counter: .fill 4
 ; (top 16 bits set) or parasite memory.
 payload_addr: .fill 4
 
+; Address of command line for *RUN. Stored in private workspace so
+; OSARGS A=0 Y=1 can retrieve it.
 command_line_ptr: .fill 2
-                
+
+; print_server_string workspace. Stored anywhere that's out of the
+; way, so that other routines can call this function without fear of
+; their workspace being trampled on.
 server_string_buffer_offset: .fill 1
                 .send fs_workspace
 
@@ -2407,13 +2413,13 @@ done:
 ;-------------------------------------------------------------------------
 
 fsvectors .proc
-                .word blfs_osfile;$212
-                .word blfs_osargs;$214
-                .word blfs_osbget;$216
-                .word blfs_osbput;$218
-                .word blfs_osgbpb;$21a
-                .word blfs_osfind;$21c
-                .word blfs_osfsc;$21e
+                .word blfs_osfile ;$212
+                .word blfs_osargs ;$214
+                .word blfs_osbget ;$216
+                .word blfs_osbput ;$218
+                .word blfs_osgbpb ;$21a
+                .word blfs_osfind ;$21c
+                .word blfs_osfsc  ;$21e
 end:
                 .pend
 
@@ -2425,8 +2431,6 @@ blfs_osfile: .proc
 block: .fill 2
 reason: .fill 1
 name_ptr: .fill 2
-name_len: .fill 1
-result: .fill 1     
                 .send osfile_workspace
                 
                 stx block+0
@@ -2500,8 +2504,6 @@ not_save:
                 ldx #name_ptr
                 jsr strlen_cr
                 
-                sty name_len
-
                 jsr add_y_to_payload_counter
 
                 ; Account for the terminating CR.
@@ -2524,16 +2526,12 @@ send_block_loop:
 
                 ldy #0
 send_name_loop:
-                cpy name_len
-                beq send_name_done
                 lda (name_ptr),y
                 jsr send_payload_byte
+                lda (name_ptr),y
                 iny
-                jmp send_name_loop
-
-send_name_done:
-                lda #13
-                jsr send_payload_byte
+                cmp #13
+                bne send_name_loop
 
                 ; Doesn't matter if this isn't a save; it'll figure it
                 ; out from the packet size.
@@ -2544,7 +2542,7 @@ send_name_done:
 
                 ; Get result A.
                 jsr recv_payload_byte
-                sta result
+                pha             ;save result
 
                 ; Get result parameter block.
                 ldy #2
@@ -2558,13 +2556,10 @@ recv_block_loop:
                 ; If the request was $FF, there's data to handle.
                 lda reason
                 cmp #$ff
-                beq recv_data
+                bne done
 
-done:
-                lda result
-                rts
+                ; Handle the data.
 
-recv_data:
                 ; Read the data address.
                 jsr recv_payload_byte
                 sta payload_addr+0
@@ -2586,7 +2581,9 @@ recv_data:
 
                 .debug_print ["Received\r"]
 
-                jmp done
+done:
+                pla             ;restore result
+                rts
                 .pend
 
 ;-------------------------------------------------------------------------
@@ -3337,33 +3334,27 @@ special:
                 jsr recv_payload_byte
                 bcc bad_response_brk
 
-                cmp #len(special_routines)
-                bcs not_supported
+                cmp #RESPONSE_SPECIAL_VOLUME_BROWSER
+                beq volumes_browser_special
 
-                tay
-                lda special_routines_l,y
-                sta exec+0
+                cmp #RESPONSE_SPECIAL_SPEED_TEST
+                beq speed_test_special
 
-                lda special_routines_h,y
-                sta exec+1
+                cmp #RESPONSE_SPECIAL_SPEED_TEST_SURE
+                beq speed_test_special.sure
 
-                jmp (exec)
+                cmp #RESPONSE_SPECIAL_WRITE_DFS_IMAGE
+                beq write_dfs_image_special
 
-special_routines=[
-                volumes_browser_special,
-                speed_test_special,
-                speed_test_special.sure,
-                write_dfs_image_special,
-                write_adfs_image_special,
-                selfupdate_special,
-                ]
-                
-special_routines_l:
-                .byte <special_routines
-special_routines_h:
-                .byte >special_routines
+                cmp #RESPONSE_SPECIAL_WRITE_ADFS_IMAGE
+                beq write_adfs_image_special
 
-not_supported:
+                cmp #RESPONSE_SPECIAL_SELFUPDATE
+                beq selfupdate_special
+
+                cmp #RESPONSE_SPECIAL_SRLOAD
+                beq srload_special
+
                 .brk_error 255,"Not supported",0
                 
                 .pend
@@ -4223,7 +4214,7 @@ inactive:
 speed_test_special: .proc
 
                 .section speed_test_workspace
-time: .fill 5
+time: .fill 2
 send_time: .fill 2
 counter: .fill 1
 parasite: .fill 1
@@ -4350,7 +4341,7 @@ loop:
 
                 jsr reset_TIME
                 jsr send_file_data
-                jsr get_TIME
+                jsr get_TIME16
 
                 ; Save send time.
                 lda time+0
@@ -4370,7 +4361,7 @@ loop:
 
                 jsr reset_TIME
                 jsr recv_file_data
-                jsr get_TIME
+                jsr get_TIME16
 
                 ; Account for response.
                 lda #10
@@ -4509,26 +4500,45 @@ parasite_size:
 ; 
 reset_TIME: .proc
                 lda #0
-                sta time+0
-                sta time+1
-                sta time+2
-                sta time+3
-                sta time+4
-                ldx #<time
-                ldy #>time
-                lda #2 
-                jmp osword
+                pha
+                pha
+                pha
+                pha
+                tsx
+                pha
+                ldy #$01
+                lda #2
+                jsr osword
+                pla
+                pla
+                pla
+                pla
+                pla
+                rts
                 .pend
 
 ;
-; get system clock, effectively counting elapsed time, due to the
-; reset.
+; get low 16 bits of system clock, effectively counting elapsed time
+; (up to ~11 minutes) due to the reset.
 ; 
-get_TIME: .proc
-                ldx #<time
-                ldy #>time
+get_TIME16: .proc
+                pha
+                pha
+                pha
+                pha
+                tsx
+                pha
+                ldy #$01
                 lda #1          ;read system clock
-                jmp osword
+                jsr osword
+                pla
+                sta time+0
+                pla
+                sta time+1
+                pla
+                pla
+                pla
+                rts
                 .pend
 
                 .pend
@@ -5271,6 +5281,96 @@ write_image_io_error: .proc
                 .brk_error 199,"Disc fault"
                 .pend
 
+;-------------------------------------------------------------------------
+;
+; Handle *SRLOAD.
+; 
+srload_special: .proc
+                .section srload_workspace
+routine_addr: .fill 2           ;address of routine on stack
+dest_addr: .fill 2              ;address to write to in ROM
+bank: .fill 1                   ;ROM bank to write to
+old_bank: .fill 1
+                .send srload_workspace
+
+                ; Don't overwrite BLFS.
+                jsr recv_payload_byte
+                cmp $f4
+                bne +
+
+                ; Trying to write to BLFS ROM! Don't allow it.
+                jsr discard_remaining_payload
+                .brk_error $93,"Won't"
+                
++
+                sta bank
+
+                jsr recv_payload_byte
+                sta dest_addr+0
+                
+                jsr recv_payload_byte
+                sta dest_addr+1
+
+                ; Copy byte set routine to stack.
+                ldx #routine_end-routine_begin-1
+-
+                lda routine_begin,x
+                pha
+                dex
+                bpl -
+
+                tsx
+                inx
+                stx routine_addr+0
+                lda #$01
+                sta routine_addr+1
+
+loop:
+                jsr recv_payload_byte
+                bcc done
+
+                jmp (routine_addr)
+loop_continue:
+
+                ldx #dest_addr
+                jsr add1z16
+
+                jmp loop
+
+done:
+                ldx #routine_end-routine_begin-1
+-
+                pla
+                dex
+                bpl -
+
+                rts
+
+; Write byte to ROM. Must be fully relocatable.
+;
+; This routine isn't as clever as it could be, but it only has to be
+; not objectionably slow, and at least beat non-Q *SRLOAD - not a very
+; high bar.
+;
+; Entry: ?bank = bank to write to
+;        (dest_addr) = address to write to
+;        A = byte to write
+routine_begin:
+                ldx $f4
+                stx old_bank
+                ldx bank
+                stx $f4
+                stx $fe30
+                ldx #dest_addr
+                sta (0,x)
+                ldx old_bank
+                stx $f4
+                stx $fe30
+                jmp loop_continue
+routine_end:
+                .cerror routine_end-routine_begin-1>128,'no'
+                .pend
+                
 ;-------------------------------------------------------------------------
 
                 .send code

@@ -30,9 +30,9 @@
 ;
 ;-------------------------------------------------------------------------
 
-                .section fs_scratch_workspace
+                .section link_workspace
 scratch_old_acr: .fill 1
-                .send fs_scratch_workspace
+                .send link_workspace
 
 ;-------------------------------------------------------------------------
 

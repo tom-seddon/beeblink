@@ -167,6 +167,7 @@ export class Server {
             new Command('NEWVOL', '<vsp>', this.newvolCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
             new Command('SELFUPDATE', undefined, this.selfupdateCommand),
+            new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand),
             new Command('SPEEDTEST', undefined, this.speedtestCommand),
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
@@ -1000,7 +1001,7 @@ export class Server {
             beebfs.BeebFS.throwError(beebfs.ErrorCode.Wont);
         }
 
-        const data = await this.bfs.readFile(file);
+        const data = await beebfs.BeebFS.readFile(file);
 
         const builder = new utils.BufferBuilder();
 
@@ -1228,7 +1229,7 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const data = await this.bfs.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
+        const data = await beebfs.BeebFS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
 
         let text = '';
 
@@ -1282,6 +1283,47 @@ export class Server {
         await this.bfs.rename(oldFQN, newFQN);
 
         return newResponse(beeblink.RESPONSE_YES, 0);
+    }
+
+    private async srloadCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+        if (commandLine.parts.length !== 4 && commandLine.parts.length !== 5) {
+            throw new CommandSyntaxError();
+        }
+
+        if (commandLine.parts.length >= 5) {
+            if (commandLine.parts[4].toLowerCase() !== 'q') {
+                throw new CommandSyntaxError();
+            }
+        }
+
+        const bank = utils.parseHex(commandLine.parts[3]);
+        if (Number.isNaN(bank)) {
+            throw new CommandSyntaxError();
+        }
+
+        let addr = utils.parseHex(commandLine.parts[2]);
+        if (Number.isNaN(addr)) {
+            throw new CommandSyntaxError();
+        }
+
+        addr &= 0xffff;
+
+        const rom = await beebfs.BeebFS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
+
+        this.log.pn(`Addr: 0x${utils.hex4(addr)}, bank: 0x${utils.hex2(addr)}, size: 0x${utils.hex4(rom.length)}`);
+
+        if (addr < 0x8000 || addr + rom.length > 0xc000) {
+            beebfs.BeebFS.throwError(beebfs.ErrorCode.Wont);
+        }
+
+        const builder = new utils.BufferBuilder();
+
+        builder.writeUInt8(beeblink.RESPONSE_SPECIAL_SRLOAD);
+        builder.writeUInt8(bank);
+        builder.writeUInt16LE(addr);
+        builder.writeBuffer(rom);
+
+        return newResponse(beeblink.RESPONSE_SPECIAL, builder);
     }
 
     private async selfupdateCommand(commandLine: beebfs.CommandLine): Promise<Response> {
@@ -1354,7 +1396,7 @@ export class Server {
         const driveString = commandLine.parts[2];
         const type = commandLine.parts[3].toLowerCase();
 
-        const data = await this.bfs.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
+        const data = await beebfs.BeebFS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
 
         if (driveString.length !== 1 || !utils.isdigit(driveString)) {
             throw new CommandSyntaxError();

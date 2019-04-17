@@ -687,6 +687,17 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    public static async readFile(file: BeebFile): Promise<Buffer> {
+        try {
+            return await utils.fsReadFile(file.hostPath);
+        } catch (error) {
+            return BeebFS.throwServerError(error);
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     private static getFirstLine(b: Buffer): string {
         let i;
 
@@ -1516,7 +1527,7 @@ export class BeebFS {
 
                 contentsBuffer = Buffer.from(linesString, 'binary');
             } else {
-                contentsBuffer = await this.readFile(file);
+                contentsBuffer = await BeebFS.readFile(file);
             }
         } else {
             // File doesn't exist.
@@ -1586,22 +1597,11 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async readFile(file: BeebFile): Promise<Buffer> {
-        try {
-            return await utils.fsReadFile(file.hostPath);
-        } catch (error) {
-            return BeebFS.throwServerError(error);
-        }
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     // this follows what MOS 3.20 *TYPE does: any of CR, LF, CRLF or LFCR is a
     // new line. See routine at $8f14 (part of *TYPE).
 
     public async readTextFile(file: BeebFile): Promise<string[]> {
-        const b = await this.readFile(file);
+        const b = await BeebFS.readFile(file);
 
         return utils.splitTextFileLines(b, 'binary');
     }
@@ -1937,7 +1937,7 @@ export class BeebFS {
 
         this.mustNotBeOpen(file);
 
-        const data = await this.readFile(file);
+        const data = await BeebFS.readFile(file);
 
         this.mustNotBeTooBig(data.length);
 

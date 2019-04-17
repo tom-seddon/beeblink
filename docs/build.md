@@ -53,13 +53,14 @@ Steps:
 2. Run `npm start -- OPTIONS` to start the server, - where `OPTIONS`
    are the command line options for it.
 
-# Programming the firmware
+# Programming the AVR firmware
 
 If you're doing the above as a one-off, carry on with the Installation
 and setup instructions...
 
 The Makefile has programming targets that can be used when iterating
-on the firmware, basically slightly automated versions of the steps described in the [the setup docs](./setup.md).
+on the firmware, basically slightly automated versions of the steps
+described in the [the setup docs](./setup.md).
 
 Run `make program_minimus` to then program a Minimus board via
 dfu-programmer.

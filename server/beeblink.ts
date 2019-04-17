@@ -474,6 +474,11 @@ export const RESPONSE_SPECIAL_WRITE_ADFS_IMAGE = 4;
 // Do a *SELFUPDATE.
 export const RESPONSE_SPECIAL_SELFUPDATE = 5;
 
+// Do *SRLOAD.
+//
+// P = 1 byte, bank; 2 bytes, 16-bit address to load to; rest, data to load.
+export const RESPONSE_SPECIAL_SRLOAD = 6;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 

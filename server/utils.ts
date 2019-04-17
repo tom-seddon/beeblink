@@ -97,6 +97,10 @@ export class BufferBuilder {
         }
     }
 
+    public writeUInt16LE(value: number) {
+        this.writeUInt8((value >> 0) & 0xff, (value >> 8) & 0xff);
+    }
+
     public writeUInt32LE(value: number) {
         this.writeUInt8((value >> 0) & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff, (value >> 24) & 0xff);
     }
@@ -701,4 +705,16 @@ export function setUInt24LE(b: Buffer, i: number, x: number): void {
     b[i + 0] = x >> 0;
     b[i + 1] = x >> 8;
     b[i + 2] = x >> 16;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// Like Number.parseInt(x,16), but barfs if there are any non-hex chars.
+export function parseHex(s: string): number {
+    if (s.match('^[0-9A-Fa-f]+$') === null) {
+        return NaN;
+    }
+
+    return Number.parseInt(s, 16);
 }

@@ -25,10 +25,10 @@ B, and will be improving it over time...
   AVR 32K and the SparkFun Pro Micro/Arduino Leonardo
   
 * PC running OS X, Windows or Linux
-* BBC Micro(s) with some good way of loading the ROM image (i.e., with
-  something like EEPROM or write-protected battery-backed sideways
-  RAM... it's no fun having to reload it on each boot and/or having it
-  zapped by careless programs)
+* BBC B/B+/Master 128 with some good way of loading the ROM image
+  (i.e., with something like EEPROM or write-protected battery-backed
+  sideways RAM... it's no fun having to reload it on each boot and/or
+  having it zapped by careless programs)
 
 # Installation and setup
 

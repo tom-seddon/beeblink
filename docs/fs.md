@@ -273,10 +273,10 @@ available in all filing systems, but the BLFS versions of these
 commands are handled on the server, and so are only available when the
 BLFS is selected.
 
-(Commands marked *B/B+* only get used on model B or B+ - on the
-Master, the built-in OS command of the same name is used instead. This
-isn't supposed to make a meaningful difference, but it's possible the
-output could be slightly different.)
+(Commands marked *B* or *B/B+* only get used on the models mentioned -
+on other models, the built-in command of the same name is used
+instead. This isn't supposed to make a meaningful difference, but it's
+possible the behaviour won't be identical.)
 
 ### `ACCESS <afsp> (<mode>)`
 
@@ -332,6 +332,17 @@ Create a new volume.
 ### `RENAME <old fsp> <new fsp>`
 
 Rename file.
+
+### `SRLOAD <fsp> <addr> <bank> (Q)` (*B*)
+
+Load ROM image into a sideways RAM bank.
+
+The operation will only write to addresses between &8000 and &BFFF,
+and will fail if it would have to write outside that range. It will
+also refuse to overwrite the bank containing the BLFS.
+
+The `Q` parameter is included for compatibility with the B+/Master
+syntax, and is ignored. The operation never uses main memory.
 
 ### `SELFUPDATE`
 
@@ -509,7 +520,7 @@ The server encountered an unexpected error while doing something.
 ## `Too big` (same code as `Disc full`)
 
 The file is too large, or the requested operation would make it too
-large. There's a (fairly arbitrary) size limit of 16MBytes.
+large. There's a size limit of 16MBytes for all files.
 
 ## `Volume not found` (same code as `File not found`)
 
@@ -517,9 +528,14 @@ The volume name supplied didn't match any volumes.
 
 ## `Won't` (&93) (as seen on ADFS)
 
-The file has a load address of &FFFFFFFF, and no explicit load address
-was provided; for `*RUN` this may also mean the file's execution
-address is &FFFFFFFF.
+The request operation won't be performed.
 
-(This usually means the file has a 0-byte .inf file, but these
-addresses can also be assigned manually.)
+When running a file with `*RUN` or loading a file with `*LOAD` and not
+providing an explicit load address, this occurs when the file has a
+load address of &FFFFFFFF. For `*RUN` this will also occur when the
+execution address is &FFFFFFFF. (This usually means the file has a
+0-byte .inf file, but these addresses can also be assigned manually.)
+
+`*SLOAD` produces this error if trying to load a ROM image over the
+BLFS itself, or if the address range would be outside the ROM area of
+&8000-&BFFF.
