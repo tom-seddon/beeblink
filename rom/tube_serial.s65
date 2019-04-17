@@ -105,12 +105,13 @@ txdp: .macro items
                 .section link_startup_workspace
 num_sync_zeros_received: .fill 2
 startup_itu: .fill 1
+startup_counter: .fill 2
                 .send link_startup_workspace
 
-; The link startup workspace is a not-very-generous 8 bytes.
-startup_end_time=brkthunk+0
-startup_current_time=brkthunk+5
-startup_max_time=1000 ;in centiseconds
+; ; The link startup workspace is a not-very-generous 8 bytes.
+; startup_end_time=brkthunk+0
+; startup_current_time=brkthunk+5
+; startup_max_time=1000 ;in centiseconds
                 
 ;-------------------------------------------------------------------------
 
@@ -283,34 +284,31 @@ startup: .proc
                 jsr is_itu
                 sta startup_itu
 
-                ; Initialise startup end time.
-                lda #1          ;read system clock
-                ldx #<startup_end_time
-                ldy #>startup_end_time
-                jsr osword
+; During service call 3, IRQs appear to be disabled. So the startup
+; process doesn't check the system clock - it just counts number of
+; iterations of each of the various initialisation loops, and classes
+; it as a timeout if any one of them exceeds some maximum number of
+; iterations. This sort of complete nonsense, as not all the loops do
+; the same thing, so the value is completely meaningless and doesn't
+; relate to any time units. But luckily, all it has to do is work.
+;
+; The range of good values is not very precisely defined, but any good
+; value must significantly exceed NUM_SERIAL_SYNC_ZEROS (that's how
+; many sync zeros must be received, and the loops that receive them
+; can receive only one per iteration), be large enough that pressing
+; BREAK during a speed test (or other bulk operation) doesn't result
+; in a sync timeout, and be small enough that when the server isn't
+; running the sync timeout doesn't take "too long"... whatever that
+; means.
+;
+; The actual value is the negated max number of iterations, as the
+; counter counts upwards until it hits zero.
+init_startup_counter=-1000
 
-                .debug_print ['Time now: &',startup_end_time+4,startup_end_time+3,startup_end_time+2,startup_end_time+1,startup_end_time+0,'\r']
-
-                clc
-                lda startup_end_time+0
-                adc #<startup_max_time
-                sta startup_end_time+0
-                lda startup_end_time+1
-                adc #>startup_max_time
-                sta startup_end_time+1
-                bcc +
-                inc startup_end_time+2
-                bne +
-                inc startup_end_time+3
-                bne +
-                inc startup_end_time+4
-+
-                
-                .debug_print ['End time: &',startup_end_time+4,startup_end_time+3,startup_end_time+2,startup_end_time+1,startup_end_time+0,'\r']
-
+                jsr reset_startup_counter
 wait_for_device_ready_loop:
-                jsr check_startup_timeout
-                bcs not_ready
+                jsr check_startup_counter
+                
                 jsr startup_read_status
                 
                 ; wait for bit 3 to become set.
@@ -324,9 +322,9 @@ start_sync:
 
                 .block
                 .debug_print ['Sync step 0...\r']
+                jsr reset_startup_counter
 sync_step_0_loop:
-                jsr check_startup_timeout
-                bcs timed_out
+                jsr check_startup_counter
 
                 lda #$80
                 jsr startup_write_fifo
@@ -336,10 +334,10 @@ sync_step_0_loop:
 
                 .block
                 .debug_print ['Sync step 1...\r']
+                jsr reset_startup_counter
 sync_step_1_loop:
                 ; .print ['&00: sent: &',num_sync_zeros_sent+1,num_sync_zeros_sent+0,'; received: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r']
-                jsr check_startup_timeout
-                bcs timed_out
+                jsr check_startup_counter
 
                 ; Try to write $00. If it didn't get sent, no
                 ; problem... plenty more where that came from.
@@ -373,9 +371,9 @@ sync_step_1_loop:
                 ; Keep reading until the 1 byte is received. Continue
                 ; sending zeros meanwhile.
                 .debug_print ['Sync step 2...\r']
+                jsr reset_startup_counter
 sync_step_2_loop:
-                jsr check_startup_timeout
-                bcs timed_out
+                jsr check_startup_counter
 
                 ; Try to write $00. If it didn't get sent, no
                 ; problem... plenty more where that came from.
@@ -395,9 +393,9 @@ sync_step_2_loop:
                 .block
                 ; Send a single non-zero byte.
                 .debug_print ['Sync step 3...\r']
+                jsr reset_startup_counter
 sync_step_3_loop:
-                jsr check_startup_timeout
-                bcs timed_out
+                jsr check_startup_counter
 
                 ldy #$01
                 jsr startup_write_fifo
@@ -413,55 +411,30 @@ failed:
                 sec             ;no good
                 rts
 
-timed_out:
+reset_startup_counter:
+                lda #<init_startup_counter
+                sta startup_counter+0
+                lda #>init_startup_counter
+                sta startup_counter+1
+                rts
+                
+check_startup_counter:
+                ldx #startup_counter
+                jsr add1z16
+                bne +
+                ; naughty hack.
+                pla
+                pla
                 ldx #status_text.sync_timed_out-status_text
                 sec
++
                 rts
 
-not_ready:
-                ldx #status_text.device_not_ready-status_text
-                sec             ;no good
-                rts
-
-; send_sync_zero:
-;                 lda #0
-; send_sync_byte:
-;                 jsr safe_write_fifo
-;                 bcc +           ;taken if write failed
-
-;                 ; ldx #num_sync_zeros_sent
-;                 ; jsr add1z16
-; +
-;                 rts
-
-check_startup_timeout:
-                lda #1          ;read system clock
-                ldx #<startup_current_time
-                ldy #>startup_current_time
-                jsr osword
-
-                sec
-                .for i=0,i<=4,i+=1
-                lda startup_end_time+i
-                sbc startup_current_time+i
-                .next
-
-                bpl no_timeout
-
-timeout:
-                .debug_print ['Timeout time: &',startup_current_time+4,startup_current_time+3,startup_current_time+2,startup_current_time+1,startup_current_time+0,'\r']
-                sec
-                rts
-
-no_timeout:
-                clc
-                rts
+                
                 
                 .pend
 
 status_text: .block
-device_not_ready:
-                .text 'Device not ready',0
 sync_failed:
                 .text 'Sync failed',0
 sync_timed_out:
@@ -1385,6 +1358,7 @@ send_parasite_page: .proc
 ; ITU=1 host->parasite page transfer.
 ;
                 .page
+
 itu_recv_parasite_page: .proc
                 .cpu '65c02'
                 
