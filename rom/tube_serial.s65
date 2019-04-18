@@ -287,24 +287,9 @@ startup: .proc
 ; During service call 3, IRQs appear to be disabled. So the startup
 ; process doesn't check the system clock - it just counts number of
 ; iterations of each of the various initialisation loops, and classes
-; it as a timeout if any one of them exceeds some maximum number of
-; iterations. This sort of complete nonsense, as not all the loops do
-; the same thing, so the value is completely meaningless and doesn't
-; relate to any time units. But luckily, all it has to do is work.
-;
-; The range of good values is not very precisely defined, but any good
-; value must significantly exceed NUM_SERIAL_SYNC_ZEROS (that's how
-; many sync zeros must be received, and the loops that receive them
-; can receive only one per iteration), be large enough that pressing
-; BREAK during a speed test (or other bulk operation) doesn't result
-; in a sync timeout, and be small enough that when the server isn't
-; running the sync timeout doesn't take "too long"... whatever that
-; means.
-;
-; The actual value is the negated max number of iterations, as the
-; counter counts upwards until it hits zero.
-init_startup_counter=-1000
+; it as a timeout if some maximum number of iterations is exceeded.
 
+                lda #4
                 jsr reset_startup_counter
 wait_for_device_ready_loop:
                 jsr check_startup_counter
@@ -322,11 +307,13 @@ start_sync:
 
                 .block
                 .debug_print ['Sync step 0...\r']
+                lda #1
                 jsr reset_startup_counter
 sync_step_0_loop:
+                ldy #status_text.sync_timed_out_0-status_text
                 jsr check_startup_counter
 
-                lda #$80
+                ldy #$80
                 jsr startup_write_fifo
 
                 bcc sync_step_0_loop
@@ -334,9 +321,11 @@ sync_step_0_loop:
 
                 .block
                 .debug_print ['Sync step 1...\r']
+                lda #16
                 jsr reset_startup_counter
 sync_step_1_loop:
-                ; .print ['&00: sent: &',num_sync_zeros_sent+1,num_sync_zeros_sent+0,'; received: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r']
+; .print ['&00: sent: &',num_sync_zeros_sent+1,num_sync_zeros_sent+0,'; received: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r']
+                ldy #status_text.sync_timed_out_1-status_text
                 jsr check_startup_counter
 
                 ; Try to write $00. If it didn't get sent, no
@@ -371,8 +360,10 @@ sync_step_1_loop:
                 ; Keep reading until the 1 byte is received. Continue
                 ; sending zeros meanwhile.
                 .debug_print ['Sync step 2...\r']
+                lda #16
                 jsr reset_startup_counter
 sync_step_2_loop:
+                ldy #status_text.sync_timed_out_2-status_text
                 jsr check_startup_counter
 
                 ; Try to write $00. If it didn't get sent, no
@@ -393,8 +384,10 @@ sync_step_2_loop:
                 .block
                 ; Send a single non-zero byte.
                 .debug_print ['Sync step 3...\r']
+                lda #16
                 jsr reset_startup_counter
 sync_step_3_loop:
+                ldy #status_text.sync_timed_out_3-status_text
                 jsr check_startup_counter
 
                 ldy #$01
@@ -411,11 +404,14 @@ failed:
                 sec             ;no good
                 rts
 
+                ; A = counter/256
 reset_startup_counter:
-                lda #<init_startup_counter
-                sta startup_counter+0
-                lda #>init_startup_counter
+                eor #$ff
+                clc
+                adc #1
                 sta startup_counter+1
+                lda #0
+                sta startup_counter+0
                 rts
                 
 check_startup_counter:
@@ -425,7 +421,9 @@ check_startup_counter:
                 ; naughty hack.
                 pla
                 pla
-                ldx #status_text.sync_timed_out-status_text
+                tya
+                tax
+                ; ldx #status_text.sync_timed_out-status_text
                 sec
 +
                 rts
@@ -437,8 +435,14 @@ check_startup_counter:
 status_text: .block
 sync_failed:
                 .text 'Sync failed',0
-sync_timed_out:
-                .text 'Sync timeout',0
+sync_timed_out_0:
+                .text 'Sync timeout (step 0)',0
+sync_timed_out_1:
+                .text 'Sync timeout (step 1)',0
+sync_timed_out_2:
+                .text 'Sync timeout (step 2)',0
+sync_timed_out_3:
+                .text 'Sync timeout (step 3)',0
                 .bend
                 
 ;-------------------------------------------------------------------------
