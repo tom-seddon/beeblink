@@ -38,9 +38,19 @@ import { Response } from './response';
 import * as SerialPort from 'serialport';
 import * as os from 'os';
 
-// ugly workaround for lack of type definitions.
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
 
-const ioctl: (fd: number, request: number, data?: Buffer | number) => void = require('ioctl');//tslint:disable-line:no-var-requires
+function getIOCTL(): ((fd: number, request: number, data?: Buffer | number) => void) | undefined {
+    if (process.platform === 'linux') {
+        // work around lack of type definitions.
+        return require('ioctl');
+    } else {
+        return undefined;
+    }
+}
+
+const ioctl = getIOCTL();
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -1173,57 +1183,61 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, serialLog: uti
             usbDevice.close();
         }
     } else if (process.platform === 'linux') {
-        // The latency timer value can be found in the file
-        // /sys/bus/usb-serial/devices/<<DEVICE>>/latency_timer, only
-        // writeable by root.
-        //
-        // The latency timer value can't be set directly, but you can
-        // use ioctl to set the ASYNC_LOW_LATENCY bit of the serial
-        // port, which sets it to 1ms.
-        //
-        // See https://www.linuxjournal.com/article/6226 for some
-        // notes about TIOCGSERIAL.
-        //
-        // Regarding ASYNC_LOW_LATENCY, see, e.g.,
-        // https://stackoverflow.com/questions/13126138/,
-        // https://github.com/pyserial/pyserial/issues/287
-        //
-        // Once set, ASYNC_LOW_LATENCY seems to stick until the device
-        // is unplugged.
+        if (ioctl === undefined) {
+            process.stderr.write(`Not setting low latency mode for ${portInfo.comName} - ioctl module not available.\n`);
+        } else {
+            // The latency timer value can be found in the file
+            // /sys/bus/usb-serial/devices/<<DEVICE>>/latency_timer, only
+            // writeable by root.
+            //
+            // The latency timer value can't be set directly, but you can
+            // use ioctl to set the ASYNC_LOW_LATENCY bit of the serial
+            // port, which sets it to 1ms.
+            //
+            // See https://www.linuxjournal.com/article/6226 for some
+            // notes about TIOCGSERIAL.
+            //
+            // Regarding ASYNC_LOW_LATENCY, see, e.g.,
+            // https://stackoverflow.com/questions/13126138/,
+            // https://github.com/pyserial/pyserial/issues/287
+            //
+            // Once set, ASYNC_LOW_LATENCY seems to stick until the device
+            // is unplugged.
 
-        const TIOCGSERIAL = 0x541e;// /usr/include/asm-generic/ioctls.h
-        const TIOCSSERIAL = 0x541f;// /usr/include/asm-generic/ioctls.h
-        const ASYNC_LOW_LATENCY = 1 << 13;// /usr/include/linux/tty_flags.h
-        const flagsOffset = 16;// offsetof(serial_struct,flags)
+            const TIOCGSERIAL = 0x541e;// /usr/include/asm-generic/ioctls.h
+            const TIOCSSERIAL = 0x541f;// /usr/include/asm-generic/ioctls.h
+            const ASYNC_LOW_LATENCY = 1 << 13;// /usr/include/linux/tty_flags.h
+            const flagsOffset = 16;// offsetof(serial_struct,flags)
 
-        const le = os.endianness() === 'LE';//but who am I kidding here.
+            const le = os.endianness() === 'LE';//but who am I kidding here.
 
-        let fd = -1;
-        try {
-            fd = await utils.fsOpen(portInfo.comName, 'r+');
+            let fd = -1;
+            try {
+                fd = await utils.fsOpen(portInfo.comName, 'r+');
 
-            const buf = Buffer.alloc(1000);//exact size doesn't really matter.
+                const buf = Buffer.alloc(1000);//exact size doesn't really matter.
 
-            // This call seems to fill the struct mostly with zeros,
-            // which I'm a bit unsure about. But setting the
-            // ASYNC_LOW_LATENCY bit does appear to work.
-            ioctl(fd, TIOCGSERIAL, buf);
+                // This call seems to fill the struct mostly with zeros,
+                // which I'm a bit unsure about. But setting the
+                // ASYNC_LOW_LATENCY bit does appear to work.
+                ioctl(fd, TIOCGSERIAL, buf);
 
-            let flags = le ? buf.readUInt32LE(16) : buf.readUInt32BE(flagsOffset);
-            flags |= ASYNC_LOW_LATENCY;
-            if (le) {
-                buf.writeUInt32LE(flags, flagsOffset);
-            } else {
-                buf.writeUInt32BE(flags, flagsOffset);
-            }
+                let flags = le ? buf.readUInt32LE(16) : buf.readUInt32BE(flagsOffset);
+                flags |= ASYNC_LOW_LATENCY;
+                if (le) {
+                    buf.writeUInt32LE(flags, flagsOffset);
+                } else {
+                    buf.writeUInt32BE(flags, flagsOffset);
+                }
 
-            ioctl(fd, TIOCSSERIAL, buf);
-        } catch (error) {
-            process.stderr.write(`Error setting low latency mode for ${portInfo.comName}: ${error}\n`);
-        } finally {
-            if (fd >= 0) {
-                await utils.fsClose(fd);
-                fd = -1;
+                ioctl(fd, TIOCSSERIAL, buf);
+            } catch (error) {
+                process.stderr.write(`Error setting low latency mode for ${portInfo.comName}: ${error}\n`);
+            } finally {
+                if (fd >= 0) {
+                    await utils.fsClose(fd);
+                    fd = -1;
+                }
             }
         }
     } else {

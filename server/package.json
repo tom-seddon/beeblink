@@ -16,9 +16,11 @@
   "dependencies": {
     "argparse": "^1.0.10",
     "chalk": "^2.4.1",
-    "ioctl": "^2.0.1",
     "serialport": "^7.1.4",
     "usb": "^1.5.0"
+  },
+  "optionalDependencies": {
+    "ioctl": "^2.0.1"
   },
   "devDependencies": {
     "@types/argparse": "^1.0.35",

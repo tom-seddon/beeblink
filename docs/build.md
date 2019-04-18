@@ -48,7 +48,8 @@ Steps:
 
 0. Change to `server` folder
 
-1. Run `npm install`
+1. Run `npm install` (note that on Windows, a build error mentioning
+   `sys/ioctl.h` is expected - this is benign, and can be ignored)
 
 2. Run `npm start -- OPTIONS` to start the server, - where `OPTIONS`
    are the command line options for it.
