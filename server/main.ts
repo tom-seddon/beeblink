@@ -1444,6 +1444,13 @@ async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: Se
         } while (!synced);
 
         // Request/response loop.
+        //
+        // Treat a command of 0xff same as 0x00 - sometimes when switching of
+        // the BBC the server receives a stream of 0xff/0x00 bytes. Safest to
+        // put it in the sync state when it looks like this is happening.
+        //
+        // No point trying to handle junk at other times.
+
         request_response_loop:
         for (; ;) {
             serialLog.pn(`Waiting for request...`);
@@ -1454,8 +1461,8 @@ async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: Se
                 const c = cmdByte & 0x7f;
                 const variableSizeRequest = (cmdByte & 0x80) !== 0;
 
-                if (c === 0) {
-                    serialLog.pn(`Got command 0 - returning to sync state`);
+                if (c === 0 || c === 0x7f) {
+                    serialLog.pn(`Got command ${utils.hex2(c)} - returning to sync state`);
                     // Special syntax.
                     break request_response_loop;
                 }
