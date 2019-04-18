@@ -74,7 +74,7 @@ write_adfs_verbose=false
 ; conflicts. So there are a few spot hacks for this.
 
 ; Prefix for use with help subject and UTILS commands.
-blfs_prefix="BL"
+blfs_prefix=""
                 
 ; FS number as per OSARGS A=0
 blfs_fs_number=93
@@ -319,14 +319,14 @@ link_recv_file_data_host=recv_file_data_host_bytewise
                 .section code
 
 help_subjects_commands:
-                .command blfs_prefix.."FS",0,svc_help.blfs
+                .command blfs_prefix.."BLFS",0,svc_help.blfs
                 .command "UTILS",0,svc_help.utils
                 .byte 255
 
 utils_commands:
-                .command blfs_prefix.."CONFIG",blconfig_syntax-syntaxes,blconfig_cmd
-                .command blfs_prefix.."FS",0,init_blfs
-                .command blfs_prefix.."VERSION",0,version_cmd
+                .command blfs_prefix.."BLCONFIG",blconfig_syntax-syntaxes,blconfig_cmd
+                .command blfs_prefix.."BLFS",0,init_blfs
+                .command blfs_prefix.."BLVERSION",0,version_cmd
                 .command "BUILD",build_syntax-syntaxes,build_cmd
                 .byte 255
 
@@ -365,7 +365,7 @@ start:
                 .endm
                 
 m128_fs_info: .block
-                .m128_fs_info_entry blfs_prefix.."FS",blfs_fs_number
+                .m128_fs_info_entry blfs_prefix.."BLFS",blfs_fs_number
 blfs_end:
                 .m128_fs_info_entry "DISC",dfs_fs_number
                 .m128_fs_info_entry "DISK",dfs_fs_number
