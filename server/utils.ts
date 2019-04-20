@@ -718,3 +718,22 @@ export function parseHex(s: string): number {
 
     return Number.parseInt(s, 16);
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// Not super clever, nor super reliable.
+export function arePathsEqual(a: string, b: string): boolean {
+    if (process.platform === 'win32') {
+        function getNPath(x: string): string {
+            return x.toLowerCase().replace('\\', '/');
+        }
+
+        return getNPath(a) === getNPath(b);
+    } else {
+        return a === b;
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////

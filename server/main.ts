@@ -206,7 +206,7 @@ function isBeebLinkDevice(device: usb.Device): boolean {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function getDeviceDescription(device: usb.Device, serial?: string): string {
+function getUSBDeviceDescription(device: usb.Device, serial?: string): string {
     let description = 'Bus ' + device.busNumber.toString().padStart(3, '0') + ' Device ' + device.deviceAddress.toString().padStart(3, '0');
 
     if (serial !== undefined) {
@@ -443,7 +443,7 @@ class BeebLinkDevice {
     public static async create(device: usb.Device, avrVerbose: boolean, log: utils.Log): Promise<BeebLinkDevice | undefined> {
         assert.ok(isBeebLinkDevice(device));
 
-        let d = getDeviceDescription(device);
+        let d = getUSBDeviceDescription(device);
 
         try {
             device.open(false);
@@ -471,7 +471,7 @@ class BeebLinkDevice {
             return await closeDevice(undefined, 'failed to get serial number');
         }
 
-        d = getDeviceDescription(device, usbSerial);
+        d = getUSBDeviceDescription(device, usbSerial);
 
         log.pn(d + ': setting configuration...');
         await new Promise((resolve, reject) => device.setConfiguration(1, (error) => error !== undefined ? reject(error) : resolve()));
@@ -548,7 +548,7 @@ class BeebLinkDevice {
         this.usbInEndpoint = usbInEndpoint;
         this.usbOutEndpoint = usbOutEndpoint;
 
-        this.description = getDeviceDescription(this.usbDevice, this.usbSerial);
+        this.description = getUSBDeviceDescription(this.usbDevice, this.usbSerial);
 
         this.log = new utils.Log('USB: ' + this.description, process.stdout, logEnabled);
     }
@@ -623,6 +623,35 @@ async function listSerialDevices(): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+// The OS X location ID is a 32-bit number. There doesn't seem to be any actual
+// documentation about how this value is formed, but it appears to be the
+// device's busNumber in bits 24-31, then first portNumber entry in bits 20-23,
+// second portNumber entry in bits 16-19, and so on. (No idea what happens if
+// you run out of bits.)
+//
+// This is easy enough to do as a string operation. The serial device list
+// returns it as a string anyway.
+//
+// (I don't know how alpha hex digit come through in the serial device list, as
+// there are none on my system. So this just does the comparison
+// case-insensitively.)
+function getOSXLocationId(d: usb.Device): string {
+    let locationId = utils.hex2(d.busNumber);
+
+    for (let i = 0; i < 6; ++i) {
+        if (d.portNumbers !== undefined && i < d.portNumbers.length) {
+            locationId += d.portNumbers[i].toString(16);
+        } else {
+            locationId += '0';
+        }
+    }
+
+    return locationId;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 async function listUSBDevices(): Promise<void> {
     const devices = usb.getDeviceList();
 
@@ -630,10 +659,28 @@ async function listUSBDevices(): Promise<void> {
     for (let i = 0; i < devices.length; ++i) {
         const device: usb.Device = devices[i];
 
-        process.stdout.write(`${i}. busNumber=${device.busNumber}\n`);
-        process.stdout.write(`    DeviceAddress=${device.deviceAddress}\n`);
-        process.stdout.write(`    PID=${utils.hex4(device.deviceDescriptor.idProduct)} VID=${utils.hex4(device.deviceDescriptor.idVendor)}\n`);
-        process.stdout.write(`    serial=${device.deviceDescriptor.iSerialNumber}\n`);
+        process.stdout.write(`${i}. BusNumber: ${device.busNumber}, DeviceAddress:${device.deviceAddress}`);
+        if (process.platform === 'darwin') {
+            process.stdout.write(` (LocationId: 0x${getOSXLocationId(device)} / ${device.deviceAddress})`);
+        }
+
+        process.stdout.write(`\n`);
+
+        process.stdout.write(`    PID: ${utils.hex4(device.deviceDescriptor.idProduct)}, VID: ${utils.hex4(device.deviceDescriptor.idVendor)}\n`);
+        process.stdout.write(`    PortNumbers: ${device.portNumbers}\n`);
+
+        let parentIndex: number | undefined;
+        for (let j = 0; j < devices.length; ++j) {
+            if (device.parent === devices[j]) {
+                parentIndex = j;
+                break;
+            }
+        }
+        if (parentIndex === undefined) {
+            process.stdout.write(`    No parent device.\n`);
+        } else {
+            process.stdout.write(`    Parent: ${parentIndex}\n`);
+        }
 
         try {
             device.open(false);
@@ -1102,85 +1149,82 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, serialLog: uti
         // But it's not a huge problem, as the latency timer can be set
         // manually, and the setting is persistent.
     } else if (process.platform === 'darwin') {
-        // Send USB control request to set the latency timer.
+        if (portInfo.locationId === undefined) {
+            serialLog.pn(`Not setting latency timer for ${portInfo.comName} - no locationId.\n`);
+        } else {
+            // Send USB control request to set the latency timer.
 
-        // Try to find the corresponding usb device in the device list.
-        let usbDevice: usb.Device | undefined;
-        {
-            const idProduct = Number.parseInt(portInfo.productId!, 16);//why not a number?
-            const idVendor = Number.parseInt(portInfo.vendorId!, 16);//why not a number?
-            const usbDevices = usb.getDeviceList();
-            for (const d of usbDevices) {
-                if (d.deviceDescriptor.idProduct === idProduct && d.deviceDescriptor.idVendor === idVendor) {
-                    try {
-                        d.open(false);
-                    } catch (error) {
-                        // oh well...
-                        process.stderr.write(`Error opening USB device corresponding to ${portInfo.comName}: ${error}\n`);
-                        continue;
+            // Try to find the corresponding usb device in the device list.
+            //
+            // The serial numbers for the FTDI devices aren't necessarily
+            // unique, so search by OS X location id rather than serial number.
+
+            let usbDevice: usb.Device | undefined;
+            {
+                const idProduct = Number.parseInt(portInfo.productId!, 16);//why not a number?
+                const idVendor = Number.parseInt(portInfo.vendorId!, 16);//why not a number?
+                const usbDevices = usb.getDeviceList();
+                for (const d of usbDevices) {
+                    if (d.deviceDescriptor.idProduct === idProduct && d.deviceDescriptor.idVendor === idVendor) {
+                        if (getOSXLocationId(d).toLowerCase() === portInfo.locationId.toLowerCase()) {
+                            serialLog.pn(`Found corresponding USB device.\n`);
+                            usbDevice = d;
+                            break;
+                        }
                     }
-
-                    const serialNumber = await getUSBDeviceStringDescriptor(d, d.deviceDescriptor.iSerialNumber);
-                    serialLog.pn(`Device USB serial number: ${serialNumber}`);
-
-                    if (serialNumber === portInfo.serialNumber) {
-                        serialLog.pn(`Found corresponding USB device.`);
-                        usbDevice = d;
-                        break;
-                    }
-
-                    d.close();
                 }
             }
-        }
 
-        if (usbDevice === undefined) {
-            serialLog.pn(`Didn't find corresponding USB device.`);
-            return;
-        }
-
-        try {
-            process.stderr.write(`Setting FTDI latency timer to 1ms.\n`);
-
-            // logic copied out of libftdi's ftdi_usb_open_dev.
-            serialLog.pn(`Setting USB device configuration...`);
-            if (usbDevice.configDescriptor.bConfigurationValue !== usbDevice.allConfigDescriptors[0].bConfigurationValue) {
-                await new Promise<void>((resolve, reject) => {
-                    usbDevice!.setConfiguration(usbDevice!.allConfigDescriptors[0].bConfigurationValue, (err) => {
-                        if (err !== undefined) {
-                            reject(err);
-                        } else {
-                            resolve();
-                        }
-                    });
-                });
+            if (usbDevice === undefined) {
+                serialLog.pn(`Didn't find corresponding USB device.`);
+                return;
             }
 
-            const FTDI_DEVICE_OUT_REQTYPE = usb.LIBUSB_REQUEST_TYPE_VENDOR | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_OUT;
-            const SIO_SET_LATENCY_TIMER_REQUEST = 0x09;
+            try {
+                process.stderr.write(`Setting FTDI latency timer for ${portInfo.comName} to 1ms.\n`);
 
-            // values corresponding to ftdi->interface and ftdi->index. 1 =
-            // INTERFACE_A. (No idea, just copying code here.)
-            const ftdiInterface = 0;
-            const ftdiIndex = 1;
+                usbDevice.open();
 
-            // 1 = INTERFACE_A.
-            serialLog.pn(`Claiming USB device interface...`);
-            usbDevice.__claimInterface(ftdiInterface);
+                // logic copied out of libftdi's ftdi_usb_open_dev.
+                serialLog.pn(`Setting USB device configuration...`);
+                if (usbDevice.configDescriptor.bConfigurationValue !== usbDevice.allConfigDescriptors[0].bConfigurationValue) {
+                    await new Promise<void>((resolve, reject) => {
+                        usbDevice!.setConfiguration(usbDevice!.allConfigDescriptors[0].bConfigurationValue, (err) => {
+                            if (err !== undefined) {
+                                reject(err);
+                            } else {
+                                resolve();
+                            }
+                        });
+                    });
+                }
 
-            serialLog.pn(`Setting latency timer...`);
-            await deviceControlTransfer(usbDevice,
-                FTDI_DEVICE_OUT_REQTYPE,
-                SIO_SET_LATENCY_TIMER_REQUEST,
-                1,//1 = 1ms
-                ftdiIndex,
-                undefined);
+                const FTDI_DEVICE_OUT_REQTYPE = usb.LIBUSB_REQUEST_TYPE_VENDOR | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_OUT;
+                const SIO_SET_LATENCY_TIMER_REQUEST = 0x09;
 
-            serialLog.pn(`Done... hopefully.`);
-        } catch (error) {
-            process.stderr.write(`Error setting FTDI latency timer for ${portInfo.comName}: ${error}\n`);
-        } finally {
-            usbDevice.close();
+                // values corresponding to ftdi->interface and ftdi->index. 1 =
+                // INTERFACE_A. (No idea, just copying code here.)
+                const ftdiInterface = 0;
+                const ftdiIndex = 1;
+
+                // 1 = INTERFACE_A.
+                serialLog.pn(`Claiming USB device interface...`);
+                usbDevice.__claimInterface(ftdiInterface);
+
+                serialLog.pn(`Setting latency timer...`);
+                await deviceControlTransfer(usbDevice,
+                    FTDI_DEVICE_OUT_REQTYPE,
+                    SIO_SET_LATENCY_TIMER_REQUEST,
+                    1,//1 = 1ms
+                    ftdiIndex,
+                    undefined);
+
+                serialLog.pn(`Done... hopefully.`);
+            } catch (error) {
+                process.stderr.write(`Error setting FTDI latency timer for ${portInfo.comName}: ${error}\n`);
+            } finally {
+                usbDevice.close();
+            }
         }
     } else if (process.platform === 'linux') {
         if (ioctl === undefined) {
@@ -1250,22 +1294,22 @@ interface IReadWaiter {
     reject: ((error: any) => void) | undefined;
 }
 
-function getPortDescription(portInfo: SerialPort.PortInfo): string {
-    return `Device ${portInfo.comName} Serial ${portInfo.serialNumber!}`;
-}
+// function getPortDescription(portInfo: SerialPort.PortInfo): string {
+//     return `Device ${portInfo.comName}`;
+// }
 
-async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>, serialLog: utils.Log): Promise<void> {
+async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): Promise<void> {
+    const serialLog = new utils.Log(portInfo.comName, process.stdout, options.serial_verbose);
+
     await setFTDILatencyTimer(portInfo, serialLog);
 
-    const prefix = portInfo.serialNumber!;
-
     serialLog.pn('Creating server...');
-    const server = await createServer(prefix, options.serial_rom);
+    const server = await createServer('SERIAL', options.serial_rom);
 
     // The baud rate doesn't actually seem to matter.
     const port: SerialPort = new SerialPort(portInfo.comName, { baudRate: 115200, autoOpen: false });
 
-    process.stderr.write(`${getPortDescription(portInfo)}: serving.\n`);
+    process.stderr.write(`${portInfo.comName}: serving.\n`);
 
     await new Promise<void>((resolve, reject) => {
         port.open((error) => {
@@ -1281,9 +1325,9 @@ async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: Se
     const readBuffers: Buffer[] = [];
     let readIndex = 0;
 
-    const dataInLog = new utils.Log(prefix, serialLog.f, options.serial_data_verbose);
-    const dataOutLog = new utils.Log(prefix, serialLog.f, options.serial_data_verbose);
-    const syncLog = new utils.Log(`${prefix}: sync`, serialLog.f, options.serial_sync_verbose);
+    const dataInLog = new utils.Log(portInfo.comName, serialLog.f, options.serial_data_verbose);
+    const dataOutLog = new utils.Log(portInfo.comName, serialLog.f, options.serial_data_verbose);
+    const syncLog = new utils.Log(`${portInfo.comName}: sync`, serialLog.f, options.serial_sync_verbose);
 
     port.on('data', (data: Buffer): void => {
         readBuffers.push(data);
@@ -1616,16 +1660,23 @@ async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: Se
 }
 
 async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): Promise<void> {
-    const serialLog = new utils.Log('SERIAL', process.stdout, options.serial_verbose);
-
     for (const portInfo of await SerialPort.list()) {
-        if (portInfo.serialNumber !== undefined) {
-            if (portInfo.vendorId === '0403' && portInfo.productId === '6014') {
-                if (options.serial_exclude !== null && options.serial_exclude.indexOf(portInfo.serialNumber) >= 0) {
-                    process.stderr.write(`${getPortDescription(portInfo)}: excluded, so not serving.\n`);
-                } else {
-                    void handleTubeSerialDevice(options, portInfo, createServer, serialLog);
+        if (portInfo.vendorId === '0403' && portInfo.productId === '6014') {
+            let exclude = false;
+
+            if (options.serial_exclude !== null) {
+                for (const excludeComName of options.serial_exclude) {
+                    if (utils.arePathsEqual(portInfo.comName, excludeComName)) {
+                        exclude = true;
+                        break;
+                    }
                 }
+            }
+
+            if (exclude) {
+                process.stderr.write(`${portInfo.comName}: excluded, so not serving.\n`);
+            } else {
+                void handleTubeSerialDevice(options, portInfo, createServer);
             }
         }
     }

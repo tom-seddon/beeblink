@@ -28,9 +28,8 @@ when using the bootstrap program or `*BLSELFUPDATE`.
 The server will autodetect and open any FTDI devices thet look like
 they might be a Tube serial board. If it's opening any such devices
 that you aren't using for BeebLink, use `--serial-exclude` to have
-them excluded. The exclusion is by device serial number (as seen in
-the output) so that it stays excluded if the COM port assignments
-change.
+them excluded. The exclusion is by device name, so watch out for
+changes in COM port assignment.
 
 # Using a config file
 
