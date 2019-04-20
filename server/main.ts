@@ -1424,69 +1424,27 @@ async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: Se
         return (-(payload.length - 1 - index)) & 0xff;
     }
 
-    for (; ;) {
-        // Sync loop.
-        port.removeAllListeners('drain');
-
-        let synced = false;
-
-        sync_loop:
-        do {
-            serialLog.pn(`Sync: flushing buffers...`);
-            await new Promise<void>((resolve, reject) => {
-                port.flush((error: any) => {
-                    if (error !== undefined && error !== null) {
-                        reject(error);
-                    } else {
-                        resolve();
-                    }
-                });
+    async function flush(): Promise<void> {
+        await new Promise<void>((resolve, reject) => {
+            port.flush((error: any) => {
+                if (error !== undefined && error !== null) {
+                    reject(error);
+                } else {
+                    resolve();
+                }
             });
+        });
+    }
 
-            serialLog.pn(`Sync: Waiting for ${beeblink.NUM_SERIAL_SYNC_ZEROS} sync 0x00 bytes...`);
+    await flush();
 
-            let numZeros = 0;
-            while (numZeros < beeblink.NUM_SERIAL_SYNC_ZEROS) {
-                const x = await readByte();
-                syncLog.pn(`read server step 1 sync byte: ${x} (${numZeros} 0x00 bytes read)`);
-                if (x !== 0) {
-                    numZeros = 0;
-                } else {
-                    ++numZeros;
-                }
-            }
+    // Start with the request/response loop, not the sync loop. If the BBC was
+    // already synced after a previous run of the server, it can carry on from
+    // where it left off, allowing it to survive a server restart. If not, it
+    // will embark on the sync process from its end and enter the sync loop that
+    // way.
 
-            serialLog.pn(`Received ${numZeros} 0 sync bytes.`);
-
-            serialLog.pn(`sync: write server step 2 sync data`);
-            await writeSyncData();
-
-            // eat remaining sync 0s.
-            {
-                let n = 0;
-                let x;
-                do {
-                    x = await readByte();
-                    ++n;
-                    syncLog.pn(`read server step 3 sync byte: ${x} (${n} bytes read)`);
-
-                    // if (n > 5 * beeblink.NUM_SERIAL_SYNC_ZEROS) {
-                    //     // a previous sync was probably interrupted, so send the sync data again.
-                    //     serialLog.pn(`taking too long! - sending server step 1 sync data again...`);
-                    //     await writeSyncData();
-                    //     n = 0;
-                    // }
-                } while (x === 0);
-
-                if (x === 1) {
-                    serialLog.pn(`Got 0x01 byte - now synced`);
-                    synced = true;
-                } else {
-                    serialLog.pn(`No sync - bad sync value: ${x} (0x${utils.hex2(x)})`);
-                }
-            }
-        } while (!synced);
-
+    for (; ;) {
         // Request/response loop.
         //
         // Treat a command of 0xff same as 0x00 - sometimes when switching of
@@ -1656,6 +1614,59 @@ async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: Se
 
             serialLog.pn(`Done one request / response.`);
         }
+
+        // Sync loop.
+        port.removeAllListeners('drain');
+
+        let synced = false;
+
+        do {
+            serialLog.pn(`Sync: flushing buffers...`);
+            await flush();
+
+            serialLog.pn(`Sync: Waiting for ${beeblink.NUM_SERIAL_SYNC_ZEROS} sync 0x00 bytes...`);
+
+            let numZeros = 0;
+            while (numZeros < beeblink.NUM_SERIAL_SYNC_ZEROS) {
+                const x = await readByte();
+                syncLog.pn(`read server step 1 sync byte: ${x} (${numZeros} 0x00 bytes read)`);
+                if (x !== 0) {
+                    numZeros = 0;
+                } else {
+                    ++numZeros;
+                }
+            }
+
+            serialLog.pn(`Received ${numZeros} 0 sync bytes.`);
+
+            serialLog.pn(`sync: write server step 2 sync data`);
+            await writeSyncData();
+
+            // eat remaining sync 0s.
+            {
+                let n = 0;
+                let x;
+                do {
+                    x = await readByte();
+                    ++n;
+                    syncLog.pn(`read server step 3 sync byte: ${x} (${n} bytes read)`);
+
+                    // if (n > 5 * beeblink.NUM_SERIAL_SYNC_ZEROS) {
+                    //     // a previous sync was probably interrupted, so send the sync data again.
+                    //     serialLog.pn(`taking too long! - sending server step 1 sync data again...`);
+                    //     await writeSyncData();
+                    //     n = 0;
+                    // }
+                } while (x === 0);
+
+                if (x === 1) {
+                    serialLog.pn(`Got 0x01 byte - now synced`);
+                    synced = true;
+                } else {
+                    serialLog.pn(`No sync - bad sync value: ${x} (0x${utils.hex2(x)})`);
+                }
+            }
+        } while (!synced);
     }
 }
 

@@ -321,7 +321,7 @@ sync_step_0_loop:
 
                 .block
                 .debug_print ['Sync step 1...\r']
-                lda #16
+                lda #255
                 jsr reset_startup_counter
 sync_step_1_loop:
 ; .print ['&00: sent: &',num_sync_zeros_sent+1,num_sync_zeros_sent+0,'; received: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r']
