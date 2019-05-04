@@ -340,21 +340,6 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
         }
     }
 
-    function getROM(optionValue: string | null, configValue: string | undefined, defaultValue: string): string {
-        if (optionValue !== null) {
-            return optionValue;
-        } else {
-            if (configValue !== undefined) {
-                return configValue;
-            } else {
-                return defaultValue;
-            }
-        }
-    }
-
-    options.avr_rom = getROM(options.avr_rom, config.avr_rom, DEFAULT_BEEBLINK_AVR_ROM);
-    options.serial_rom = getROM(options.serial_rom, config.serial_rom, DEFAULT_BEEBLINK_SERIAL_ROM);
-
     options.git = options.git || config.git === true;
 
     if (config.serial_exclude !== undefined) {
@@ -739,11 +724,19 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         process.stderr.write('Note: new volumes will be created in: ' + options.folders[0] + '\n');
     }
 
-    if (!await utils.fsExists(options.avr_rom!)) {
+    if (options.avr_rom === null) {
+        options.avr_rom = DEFAULT_BEEBLINK_AVR_ROM;
+    }
+
+    if (options.serial_rom === null) {
+        options.serial_rom = DEFAULT_BEEBLINK_SERIAL_ROM;
+    }
+
+    if (!await utils.fsExists(options.avr_rom)) {
         process.stderr.write('AVR ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.avr_rom + '\n');
     }
 
-    if (!await utils.fsExists(options.serial_rom!)) {
+    if (!await utils.fsExists(options.serial_rom)) {
         process.stderr.write('Serial ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.serial_rom + '\n');
     }
 
