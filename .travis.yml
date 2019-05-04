@@ -19,25 +19,28 @@ before_install:
   - env
   - npm version
   - node --version
-  - (cd ~ && git clone https://github.com/macports/macports-base.git)
-  - (cd ~/macports-base && git checkout v2.5.3)
-  - (cd ~/macports-base && ./configure --enable-readline)
-  - (cd ~/macports-base && make)
-  - (cd ~/macports-base && sudo make install)
-  - sudo port -q selfupdate
-  - sudo port -N install avr-binutils
-  - sudo port -N install avr-gcc
-  - sudo port -N install avr-libc
-  - sudo port -N install p7zip
-  - (cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1905)
-  - (cd ~/tass64-code && make all && make install)
+  - nvm ls
+  - nvm ls-remote
+  # - (cd ~ && git clone https://github.com/macports/macports-base.git)
+  # - (cd ~/macports-base && git checkout v2.5.3)
+  # - (cd ~/macports-base && ./configure --enable-readline)
+  # - (cd ~/macports-base && make)
+  # - (cd ~/macports-base && sudo make install)
+  # - sudo port -q selfupdate
+  # - sudo port -N install avr-binutils
+  # - sudo port -N install avr-gcc
+  # - sudo port -N install avr-libc
+  # - sudo port -N install p7zip
+  # - (cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1905)
+  # - (cd ~/tass64-code && make all && make install)
 
 script:
-  - (cd ./firmware && make)
-  - (cd ./rom && make)
+  # - (cd ./firmware && make)
+  # - (cd ./rom && make)
   - (cd ./server && npm install)
   - (cd ./server && npm run compile)
   - (cd ./server && ./node_modules/.bin/pkg -t macos-x64 .)
+  - find . -iname '*.node'
   - (cd ./server && 7z a ../$SERVER_ZIP_NAME beeblink-server ./node_modules/usb/src/binding/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node)
   - (7z a $SERVER_ZIP_NAME ./volumes)
   - (cd ./firmware && 7z a ../$FIRMWARE_ZIP_NAME *.hex)
