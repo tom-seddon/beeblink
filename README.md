@@ -32,11 +32,12 @@ B, and will be improving it over time...
 
 # Installation and setup
 
-If using OS X or 64-bit Windows, download latest release from
+If using OS X or Windows, download latest release from
 [the BeebLink releases page](https://github.com/tom-seddon/beeblink/releases) -
 you'll need the firmware ZIP, and a server ZIP for your OS.
 
-(If using Linux or 32-bit Windows, follow the DIY instructions below
+(If using Linux, follow
+[the Building it yourself instructions below](#building-it-yourself)
 to build firmware and get set up with a version of the server you can
 run. There are no binary releases for these platforms.)
 
