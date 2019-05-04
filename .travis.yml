@@ -33,7 +33,7 @@ before_install:
   - sudo port -N install avr-gcc
   - sudo port -N install avr-libc
   - (cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1905)
-  - (cd ~/tass64-code && make all && make install
+  - (cd ~/tass64-code && make all && make install)
 
 script:
   - (cd ./firmware && make)
