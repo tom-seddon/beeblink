@@ -1,7 +1,7 @@
 language: C++
 sudo: false
 os: osx
-osx_image: xcode9.2
+osx_image: xcode10.1
 
 branches:
   only:
@@ -17,6 +17,8 @@ before_install:
   - export COLUMNS=80
   - pwd
   - env
+  - npm version
+  - node --version
   - (cd ~ && git clone https://github.com/macports/macports-base.git)
   - (cd ~/macports-base && git checkout v2.5.3)
   - (cd ~/macports-base && ./configure --enable-readline)

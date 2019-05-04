@@ -16,6 +16,8 @@ install:
   - ps: $env:OUTPUT_NAME = "beeblink-"+$env:SUFFIX+"-server-windows.zip"
 
 build_script:
+  - npm version
+  - node --version
   - cd .\server
   - npm install
   - npm run compile
