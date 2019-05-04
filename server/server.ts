@@ -992,6 +992,10 @@ export class Server {
     }
 
     private async handleRun(commandLine: beebfs.CommandLine, tryLibDir: boolean): Promise<Response> {
+        if (commandLine.parts.length === 0) {
+            beebfs.BeebFS.throwError(beebfs.ErrorCode.BadName);
+        }
+
         this.log.pn('*RUN: ``' + commandLine.parts[0] + '\'\' (try lib dir: ' + tryLibDir + ')');
 
         const fsp = beebfs.BeebFS.parseFileString(commandLine.parts[0]);
