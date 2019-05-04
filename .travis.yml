@@ -20,7 +20,9 @@ before_install:
   - npm version
   - node --version
   - nvm ls
-  - nvm ls-remote
+  - nvm use 10.13.0
+  - nvm ls
+  - brew install p7zip
   # - (cd ~ && git clone https://github.com/macports/macports-base.git)
   # - (cd ~/macports-base && git checkout v2.5.3)
   # - (cd ~/macports-base && ./configure --enable-readline)
@@ -30,9 +32,8 @@ before_install:
   # - sudo port -N install avr-binutils
   # - sudo port -N install avr-gcc
   # - sudo port -N install avr-libc
-  # - sudo port -N install p7zip
   # - (cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1905)
-  # - (cd ~/tass64-code && make all && make install)
+  # - (cd ~/tass64-code && make all && make install
 
 script:
   # - (cd ./firmware && make)
