@@ -564,6 +564,12 @@ svc_boot: .proc
                 bne pass_on     ;taken if something other than the
                                 ;special key was held down
 
+                ; Clear boot key pressed status. Don't let it end up
+                ; in the keyboard buffer.
+                lda #$78        ;write current keys pressed
+                                ;information, AUG 142
+                jsr osbyte
+
 boot_fs:
                 ldx #<rom_name
                 ldy #rom_version_string-rom_name
