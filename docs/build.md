@@ -1,18 +1,4 @@
-# Build AVR firmware (OS X/Linux)
-
-Prerequisites:
-
-* AVR toolchain
-* Usual Unix stuff (GNU make + GNU tools)
-* Python 2.x on PATH
-
-Steps:
-
-0. Change to `firmware` folder
-
-1. Run `make`
-
-# Build BBC ROM (Windows/OS X/Linux)
+# Build BBC ROMs (Windows/OS X/Linux)
 
 Prerequisites (all):
 
@@ -31,7 +17,7 @@ Steps:
 
 1. On OS X/Linux, run `make`; on Windows, run `..\tools\snmake.exe`.
 
-The ROM files are build to the `rom/.build` folder.
+The ROM files are built to the `rom/.build` folder.
 
 # Build and run server (Windows/OS X/Linux)
 
@@ -53,22 +39,3 @@ Steps:
 
 2. Run `npm start -- OPTIONS` to start the server, - where `OPTIONS`
    are the command line options for it.
-
-# Programming the AVR firmware
-
-If you're doing the above as a one-off, carry on with the Installation
-and setup instructions...
-
-The Makefile has programming targets that can be used when iterating
-on the firmware, basically slightly automated versions of the steps
-described in the [the setup docs](./setup.md).
-
-Run `make program_minimus` to then program a Minimus board via
-dfu-programmer.
-
-Or, run `make program_leonardo` to then program a Leonardo/Pro Micro
-board via avrdude.
-[The Makefile tries to guess the right device name automatically](https://github.com/tom-seddon/beeblink/blob/8056fbbcebde5f509bb45bf87208eacd18f142c0/firmware/Makefile#L40),
-under the assumption there's only one device at a time that's in
-bootloader mode, and it's supposed to work as-is on OS X and Linux...
-but it is a guess, and I've only tried it on my PCs...

@@ -16,8 +16,7 @@ OS X/Linux: `./beeblink_server --default-volume beeblink ./volumes`
 
 Windows: `beeblink_server --default-volume beeblink ./volumes`
 
-The AVR or Tube serial devices you have connected will be
-autodetected.
+The Tube serial devices you have connected will be autodetected.
 
 After a moment you should get a `Server running...` message.
 
@@ -29,7 +28,7 @@ BeebLink banner.
 
     Acorn MOS
 	
-	BeebLink (AVR) - OK
+	BeebLink (Tube Serial) - OK
 	
 	BASIC
 	
@@ -169,12 +168,11 @@ be seen on disk until the file is closed or flushed with OSARGS A=&FF.
 Press Ctrl+C.
 
 The error checking for a broken connection is not so great, so if you
-do this (or reset the AVR) then the BBC will just hang up on the next
-filing system operation.
+do this then the BBC will just hang up on the next filing system
+operation.
 
 CTRL+BREAK should sort it out. The startup message will say something
-like `BeebLink (AVR) - No AVR` or `BeebLink (Tube Serial) - Sync timed
-out`.
+like `BeebLink (Tube Serial) - Sync timed out`.
 
 ## Running from sideways RAM
 
