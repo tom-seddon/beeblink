@@ -169,6 +169,7 @@ struct_section: .macro
 
 *=$a8
                 .union
+                .struct_section is_sideways_ram_workspace
                 .struct_section misc_workspace
                 .struct_section build_workspace
                 .struct_section link_startup_workspace
@@ -4551,30 +4552,86 @@ get_TIME16: .proc
 
 ;-------------------------------------------------------------------------
 ;
-; Check if code is running from sideways RAM.
+; Check if ROM is running from sideways RAM.
 ;
 ; exit: C=1 if apparently running from RAM
 ;       C=0 if apparently running from ROM
-; preserves: Y
 is_sideways_ram: .proc
+                .section is_sideways_ram_workspace
+cmp_result: .fill 0             ;can overlap address
+routine_addr: .fill 2
+                .send is_sideways_ram_workspace
+                
                 php
                 sei
-                lda $8000
-                tax
+
+                .push16 routine_addr
+                
+                ; copy routine
+                ldx #routine_end-1-routine
+-
+                lda routine,x
+                pha
+                dex
+                bpl -
+
+                tsx
                 inx
-                stx $8000
-                cmp $8000
-                beq rom
-ram:
-                sta $8000
+                stx routine_addr+0
+
+                lda #$01
+                sta routine_addr+1
+
+                lda $8008       ;ROM version number
+                tax             ;X = original value
+                eor #$ff        ;A = inverted version number
+
+                jmp (routine_addr)
+continue:
+                pla
+                sta cmp_result
+
+                ldx #routine_end-1-routine
+-
+                pla
+                dex
+                bpl -
+
+                lda cmp_result
+                and #2          ;A=0 if ROM, A=2 if RAM
+                tax             ;X=0 if ROM, X=2 if RAM
+
+                .pop16 routine_addr
+
                 plp
-                sec
+                
+                cpx #2          ;C=0 if ROM, C=1 if RAM
                 rts
                 
-rom:
-                plp
-                clc
-                rts
+routine:
+                ; Write inverted version number. 
+                sta $8008
+
+                ; Loop until stable value read - work around EEPROMs
+                ; that return junk after an attempted write.
+-
+                ldy $8008
+                cpy $8008
+                bne -
+
+                cmp $8008       ;Z=0 if ROM, Z=1 if RAM
+                php
+
+                ; Restore original version number.
+                stx $8008
+-
+                ldy $8008
+                cpy $8008
+                bne -
+                
+                jmp is_sideways_ram.continue
+                .cerror *-routine>40,'no'
+routine_end:
                 .pend
 
 ;-------------------------------------------------------------------------
