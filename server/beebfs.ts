@@ -58,6 +58,7 @@ const BOOT_OPTION_DESCRIPTIONS = ['None', 'LOAD', 'RUN', 'EXEC'];
 const OPT4_FILE_NAME = '.opt4';
 const TITLE_FILE_NAME = '.title';
 const VOLUME_FILE_NAME = '.volume';
+const PC_FILE_NAME = '.beeblink-pc';
 
 const DEFAULT_TITLE = '';
 const DEFAULT_BOOT_OPTION = 0;
@@ -79,7 +80,8 @@ for (let c = 0; c < 256; ++c) {
         // not valid on Windows
         escape = true;
     } else if (' .'.indexOf(String.fromCharCode(c)) >= 0) {
-        // may change this policy.
+        // It's worth escaping '.', because it makes it impossible to create a
+        // BBC file that ends with '.inf'...
         escape = true;
     } else if (String.fromCharCode(c) === HOST_NAME_ESCAPE_CHAR) {
         // the escape char itself.
@@ -628,50 +630,54 @@ export class BeebFS {
 
         const beebFiles: BeebFile[] = [];
 
-        const infExtRegExp = new RegExp('\.inf$', 'i');
+        const infExtRegExp = new RegExp(`\\${INF_EXT}$$`, 'i');
 
         if (log !== undefined) {
             log.in('getBeebFiles: ');
         }
 
-        for (const infHostName of hostNames) {
-            if (infExtRegExp.exec(infHostName) === null) {
+        if (log !== undefined) {
+            log.pn(`path: ${path.join(volume.path, drive)}`);
+            log.pn(`.inf regexp: ${infExtRegExp.source}`);
+        }
+
+        for (const hostName of hostNames) {
+            if (infExtRegExp.exec(hostName) !== null) {
+                // skip .inf files.
                 continue;
             }
 
+            const hostPath = path.join(volume.path, drive, hostName);
+
             if (log !== undefined) {
-                log.p(infHostName);
+                log.p(`${hostName}: `);
             }
 
-            const hostName = infHostName.substr(0, infHostName.length - 4);
-            const hostPath = path.join(volume.path, drive, hostName);
             const hostStat = await utils.tryStat(hostPath);
             if (hostStat === undefined) {
                 if (log !== undefined) {
-                    log.pn(' - failed to stat');
+                    log.pn(` - failed to stat`);
                 }
                 continue;
             }
 
-            const infPath = path.join(volume.path, drive, infHostName);
+            const infPath = hostPath + INF_EXT;
             const infBuffer = await utils.tryReadFile(infPath);
-            if (infBuffer === undefined) {
-                if (log !== undefined) {
-                    log.pn(' - failed to load .inf');
-                }
-                continue;
-            }
 
             const file = BeebFS.tryCreateBeebFileFromINF(infBuffer, hostPath, volume, drive, hostName, hostStat, log);
             if (file === undefined) {
                 if (log !== undefined) {
-                    log.pn(' - failed to interpret .inf');
+                    if (infBuffer === undefined) {
+                        log.pn(` - invalid name`);
+                    } else {
+                        log.pn(` - invalid .inf contents`);
+                    }
                 }
                 continue;
             }
 
             if (log !== undefined) {
-                log.pn(' - ok');
+                log.pn(`${file}`);
             }
 
             beebFiles.push(file);
@@ -909,14 +915,14 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private static tryCreateBeebFileFromINF(infBuffer: Buffer, hostPath: string, volume: BeebVolume, drive: string, hostName: string, hostStat: fs.Stats, log: utils.Log | undefined): BeebFile | undefined {
+    private static tryCreateBeebFileFromINF(infBuffer: Buffer | undefined, hostPath: string, volume: BeebVolume, drive: string, hostName: string, hostStat: fs.Stats, log: utils.Log | undefined): BeebFile | undefined {
         let name;
         let load;
         let exec;
         let attr;
         let text;
 
-        if (infBuffer.length === 0) {
+        if (infBuffer === undefined || infBuffer.length === 0) {
             name = hostName;
             load = DEFAULT_LOAD;
             exec = DEFAULT_EXEC;

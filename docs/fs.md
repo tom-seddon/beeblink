@@ -121,22 +121,24 @@ https://www.stairwaytohell.com/essentials/index.html?page=homepage
 
 You can create BBC files on the server, e.g., when using your PC to
 develop BBC software. Create the file with a DFS-like file name: a
-directory character, a `.`, then the name. Then create a 0-byte file
-with the same name, and a `.inf` extension.
+directory character, a `.`, then a name (max 10 chars). (For example:
+`$.!BOOT`.)
 
-For example: `$.!BOOT` and `$.!BOOT.inf`.
+If the name is valid, the BBC will see it, under exactly the name it
+has on the PC.
 
-The following rules apply to files with a 0-byte .inf file:
+The following rules apply to files with no associated .inf file, or an
+empty .inf file:
 
 * the name seen on the BBC will be exactly the name it has on the PC
-* load and execution addresses wil both be &FFFFFFFF (see `Won't`
+* load and execution addresses will both be &FFFFFFFF (see `Won't`
   below)
 * the file will be unlocked
-* if the directory name is `!`, it is treated as a PC-style text file:
-  when opened for random access, double-/single-byte newlines will be
-  converted to ASCII 13, and an ASCII 13 will be added to the end if
-  necessary. This affects data read from `OSBGET`/`OSGBPB`, and the
-  value of `EXT#`. `OSFILE` access is unaffected.
+* if the directory name is `!`, it will be treated as a PC-style text
+  file: when opened for random access, double-/single-byte newlines
+  will be converted to ASCII 13, and an ASCII 13 will be added to the
+  end if necessary. This affects data read from `OSBGET`/`OSGBPB`, and
+  the value of `EXT#`. `OSFILE` access is unaffected.
 
   (This is a hack to make it easy to use PC-style text files with
   `*EXEC`, e.g., after downloading from the web, or saving copied and
@@ -145,9 +147,9 @@ The following rules apply to files with a 0-byte .inf file:
   other way to have a file interpreted this way. This may improve over
   time)
 
-The .inf file will be updated automatically if any of its properties
-change. This will affect the interpretation of files in the `!`
-directory.
+The .inf file will be created or updated automatically if any of its
+properties change. This will affect the interpretation of files in the
+`!` directory.
 
 ## Accessing BBC files on the server
 
