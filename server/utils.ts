@@ -657,6 +657,7 @@ function getBeebLinkConstantsByPrefix(prefix: string): Map<number, string> {
     const map = new Map<number, string>();
 
     for (const kv of Object.entries(beeblink)) {
+        //tslint:disable-next-line strict-type-predicates
         if (kv[0].startsWith(prefix) && typeof (kv[1]) === 'number') {
             // if there's already an entry for this value, don't overwrite it.
             // This is a bodge to handle response sub-types, which have the same

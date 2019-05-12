@@ -322,27 +322,26 @@ export class BeebVolume {
 
 // Name of Beeb file or dir, that may or may not exist, as entered on the
 // command line. Components not supplied are set to undefined.
+//
+// A BeebFSP always includes a volume. wasExplicitVolume indicates whether the
+// ::VOLUME syntax was used.
 export class BeebFSP {
-    public readonly volume: BeebVolume | undefined;
+    public readonly volume: BeebVolume;
+    public readonly wasExplicitVolume: boolean;
     public readonly drive: string | undefined;
     public readonly dir: string | undefined;
     public readonly name: string | undefined;
 
-    public constructor(volume: BeebVolume | undefined, drive: string | undefined, dir: string | undefined, name: string | undefined) {
+    public constructor(volume: BeebVolume, wasExplicitVolume: boolean, drive: string | undefined, dir: string | undefined, name: string | undefined) {
         this.volume = volume;
+        this.wasExplicitVolume = wasExplicitVolume;
         this.drive = drive;
         this.dir = dir;
         this.name = name;
     }
 
     public toString(): string {
-        let str = ``;
-
-        if (this.volume !== undefined) {
-            str += `::${this.volume.name}`;
-        }
-
-        str += `:${this.getString(this.drive)}.${this.getString(this.dir)}`;
+        let str = `::${this.volume.name}:${this.getString(this.drive)}.${this.getString(this.dir)}`;
 
         if (this.name !== undefined) {
             str += `.${this.name}`;
@@ -1139,7 +1138,8 @@ export class BeebFS {
             return fsp;
         } else {
             return new BeebFSP(
-                undefined,
+                fsp.volume,
+                fsp.wasExplicitVolume,
                 fsp.drive !== undefined ? fsp.drive : this.drive,
                 fsp.dir !== undefined ? fsp.dir : this.dir,
                 fsp.name);
@@ -1159,9 +1159,7 @@ export class BeebFS {
             return BeebFS.throwError(ErrorCode.BadName);
         }
 
-        const volume = this.getVolumeFromFSP(fsp);
-
-        const fqn = new BeebFQN(volume, fsp.drive !== undefined ? fsp.drive : this.drive, fsp.dir !== undefined ? fsp.dir : this.dir, fsp.name);
+        const fqn = new BeebFQN(fsp.volume, fsp.drive !== undefined ? fsp.drive : this.drive, fsp.dir !== undefined ? fsp.dir : this.dir, fsp.name);
         this.log.pn('    fqn: ' + fqn);
         return fqn;
     }
@@ -1226,7 +1224,7 @@ export class BeebFS {
             }
 
             // "*CAT :<drive>" or "*CAT ::<volume>:<drive>"
-            volume = this.getVolumeFromFSP(fsp);
+            volume = fsp.volume;
             drive = fsp.drive;
         }
 
@@ -1681,14 +1679,12 @@ export class BeebFS {
         }
 
         // Don't try lib dir if the file name looks at all explicit.
-        if (fsp.volume !== undefined || fsp.drive !== undefined || fsp.dir !== undefined) {
+        if (fsp.wasExplicitVolume || fsp.drive !== undefined || fsp.dir !== undefined) {
             tryLibDir = false;
             this.log.pn('Volume/drive/dir provided - don\'t try lib dir.');
         }
 
-        const volume = this.getVolumeFromFSP(fsp);
-
-        const curFQN = new BeebFQN(volume, fsp.drive !== undefined ? fsp.drive : this.drive, fsp.dir !== undefined ? fsp.dir : this.dir, fsp.name);
+        const curFQN = new BeebFQN(fsp.volume, fsp.drive !== undefined ? fsp.drive : this.drive, fsp.dir !== undefined ? fsp.dir : this.dir, fsp.name);
         this.log.pn('Trying in current dir: ``' + curFQN + '\'\'');
 
         const curFile = await this.getBeebFileInternal(curFQN, true, false);
@@ -1697,7 +1693,9 @@ export class BeebFS {
         }
 
         if (tryLibDir) {
-            const libFQN = new BeebFQN(volume, fsp.drive !== undefined ? fsp.drive : this.libDrive, fsp.dir !== undefined ? fsp.dir : this.libDir, fsp.name);
+            // (fsp.volume will be the current volume - if fsp.wasExplicitVolume,
+            // tryLibDir is false.)
+            const libFQN = new BeebFQN(fsp.volume, fsp.drive !== undefined ? fsp.drive : this.libDrive, fsp.dir !== undefined ? fsp.dir : this.libDir, fsp.name);
             this.log.pn('Trying in library dir: ``' + libFQN + '\'\'');
 
             const libFile = await this.getBeebFileInternal(libFQN, true, false);
@@ -1733,17 +1731,6 @@ export class BeebFS {
                     this.openFiles.push(undefined);
                 }
             }
-        }
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    private getVolumeFromFSP(fsp: BeebFSP): BeebVolume {
-        if (fsp.volume !== undefined) {
-            return fsp.volume;
-        } else {
-            return this.getVolume();
         }
     }
 
@@ -2414,7 +2401,8 @@ export class BeebFS {
         }
 
         let i = 0;
-        let volume: BeebVolume | undefined;
+        let volume: BeebVolume;
+        let wasExplicitVolume: boolean;
         let drive: string | undefined;
         let dir: string | undefined;
         let name: string | undefined;
@@ -2438,8 +2426,14 @@ export class BeebFS {
             }
 
             volume = volumes[0];
+            wasExplicitVolume = true;
 
             i = end;
+        } else {
+            // This might produce a 'No volume' error, which feels a bit ugly at
+            // the parsing step, but I don't think it matters in practice...
+            volume = this.getVolume();
+            wasExplicitVolume = false;
         }
 
         if (str[i] === ':' && i + 1 < str.length) {
@@ -2487,13 +2481,13 @@ export class BeebFS {
         }
 
         // Everything is mandatory using the :: syntax.
-        if (volume !== undefined) {
+        if (wasExplicitVolume) {
             if (drive === undefined || name !== undefined && dir === undefined) {
                 return BeebFS.throwError(ErrorCode.BadName);
             }
         }
 
-        return new BeebFSP(volume, drive, dir, name);
+        return new BeebFSP(volume, wasExplicitVolume, drive, dir, name);
     }
 
     /////////////////////////////////////////////////////////////////////////

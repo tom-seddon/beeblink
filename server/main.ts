@@ -154,6 +154,7 @@ class InEndpointReader {
         if (this.buffers.length === 0) {
             this.buffers.push(await new Promise<Buffer>((resolve, reject) => {
                 this.endpoint.transfer(this.endpoint.descriptor.wMaxPacketSize, (error, data) => {
+                    //tslint:disable-next-line strict-type-predicates
                     if (error !== undefined) {
                         reject(error);
                     } else {
@@ -266,6 +267,7 @@ async function getUSBDeviceStringDescriptor(device: usb.Device, iIdentifier: num
     try {
         stringBuffer = await new Promise<Buffer | undefined>((resolve, reject) => {
             device.getStringDescriptor(iIdentifier, (error, buffer) => {
+                //tslint:disable-next-line strict-type-predicates
                 if (error !== undefined && error !== null) {
                     reject(error);
                 } else {
@@ -472,8 +474,8 @@ class BeebLinkDevice {
         }
 
         log.pn(d + ': finding endpoints...');
-        const inEndpoint = findSingleEndpoint(interf, 'in') as usb.InEndpoint;
-        const outEndpoint = findSingleEndpoint(interf, 'out') as usb.OutEndpoint;
+        const inEndpoint = findSingleEndpoint(interf, 'in') as usb.InEndpoint | undefined;
+        const outEndpoint = findSingleEndpoint(interf, 'out') as usb.OutEndpoint | undefined;
         if (inEndpoint === undefined || outEndpoint === undefined) {
             return await closeDevice(undefined, 'failed to find 1 input endpoint and 1 output endpoint');
         }
@@ -624,6 +626,7 @@ function getOSXLocationId(d: usb.Device): string {
     let locationId = utils.hex2(d.busNumber);
 
     for (let i = 0; i < 6; ++i) {
+        //tslint:disable-next-line strict-type-predicates
         if (d.portNumbers !== undefined && i < d.portNumbers.length) {
             locationId += d.portNumbers[i].toString(16);
         } else {
@@ -724,6 +727,19 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         process.stderr.write('Note: new volumes will be created in: ' + options.folders[0] + '\n');
     }
 
+    if (options.save_config !== null) {
+        const config: IConfigFile = {
+            default_volume: options.default_volume !== null ? options.default_volume : undefined,
+            folders: options.folders,
+            avr_rom: options.avr_rom !== null ? options.avr_rom : undefined,
+            serial_rom: options.serial_rom !== null ? options.serial_rom : undefined,
+            git: options.git,
+            serial_exclude: options.serial_exclude !== null ? options.serial_exclude : undefined,
+        };
+
+        await utils.fsMkdirAndWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
+    }
+
     if (options.avr_rom === null) {
         options.avr_rom = DEFAULT_BEEBLINK_AVR_ROM;
     }
@@ -738,19 +754,6 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
 
     if (!await utils.fsExists(options.serial_rom)) {
         process.stderr.write('Serial ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.serial_rom + '\n');
-    }
-
-    if (options.save_config !== null) {
-        const config: IConfigFile = {
-            default_volume: options.default_volume !== null ? options.default_volume : undefined,
-            folders: options.folders,
-            avr_rom: options.avr_rom !== null ? options.avr_rom : undefined,
-            serial_rom: options.serial_rom !== null ? options.serial_rom : undefined,
-            git: options.git !== null ? options.git : undefined,
-            serial_exclude: options.serial_exclude !== null ? options.serial_exclude : undefined,
-        };
-
-        await utils.fsMkdirAndWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
     }
 
     return true;
@@ -872,7 +875,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
             // }
 
             const senderId = httpRequest.headers[BEEBLINK_SENDER_ID];
-            if (senderId === undefined || senderId === null || senderId.length === 0 || typeof (senderId) !== 'string') {
+            if (senderId === undefined || senderId.length === 0 || typeof (senderId) !== 'string') {
                 return await errorResponse(400, 'missing header: ' + BEEBLINK_SENDER_ID);
             }
 
@@ -1043,6 +1046,7 @@ async function handleUSB(options: ICommandLineOptions, createServer: (additional
             try {
                 await new Promise((resolve, reject) => {
                     blDevice.usbOutEndpoint.transfer(responseData, (error) => {
+                        //tslint:disable-next-line strict-type-predicates
                         if (error !== undefined && error !== null) {
                             reject(error);
                         } else {
@@ -1305,7 +1309,9 @@ async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: Se
     process.stderr.write(`${portInfo.comName}: serving.\n`);
 
     await new Promise<void>((resolve, reject) => {
-        port.open((error) => {
+        // don't think the module's TS type definition for the callback is quite
+        // right...
+        port.open((error: Error | undefined | null) => {
             if (error !== undefined && error !== null) {
                 reject(error);
             } else {

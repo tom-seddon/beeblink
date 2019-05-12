@@ -31,6 +31,7 @@
         "promise-function-async": true,
         "strict-boolean-expressions": true,
         "object-literal-sort-keys": false,
-        "no-unnecessary-type-assertion": true
+        "no-unnecessary-type-assertion": true,
+        "strict-type-predicates": true
     }
 }

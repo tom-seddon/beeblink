@@ -794,7 +794,7 @@ export class Server {
                 // bit lame, but the mount process will want to append a message...
                 const builder = new utils.BufferBuilder();
 
-                if (result.text !== undefined) {
+                if (result.text.length > 0) {
                     builder.writeBuffer(result.text);
                 }
 
@@ -812,7 +812,7 @@ export class Server {
                 this.textResponse(builder.createBuffer());
 
                 return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, responseType);
-            } else if (result.text !== undefined) {
+            } else if (result.text.length > 0) {
                 this.textResponse(result.text);
 
                 if (result.flushKeyboardBuffer) {
@@ -1095,7 +1095,7 @@ export class Server {
 
             this.log.pn('*DIR: ' + fsp);
 
-            if (fsp.volume !== undefined) {
+            if (fsp.wasExplicitVolume) {
                 await this.bfs.mount(fsp.volume);
             }
 
@@ -1115,7 +1115,7 @@ export class Server {
             this.bfs.setDrive(commandLine.parts[1]);
         } else {
             const fsp = await this.bfs.parseFileString(commandLine.parts[1]);
-            if (fsp.volume !== undefined || fsp.drive === undefined || fsp.dir !== undefined || fsp.name !== undefined) {
+            if (fsp.wasExplicitVolume || fsp.drive === undefined || fsp.dir !== undefined || fsp.name !== undefined) {
                 beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDrive);
             }
             this.bfs.setDrive(fsp.drive!);
@@ -1148,7 +1148,7 @@ export class Server {
 
             this.log.pn('*LIB: ' + fsp);
 
-            if (fsp.volume !== undefined) {
+            if (fsp.wasExplicitVolume) {
                 // Volume spec not permitted.
                 beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDir);
             }
@@ -1193,7 +1193,7 @@ export class Server {
 
         const afsp = await this.bfs.parseFileString(commandLine.parts[1]);
 
-        if (afsp.volume !== undefined || afsp.drive !== undefined || afsp.name === undefined) {
+        if (afsp.wasExplicitVolume || afsp.drive !== undefined || afsp.name === undefined) {
             return beebfs.BeebFS.throwError(beebfs.ErrorCode.BadName);
         }
 
