@@ -171,23 +171,19 @@ const errorTexts: { [index: number]: string | undefined } = {
 // This was a slightly late addition and isn't used everywhere it should be...
 export class BeebFQN {
     public readonly volume: BeebVolume;
-    public readonly drive: string;
-    public readonly dir: string;
-    public readonly name: string;
+    public name: FSFQN;
 
-    public constructor(volume: BeebVolume, drive: string, dir: string, name: string) {
+    public constructor(volume: BeebVolume, name: FSFQN) {
         this.volume = volume;
-        this.drive = drive;
-        this.dir = dir;
         this.name = name;
     }
 
     public toString() {
-        return '::' + this.volume.path + ':' + this.drive + '.' + this.dir + '.' + this.name;
+        return `::${this.volume.name}:${this.name}`;
     }
 
     public equals(other: BeebFQN): boolean {
-        return this.volume.equals(other.volume) && utils.strieq(this.drive, other.drive) && utils.strieq(this.dir, other.dir) && utils.strieq(this.name, other.name);
+        return this.volume.equals(other.volume) && this.name.equals(other.name);
     }
 }
 
@@ -277,26 +273,21 @@ export class BeebDrive {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export enum BeebVolumeType {
-    DFS,
-    PC,
-}
-
 export class BeebVolume {
     public readonly path: string;
     public readonly name: string;
-    public readonly type: BeebVolumeType;
+    public readonly handler: Handler;
     private readOnly: boolean;
 
-    public constructor(volumePath: string, name: string, type: BeebVolumeType) {
+    public constructor(volumePath: string, name: string, handler: Handler) {
         this.path = volumePath;
         this.name = name;
-        this.type = type;
+        this.handler = handler;
         this.readOnly = false;
     }
 
     public isReadOnly(): boolean {
-        if (this.type === BeebVolumeType.PC) {
+        if (!this.handler.canWrite()) {
             return true;
         }
 
@@ -308,7 +299,7 @@ export class BeebVolume {
     }
 
     public asReadOnly(): BeebVolume {
-        const readOnly = new BeebVolume(this.path, this.name, this.type);
+        const readOnly = new BeebVolume(this.path, this.name, this.handler);
 
         readOnly.readOnly = true;
 
@@ -332,31 +323,16 @@ export class BeebVolume {
 class BeebFSP {
     public readonly volume: BeebVolume;
     public readonly wasExplicitVolume: boolean;
-    public readonly drive: string | undefined;
-    public readonly dir: string | undefined;
-    public readonly name: string | undefined;
+    public readonly name: FSFSP;
 
-    public constructor(volume: BeebVolume, wasExplicitVolume: boolean, drive: string | undefined, dir: string | undefined, name: string | undefined) {
+    public constructor(volume: BeebVolume, wasExplicitVolume: boolean, name: FSFSP) {
         this.volume = volume;
         this.wasExplicitVolume = wasExplicitVolume;
-        this.drive = drive;
-        this.dir = dir;
         this.name = name;
     }
 
     public toString(): string {
-        let str = `::${this.volume.name}:${this.getString(this.drive)}.${this.getString(this.dir)}`;
-
-        if (this.name !== undefined) {
-            str += `.${this.name}`;
-        }
-
-        return str;
-    }
-
-    private getString(x: string | undefined): string {
-        // 2026 = HORIZONTAL ELLIPSIS
-        return x !== undefined ? x : '\u2026';
+        return `::${this.volume.name}:${this.name}`;
     }
 }
 
@@ -530,6 +506,366 @@ export class OSFILEResult {
         this.dataLoad = dataLoad;
     }
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+interface State {
+}
+
+interface Handler {
+    // create new state for this type of FS.
+    createState(): State;
+
+    // whether this FS supports writing.
+    canWrite(): boolean;
+
+    // check if given string is a valid BBC file name. Used to check that a .INF
+    // file is valid, or whether a .INF/0-byte .INF PC file has a valid BBC
+    // name.
+    isValidBeebFileName(str: string): boolean;
+
+    // parse file/dir string, starting at index i. If state!==undefined, use it to fill in any
+    // unspecified components.
+    parseFileOrDirString(str: string, i: number, parseAsDir: boolean, state: State | undefined): FSFSP;
+
+    // create appropriate FSFQN from FSFSP, filling in defaults from the given State as appropriate.
+    createFQN(fsp: FSFSP, state: State | undefined): FSFQN;
+
+    // get ideal host path for FQN, relative to whichever volume it's in. Used
+    // when creating a new file.
+    getHostPath(fqn: FSFQN): string;
+
+    async getFileForRUN(fsp: BeebFSP, tryLibDir: boolean, state: State | undefined): Promise<BeebFile>;
+}
+
+interface FSFSP {
+    getName(): string | undefined;
+}
+
+interface FSFQN {
+    readonly name: string;
+    equals(other: FSFQN): boolean;
+}
+
+class DFSFQN implements FSFQN {
+    public readonly drive: string;
+    public readonly dir: string;
+    public readonly name: string;
+
+    public constructor(drive: string, dir: string, name: string) {
+        this.drive = drive;
+        this.dir = dir;
+        this.name = name;
+    }
+
+    public equals(other: FSFQN): boolean {
+        if (!(other instanceof DFSFQN)) {
+            return false;
+        }
+
+        if (!utils.strieq(this.drive, other.drive)) {
+            return false;
+        }
+
+        if (!utils.strieq(this.dir, other.dir)) {
+            return false;
+        }
+
+        if (!utils.strieq(this.name, other.name)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public toString(): string {
+        return `:${this.drive}.${this.dir}.${this.name}`;
+    }
+}
+
+class DFSFSP implements FSFSP {
+    private drive: string | undefined;
+    private dir: string | undefined;
+    private name: string | undefined;
+
+    public constructor(drive: string | undefined, dir: string | undefined, name: string | undefined) {
+        this.drive = drive;
+        this.dir = dir;
+        this.name = name;
+    }
+
+    public getName(): string | undefined {
+        return this.name;
+    }
+
+    public toString(): string {
+        return `:${this.getString(this.drive)}.${this.getString(this.dir)}.${this.getString(this.name)} `;
+    }
+
+    private getString(x: string | undefined): string {
+        // 2026 = HORIZONTAL ELLIPSIS
+        return x !== undefined ? x : '\u2026';
+    }
+}
+
+class DFSState implements State {
+    public drive: string;
+    public dir: string;
+
+    public libDrive: string;
+    public libDir: string;
+
+    public constructor() {
+        this.drive = '0';
+        this.dir = '$';
+
+        this.libDrive = '0';
+        this.libDir = '$';
+    }
+}
+
+class DFSHandler implements Handler {
+    private static mustBeDFSState(state: State | undefined): state is DFSState | undefined {
+        if (state !== undefined) {
+            if (!(state instanceof DFSState)) {
+                throw new Error('not DFSState');
+            }
+        }
+
+        return true;
+    }
+
+    private static mustBeDFSFSP(fsp: FSFSP): fsp is DFSFSP {
+        if (!(fsp instanceof DFSFSP)) {
+            throw new Error('not DFSFSP');
+        }
+
+        return true;
+    }
+
+    private static mustBeDFSFQN(fqn: FSFQN): fqn is DFSFQN {
+        if (!(fqn instanceof DFSFQN)) {
+            throw new Error('not DFSFQN');
+        }
+
+        return true;
+    }
+
+    private static isValidFileNameChar(char: string) {
+        const c = char.charCodeAt(0);
+        return c >= 32 && c < 127;
+    }
+
+    public createState(): State {
+        return new DFSState();
+    }
+
+    public canWrite(): boolean {
+        return true;
+    }
+
+    public isValidBeebFileName(str: string): boolean {
+        if (str.length < 2) {
+            return false;
+        }
+
+        if (str[1] !== '.') {
+            return false;
+        }
+
+        if (str.length > 2 + MAX_NAME_LENGTH) {
+            return false;
+        }
+
+        if (!DFSHandler.isValidFileNameChar(str[0])) {
+            return false;
+        }
+
+        for (let i = 2; i < str.length; ++i) {
+            if (!DFSHandler.isValidFileNameChar(str[i])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public parseFileOrDirString(str: string, i: number, parseAsDir: boolean, state: DFSState | undefined): DFSFSP {
+        DFSHandler.mustBeDFSState(state);
+
+        let drive: string | undefined;
+        let dir: string | undefined;
+        let name: string | undefined;
+
+        if (str[i] === ':' && i + 1 < str.length) {
+            if (!BeebFS.isValidDrive(str[i + 1])) {
+                BeebFS.throwError(ErrorCode.BadDrive);
+            }
+
+            drive = str[i + 1];
+            i += 2;
+
+            if (str[i] === '.') {
+                ++i;
+            }
+        } else {
+            if (state !== undefined) {
+                drive = state.drive;
+            }
+        }
+
+        if (str[i + 1] === '.') {
+            if (!DFSHandler.isValidFileNameChar(str[i])) {
+                BeebFS.throwError(ErrorCode.BadDir);
+            }
+
+            dir = str[i];
+            i += 2;
+        } else {
+            if (state !== undefined) {
+                dir = state.dir;
+            }
+        }
+
+        if (parseAsDir) {
+            if (i < str.length && dir !== undefined || i === str.length - 1 && !DFSHandler.isValidFileNameChar(str[i])) {
+                BeebFS.throwError(ErrorCode.BadDir);
+            }
+
+            dir = str[i];
+        } else {
+            if (i < str.length) {
+                for (let j = i; j < str.length; ++j) {
+                    if (!DFSHandler.isValidFileNameChar(str[j])) {
+                        BeebFS.throwError(ErrorCode.BadName);
+                    }
+                }
+
+                name = str.slice(i);
+
+                if (name.length > MAX_NAME_LENGTH) {
+                    BeebFS.throwError(ErrorCode.BadName);
+                }
+            }
+        }
+
+        return new DFSFSP(drive, dir, name);
+    }
+
+    public createFQN(fsp: FSFSP, state: State | undefined): DFSFQN {
+        DFSHandler.mustBeDFSFSP(fsp);
+        DFSHandler.mustBeDFSState(state);
+
+        let drive: string;
+        if (fsp.drive === undefined) {
+            if (state === undefined) {
+                BeebFS.throwError(ErrorCode.BadName);
+            }
+
+            drive = state.drive;
+        } else {
+            drive = fsp.drive;
+        }
+
+        let dir: string;
+        if (fsp.dir === undefined) {
+            if (state === undefined) {
+                BeebFS.throwError(ErrorCode.BadName);
+            }
+            dir = state.dir;
+        } else {
+            dir = fsp.dir;
+        }
+
+        if (fsp.name === undefined) {
+            BeebFS.throwError(ErrorCode.BadName);
+        }
+
+        return new DFSFQN(drive, dir, fsp.name);
+    }
+
+    public getHostPath(fqn: FSFQN): string {
+        DFSHandler.mustBeDFSFQN(fqn);
+
+        return path.join(fqn.drive, this.getHostChars(fqn.dir) + '.' + this.getHostChars(fqn.name));
+    }
+
+    public async getFileForRUN(fsp: BeebFSP, tryLibDir: boolean, state: State | undefined): Promise<BeebFile | undefined> {
+        DFSHandler.mustBeDFSFSP(fsp.name);
+        DFSHandler.mustBeDFSState(state);
+
+        // Additional DFS rules for tryLibDir.
+        if (fsp.name.drive !== undefined || fsp.name.dir !== undefined) {
+            tryLibDir = false;
+        }
+
+        const curFQN = new BeebFQN(fsp.volume, this.createFQN(fsp, state));
+        const curFile = await this.getBeebFile(curFQN, true, false);
+        if (curFile !== undefined) {
+            return curFile;
+        }
+
+        if (tryLibDir) {
+            const libFQN = new BeebFQN(fsp.volume, new DFSFQN(state.libDrive, state.libDir, fsp.name.name));
+            const libFile = await this.getBeebFile(libFQN, true, false);
+            if (libFile !== undefined) {
+                return libFile;
+            }
+        }
+
+        return undefined;
+    }
+
+    private async getBeebFile(fqn: BeebFQN, wildcardsOK: boolean, throwIfNotFound: boolean): Promise<BeebFile | undefined> {
+        DFSHandler.mustBeDFSFQN(fqn.name);
+
+        if (!wildcardsOK) {
+            if (fqn.name.dir === utils.MATCH_N_CHAR || fqn.name.dir === utils.MATCH_ONE_CHAR) {
+                return BeebFS.throwError(ErrorCode.BadName);
+            }
+
+            for (const c of fqn.name.name) {
+                if (c === utils.MATCH_N_CHAR || c === utils.MATCH_ONE_CHAR) {
+                    return BeebFS.throwError(ErrorCode.BadName);
+                }
+            }
+        }
+
+        const files = await BeebFS.getBeebFilesForAFSP(fqn, undefined);//this.log);
+
+        if (files.length === 0) {
+            if (throwIfNotFound) {
+                return BeebFS.throwError(ErrorCode.FileNotFound);
+            } else {
+                return undefined;
+            }
+        } else if (files.length === 1) {
+            return files[0];
+        } else {
+            throw new BeebError(ErrorCode.BadName, 'Ambiguous name');
+        }
+    }
+
+    private getHostChars(str: string): string {
+        let result = '';
+
+        for (let i = 0; i < str.length; ++i) {
+            const c = str.charCodeAt(i);
+            if (c < 0 || c >= HOST_NAME_CHARS.length) {
+                // Answers on postcard please.
+                result += '_';
+            } else {
+                result += HOST_NAME_CHARS[c];
+            }
+        }
+
+        return result;
+    }
+}
+
+// there's just the one of these.
+const gDFSHandler = new DFSHandler();
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -860,9 +1196,13 @@ export class BeebFS {
             text = false;
         }
 
+        
+
+        if (!volume.handler.isValidBeebFileName(
+
         if (name.length < 2 || name[1] !== '.') {
-            return undefined;
-        }
+                return undefined;
+            }
 
         const dir = name[0];
         name = name.slice(2);
@@ -982,10 +1322,12 @@ export class BeebFS {
 
     private log: utils.Log;
 
-    private drive!: string;
-    private dir!: string;
-    private libDrive!: string;
-    private libDir!: string;
+    private state: State | undefined;
+
+    // private drive!: string;
+    // private dir!: string;
+    // private libDrive!: string;
+    // private libDir!: string;
     private gaManipulator: gitattributes.Manipulator | undefined;
 
     /////////////////////////////////////////////////////////////////////////
@@ -998,7 +1340,7 @@ export class BeebFS {
         this.folders = folders.slice();
         this.pcFolders = pcFolders.slice();
 
-        this.resetDirs();
+        //this.resetDirs();
 
         this.openFiles = [];
         this.firstFileHandle = DEFAULT_FIRST_FILE_HANDLE;
@@ -1037,8 +1379,7 @@ export class BeebFS {
         }
 
         this.currentVolume = volume;
-
-        this.resetDirs();
+        this.state = volume.handler.createState();
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1046,7 +1387,11 @@ export class BeebFS {
 
     // Reset dirs and close open files.
     public async reset() {
-        this.resetDirs();
+        if (this.currentVolume === undefined) {
+            this.state = undefined;
+        } else {
+            this.state = this.currentVolume.handler.createState();
+        }
 
         await this.OSFINDClose(0);
     }
@@ -1065,57 +1410,56 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public getDrive(): string {
-        return this.drive;
+    // public getDrive(): string {
+    //     return this.drive;
+    // }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public async starDrive(arg: string): Promise<void> {
+        // if (beebfs.BeebFS.isValidDrive(commandLine.parts[1])) {
+        //     this.bfs.setDrive(commandLine.parts[1]);
+        // } else {
+        //     const fsp = await this.bfs.parseFileString(commandLine.parts[1]);
+        //     if (fsp.wasExplicitVolume || fsp.drive === undefined || fsp.dir !== undefined || fsp.name !== undefined) {
+        //         beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDrive);
+        //     }
+        //     this.bfs.setDrive(fsp.drive!);
+        // }
+    }
+    // public setDrive(drive: string) {
+    //     this.drive = this.setDriveInternal(drive);
+    // }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    // public getDir(): string {
+    //     return this.dir;
+    // }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public async starDir(arg: string): Promise<void> {
+        const fsp = await this.parseDirString(arg);
+
+        if (fsp.wasExplicitVolume) {
+            await this.mount(fsp.volume);
+        }
+
+        fsp.volume.handler.starDir(fsp, state);
     }
 
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
+    public async starLib(arg: string): Promise<void> {
+        const fsp = await this.parseDirString(arg);
 
-    public setDrive(drive: string) {
-        this.drive = this.setDriveInternal(drive);
-    }
+        if (fsp.wasExplicitVolume) {
+            BeebFS.throwError(ErrorCode.BadDir);
+        }
 
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public getDir(): string {
-        return this.dir;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public setDir(dir: string) {
-        this.dir = this.setDirInternal(dir);
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public getLibDrive(): string {
-        return this.libDrive;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public setLibDrive(drive: string) {
-        this.libDrive = this.setDriveInternal(drive);
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public getLibDir(): string {
-        return this.libDir;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public setLibDir(dir: string) {
-        this.libDir = this.setDirInternal(dir);
+        fsp.volume.handler.starLib(fsp, state);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1165,32 +1509,32 @@ export class BeebFS {
             BeebFS.throwServerError(error);
         }
 
-        const newVolume = new BeebVolume(volumePath, name, BeebVolumeType.DFS);
+        const newVolume = new BeebVolume(volumePath, name, gDFSHandler);
         return newVolume;
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async parseDirStringWithDefaults(dirString: string): Promise<BeebFSP> {
-        const fsp = await this.parseDirString(dirString);
+    // public async parseDirStringWithDefaults(dirString: string): Promise<BeebFSP> {
+    //     const fsp = await this.parseDirString(dirString);
 
-        // if (fsp.volumeName !== undefined) {
-        //     // this is for *LIB and *DIR. Current volume only!
-        //     BeebFS.throwError(ErrorCode.BadDir);
-        // }
+    //     // if (fsp.volumeName !== undefined) {
+    //     //     // this is for *LIB and *DIR. Current volume only!
+    //     //     BeebFS.throwError(ErrorCode.BadDir);
+    //     // }
 
-        if (fsp.drive !== undefined && fsp.dir !== undefined) {
-            return fsp;
-        } else {
-            return new BeebFSP(
-                fsp.volume,
-                fsp.wasExplicitVolume,
-                fsp.drive !== undefined ? fsp.drive : this.drive,
-                fsp.dir !== undefined ? fsp.dir : this.dir,
-                fsp.name);
-        }
-    }
+    //     if (fsp.drive !== undefined && fsp.dir !== undefined) {
+    //         return fsp;
+    //     } else {
+    //         return new BeebFSP(
+    //             fsp.volume,
+    //             fsp.wasExplicitVolume,
+    //             fsp.drive !== undefined ? fsp.drive : this.drive,
+    //             fsp.dir !== undefined ? fsp.dir : this.dir,
+    //             fsp.name);
+    //     }
+    // }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
@@ -1201,13 +1545,18 @@ export class BeebFS {
         const fsp = await this.parseFileString(fileString);
         this.log.pn('    fsp: ' + fsp);
 
-        if (fsp.name === undefined) {
-            return BeebFS.throwError(ErrorCode.BadName);
-        }
+        const fqn = fsp.volume.handler.createFQN(fsp.name, this.state);
+        this.log.pn(`    fqn: ${fqn}`);
 
-        const fqn = new BeebFQN(fsp.volume, fsp.drive !== undefined ? fsp.drive : this.drive, fsp.dir !== undefined ? fsp.dir : this.dir, fsp.name);
-        this.log.pn('    fqn: ' + fqn);
-        return fqn;
+        // if (fsp.name.getName() === undefined) {
+        //     return BeebFS.throwError(ErrorCode.BadName);
+        // }
+
+
+
+        // const fqn = new BeebFQN(fsp.volume, fsp.drive !== undefined ? fsp.drive : this.drive, fsp.dir !== undefined ? fsp.dir : this.dir, fsp.name);
+        // this.log.pn('    fqn: ' + fqn);
+        return new BeebFQN(fsp.volume, fqn);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1557,9 +1906,9 @@ export class BeebFS {
         } else if (a === 5) {
             return await this.OSGBPBGetTitleAndBootOption();
         } else if (a === 6) {
-            return this.OSGBPBReadDevice(this.drive, this.dir);
+            return this.OSGBPBReadDevice(true);//this.drive, this.dir);
         } else if (a === 7) {
-            return this.OSGBPBReadDevice(this.libDrive, this.libDir);
+            return this.OSGBPBReadDevice(false);//this.libDrive, this.libDir);
         } else if (a === 8) {
             return await this.OSGBPBReadNames(numBytes, newPtr);
         } else {
@@ -1668,9 +2017,9 @@ export class BeebFS {
             BeebFS.throwError(ErrorCode.BadDrive);
         }
 
-        if (oldFQN.drive !== newFQN.drive) {
-            BeebFS.throwError(ErrorCode.BadDrive);//not my rules
-        }
+        // if (oldFQN.drive !== newFQN.drive) {
+        //     BeebFS.throwError(ErrorCode.BadDrive);//not my rules
+        // }
 
         if (await this.getBeebFileInternal(newFQN, false, false) !== undefined) {
             BeebFS.throwError(ErrorCode.Exists);
@@ -1698,37 +2047,45 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     public async getFileForRUN(fsp: BeebFSP, tryLibDir: boolean): Promise<BeebFile> {
-        if (fsp.name === undefined) {
-            return BeebFS.throwError(ErrorCode.BadName);
-        }
+        const file = await fsp.volume.handler.getFileForRUN(fsp, !fsp.wasExplicitVolume, this.state);
 
-        // Don't try lib dir if the file name looks at all explicit.
-        if (fsp.wasExplicitVolume || fsp.drive !== undefined || fsp.dir !== undefined) {
-            tryLibDir = false;
-            this.log.pn('Volume/drive/dir provided - don\'t try lib dir.');
-        }
-
-        const curFQN = new BeebFQN(fsp.volume, fsp.drive !== undefined ? fsp.drive : this.drive, fsp.dir !== undefined ? fsp.dir : this.dir, fsp.name);
-        this.log.pn('Trying in current dir: ``' + curFQN + '\'\'');
-
-        const curFile = await this.getBeebFileInternal(curFQN, true, false);
-        if (curFile !== undefined) {
-            return curFile;
-        }
-
-        if (tryLibDir) {
-            // (fsp.volume will be the current volume - if fsp.wasExplicitVolume,
-            // tryLibDir is false.)
-            const libFQN = new BeebFQN(fsp.volume, fsp.drive !== undefined ? fsp.drive : this.libDrive, fsp.dir !== undefined ? fsp.dir : this.libDir, fsp.name);
-            this.log.pn('Trying in library dir: ``' + libFQN + '\'\'');
-
-            const libFile = await this.getBeebFileInternal(libFQN, true, false);
-            if (libFile !== undefined) {
-                return libFile;
-            }
+        if (file !== undefined) {
+            return file;
         }
 
         return BeebFS.throwError(ErrorCode.BadCommand);
+
+        // if (fsp.name === undefined) {
+        //     return BeebFS.throwError(ErrorCode.BadName);
+        // }
+
+        // // Don't try lib dir if the file name looks at all explicit.
+        // if (fsp.wasExplicitVolume || fsp.drive !== undefined || fsp.dir !== undefined) {
+        //     tryLibDir = false;
+        //     this.log.pn('Volume/drive/dir provided - don\'t try lib dir.');
+        // }
+
+        // const curFQN = new BeebFQN(fsp.volume, fsp.drive !== undefined ? fsp.drive : this.drive, fsp.dir !== undefined ? fsp.dir : this.dir, fsp.name);
+        // this.log.pn('Trying in current dir: ``' + curFQN + '\'\'');
+
+        // const curFile = await this.getBeebFileInternal(curFQN, true, false);
+        // if (curFile !== undefined) {
+        //     return curFile;
+        // }
+
+        // if (tryLibDir) {
+        //     // (fsp.volume will be the current volume - if fsp.wasExplicitVolume,
+        //     // tryLibDir is false.)
+        //     const libFQN = new BeebFQN(fsp.volume, fsp.drive !== undefined ? fsp.drive : this.libDrive, fsp.dir !== undefined ? fsp.dir : this.libDir, fsp.name);
+        //     this.log.pn('Trying in library dir: ``' + libFQN + '\'\'');
+
+        //     const libFile = await this.getBeebFileInternal(libFQN, true, false);
+        //     if (libFile !== undefined) {
+        //         return libFile;
+        //     }
+        // }
+
+        // return BeebFS.throwError(ErrorCode.BadCommand);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1761,51 +2118,30 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private setDriveInternal(drive: string): string {
-        if (drive < '0' || drive > '9') {
-            BeebFS.throwError(ErrorCode.BadDrive);
-        }
+    // private setDriveInternal(drive: string): string {
+    //     if (drive < '0' || drive > '9') {
+    //         BeebFS.throwError(ErrorCode.BadDrive);
+    //     }
 
-        return drive;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    private setDirInternal(dir: string): string {
-        if (dir.length !== 1 || !BeebFS.isValidFileNameChar(dir)) {
-            BeebFS.throwError(ErrorCode.BadDir);
-        }
-
-        return dir;
-    }
+    //     return drive;
+    // }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private getHostChars(str: string): string {
-        let result = '';
+    // private setDirInternal(dir: string): string {
+    //     if (dir.length !== 1 || !BeebFS.isValidFileNameChar(dir)) {
+    //         BeebFS.throwError(ErrorCode.BadDir);
+    //     }
 
-        for (let i = 0; i < str.length; ++i) {
-            const c = str.charCodeAt(i);
-            if (c < 0 || c >= HOST_NAME_CHARS.length) {
-                // Answers on postcard please.
-                result += '_';
-            } else {
-                result += HOST_NAME_CHARS[c];
-            }
-        }
-
-        return result;
-    }
+    //     return dir;
+    // }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
     private getHostPath(fqn: BeebFQN): string {
-        const volume = this.getVolume();
-
-        return path.join(volume.path, fqn.drive, this.getHostChars(fqn.dir) + '.' + this.getHostChars(fqn.name));
+        return path.join(fqn.volume.path, fqn.volume.handler.getHostPath(fqn.name));
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2346,10 +2682,15 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSGBPBGetTitleAndBootOption(): Promise<OSGBPBResult> {
+        let volume = this.getVolume();
+
         const builder = new utils.BufferBuilder();
 
-        builder.writePascalString(await BeebFS.loadTitle(this.getVolume(), this.drive));
-        builder.writeUInt8(await BeebFS.loadBootOption(this.getVolume(), this.drive));
+        const title = await volume.handler.loadTitleForOSGBPB(volume, this.state);
+        const bootOption = await volume.handler.loadBootOptionForOSGBPB(volume, this.state);
+
+        // builder.writePascalString(await BeebFS.loadTitle(this.getVolume(), this.drive));
+        // builder.writeUInt8(await BeebFS.loadBootOption(this.getVolume(), this.drive));
 
         // What are you supposed to return for count and pointer in this case?
         return new OSGBPBResult(false, undefined, undefined, builder.createBuffer());
@@ -2358,8 +2699,13 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private OSGBPBReadDevice(drive: string, dir: string): OSGBPBResult {
+    private OSGBPBReadDevice(current: boolean): OSGBPBResult {
+        const volume = this.getVolume();
+
         const builder = new utils.BufferBuilder();
+
+        const drive = volume.handler.getDriveStringForOSGBPB(this.state);
+        const dir = volume.handler.getDirStringForOSGBPB(this.state);
 
         builder.writePascalString(drive);
         builder.writePascalString(dir);
@@ -2408,13 +2754,13 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private resetDirs() {
-        this.setDrive('0');
-        this.setDir('$');
+    // private resetDirs() {
+    //     this.setDrive('0');
+    //     this.setDir('$');
 
-        this.setLibDrive('0');
-        this.setLibDir('$');
-    }
+    //     this.setLibDrive('0');
+    //     this.setLibDir('$');
+    // }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
@@ -2460,58 +2806,15 @@ export class BeebFS {
             wasExplicitVolume = false;
         }
 
-        if (str[i] === ':' && i + 1 < str.length) {
-            if (!BeebFS.isValidDrive(str[i + 1])) {
-                BeebFS.throwError(ErrorCode.BadDrive);
-            }
+        const fsp = volume.handler.parseFileOrDirString(str, i, parseAsDir, this.state);
 
-            drive = str[i + 1];
-            i += 2;
+        // if (wasExplicitVolume) {
+        //     if (!fsp.isOKWithExplicitVolume()) {
+        //         return BeebFS.throwError(ErrorCode.BadName);
+        //     }
+        // }
 
-            if (str[i] === '.') {
-                ++i;
-            }
-        }
-
-        if (str[i + 1] === '.') {
-            if (!BeebFS.isValidFileNameChar(str[i])) {
-                BeebFS.throwError(ErrorCode.BadDir);
-            }
-
-            dir = str[i];
-            i += 2;
-        }
-
-        if (parseAsDir) {
-            if (i < str.length && dir !== undefined || i === str.length - 1 && !BeebFS.isValidFileNameChar(str[i])) {
-                BeebFS.throwError(ErrorCode.BadDir);
-            }
-
-            dir = str[i];
-        } else {
-            if (i < str.length) {
-                for (let j = i; j < str.length; ++j) {
-                    if (!BeebFS.isValidFileNameChar(str[j])) {
-                        BeebFS.throwError(ErrorCode.BadName);
-                    }
-                }
-
-                name = str.slice(i);
-
-                if (name.length > MAX_NAME_LENGTH) {
-                    BeebFS.throwError(ErrorCode.BadName);
-                }
-            }
-        }
-
-        // Everything is mandatory using the :: syntax.
-        if (wasExplicitVolume) {
-            if (drive === undefined || name !== undefined && dir === undefined) {
-                return BeebFS.throwError(ErrorCode.BadName);
-            }
-        }
-
-        return new BeebFSP(volume, wasExplicitVolume, drive, dir, name);
+        return new BeebFSP(volume, wasExplicitVolume, fsp);
     }
 
     /////////////////////////////////////////////////////////////////////////

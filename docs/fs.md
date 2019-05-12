@@ -165,6 +165,29 @@ to the PC name, but the server tries not to do this itself.)
 While a file is open on the BBC, it is buffered in RAM. Changes won't
 be seen on disk until the file is closed or flushed with OSARGS A=&FF.
 
+## Accessing PC files on the BBC
+
+Use the `--pc` option to expose a PC folder as a read-only volume. All
+files in that folder with names of 24 chars or less (in total,
+including any extensions) will be accessible on the BBC under their PC
+names.
+
+This doesn't bother to try to operate like any existing type of BBC
+filing system, nor does it make any real effort at being super-useful.
+Note the following:
+
+* the folder is read only
+* there are no drives or directories
+* the file names seen on the BBC are exactly the names they have on
+  the PC
+* files' load and execution addresses are always &FFFFFFFF (see
+  `Won't` below)
+* if a file's extension is `.txt`, it will be treated as a PC-style
+  text file (see above)
+  
+I use this for getting quick access to stuff in my downloads folder.
+That's basically what it's designed for.
+
 ## Quitting the server
 
 Press Ctrl+C.

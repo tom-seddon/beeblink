@@ -2,6 +2,62 @@
 
 Brain dump that's on GitHub so I have a backup.
 
+* Volume types
+
+** DFS
+
+For compatibility with DFS software - but with longer names and no
+file limit.
+
+File name format: =#.########=
+
+Hierarchy: no
+
+** ADFS
+   
+For compatibility with ADFS software or ADFS disk images.
+
+File name format: =########=
+
+Hierarchy: yes
+
+Path separator: =.=
+
+Parent dir: =^=
+
+** PC
+
+File name format: =*=
+
+Hierarchy: yes
+
+Path separator: =/= or =\= (
+
+Parent dir: =..=
+
+Unusual behaviour:
+
+- file name character set is ASCII 33-126 (note that U+00A3 POUND SIGN
+  is not permitted). All characters are just passed through and it's
+  up to the PC filing system to complain
+
+- only files with names <=20 (TBC) chars are supported. This is mostly
+  so that it's feasible to print something useful in Mode 7 for =*CAT=
+  or =*INFO=, but you probably don't want 21+ char names anyway...
+
+- limited support for OSGBPB A=5, A=6, A=7 or A=8 (don't want to have
+  to think about issues with file name length)
+
+- PC volumes do not contain drives
+
+- files in PC volumes never have BBC-style metadata - load/exec
+  addresses always read as $ffffffff (producing =Won't= error as
+  appropriate). Attributes reflect the attributes on the PC filing
+  system
+
+- files matching =*.txt= are interpreted as text, with newline
+  normalization translation
+
 * Speed tests
 
 Back-of-the-envelope calculations to give peak plausible-ish throughput, for actual code that might actually run from a ROM.

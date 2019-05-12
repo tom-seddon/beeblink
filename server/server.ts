@@ -1089,18 +1089,9 @@ export class Server {
     private async dirCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             this.log.pn('*DIR: using drive 0.');
-            this.bfs.setDrive('0');
+            await this.bfs.starDrive('0');
         } else {
-            const fsp = await this.bfs.parseDirStringWithDefaults(commandLine.parts[1]);
-
-            this.log.pn('*DIR: ' + fsp);
-
-            if (fsp.wasExplicitVolume) {
-                await this.bfs.mount(fsp.volume);
-            }
-
-            this.bfs.setDrive(fsp.drive!);
-            this.bfs.setDir(fsp.dir!);
+            await this.bfs.starDir(commandLine.parts[1]);
         }
 
         return newResponse(beeblink.RESPONSE_YES, 0);
@@ -1111,15 +1102,7 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        if (beebfs.BeebFS.isValidDrive(commandLine.parts[1])) {
-            this.bfs.setDrive(commandLine.parts[1]);
-        } else {
-            const fsp = await this.bfs.parseFileString(commandLine.parts[1]);
-            if (fsp.wasExplicitVolume || fsp.drive === undefined || fsp.dir !== undefined || fsp.name !== undefined) {
-                beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDrive);
-            }
-            this.bfs.setDrive(fsp.drive!);
-        }
+        await this.bfs.starDrive(commandLine.parts[1]);
 
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
