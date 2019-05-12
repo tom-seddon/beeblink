@@ -66,7 +66,7 @@ export class Manipulator {
 
     public scanForBASIC(drive: beebfs.BeebDrive): void {
         this.push(async (): Promise<void> => {
-            const beebFiles = await beebfs.BeebFS.getBeebFiles(drive.volume, drive.name, undefined);
+            const beebFiles = await beebfs.BeebFS.getBeebFilesForAFSP(new beebfs.BeebFQN(drive.volume, drive.name, '*', '*'), this.log);
 
             //this.log.pn(path.join(drive.volumePath, drive.name) + ': ' + beebFiles.length + ' Beeb file(s)\n');
 

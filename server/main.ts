@@ -112,6 +112,7 @@ interface ICommandLineOptions {
     list_serial_devices: boolean;
     list_usb_devices: boolean;
     serial_exclude: string[] | null;
+    pcFolders: string[];
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -777,7 +778,13 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
 
         const allDrives: beebfs.BeebDrive[] = [];
         let numFolders = 0;
+        let numReadOnly = 0;
         for (const volume of volumes) {
+            if (volume.isReadOnly()) {
+                ++numReadOnly;
+                continue;
+            }
+
             const drives = await beebfs.BeebFS.findDrivesForVolume(volume);
             for (const drive of drives) {
                 ++numFolders;
@@ -786,7 +793,8 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
                 }
             }
         }
-        process.stderr.write('Found ' + allDrives.length + '/' + numFolders + ' git drive(s) in ' + volumes.length + ' volume(s)\n');
+
+        process.stderr.write(`Found ${allDrives.length}/${numFolders} git drive(s) in ${volumes.length} volume(s) (${numReadOnly} read-only volume(s) were ignored)\n`);
 
         for (const drive of allDrives) {
             const drivePath = path.join(drive.volume.path, drive.name);
@@ -1703,7 +1711,7 @@ async function main(options: ICommandLineOptions) {
         return;
     }
 
-    const volumes = await beebfs.BeebFS.findAllVolumes(options.folders, log);
+    const volumes = await beebfs.BeebFS.findAllVolumes(options.folders, options.pcFolders, log);
 
     const gaManipulator = await createGitattributesManipulator(options, volumes);
 
@@ -1727,7 +1735,7 @@ async function main(options: ICommandLineOptions) {
         const bfsLogPrefix = options.fs_verbose ? 'FS' + connectionId : undefined;
         const serverLogPrefix = options.server_verbose ? additionalPrefix + 'SRV' + connectionId : undefined;
 
-        const bfs = new beebfs.BeebFS(bfsLogPrefix, options.folders, colours, gaManipulator);
+        const bfs = new beebfs.BeebFS(bfsLogPrefix, options.folders, options.pcFolders, colours, gaManipulator);
 
         if (defaultVolume !== undefined) {
             await bfs.mount(defaultVolume);
@@ -1797,6 +1805,7 @@ function integer(s: string): number {
     parser.addArgument(['--serial-data-verbose'], { action: 'storeTrue', help: 'dump raw serial data sent/received (requires --serial-verbose)' });
     parser.addArgument(['--list-serial-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
     parser.addArgument(['--list-usb-devices'], { action: 'storeTrue', help: 'list available USB devices, then exit' });
+    parser.addArgument(['--pc'], { dest: 'pcFolders', action: 'append', defaultValue: [], metavar: 'FOLDER', help: 'use %(metavar)s as a PC volume' });
     //parser.addArgument(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
 
     const options = parser.parseArgs();

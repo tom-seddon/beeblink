@@ -913,7 +913,7 @@ export class Server {
     }
 
     private async filesInfoResponse(afsp: beebfs.BeebFQN): Promise<Response> {
-        const files = await this.bfs.getBeebFilesForAFSP(afsp);
+        const files = await beebfs.BeebFS.getBeebFilesForAFSP(afsp, this.log);
 
         if (files.length === 0) {
             beebfs.BeebFS.throwError(beebfs.ErrorCode.FileNotFound);
@@ -1063,7 +1063,7 @@ export class Server {
             attrString = commandLine.parts[2];
         }
 
-        const beebFiles = await this.bfs.getBeebFilesForAFSP(await this.bfs.parseFQN(commandLine.parts[1]));
+        const beebFiles = await beebfs.BeebFS.getBeebFilesForAFSP(await this.bfs.parseFQN(commandLine.parts[1]), this.log);
         for (const beebFile of beebFiles) {
             // the validity of `attrString' will be checked over and over again,
             // which is kind of stupid.
@@ -1197,23 +1197,20 @@ export class Server {
             return beebfs.BeebFS.throwError(beebfs.ErrorCode.BadName);
         }
 
-        const dirRegExp = afsp.dir !== undefined ? utils.getRegExpFromAFSP(afsp.dir) : undefined;
-        const nameRegExp = utils.getRegExpFromAFSP(afsp.name);
+        const dir: string = afsp.dir !== undefined ? afsp.dir : '*';
+
+        // const dirRegExp = afsp.dir !== undefined ? utils.getRegExpFromAFSP(afsp.dir) : undefined;
+        // const nameRegExp = utils.getRegExpFromAFSP(afsp.name);
 
         const volumes = await this.bfs.findVolumesMatching('*');
         const foundFiles = [];
 
-        // This is almost, but not quite, what BeebFS.getBeebFilesForAFSP does.
-        // Should probably tidy that up.
-
         for (const volume of volumes) {
             const drives = await beebfs.BeebFS.findDrivesForVolume(volume);
             for (const drive of drives) {
-                const files = await beebfs.BeebFS.getBeebFiles(volume, drive.name, undefined);
+                const files = await beebfs.BeebFS.getBeebFilesForAFSP(new beebfs.BeebFQN(volume, drive.name, dir, afsp.name), this.log);
                 for (const file of files) {
-                    if ((dirRegExp === undefined || dirRegExp.exec(file.name.dir) !== null) && nameRegExp.exec(file.name.name) !== null) {
-                        foundFiles.push(file);
-                    }
+                    foundFiles.push(file);
                 }
             }
         }
