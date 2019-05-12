@@ -370,13 +370,15 @@ Set current drive's title.
 
 Show contents of text file.
 
-### `VOL (<avsp>)`
+### `VOL (<avsp>) (R)`
 
 With no argument, prints the name and path of the current volume.
 
 With argument, change to that volume. Wildcards are acceptable, as are
 names that match more than one volume - the first matching volume
 found will be selected.
+
+Specify `R` to mount the volume read-only.
 
 ### `VOLS (<avsp>)`
 

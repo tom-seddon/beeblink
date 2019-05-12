@@ -125,6 +125,7 @@ export enum ErrorCode {
     Exists = 196,
     TooBig = 198,
     DiscFault = 199,
+    VolumeReadOnly = 201,
     BadName = 204,
     BadDrive = 205,
     BadDir = 206,
@@ -158,6 +159,7 @@ const errorTexts: { [index: number]: string | undefined } = {
     [ErrorCode.BadCommand]: 'Bad command',
     [ErrorCode.DataLost]: 'Data lost',
     [ErrorCode.Wont]: 'Won\'t',
+    [ErrorCode.VolumeReadOnly]: 'Volume read only',
 };
 
 /////////////////////////////////////////////////////////////////////////
@@ -278,10 +280,20 @@ export class BeebDrive {
 export class BeebVolume {
     public readonly path: string;
     public readonly name: string;
+    private readOnly: boolean;
 
-    public constructor(volumePath: string, name: string) {
+    public constructor(volumePath: string, name: string, readOnly: boolean) {
         this.path = volumePath;
         this.name = name;
+        this.readOnly = readOnly;
+    }
+
+    public isReadOnly(): boolean {
+        return this.readOnly;
+    }
+
+    public asReadOnly(): BeebVolume {
+        return new BeebVolume(this.path, this.name, true);
     }
 
     public equals(oth: BeebVolume): boolean {
@@ -535,13 +547,6 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public static throwNoVolumeError(): never {
-        throw new BeebError(ErrorCode.DiscFault, 'No volume');
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     public static parseDirString(dirString: string): BeebFSP {
         return BeebFS.parseFileOrDirString(dirString, true);
     }
@@ -768,7 +773,7 @@ export class BeebFS {
                         }
 
                         if (BeebFS.isValidVolumeName(volumeName)) {
-                            const volume = new BeebVolume(fullName, volumeName);
+                            const volume = new BeebVolume(fullName, volumeName, false);
                             if (log !== undefined) {
                                 log.pn('Found volume ' + volume.path + ': ' + volume.name);
                             }
@@ -1013,7 +1018,7 @@ export class BeebFS {
 
     private folders: Array<string>;
 
-    private volume: BeebVolume | undefined;
+    private currentVolume: BeebVolume | undefined;
 
     private firstFileHandle: number;
     private openFiles: (OpenFile | undefined)[];
@@ -1057,7 +1062,7 @@ export class BeebFS {
             }
         }
 
-        this.volume = volume;
+        this.currentVolume = volume;
 
         this.resetDirs();
     }
@@ -1076,11 +1081,11 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     public getVolume() {
-        if (this.volume === undefined) {
-            return BeebFS.throwNoVolumeError();
+        if (this.currentVolume === undefined) {
+            throw new BeebError(ErrorCode.DiscFault, 'No volume');
         }
 
-        return this.volume;
+        return this.currentVolume;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1143,11 +1148,7 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     public async findDrives(): Promise<BeebDrive[]> {
-        if (this.volume === undefined) {
-            return BeebFS.throwNoVolumeError();
-        }
-
-        return await BeebFS.findDrivesForVolume(this.volume);
+        return await BeebFS.findDrivesForVolume(this.getVolume());
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1190,7 +1191,7 @@ export class BeebFS {
             BeebFS.throwServerError(error);
         }
 
-        const newVolume = new BeebVolume(volumePath, name);
+        const newVolume = new BeebVolume(volumePath, name, false);
         return newVolume;
     }
 
@@ -1283,19 +1284,11 @@ export class BeebFS {
         let volume: BeebVolume;
 
         if (commandLine === undefined) {
-            if (this.volume === undefined) {
-                return BeebFS.throwNoVolumeError();
-            }
-
             drive = this.drive;
-            volume = this.volume;
+            volume = this.getVolume();
         } else if (BeebFS.isValidDrive(commandLine)) {
-            if (this.volume === undefined) {
-                return BeebFS.throwNoVolumeError();
-            }
-
             drive = commandLine;
-            volume = this.volume;
+            volume = this.getVolume();
         } else {
             const fsp = BeebFS.parseFileString(commandLine);
 
@@ -1510,7 +1503,8 @@ export class BeebFS {
             hostPath = file.hostPath;
 
             if (write) {
-                this.mustBeWriteable(file);
+                this.mustBeWriteableVolume(fqn.volume);
+                this.mustBeWriteableFile(file);
             }
 
             if (write && !read) {
@@ -1657,24 +1651,24 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     public async setTitle(drive: string, title: string): Promise<void> {
-        if (this.volume === undefined) {
-            return BeebFS.throwNoVolumeError();
-        }
+        const volume = this.getVolume();
+
+        this.mustBeWriteableVolume(volume);
 
         const buffer = Buffer.from(title.substr(0, MAX_TITLE_LENGTH) + os.EOL, 'binary');
-        await this.writeHostFile(path.join(this.volume.path, drive, TITLE_FILE_NAME), buffer);
+        await this.writeHostFile(path.join(volume.path, drive, TITLE_FILE_NAME), buffer);
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
     public async saveBootOption(drive: string, option: number): Promise<void> {
-        if (this.volume === undefined) {
-            return BeebFS.throwNoVolumeError();
-        }
+        const volume = this.getVolume();
+
+        this.mustBeWriteableVolume(volume);
 
         const str = (option & 3).toString() + os.EOL;
-        await this.writeHostFile(path.join(this.volume.path, drive, OPT4_FILE_NAME), Buffer.from(str, 'binary'));
+        await this.writeHostFile(path.join(volume.path, drive, OPT4_FILE_NAME), Buffer.from(str, 'binary'));
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1826,10 +1820,8 @@ export class BeebFS {
             }
 
             return volumes[0];
-        } else if (this.volume === undefined) {
-            return BeebFS.throwNoVolumeError();
         } else {
-            return this.volume;
+            return this.getVolume();
         }
     }
 
@@ -1878,11 +1870,9 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     private getHostPath(fqn: BeebFQN): string {
-        if (this.volume === undefined) {
-            throw BeebFS.throwNoVolumeError();
-        }
+        const volume=this.getVolume();
 
-        return path.join(this.volume.path, fqn.drive, this.getHostChars(fqn.dir) + '.' + this.getHostChars(fqn.name));
+        return path.join(volume.path, fqn.drive, this.getHostChars(fqn.dir) + '.' + this.getHostChars(fqn.name));
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1965,6 +1955,7 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILESave(fqn: BeebFQN, load: number, exec: number, data: Buffer): Promise<OSFILEResult> {
+        this.mustBeWriteableVolume(fqn.volume);
         this.mustNotBeTooBig(data.length);
 
         let hostPath: string;
@@ -1972,7 +1963,7 @@ export class BeebFS {
         const file = await this.getBeebFileInternal(fqn, false, false);
         if (file !== undefined) {
             this.mustNotBeOpen(file);
-            this.mustBeWriteable(file);
+            this.mustBeWriteableFile(file);
 
             hostPath = file.hostPath;
         } else {
@@ -1996,6 +1987,7 @@ export class BeebFS {
         load: number | undefined,
         exec: number | undefined,
         attr: number | undefined): Promise<OSFILEResult> {
+        this.mustBeWriteableVolume(fqn.volume);
 
         const file = await this.getBeebFileInternal(fqn, false, false);
         if (file === undefined) {
@@ -2049,8 +2041,9 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     private async deleteFile(file: BeebFile): Promise<void> {
+        this.mustBeWriteableVolume(file.name.volume);
         this.mustNotBeOpen(file);
-        this.mustBeWriteable(file);
+        this.mustBeWriteableFile(file);
 
         try {
             await utils.forceFsUnlink(file.hostPath + INF_EXT);
@@ -2064,6 +2057,7 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILECreate(fqn: BeebFQN, load: number, exec: number, size: number): Promise<OSFILEResult> {
+        this.mustBeWriteableVolume(fqn.volume);
         this.mustNotBeTooBig(size);//block.attr - block.size);
 
         // Cheat.
@@ -2135,13 +2129,36 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     // Causes a 'Locked' error if the file exists and is locked.
-    private mustBeWriteable(file: BeebFile | undefined) {
+    private mustBeWriteableFile(file: BeebFile | undefined) {
         if (file !== undefined) {
             if (file.isLocked()) {
                 BeebFS.throwError(ErrorCode.Locked);
             }
         }
     }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private mustBeWriteableVolume(volume: BeebVolume): void {
+        if (volume.isReadOnly()) {
+            BeebFS.throwError(ErrorCode.VolumeReadOnly);
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    // Throws 'No volume', or 'Volume read only', when appropriate.
+    // private getWriteableCurrentVolume(): BeebVolume {
+    //     let volume = this.getVolume();
+
+    //     if (volume.isReadOnly()) {
+    //         BeebFS.throwError(ErrorCode.VolumeReadOnly);
+    //     }
+
+    //     return volume;
+    // }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
@@ -2396,14 +2413,10 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSGBPBGetTitleAndBootOption(): Promise<OSGBPBResult> {
-        if (this.volume === undefined) {
-            return BeebFS.throwNoVolumeError();
-        }
-
         const builder = new utils.BufferBuilder();
 
-        builder.writePascalString(await BeebFS.loadTitle(this.volume, this.drive));
-        builder.writeUInt8(await BeebFS.loadBootOption(this.volume, this.drive));
+        builder.writePascalString(await BeebFS.loadTitle(this.getVolume(), this.drive));
+        builder.writeUInt8(await BeebFS.loadBootOption(this.getVolume(), this.drive));
 
         // What are you supposed to return for count and pointer in this case?
         return new OSGBPBResult(false, undefined, undefined, builder.createBuffer());
@@ -2425,13 +2438,9 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSGBPBReadNames(numBytes: number, newPtr: number): Promise<OSGBPBResult> {
-        if (this.volume === undefined) {
-            return BeebFS.throwNoVolumeError();
-        }
-
         const builder = new utils.BufferBuilder();
 
-        const files = await this.getBeebFilesForAFSP(new BeebFQN(this.volume, this.drive, this.dir, '*'));
+        const files = await this.getBeebFilesForAFSP(new BeebFQN(this.getVolume(), this.drive, this.dir, '*'));
 
         let fileIdx = newPtr;
 

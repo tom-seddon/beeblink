@@ -172,7 +172,7 @@ export class Server {
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
             new Command('VOLBROWSER', undefined, this.volbrowserCommand),
-            new Command('VOL', '(<avsp>)', this.volCommand),
+            new Command('VOL', '(<avsp>) (R)', this.volCommand),
             new Command('VOLS', '(<avsp>)', this.volsCommand),
             new Command('WDUMP', '<fsp>', this.wdumpCommand),
             new Command('WRITE', '<fsp> <drive> <type>', this.writeCommand),
@@ -1379,8 +1379,15 @@ export class Server {
                 throw new beebfs.BeebError(beebfs.ErrorCode.FileNotFound, 'Volume not found');
             }
 
-            await this.bfs.mount(volumes[0]);
             volume = volumes[0];
+
+            if (commandLine.parts.length >= 3) {
+                if (commandLine.parts[2].toLowerCase() === 'r') {
+                    volume = volume.asReadOnly();
+                }
+            }
+
+            await this.bfs.mount(volume);
         } else {
             volume = this.bfs.getVolume();
         }
