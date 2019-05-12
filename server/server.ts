@@ -152,6 +152,7 @@ export class Server {
         this.bfs = bfs;
         this.stringBufferIdx = 0;
         this.imagePartIdx = 0;
+
         this.commands = [
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
             new Command('DELETE', '<fsp>', this.deleteCommand),
@@ -998,7 +999,7 @@ export class Server {
 
         this.log.pn('*RUN: ``' + commandLine.parts[0] + '\'\' (try lib dir: ' + tryLibDir + ')');
 
-        const fsp = beebfs.BeebFS.parseFileString(commandLine.parts[0]);
+        const fsp = await this.bfs.parseFileString(commandLine.parts[0]);
         const file = await this.bfs.getFileForRUN(fsp, tryLibDir);
 
         if (file.load === beebfs.SHOULDNT_LOAD || file.exec === beebfs.SHOULDNT_EXEC) {
@@ -1090,9 +1091,13 @@ export class Server {
             this.log.pn('*DIR: using drive 0.');
             this.bfs.setDrive('0');
         } else {
-            const fsp = this.bfs.parseDirStringWithDefaults(commandLine.parts[1]);
+            const fsp = await this.bfs.parseDirStringWithDefaults(commandLine.parts[1]);
 
             this.log.pn('*DIR: ' + fsp);
+
+            if (fsp.volume !== undefined) {
+                await this.bfs.mount(fsp.volume);
+            }
 
             this.bfs.setDrive(fsp.drive!);
             this.bfs.setDir(fsp.dir!);
@@ -1109,8 +1114,8 @@ export class Server {
         if (beebfs.BeebFS.isValidDrive(commandLine.parts[1])) {
             this.bfs.setDrive(commandLine.parts[1]);
         } else {
-            const fsp = beebfs.BeebFS.parseFileString(commandLine.parts[1]);
-            if (fsp.volumeName !== undefined || fsp.drive === undefined || fsp.dir !== undefined || fsp.name !== undefined) {
+            const fsp = await this.bfs.parseFileString(commandLine.parts[1]);
+            if (fsp.volume !== undefined || fsp.drive === undefined || fsp.dir !== undefined || fsp.name !== undefined) {
                 beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDrive);
             }
             this.bfs.setDrive(fsp.drive!);
@@ -1139,9 +1144,14 @@ export class Server {
         if (commandLine.parts.length < 2) {
             this.log.pn('*LIB: using current dir: :' + this.bfs.getDrive() + '.' + this.bfs.getDir());
         } else {
-            const fsp = this.bfs.parseDirStringWithDefaults(commandLine.parts[1]);
+            const fsp = await this.bfs.parseDirStringWithDefaults(commandLine.parts[1]);
 
             this.log.pn('*LIB: ' + fsp);
+
+            if (fsp.volume !== undefined) {
+                // Volume spec not permitted.
+                beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDir);
+            }
 
             this.bfs.setLibDrive(fsp.drive!);
             this.bfs.setLibDir(fsp.dir!);
@@ -1181,9 +1191,9 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const afsp = beebfs.BeebFS.parseFileString(commandLine.parts[1]);
+        const afsp = await this.bfs.parseFileString(commandLine.parts[1]);
 
-        if (afsp.volumeName !== undefined || afsp.drive !== undefined || afsp.name === undefined) {
+        if (afsp.volume !== undefined || afsp.drive !== undefined || afsp.name === undefined) {
             return beebfs.BeebFS.throwError(beebfs.ErrorCode.BadName);
         }
 
