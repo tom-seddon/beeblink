@@ -776,31 +776,16 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
         // thing at a time. (Noticeably faster startup on OS X with lots of
         // volumes, even on an SSD.)
 
-        const allDrives: beebfs.BeebDrive[] = [];
-        let numFolders = 0;
-        let numReadOnly = 0;
+        let oldNumVolumes = volumes.length;
+
+        volumes = volumes.filter(volume => !volume.isReadOnly());
+        volumes = volumes.filter(async volume => !(await isGit(volume.path)));
+
+        process.stderr.write(`Found ${volumes.length}/${oldNumVolumes} writeable git-controlled volumes\n`);
+
         for (const volume of volumes) {
-            if (volume.isReadOnly()) {
-                ++numReadOnly;
-                continue;
-            }
-
-            const drives = await beebfs.BeebFS.findDrivesForVolume(volume);
-            for (const drive of drives) {
-                ++numFolders;
-                if (await isGit(path.join(drive.volume.path, drive.name))) {
-                    allDrives.push(drive);
-                }
-            }
-        }
-
-        process.stderr.write(`Found ${allDrives.length}/${numFolders} git drive(s) in ${volumes.length} volume(s) (${numReadOnly} read-only volume(s) were ignored)\n`);
-
-        for (const drive of allDrives) {
-            const drivePath = path.join(drive.volume.path, drive.name);
-
-            gaManipulator.makeFolderNotText(drivePath);
-            gaManipulator.scanForBASIC(drive);
+            gaManipulator.makeFolderNotText(volume.path);
+            gaManipulator.scanForBASIC(volume);
         }
 
         gaManipulator.whenQuiescent(() => {

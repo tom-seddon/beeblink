@@ -54,6 +54,14 @@ export class Manipulator {
         this.change(path.join(folderPath, '*'), undefined, '-text');
     }
 
+    public deleteFile(filePath: string): void {
+        // TODO - actually write this.
+    }
+
+    public renameFile(oldFilePath: string, newFilePath: string): void {
+        // TODO - actually write this.
+    }
+
     public makeFileBASIC(filePath: string, basic: boolean): void {
         const diff = 'diff=bbcbasic';
 
@@ -64,9 +72,13 @@ export class Manipulator {
         }
     }
 
-    public scanForBASIC(drive: beebfs.BeebDrive): void {
+    public scanForBASIC(volume: beebfs.BeebVolume): void {
+        if (volume.isReadOnly()) {
+            return;
+        }
+
         this.push(async (): Promise<void> => {
-            const beebFiles = await beebfs.BeebFS.getBeebFilesForAFSP(new beebfs.BeebFQN(drive.volume, drive.name, '*', '*'), this.log);
+            const beebFiles = await volume.handler.getBeebFilesMatching(volume, undefined, undefined);
 
             //this.log.pn(path.join(drive.volumePath, drive.name) + ': ' + beebFiles.length + ' Beeb file(s)\n');
 
@@ -80,7 +92,7 @@ export class Manipulator {
 
                 //this.log.pn(beebFile.hostPath + ': is BASIC: ' + (isBASIC ? 'yes' : 'no'));
 
-                this.makeFileBASIC(beebFile.hostPath, utils.isBASIC(data));
+                this.makeFileBASIC(beebFile.hostPath, isBASIC);
             }
         });
     }

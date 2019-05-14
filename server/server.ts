@@ -711,7 +711,8 @@ export class Server {
     }
 
     private async handleGetBootOption(handler: Handler, p: Buffer): Promise<Response> {
-        const option = await beebfs.BeebFS.loadBootOption(this.bfs.getVolume(), this.bfs.getDrive());
+        // const option = await beebfs.BeebFS.loadBootOption(this.bfs.getVolume(), this.bfs.getDrive());
+        const option = await this.bfs.getBootOption();
 
         return newResponse(beeblink.RESPONSE_BOOT_OPTION, option);
     }
@@ -913,7 +914,7 @@ export class Server {
     }
 
     private async filesInfoResponse(afsp: beebfs.BeebFQN): Promise<Response> {
-        const files = await beebfs.BeebFS.getBeebFilesForAFSP(afsp, this.log);
+        const files = await this.bfs.findFilesMatching(afsp);
 
         if (files.length === 0) {
             beebfs.BeebFS.throwError(beebfs.ErrorCode.FileNotFound);
@@ -922,15 +923,7 @@ export class Server {
         let text = '';
 
         for (const file of files) {
-            // 0123456789012345678901234567890123456789
-            // $.1234567 L 12345678 12345678 123456
-            // x.1234567
-            text += (file.name.dir + '.' + file.name.name).padEnd(12);
-            text += ' ' + (file.isLocked() ? 'L' : ' ');
-            text += ' ' + utils.hex8(file.load).toUpperCase();
-            text += ' ' + utils.hex8(file.exec).toUpperCase();
-            text += ' ' + utils.hex(file.size & 0x00ffffff, 6).toUpperCase();
-            text += BNL;
+            text += `${this.bfs.getInfoText(file)}${BNL}`;
         }
 
         return this.textResponse(text);
@@ -1058,17 +1051,19 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        let attrString: string | undefined;
+        let attrString = '';
         if (commandLine.parts.length >= 3) {
             attrString = commandLine.parts[2];
         }
 
-        const beebFiles = await beebfs.BeebFS.getBeebFilesForAFSP(await this.bfs.parseFQN(commandLine.parts[1]), this.log);
+        const fqn = await this.bfs.parseFQN(commandLine.parts[1]);
+        const beebFiles = await this.bfs.findFilesMatching(fqn);
         for (const beebFile of beebFiles) {
             // the validity of `attrString' will be checked over and over again,
             // which is kind of stupid.
-            const newAttr = this.bfs.getModifiedAttributes(attrString, beebFile.attr);
-            await this.bfs.writeMetadata(beebFile.hostPath, beebFile.name, beebFile.load, beebFile.exec, newAttr);
+            const newFile = this.bfs.getFileWithModifiedAttributes(beebFile, attrString);
+
+            await this.bfs.writeBeebFileMetadata(newFile);
         }
 
         return newResponse(beeblink.RESPONSE_YES, 0);
@@ -1087,59 +1082,27 @@ export class Server {
     }
 
     private async dirCommand(commandLine: beebfs.CommandLine): Promise<Response> {
-        if (commandLine.parts.length < 2) {
-            this.log.pn('*DIR: using drive 0.');
-            await this.bfs.starDrive('0');
-        } else {
-            await this.bfs.starDir(commandLine.parts[1]);
-        }
-
+        let arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
+        await this.bfs.starDir(arg);
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
     private async driveCommand(commandLine: beebfs.CommandLine): Promise<Response> {
-        if (commandLine.parts.length < 2) {
-            throw new CommandSyntaxError();
-        }
-
-        await this.bfs.starDrive(commandLine.parts[1]);
+        let arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
+        await this.bfs.starDrive(arg);
 
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
     private async drivesCommand(commandLine: beebfs.CommandLine): Promise<Response> {
-        const drives = await this.bfs.findDrives();
-
-        let text = '';
-
-        for (const drive of drives) {
-            text += drive.name + ' - ' + drive.getOptionDescription().padEnd(4, ' ');
-            if (drive.title.length > 0) {
-                text += ': ' + drive.title;
-            }
-            text += utils.BNL;
-        }
+        const text = await this.bfs.starDrives();
 
         return this.textResponse(text);
     }
 
     private async libCommand(commandLine: beebfs.CommandLine): Promise<Response> {
-        if (commandLine.parts.length < 2) {
-            this.log.pn('*LIB: using current dir: :' + this.bfs.getDrive() + '.' + this.bfs.getDir());
-        } else {
-            const fsp = await this.bfs.parseDirStringWithDefaults(commandLine.parts[1]);
-
-            this.log.pn('*LIB: ' + fsp);
-
-            if (fsp.wasExplicitVolume) {
-                // Volume spec not permitted.
-                beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDir);
-            }
-
-            this.bfs.setLibDrive(fsp.drive!);
-            this.bfs.setLibDir(fsp.dir!);
-        }
-
+        let arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
+        await this.bfs.starLib(arg);
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
@@ -1174,37 +1137,19 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        const afsp = await this.bfs.parseFileString(commandLine.parts[1]);
-
-        if (afsp.wasExplicitVolume || afsp.drive !== undefined || afsp.name === undefined) {
-            return beebfs.BeebFS.throwError(beebfs.ErrorCode.BadName);
-        }
-
-        const dir: string = afsp.dir !== undefined ? afsp.dir : '*';
-
-        // const dirRegExp = afsp.dir !== undefined ? utils.getRegExpFromAFSP(afsp.dir) : undefined;
-        // const nameRegExp = utils.getRegExpFromAFSP(afsp.name);
-
-        const volumes = await this.bfs.findVolumesMatching('*');
-        const foundFiles = [];
-
-        for (const volume of volumes) {
-            const drives = await beebfs.BeebFS.findDrivesForVolume(volume);
-            for (const drive of drives) {
-                const files = await beebfs.BeebFS.getBeebFilesForAFSP(new beebfs.BeebFQN(volume, drive.name, dir, afsp.name), this.log);
-                for (const file of files) {
-                    foundFiles.push(file);
-                }
-            }
-        }
+        const foundPaths = await this.bfs.starLocate(commandLine.parts[1]);
 
         let text = '';
-        if (foundFiles.length === 0) {
+        if (foundPaths.length === 0) {
             text += 'No files found.' + utils.BNL;
         } else {
-            for (const foundFile of foundFiles) {
-                text += '::' + foundFile.name.volume.name + ':' + foundFile.name.drive + '.' + foundFile.name.dir + '.' + foundFile.name.name + utils.BNL;
+            for (const foundPath of foundPaths) {
+                text += `${foundPath}${utils.BNL}`;
             }
+            // for (const foundFile of foundFiles) {
+            //     text+=`${foundFile.getFullPath()}${utils.BNL}`;
+            //     text += '::' + foundFile.name.volume.name + ':' + foundFile.name.drive + '.' + foundFile.name.dir + '.' + foundFile.name.name + utils.BNL;
+            // }
         }
 
         return this.textResponse(text);
@@ -1340,7 +1285,7 @@ export class Server {
             throw new CommandSyntaxError();
         }
 
-        await this.bfs.setTitle(this.bfs.getDrive(), commandLine.parts[1]);
+        await this.bfs.setTitle(commandLine.parts[1]);
 
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
