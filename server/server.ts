@@ -1082,13 +1082,13 @@ export class Server {
     }
 
     private async dirCommand(commandLine: beebfs.CommandLine): Promise<Response> {
-        let arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
+        const  arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starDir(arg);
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
     private async driveCommand(commandLine: beebfs.CommandLine): Promise<Response> {
-        let arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
+        const  arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starDrive(arg);
 
         return newResponse(beeblink.RESPONSE_YES, 0);
@@ -1101,7 +1101,7 @@ export class Server {
     }
 
     private async libCommand(commandLine: beebfs.CommandLine): Promise<Response> {
-        let arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
+        const  arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starLib(arg);
         return newResponse(beeblink.RESPONSE_YES, 0);
     }

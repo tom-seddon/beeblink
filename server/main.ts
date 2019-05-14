@@ -776,10 +776,10 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
         // thing at a time. (Noticeably faster startup on OS X with lots of
         // volumes, even on an SSD.)
 
-        let oldNumVolumes = volumes.length;
+        const oldNumVolumes = volumes.length;
 
-        volumes = volumes.filter(volume => !volume.isReadOnly());
-        volumes = volumes.filter(async volume => !(await isGit(volume.path)));
+        volumes = volumes.filter((volume) => !volume.isReadOnly());
+        volumes = volumes.filter(async (volume) => !(await isGit(volume.path)));
 
         process.stderr.write(`Found ${volumes.length}/${oldNumVolumes} writeable git-controlled volumes\n`);
 
