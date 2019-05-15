@@ -21,10 +21,10 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-import { Message } from './message';
+import Message from './Message';
 import * as utils from './utils';
 
-export class Response extends Message {
+export default class Response extends Message {
     public constructor(c: number, p: Buffer) {
         super(c, p);
     }

@@ -23,7 +23,7 @@
 
 import * as utils from './utils';
 
-export class Message {
+export default class Message {
     public readonly c: number;
     public readonly p: Buffer;
 

@@ -32,8 +32,9 @@ import * as adfsimage from './adfsimage';
 import * as crypto from 'crypto';
 import { BNL } from './utils';
 import { Chalk } from 'chalk';
-import { Request } from './request';
-import { Response } from './response';
+import Request from './Request';
+import Response from './Response';
+import * as errors from './errors';
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -106,18 +107,6 @@ class Handler {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-class CommandSyntaxError extends Error {
-    public constructor() {
-        super('CommandSyntaxError');
-
-        // there's no state; this type exists just to indicate this was a syntax
-        // error rather than some other type of error.
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 // This handles the front-end duties of decomposing payloads, parsing command
 // lines, routing requests to the appropriate methods of BeebFS, and dealing
 // with the packet writing. The plan is that the BeebFS part could be
@@ -131,7 +120,7 @@ class CommandSyntaxError extends Error {
 // and if you get (say) a 'Bad drive' rather than 'Syntax: xxx', then that's
 // fine.
 
-export class Server {
+export default class Server {
     private bfs: beebfs.BeebFS;
     // romPath is set directly from the command line options struct, which is
     // why it's a bit inconistent.
@@ -271,7 +260,7 @@ export class Server {
                 }
             }
         } catch (error) {
-            if (error instanceof beebfs.BeebError) {
+            if (error instanceof errors.BeebError) {
                 this.log.pn('Error response: ' + error.toString());
 
                 const builder = new utils.BufferBuilder();
@@ -290,7 +279,7 @@ export class Server {
 
     private async handleGetROM(handler: Handler, p: Buffer): Promise<Response> {
         if (this.romPath === null) {
-            throw new beebfs.BeebError(beebfs.ErrorCode.DiscFault, 'No ROM available');
+            return errors.generic('No ROM available');
         } else {
             try {
                 const rom = await utils.fsReadFile(this.romPath);
@@ -310,7 +299,7 @@ export class Server {
             try {
                 await this.bfs.reset();
             } catch (error) {
-                if (error instanceof beebfs.BeebError) {
+                if (error instanceof errors.BeebError) {
                     process.stderr.write('WARNING: error occured during reset: ' + error + '\n');
                 } else {
                     throw error;
@@ -366,7 +355,7 @@ export class Server {
         const commandLine = this.initCommandLine(p.toString('binary'));
 
         if (commandLine.parts.length < 1) {
-            beebfs.BeebFS.throwError(beebfs.ErrorCode.BadCommand);
+            return errors.badCommand();
         }
 
         let matchedCommand: Command | undefined;
@@ -419,12 +408,14 @@ export class Server {
             try {
                 return await matchedCommand.applyFun(this, commandLine);
             } catch (error) {
-                if (error instanceof CommandSyntaxError) {
-                    const text = 'Syntax: ' + matchedCommand.nameUC + (matchedCommand.syntax !== undefined ? ' ' + matchedCommand.syntax : '');
-                    throw new beebfs.BeebError(beebfs.ErrorCode.Syntax, text);
-                } else {
-                    throw error;
+                if (error instanceof errors.BeebError) {
+                    if (error.code === 220 && error.text === '') {
+                        const text = 'Syntax: ' + matchedCommand.nameUC + (matchedCommand.syntax !== undefined ? ' ' + matchedCommand.syntax : '');
+                        return errors.syntax(text);
+                    }
                 }
+
+                throw error;
             }
         } else {
             return await this.handleRun(commandLine, true);//true = check library directory
@@ -477,7 +468,7 @@ export class Server {
         }
 
         if (i >= p.length) {
-            throw new beebfs.BeebError(beebfs.ErrorCode.DiscFault, 'Bad OSFILE request (2)');
+            return errors.generic('Bad OSFILE request (2)');
         }
 
         ++i;//consume CR
@@ -608,7 +599,7 @@ export class Server {
         const commandLine = this.initCommandLine(p.toString('binary'));
 
         if (commandLine.parts.length === 0) {
-            return beebfs.BeebFS.throwError(beebfs.ErrorCode.BadName);
+            return errors.badName();
         }
 
         const fqn = await this.bfs.parseFQN(commandLine.parts[0]);
@@ -894,7 +885,7 @@ export class Server {
     }
 
     private internalError(text: string): never {
-        throw new beebfs.BeebError(beebfs.ErrorCode.DiscFault, text);
+        return errors.generic(text);
     }
 
     private payloadMustBeAtLeast(handler: Handler, p: Buffer, minSize: number) {
@@ -917,7 +908,7 @@ export class Server {
         const files = await this.bfs.findFilesMatching(afsp);
 
         if (files.length === 0) {
-            beebfs.BeebFS.throwError(beebfs.ErrorCode.FileNotFound);
+            return errors.fileNotFound();
         }
 
         let text = '';
@@ -970,7 +961,7 @@ export class Server {
         try {
             commandLine = new beebfs.CommandLine(commandLineString);
         } catch (error) {
-            if (error instanceof beebfs.BeebError) {
+            if (error instanceof errors.BeebError) {
                 this.log.pn('parse error: ' + error.toString());
             }
 
@@ -987,7 +978,7 @@ export class Server {
 
     private async handleRun(commandLine: beebfs.CommandLine, tryLibDir: boolean): Promise<Response> {
         if (commandLine.parts.length === 0) {
-            beebfs.BeebFS.throwError(beebfs.ErrorCode.BadName);
+            return errors.badName();
         }
 
         this.log.pn('*RUN: ``' + commandLine.parts[0] + '\'\' (try lib dir: ' + tryLibDir + ')');
@@ -996,7 +987,7 @@ export class Server {
         const file = await this.bfs.getFileForRUN(fsp, tryLibDir);
 
         if (file.load === beebfs.SHOULDNT_LOAD || file.exec === beebfs.SHOULDNT_EXEC) {
-            beebfs.BeebFS.throwError(beebfs.ErrorCode.Wont);
+            return errors.wont();
         }
 
         const data = await beebfs.BeebFS.readFile(file);
@@ -1039,7 +1030,7 @@ export class Server {
 
     private async infoCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         const fqn = await this.bfs.parseFQN(commandLine.parts[1]);
@@ -1048,7 +1039,7 @@ export class Server {
 
     private async accessCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         let attrString = '';
@@ -1071,7 +1062,7 @@ export class Server {
 
     private async deleteCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         const fqn = await this.bfs.parseFQN(commandLine.parts[1]);
@@ -1082,13 +1073,13 @@ export class Server {
     }
 
     private async dirCommand(commandLine: beebfs.CommandLine): Promise<Response> {
-        const  arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
+        const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starDir(arg);
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
     private async driveCommand(commandLine: beebfs.CommandLine): Promise<Response> {
-        const  arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
+        const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starDrive(arg);
 
         return newResponse(beeblink.RESPONSE_YES, 0);
@@ -1101,14 +1092,14 @@ export class Server {
     }
 
     private async libCommand(commandLine: beebfs.CommandLine): Promise<Response> {
-        const  arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
+        const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starLib(arg);
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
     private async typeCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length !== 2) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         const lines = await this.bfs.readTextFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
@@ -1118,7 +1109,7 @@ export class Server {
 
     private async listCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length !== 2) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         const lines = await this.bfs.readTextFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
@@ -1134,7 +1125,7 @@ export class Server {
 
     private async locateCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         const foundPaths = await this.bfs.starLocate(commandLine.parts[1]);
@@ -1165,7 +1156,7 @@ export class Server {
 
     private async dumpCommandInternal(commandLine: beebfs.CommandLine, wide: boolean): Promise<Response> {
         if (commandLine.parts.length !== 2) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         const data = await beebfs.BeebFS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
@@ -1213,7 +1204,7 @@ export class Server {
 
     private async renameCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 3) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         const oldFQN = await this.bfs.parseFQN(commandLine.parts[1]);
@@ -1226,23 +1217,23 @@ export class Server {
 
     private async srloadCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length !== 4 && commandLine.parts.length !== 5) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         if (commandLine.parts.length >= 5) {
             if (commandLine.parts[4].toLowerCase() !== 'q') {
-                throw new CommandSyntaxError();
+                return errors.syntax();
             }
         }
 
         const bank = utils.parseHex(commandLine.parts[3]);
         if (Number.isNaN(bank)) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         let addr = utils.parseHex(commandLine.parts[2]);
         if (Number.isNaN(addr)) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         addr &= 0xffff;
@@ -1252,7 +1243,7 @@ export class Server {
         this.log.pn(`Addr: 0x${utils.hex4(addr)}, bank: 0x${utils.hex2(addr)}, size: 0x${utils.hex4(rom.length)}`);
 
         if (addr < 0x8000 || addr + rom.length > 0xc000) {
-            beebfs.BeebFS.throwError(beebfs.ErrorCode.Wont);
+            return errors.wont();
         }
 
         const builder = new utils.BufferBuilder();
@@ -1282,7 +1273,7 @@ export class Server {
 
     private async titleCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         await this.bfs.setTitle(commandLine.parts[1]);
@@ -1296,7 +1287,7 @@ export class Server {
 
     private async newvolCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         const volume = await this.bfs.createVolume(commandLine.parts[1]);
@@ -1311,7 +1302,7 @@ export class Server {
         if (commandLine.parts.length >= 2) {
             const volumes = await this.bfs.findVolumesMatching(commandLine.parts[1]);
             if (volumes.length === 0) {
-                throw new beebfs.BeebError(beebfs.ErrorCode.FileNotFound, 'Volume not found');
+                return errors.fileNotFound('Volume not found');
             }
 
             volume = volumes[0];
@@ -1332,7 +1323,7 @@ export class Server {
 
     private async writeCommand(commandLine: beebfs.CommandLine): Promise<Response> {
         if (commandLine.parts.length < 4) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
 
         this.imageParts = undefined;
@@ -1345,14 +1336,14 @@ export class Server {
         const data = await beebfs.BeebFS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
 
         if (driveString.length !== 1 || !utils.isdigit(driveString)) {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
         const drive: number = +driveString;
 
         if (type === 'a') {
             // there's only a 3-bit field for ADFS drives.
             if (drive < 0 || drive > 7) {
-                beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDrive);
+                return errors.badDrive();
             }
 
             const image = adfsimage.getADFSImage(data, drive, this.log);
@@ -1370,14 +1361,14 @@ export class Server {
             return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_WRITE_DFS_IMAGE);
         } else if (type === 'd') {
             if (drive !== 0 && drive !== 1) {
-                beebfs.BeebFS.throwError(beebfs.ErrorCode.BadDrive);
+                return errors.badDrive();
             }
 
             this.imageParts = dfsimage.getDSDParts(data, drive, this.log);
 
             return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_WRITE_DFS_IMAGE);
         } else {
-            throw new CommandSyntaxError();
+            return errors.syntax();
         }
     }
 }

@@ -26,6 +26,7 @@ import * as assert from 'assert';
 import * as utils from './utils';
 import * as beebfs from './beebfs';
 import { MAX_DISK_IMAGE_PART_SIZE } from './beeblink';
+import * as errors from './errors';
 
 const TRACK_SIZE_SECTORS = 16;
 const SECTOR_SIZE_BYTES = 256;
@@ -34,10 +35,6 @@ const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
 const S_SIZE_BYTES = 1 * 40 * TRACK_SIZE_BYTES;
 const M_SIZE_BYTES = 1 * 80 * TRACK_SIZE_BYTES;
 const L_SIZE_BYTES = 2 * 80 * TRACK_SIZE_BYTES;
-
-function throwError(message: string): never {
-    throw new beebfs.BeebError(beebfs.ErrorCode.DiscFault, message);
-}
 
 function checkChecksum(sector: Buffer, index: number): void {
     let sum = 255;
@@ -52,7 +49,7 @@ function checkChecksum(sector: Buffer, index: number): void {
     }
 
     if ((sum & 0xff) !== sector[0xff]) {
-        throwError('Bad ADFS image (bad map) (' + index + ' ' + utils.hex2(sum) + ' ' + utils.hex2(sector[0xff]) + ')');
+        return errors.generic('Bad ADFS image (bad map) (' + index + ' ' + utils.hex2(sum) + ' ' + utils.hex2(sector[0xff]) + ')');
     }
 }
 
@@ -96,13 +93,13 @@ export function getADFSImage(data: Buffer, drive: number, log: utils.Log): IADFS
             break;
 
         default:
-            throwError('Bad ADFS image (unsupported size)');
+            return errors.generic('Bad ADFS image (unsupported size)');
     }
 
     // Check ADFS format.
     log.pn('Check ADFS format');
     if (data.toString('binary', 0x201, 0x205) !== 'Hugo') {
-        throwError('Bad ADFS image (no Hugo)');
+        return errors.generic('Bad ADFS image (no Hugo)');
     }
 
     const sector0 = Buffer.from(data.buffer, 0, 256);
@@ -112,16 +109,16 @@ export function getADFSImage(data: Buffer, drive: number, log: utils.Log): IADFS
     checkChecksum(sector1, 1);
 
     if (sector1[0xfe] % 3 !== 0) {
-        throwError('Bad ADFS image (bad free space list size)');
+        return errors.generic('Bad ADFS image (bad free space list size)');
     }
 
     const totalNumSectors = utils.getUInt24LE(sector0, 0xfc);
     if (totalNumSectors * SECTOR_SIZE_BYTES !== data.length) {
-        throwError('Bad ADFS image (bad sector count)');
+        return errors.generic('Bad ADFS image (bad sector count)');
     }
 
     if (totalNumSectors >= (1 << 21)) {
-        throwError('Bad ADFS image (sector count too large)');
+        return errors.generic('Bad ADFS image (sector count too large)');
     }
 
     // Get list of used sectors.
@@ -138,11 +135,11 @@ export function getADFSImage(data: Buffer, drive: number, log: utils.Log): IADFS
         for (let j = 0; j < numSectors; ++j) {
             const sector = startSector + j;
             if (sector >= totalNumSectors) {
-                throwError('Bad ADFS image (invalid free space map)');
+                return errors.generic('Bad ADFS image (invalid free space map)');
             }
 
             if (!isSectorUsed[sector]) {
-                throwError('Bad ADFS image (free space overlap)');
+                return errors.generic('Bad ADFS image (free space overlap)');
             }
 
             isSectorUsed[sector] = false;

@@ -24,18 +24,15 @@
 
 import * as utils from './utils';
 import * as beebfs from './beebfs';
+import * as errors from './errors';
 
 const TRACK_SIZE_SECTORS = 10;
 const SECTOR_SIZE_BYTES = 256;
 const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
 
-function throwError(message: string): never {
-    throw new beebfs.BeebError(beebfs.ErrorCode.DiscFault, message);
-}
-
 function checkSize(data: Buffer, minSize: number): void {
     if (data.length % SECTOR_SIZE_BYTES !== 0) {
-        throwError('Bad image size (not sector aligned)');
+        return errors.generic('Bad image size (not sector aligned)');
     }
 
     if (data.length < minSize) {
@@ -69,7 +66,7 @@ function compareTracks(a: ITrack, b: ITrack): number {
 
 function getSideTracks(diskImageData: Buffer, drive: number, diskImageTrack0Offset: number, diskImageTrackSizeBytes: number, log: utils.Log): ITrack[] {
     if (diskImageData[diskImageTrack0Offset + 0x105] % 8 !== 0) {
-        throwError('Bad DFS format (file count)');
+        return errors.generic('Bad DFS format (file count)');
     }
 
     const usedTracksMap = new Map<number, boolean>();
@@ -106,7 +103,7 @@ function getSideTracks(diskImageData: Buffer, drive: number, diskImageTrack0Offs
     for (const index of usedTracksMap.keys()) {
         const begin = diskImageTrack0Offset + index * diskImageTrackSizeBytes;
         if (begin >= diskImageData.length) {
-            throwError('Bad DFS format (overrun)');
+            return errors.generic('Bad DFS format (overrun)');
         }
 
         // Assume end overrun isn't an error, just a correctly truncated image. 

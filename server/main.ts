@@ -28,13 +28,13 @@ import * as path from 'path';
 import * as assert from 'assert';
 import * as beeblink from './beeblink';
 import * as beebfs from './beebfs';
-import { Server } from './server';
+import Server from './server';
 import { Chalk } from 'chalk';
 import chalk from 'chalk';
 import * as gitattributes from './gitattributes';
 import * as http from 'http';
-import { Request } from './request';
-import { Response } from './response';
+import Request from './Request';
+import Response from './Response';
 import * as SerialPort from 'serialport';
 import * as os from 'os';
 
