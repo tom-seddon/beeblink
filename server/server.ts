@@ -35,6 +35,7 @@ import { Chalk } from 'chalk';
 import Request from './Request';
 import Response from './Response';
 import * as errors from './errors';
+import CommandLine from './CommandLine';
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -62,15 +63,15 @@ class Command {
     public readonly nameUC: string;
     public readonly syntax: string | undefined;
 
-    public readonly fun: (commandLine: beebfs.CommandLine) => Promise<Response>;// if this signature changes, change Server.handleStarCommand too.
+    public readonly fun: (commandLine: CommandLine) => Promise<Response>;// if this signature changes, change Server.handleStarCommand too.
 
-    public constructor(name: string, syntax: string | undefined, fun: (commandLine: beebfs.CommandLine) => Promise<Response>) {
+    public constructor(name: string, syntax: string | undefined, fun: (commandLine: CommandLine) => Promise<Response>) {
         this.nameUC = name.toUpperCase();
         this.syntax = syntax;
         this.fun = fun;
     }
 
-    public async applyFun(thisObject: any, commandLine: beebfs.CommandLine): Promise<Response> {
+    public async applyFun(thisObject: any, commandLine: CommandLine): Promise<Response> {
         return await this.fun.apply(thisObject, [commandLine]);
     }
 }
@@ -954,12 +955,12 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_TEXT, 0);
     }
 
-    private initCommandLine(commandLineString: string): beebfs.CommandLine {
-        let commandLine: beebfs.CommandLine;
+    private initCommandLine(commandLineString: string): CommandLine {
+        let commandLine: CommandLine;
 
         this.log.pn('command line=' + JSON.stringify(commandLineString));
         try {
-            commandLine = new beebfs.CommandLine(commandLineString);
+            commandLine = new CommandLine(commandLineString);
         } catch (error) {
             if (error instanceof errors.BeebError) {
                 this.log.pn('parse error: ' + error.toString());
@@ -976,7 +977,7 @@ export default class Server {
         return commandLine;
     }
 
-    private async handleRun(commandLine: beebfs.CommandLine, tryLibDir: boolean): Promise<Response> {
+    private async handleRun(commandLine: CommandLine, tryLibDir: boolean): Promise<Response> {
         if (commandLine.parts.length === 0) {
             return errors.badName();
         }
@@ -1002,7 +1003,7 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_RUN, builder);
     }
 
-    private async volsCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async volsCommand(commandLine: CommandLine): Promise<Response> {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : '*';
 
         const volumes = await this.bfs.findVolumesMatching(arg);
@@ -1024,11 +1025,11 @@ export default class Server {
         return this.textResponse(text);
     }
 
-    private async filesCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async filesCommand(commandLine: CommandLine): Promise<Response> {
         return this.textResponse(this.bfs.getOpenFilesOutput());
     }
 
-    private async infoCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async infoCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1037,7 +1038,7 @@ export default class Server {
         return await this.filesInfoResponse(fqn);
     }
 
-    private async accessCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async accessCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1060,7 +1061,7 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async deleteCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async deleteCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1072,32 +1073,32 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async dirCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async dirCommand(commandLine: CommandLine): Promise<Response> {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starDir(arg);
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async driveCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async driveCommand(commandLine: CommandLine): Promise<Response> {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starDrive(arg);
 
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async drivesCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async drivesCommand(commandLine: CommandLine): Promise<Response> {
         const text = await this.bfs.starDrives();
 
         return this.textResponse(text);
     }
 
-    private async libCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async libCommand(commandLine: CommandLine): Promise<Response> {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starLib(arg);
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async typeCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async typeCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length !== 2) {
             return errors.syntax();
         }
@@ -1107,7 +1108,7 @@ export default class Server {
         return this.textResponse(lines.join(BNL) + BNL);
     }
 
-    private async listCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async listCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length !== 2) {
             return errors.syntax();
         }
@@ -1123,7 +1124,7 @@ export default class Server {
         return this.textResponse(text);
     }
 
-    private async locateCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async locateCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1146,15 +1147,15 @@ export default class Server {
         return this.textResponse(text);
     }
 
-    private async dumpCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async dumpCommand(commandLine: CommandLine): Promise<Response> {
         return await this.dumpCommandInternal(commandLine, false);
     }
 
-    private async wdumpCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async wdumpCommand(commandLine: CommandLine): Promise<Response> {
         return await this.dumpCommandInternal(commandLine, true);
     }
 
-    private async dumpCommandInternal(commandLine: beebfs.CommandLine, wide: boolean): Promise<Response> {
+    private async dumpCommandInternal(commandLine: CommandLine, wide: boolean): Promise<Response> {
         if (commandLine.parts.length !== 2) {
             return errors.syntax();
         }
@@ -1202,7 +1203,7 @@ export default class Server {
         return this.textResponse(text);
     }
 
-    private async renameCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async renameCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length < 3) {
             return errors.syntax();
         }
@@ -1215,7 +1216,7 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async srloadCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async srloadCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length !== 4 && commandLine.parts.length !== 5) {
             return errors.syntax();
         }
@@ -1256,11 +1257,11 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_SPECIAL, builder);
     }
 
-    private async selfupdateCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async selfupdateCommand(commandLine: CommandLine): Promise<Response> {
         return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_SELFUPDATE);
     }
 
-    private async speedtestCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async speedtestCommand(commandLine: CommandLine): Promise<Response> {
         let payload = beeblink.RESPONSE_SPECIAL_SPEED_TEST;
         if (commandLine.parts.length > 1) {
             if (commandLine.parts[1].toLowerCase() === 'y') {
@@ -1271,7 +1272,7 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_SPECIAL, payload);
     }
 
-    private async titleCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async titleCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1281,11 +1282,11 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_YES, 0);
     }
 
-    private async volbrowserCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async volbrowserCommand(commandLine: CommandLine): Promise<Response> {
         return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_VOLUME_BROWSER);
     }
 
-    private async newvolCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async newvolCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1297,7 +1298,7 @@ export default class Server {
         return this.textResponse('New volume: ' + volume.name + BNL + 'Path: ' + volume.path + BNL);
     }
 
-    private async volCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async volCommand(commandLine: CommandLine): Promise<Response> {
         let volume: beebfs.BeebVolume;
         if (commandLine.parts.length >= 2) {
             const volumes = await this.bfs.findVolumesMatching(commandLine.parts[1]);
@@ -1321,7 +1322,7 @@ export default class Server {
         return this.textResponse('Volume: ' + volume.name + BNL + 'Path: ' + volume.path + BNL);
     }
 
-    private async writeCommand(commandLine: beebfs.CommandLine): Promise<Response> {
+    private async writeCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length < 4) {
             return errors.syntax();
         }
