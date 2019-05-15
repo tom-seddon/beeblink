@@ -437,9 +437,15 @@ interface IFSType {
     getInfoText(file: File): string;
 }
 
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 interface IFSFSP {
     getName(): string | undefined;
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
 
 interface IFSFQN {
     readonly name: string;
@@ -447,6 +453,9 @@ interface IFSFQN {
     toString(): string;
     isWildcard(): boolean;
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
 
 function mustBeDFSHandler(handler: IFSType): DFSHandler {
     if (!(handler instanceof DFSHandler)) {
@@ -482,6 +491,8 @@ function mustBeDFSFQN(fqn: IFSFQN): DFSFQN {
     return fqn;
 }
 
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
 
 class DFSFQN implements IFSFQN {
     public readonly drive: string;
@@ -533,6 +544,9 @@ class DFSFQN implements IFSFQN {
     }
 }
 
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 class DFSFSP implements IFSFSP {
     public readonly drive: string | undefined;
     public readonly dir: string | undefined;
@@ -557,6 +571,9 @@ class DFSFSP implements IFSFSP {
         return x !== undefined ? x : '\u2026';
     }
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
 
 // get single BeebFile matching the given fqn.
 //
@@ -594,13 +611,22 @@ async function getBeebFile(fqn: FQN, wildcardsOK: boolean, throwIfNotFound: bool
     }
 }
 
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 const DFS_FIXED_ATTRS = R_ATTR | W_ATTR;
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
 
 interface IDFSDrive {
     readonly name: string;
     readonly option: number;
     readonly title: string;
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
 
 class DFSState implements IFSState {
     public readonly volume: Volume;
@@ -670,13 +696,17 @@ class DFSState implements IFSState {
     }
 
     public async getCAT(commandLine: string | undefined): Promise<string> {
+        let drive: string;
         if (commandLine === undefined) {
-            return await this.volume.handler.getCAT(new FSP(this.volume, false, new DFSFSP(this.drive, undefined, undefined)), this);
+            drive = this.drive;
         } else if (commandLine.length === 1 && utils.isdigit(commandLine)) {
-            return await this.volume.handler.getCAT(new FSP(this.volume, false, new DFSFSP(commandLine, undefined, undefined)), this);
+            drive = commandLine;
         } else {
             return errors.badDrive();
         }
+
+        this.log.pn(`*CAT: drive: ${drive}`);
+        return await this.volume.handler.getCAT(new FSP(this.volume, false, new DFSFSP(drive, undefined, undefined)), this);
     }
 
     public starDrive(arg: string | undefined): boolean {
@@ -776,6 +806,9 @@ class DFSState implements IFSState {
     }
 }
 
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 class DFSHandler implements IFSType {
     private static isValidFileNameChar(char: string) {
         const c = char.charCodeAt(0);
@@ -839,8 +872,6 @@ class DFSHandler implements IFSType {
                 drive = dfsState.drive;
             }
         }
-
-
 
         if (str[i + 1] === '.') {
             if (!DFSHandler.isValidFileNameChar(str[i])) {
@@ -1177,6 +1208,9 @@ class DFSHandler implements IFSType {
         return maybeDrive.length === 1 && utils.isdigit(maybeDrive);
     }
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
 
 // there's just the one of these.
 const gDFSHandler = new DFSHandler();
@@ -1616,16 +1650,18 @@ export class FS {
         if (commandLine !== undefined) {
             let fsp: FSP | undefined;
             try {
-                fsp = await this.parseFileString(commandLine);
+                fsp = await this.parseDirString(commandLine);
             } catch (error) {
                 // Just ignore, and let the active FS try to re-parse it.
             }
 
             if (fsp !== undefined) {
+                this.log.pn(`*CAT with FSP: ${fsp}`);
                 return fsp.volume.handler.getCAT(fsp, this.state);
             }
         }
 
+        this.log.pn(`*CAT with command line: ${commandLine}`);
         return await this.getState().getCAT(commandLine);
     }
 

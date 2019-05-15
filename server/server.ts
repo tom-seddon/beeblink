@@ -348,8 +348,10 @@ export default class Server {
     }
 
     private async handleStarCat(handler: Handler, p: Buffer): Promise<Response> {
+        // the command line in this case does not include the *CAT itself...
         const commandLine = this.initCommandLine(p.toString('binary'));
-        return this.textResponse(await this.bfs.getCAT(commandLine.parts.length > 0 ? commandLine.parts[0] : undefined));
+
+        return this.textResponse(await this.bfs.getCAT(commandLine.parts.length >= 1 ? commandLine.parts[0] : undefined));
     }
 
     private async handleStarCommand(handler: Handler, p: Buffer): Promise<Response> {
