@@ -917,7 +917,7 @@ export default class Server {
         let text = '';
 
         for (const file of files) {
-            text += `${this.bfs.getInfoText(file)}${BNL}`;
+            text += `${await this.bfs.getInfoText(file)}${BNL}`;
         }
 
         return this.textResponse(text);

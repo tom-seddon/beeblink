@@ -141,25 +141,23 @@ export class File {
     // BBC-style attributes.
     public readonly load: number;
     public readonly exec: number;
-    public readonly size: number;
     public readonly attr: number;
 
     // could perhaps be part of the attr field, but I'm a bit reluctant to
     // fiddle around with that.
     public readonly text: boolean;
 
-    public constructor(hostPath: string, fqn: FQN, load: number, exec: number, size: number, attr: number, text: boolean) {
+    public constructor(hostPath: string, fqn: FQN, load: number, exec: number, attr: number, text: boolean) {
         this.hostPath = hostPath;
         this.fqn = fqn;
         this.load = load;
         this.exec = exec;
-        this.size = size;
         this.attr = attr;
         this.text = text;
     }
 
     public toString(): string {
-        return 'BeebFile(hostPath=``' + this.hostPath + '\'\' name=``' + this.fqn + '\'\' load=0x' + utils.hex8(this.load) + ' exec=0x' + utils.hex8(this.exec) + ' size=' + this.size + ' (0x' + this.size.toString(16) + ') attr=0x' + utils.hex8(this.attr);
+        return 'BeebFile(hostPath=``' + this.hostPath + '\'\' name=``' + this.fqn + '\'\' load=0x' + utils.hex8(this.load) + ' exec=0x' + utils.hex8(this.exec) + ' attr=0x' + utils.hex8(this.attr);
     }
 }
 
@@ -434,7 +432,7 @@ interface IFSType {
 
     // get *INFO/*EX text for the given file. Show name, attributes and
     // metadata. Newline will be added automatically.
-    getInfoText(file: File): string;
+    getInfoText(file: File, fileSize: number): string;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -995,7 +993,7 @@ class DFSHandler implements IFSType {
 
                 const dfsFQN = new DFSFQN(driveName, dir, name);
 
-                const file = new File(beebFileInfo.hostPath, new FQN(volume, dfsFQN), beebFileInfo.load, beebFileInfo.exec, beebFileInfo.size, beebFileInfo.attr | DFS_FIXED_ATTRS, text);
+                const file = new File(beebFileInfo.hostPath, new FQN(volume, dfsFQN), beebFileInfo.load, beebFileInfo.exec, beebFileInfo.attr | DFS_FIXED_ATTRS, text);
 
                 if (log !== undefined) {
                     log.pn(`${file}`);
@@ -1106,7 +1104,7 @@ class DFSHandler implements IFSType {
         const newHostPath = path.join(newFQN.volume.path, this.getHostPath(newFQNDFSName));
         await mustNotExist(newHostPath);
 
-        const newFile = new File(newHostPath, newFQN, oldFile.load, oldFile.exec, oldFile.size, oldFile.attr, false);
+        const newFile = new File(newHostPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr, false);
 
         await this.writeBeebMetadata(newFile.hostPath, newFQNDFSName, newFile.load, newFile.exec, newFile.attr);
 
@@ -1153,13 +1151,13 @@ class DFSHandler implements IFSType {
         return buffer[0] & 3;//ugh.
     }
 
-    public getInfoText(file: File): string {
+    public getInfoText(file: File, fileSize: number): string {
         const dfsFQN = mustBeDFSFQN(file.fqn.fsFQN);
 
         const attr = (file.attr & L_ATTR) !== 0 ? 'L' : ' ';
         const load = utils.hex8(file.load).toUpperCase();
         const exec = utils.hex8(file.exec).toUpperCase();
-        const size = utils.hex(file.size & 0x00ffffff, 6).toUpperCase();
+        const size = utils.hex(fileSize & 0x00ffffff, 6).toUpperCase();
 
         // 0123456789012345678901234567890123456789
         // _.__________ L 12345678 12345678 123456
@@ -1583,8 +1581,10 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public getInfoText(file: File): string {
-        return file.fqn.volume.handler.getInfoText(file);
+    public async getInfoText(file: File): Promise<string> {
+        const fileSize = await this.tryGetFileSize(file);
+
+        return file.fqn.volume.handler.getInfoText(file, fileSize);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1974,7 +1974,7 @@ export class FS {
             return errors.badAttribute();
         }
 
-        return new File(file.hostPath, file.fqn, file.load, file.exec, file.size, newAttr, file.text);
+        return new File(file.hostPath, file.fqn, file.load, file.exec, newAttr, file.text);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2100,7 +2100,7 @@ export class FS {
             }
         }
 
-        return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, file.size, file.attr), data, dataLoadAddress);
+        return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, data.length, file.attr), data, dataLoadAddress);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2155,6 +2155,20 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    // This is never used anywhere where the error case is particularly
+    // important.
+    private async tryGetFileSize(file: File): Promise<number> {
+        const hostStat = await utils.tryStat(file.hostPath);
+        if (hostStat === undefined) {
+            return 0;
+        }
+
+        return hostStat.size;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     private async OSFILEWriteMetadata(
         fqn: FQN,
         load: number | undefined,
@@ -2179,9 +2193,11 @@ export class FS {
             attr = file.attr;
         }
 
+        const fileSize = await this.tryGetFileSize(file);
+
         await this.writeBeebMetadata(file.hostPath, file.fqn, load, exec, attr);
 
-        return new OSFILEResult(1, this.createOSFILEBlock(load, exec, file.size, attr), undefined, undefined);
+        return new OSFILEResult(1, this.createOSFILEBlock(load, exec, fileSize, attr), undefined, undefined);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2192,7 +2208,9 @@ export class FS {
         if (file === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         } else {
-            return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, file.size, file.attr), undefined, undefined);
+            const fileSize = await this.tryGetFileSize(file);
+
+            return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, fileSize, file.attr), undefined, undefined);
         }
     }
 
@@ -2204,9 +2222,11 @@ export class FS {
         if (file === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         } else {
+            const fileSize = await this.tryGetFileSize(file);
+
             await this.deleteFile(file);
 
-            return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, file.size, file.attr), undefined, undefined);
+            return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, fileSize, file.attr), undefined, undefined);
         }
     }
 

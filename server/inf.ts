@@ -90,9 +90,6 @@ export interface IINF {
     // Execution address.
     exec: number;
 
-    // File size.
-    size: number;
-
     // Attributes. "L" is translated to L_ATTR.
     attr: number;
 
@@ -113,20 +110,11 @@ export async function tryParse(
     hostPath: string,
     hostName: string,
     log: utils.Log | undefined): Promise<IINF | undefined> {
-    const hostStat = await utils.tryStat(hostPath);
-    if (hostStat === undefined) {
-        if (log !== undefined) {
-            log.pn(` - failed to stat`);
-        }
-        return undefined;
-    }
-
     let name: string;
     let load: number | undefined;
     let exec: number | undefined;
     let attr: number;
     let noINF: boolean;
-    const size = hostStat.size;
 
     if (infBuffer === undefined || infBuffer.length === 0) {
         name = hostName;
@@ -196,10 +184,10 @@ export async function tryParse(
     }
 
     if (log !== undefined) {
-        log.pn(` - load=0x${load.toString(16)} exec=0x${exec.toString(16)} size=${size} attr=0x${attr.toString(16)}`);
+        log.pn(` - load=0x${load.toString(16)} exec=0x${exec.toString(16)} attr=0x${attr.toString(16)}`);
     }
 
-    return { hostPath, name, load, exec, size, attr, noINF };
+    return { hostPath, name, load, exec, attr, noINF };
 }
 
 /////////////////////////////////////////////////////////////////////////
