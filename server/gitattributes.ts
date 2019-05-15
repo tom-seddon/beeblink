@@ -50,8 +50,13 @@ export class Manipulator {
         this.quiescentCallbacks.push(callback);
     }
 
-    public makeFolderNotText(folderPath: string): void {
-        this.change(path.join(folderPath, '*'), undefined, '-text');
+    // Mark files in given volume as -text.
+    public makeVolumeNotText(volume: beebfs.BeebVolume): void {
+        if (volume.isReadOnly()) {
+            return;
+        }
+
+        this.change(path.join(volume.path, '*'), undefined, '-text');
     }
 
     public deleteFile(filePath: string): void {
@@ -78,7 +83,7 @@ export class Manipulator {
         }
 
         this.push(async (): Promise<void> => {
-            const beebFiles = await volume.handler.getBeebFilesMatching(volume, undefined, undefined);
+            const beebFiles = await volume.handler.findBeebFilesMatching(volume, undefined, undefined);
 
             //this.log.pn(path.join(drive.volumePath, drive.name) + ': ' + beebFiles.length + ' Beeb file(s)\n');
 

@@ -766,34 +766,31 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
 async function createGitattributesManipulator(options: ICommandLineOptions, volumes: beebfs.BeebVolume[]): Promise<gitattributes.Manipulator | undefined> {
     if (!options.git) {
         return undefined;
-    } else {
-        const gaManipulator = new gitattributes.Manipulator(options.git_verbose);
-
-        process.stderr.write('Checking for .gitattributes...\n');
-
-        // Find all the paths first, then set the gitattributes manipulator
-        // going once they've all been collected, in the interests of doing one
-        // thing at a time. (Noticeably faster startup on OS X with lots of
-        // volumes, even on an SSD.)
-
-        const oldNumVolumes = volumes.length;
-
-        volumes = volumes.filter((volume) => !volume.isReadOnly());
-        volumes = volumes.filter(async (volume) => !(await isGit(volume.path)));
-
-        process.stderr.write(`Found ${volumes.length}/${oldNumVolumes} writeable git-controlled volumes\n`);
-
-        for (const volume of volumes) {
-            gaManipulator.makeFolderNotText(volume.path);
-            gaManipulator.scanForBASIC(volume);
-        }
-
-        gaManipulator.whenQuiescent(() => {
-            process.stderr.write('Finished scanning for BASIC files.\n');
-        });
-
-        return gaManipulator;
     }
+
+    const gaManipulator = new gitattributes.Manipulator(options.git_verbose);
+
+    // Find all the paths first, then set the gitattributes manipulator
+    // going once they've all been collected, in the interests of doing one
+    // thing at a time. (Noticeably faster startup on OS X with lots of
+    // volumes, even on an SSD.)
+
+    const oldNumVolumes = volumes.length;
+
+    volumes = volumes.filter((volume) => !volume.isReadOnly());
+    volumes = volumes.filter(async (volume) => !(await isGit(volume.path)));
+    process.stderr.write(`Found ${volumes.length}/${oldNumVolumes} writeable git-controlled volumes\n`);
+
+    for (const volume of volumes) {
+        gaManipulator.makeVolumeNotText(volume);
+        gaManipulator.scanForBASIC(volume);
+    }
+
+    gaManipulator.whenQuiescent(() => {
+        process.stderr.write('Finished scanning for BASIC files.\n');
+    });
+
+    return gaManipulator;
 }
 
 /////////////////////////////////////////////////////////////////////////
