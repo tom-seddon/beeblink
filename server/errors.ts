@@ -1,5 +1,26 @@
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//
+// BeebLink - BBC Micro file storage system
+//
+// Copyright (C) 2018 Tom Seddon
+// 
+// This program is free software: you can redistribute it and/or
+// modify it under the terms of the GNU General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+// General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see
+// <https://www.gnu.org/licenses/>.
+//
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
 export class BeebError extends Error {
     public readonly code: number;
@@ -16,6 +37,9 @@ export class BeebError extends Error {
         return this.message;
     }
 }
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
 function createErrorFactory(code: number, defaultMessage: string): (message?: string) => never {
     return (message?: string): never => {
@@ -46,6 +70,12 @@ export const badCommand = createErrorFactory(254, 'Bad command');
 export const dataLost = createErrorFactory(0xca, 'Data lost');
 export const wont = createErrorFactory(0x93, 'Won\'t');
 
+// Message is mandatory for generic errors.
+//
+// All reuse the Disc fault code.
 export function generic(message: string): never {
     throw new BeebError(199, message);
 }
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
