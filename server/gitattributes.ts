@@ -83,7 +83,7 @@ export class Manipulator {
         }
 
         this.push(async (): Promise<void> => {
-            const beebFiles = await volume.handler.findBeebFilesMatching(volume, undefined, undefined);
+            const beebFiles = await volume.handler.findBeebFilesMatching(volume, volume.handler.matchAllFSP, undefined);
 
             //this.log.pn(path.join(drive.volumePath, drive.name) + ': ' + beebFiles.length + ' Beeb file(s)\n');
 

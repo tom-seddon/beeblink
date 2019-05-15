@@ -388,6 +388,10 @@ interface IFSState {
 // Handle FS-specific stuff that doesn't require any state.
 
 interface IFSType {
+    // a IFSFP for use with findBeebFilesMatching that will match all files in
+    // the volume.
+    readonly matchAllFSP: IFSFSP;
+
     // create new state for this type of FS.
     createState(volume: Volume, log: utils.Log): IFSState;
 
@@ -399,13 +403,13 @@ interface IFSType {
     // name.
     isValidBeebFileName(str: string): boolean;
 
-    // get list of Beeb files matching the given FQN in the given volume - or,
-    // if the FQN is undefined, all files in the volume.
-    findBeebFilesMatching(volume: Volume, fqn: IFSFQN | undefined, log: utils.Log | undefined): Promise<File[]>;
+    // get list of Beeb files matching the given FSP/FQN in the given volume. If
+    // an FQN, do a wildcard match; if an FSP, same, treating any undefined
+    // values as matching anything.
+    findBeebFilesMatching(volume: Volume, pattern: IFSFSP | IFSFQN, log: utils.Log | undefined): Promise<File[]>;
 
-    // parse file/dir string, starting at index i. If state!==undefined, use it to fill in any
-    // unspecified components.
-    parseFileOrDirString(str: string, i: number, parseAsDir: boolean, state: IFSState | undefined): IFSFSP;
+    // parse file/dir string, starting at index i. 
+    parseFileOrDirString(str: string, i: number, parseAsDir: boolean): IFSFSP;
 
     // create appropriate FSFQN from FSFSP, filling in defaults from the given State as appropriate.
     createFQN(fsp: IFSFSP, state: IFSState | undefined): IFSFQN;
@@ -715,7 +719,7 @@ class DFSState implements IFSState {
         if (arg.length === 1 && utils.isdigit(arg)) {
             this.drive = arg;
         } else {
-            const fsp = mustBeDFSFSP(this.volume.handler.parseFileOrDirString(arg, 0, true, this));
+            const fsp = mustBeDFSFSP(this.volume.handler.parseFileOrDirString(arg, 0, true));
             if (fsp.drive === undefined || fsp.dir !== undefined) {
                 return errors.badDrive();
             }
@@ -781,7 +785,7 @@ class DFSState implements IFSState {
     }
 
     public async readNames(): Promise<string[]> {
-        const files = await this.volume.handler.findBeebFilesMatching(this.volume, new DFSFQN(this.drive, this.dir, '*'), undefined);
+        const files = await this.volume.handler.findBeebFilesMatching(this.volume, new DFSFSP(this.drive, this.dir, undefined), undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -812,6 +816,8 @@ class DFSHandler implements IFSType {
         const c = char.charCodeAt(0);
         return c >= 32 && c < 127;
     }
+
+    public readonly matchAllFSP: IFSFSP = new DFSFSP(undefined, undefined, undefined);
 
     public createState(volume: Volume, log: utils.Log): IFSState {
         return new DFSState(volume, log);
@@ -847,9 +853,7 @@ class DFSHandler implements IFSType {
         return true;
     }
 
-    public parseFileOrDirString(str: string, i: number, parseAsDir: boolean, state: IFSState | undefined): DFSFSP {
-        const dfsState = mustBeDFSState(state);
-
+    public parseFileOrDirString(str: string, i: number, parseAsDir: boolean): DFSFSP {
         let drive: string | undefined;
         let dir: string | undefined;
         let name: string | undefined;
@@ -865,10 +869,6 @@ class DFSHandler implements IFSType {
             if (str[i] === '.') {
                 ++i;
             }
-        } else {
-            if (dfsState !== undefined) {
-                drive = dfsState.drive;
-            }
         }
 
         if (str[i + 1] === '.') {
@@ -878,10 +878,6 @@ class DFSHandler implements IFSType {
 
             dir = str[i];
             i += 2;
-        } else {
-            if (dfsState !== undefined) {
-                dir = dfsState.dir;
-            }
         }
 
         if (parseAsDir) {
@@ -947,22 +943,29 @@ class DFSHandler implements IFSType {
         return path.join(dfsFQN.drive, this.getHostChars(dfsFQN.dir) + '.' + this.getHostChars(fqn.name));
     }
 
-    public async findBeebFilesMatching(volume: Volume, fqn: IFSFQN | undefined, log: utils.Log | undefined): Promise<File[]> {
+    public async findBeebFilesMatching(volume: Volume, pattern: IFSFQN | IFSFSP, log: utils.Log | undefined): Promise<File[]> {
         let driveNames: string[];
         let dirRegExp: RegExp;
         let nameRegExp: RegExp;
-        if (fqn === undefined) {
-            driveNames = [];
-            for (const drive of await this.findDrivesForVolume(volume)) {
-                driveNames.push(drive.name);
+
+        if (pattern instanceof DFSFQN) {
+            driveNames = [pattern.drive];
+            dirRegExp = utils.getRegExpFromAFSP(pattern.dir);
+            nameRegExp = utils.getRegExpFromAFSP(pattern.name);
+        } else if (pattern instanceof DFSFSP) {
+            if (pattern.drive !== undefined) {
+                driveNames = [pattern.drive];
+            } else {
+                driveNames = [];
+                for (const drive of await this.findDrivesForVolume(volume)) {
+                    driveNames.push(drive.name);
+                }
             }
-            dirRegExp = utils.getRegExpFromAFSP('*');
-            nameRegExp = utils.getRegExpFromAFSP('*');
+
+            dirRegExp = utils.getRegExpFromAFSP(pattern.dir !== undefined ? pattern.dir : '*');
+            nameRegExp = utils.getRegExpFromAFSP(pattern.name !== undefined ? pattern.name : '*');
         } else {
-            const dfsFQN = mustBeDFSFQN(fqn);
-            driveNames = [dfsFQN.drive];
-            dirRegExp = utils.getRegExpFromAFSP(dfsFQN.dir);
-            nameRegExp = utils.getRegExpFromAFSP(dfsFQN.name);
+            throw new Error('not DFSFQN or DFSFSP');
         }
 
         const beebFiles: File[] = [];
@@ -1018,7 +1021,7 @@ class DFSHandler implements IFSType {
             return errors.badDrive();
         }
 
-        const beebFiles = await this.findBeebFilesMatching(fsp.volume, new DFSFQN(fspDFSName.drive, '*', '*'), undefined);
+        const beebFiles = await this.findBeebFilesMatching(fsp.volume, new DFSFSP(fspDFSName.drive, undefined, undefined), undefined);
 
         let text = '';
 
@@ -1596,7 +1599,16 @@ export class FS {
         const foundPaths: string[] = [];
 
         for (const volume of volumes) {
-            const files = await volume.handler.findBeebFilesMatching(volume, undefined, undefined);
+            let fsp: IFSFSP;
+            try {
+                fsp = volume.handler.parseFileOrDirString(arg, 0, false);
+            } catch (error) {
+                // if the arg wasn't even parseable by this volume's handler, it
+                // presumably won't match any file...
+                continue;
+            }
+
+            const files = await volume.handler.findBeebFilesMatching(volume, fsp, undefined);
 
             for (const file of files) {
                 foundPaths.push(file.fqn.toString());
@@ -2633,7 +2645,7 @@ export class FS {
             wasExplicitVolume = false;
         }
 
-        const fsp = volume.handler.parseFileOrDirString(str, i, parseAsDir, this.state);
+        const fsp = volume.handler.parseFileOrDirString(str, i, parseAsDir);
 
         return new FSP(volume, wasExplicitVolume, fsp);
     }
