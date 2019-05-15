@@ -738,3 +738,17 @@ export function arePathsEqual(a: string, b: string): boolean {
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
+
+// Get contents of first line of an 8-bit text file.
+export function getFirstLine(b: Buffer): string {
+    let i;
+
+    for (i = 0; i < b.length; ++i) {
+        const x = b[i];
+        if (x === 10 || x === 13 || x === 26) {
+            break;
+        }
+    }
+
+    return b.toString('binary', 0, i).trim();
+}

@@ -30,13 +30,13 @@ import { Chalk } from 'chalk';
 import * as gitattributes from './gitattributes';
 import * as errors from './errors';
 import CommandLine from './CommandLine';
+import * as inf from './inf';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
 const MAX_NUM_DRIVES = 8;
 const MAX_FILE_SIZE = 0xffffff;
-const INF_EXT = '.inf';
 
 // Must be <255, but aside from that it's a completely arbitrary limit.
 const MAX_TITLE_LENGTH = 40;
@@ -49,9 +49,9 @@ const MIN_FILE_HANDLE = 0xa0;
 export const SHOULDNT_LOAD = 0xffffffff;
 export const SHOULDNT_EXEC = 0xffffffff;
 
-const DEFAULT_LOAD = SHOULDNT_LOAD;
-const DEFAULT_EXEC = SHOULDNT_EXEC;
-const DEFAULT_ATTR = 0;
+export const DEFAULT_LOAD = SHOULDNT_LOAD;
+export const DEFAULT_EXEC = SHOULDNT_EXEC;
+export const DEFAULT_ATTR = 0;
 
 const BOOT_OPTION_DESCRIPTIONS = ['None', 'LOAD', 'RUN', 'EXEC'];
 
@@ -126,10 +126,10 @@ export class BeebFQN {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-const R_ATTR = 1;
-const W_ATTR = 2;
-const E_ATTR = 4;
-const L_ATTR = 8;
+export const R_ATTR = 1;
+export const W_ATTR = 2;
+export const E_ATTR = 4;
+export const L_ATTR = 8;
 
 export class BeebFile {
     // Path of this file on the PC filing system.
@@ -320,46 +320,6 @@ export class OSFILEResult {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// Convert a hex address from a .inf file into a number, or undefined if it
-// isn't valid. Sign-extend 6-digit DFS *INFO output if necessary.
-function tryGetINFAddress(addressString: string): number | undefined {
-    let address = Number('0x' + addressString);
-    if (Number.isNaN(address)) {
-        return undefined;
-    }
-
-    // Try to work around 6-digit DFS addresses.
-    if (addressString.length === 6) {
-        if ((address & 0xff0000) === 0xff0000) {
-            // Javascript bitwise operators work with 32-bit signed values,
-            // so |=0xff000000 makes a negative mess.
-            address += 0xff000000;
-        }
-    }
-
-    return address;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-// Get contents of first line of an 8-bit text file.
-function getFirstLine(b: Buffer): string {
-    let i;
-
-    for (i = 0; i < b.length; ++i) {
-        const x = b[i];
-        if (x === 10 || x === 13 || x === 26) {
-            break;
-        }
-    }
-
-    return b.toString('binary', 0, i).trim();
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 // Causes a 'Exists on server' error if the given host file or metadata
 // counterpart exists.
 //
@@ -368,215 +328,10 @@ function getFirstLine(b: Buffer): string {
 // in the .inf files and the actual names on disk, could be due to loose
 // non-BBC files on disk...
 async function mustNotExist(hostPath: string): Promise<void> {
-    if (await utils.fsExists(hostPath) || await utils.fsExists(hostPath + INF_EXT)) {
+    if (await utils.fsExists(hostPath) || await utils.fsExists(hostPath + inf.ext)) {
         return errors.exists('Exists on server');
     }
 }
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-interface IBeebFileInfo {
-    // Host path for this file.
-    hostPath: string;
-
-    // Name, verbatim.
-    name: string;
-
-    // Load address.
-    load: number;
-
-    // Execution address.
-    exec: number;
-
-    // File size.
-    size: number;
-
-    // Attributes. "L" is translated to L_ATTR.
-    attr: number;
-
-    // true if the .inf file is non-existent or 0 bytes.
-    noINF: boolean;
-}
-
-// Try to parse a .inf file. infBuffer is the contents, or undefined if no .inf
-// file; hostName is the basename of the host file.
-//
-// hostName should be path.basename(hostPath); this could be computed, but since
-// the caller will already have it, might as well have it supply it.
-async function tryGetBeebFileInfo(
-    infBuffer: Buffer | undefined,
-    hostPath: string,
-    hostName: string,
-    log: utils.Log | undefined): Promise<IBeebFileInfo | undefined> {
-    const hostStat = await utils.tryStat(hostPath);
-    if (hostStat === undefined) {
-        if (log !== undefined) {
-            log.pn(` - failed to stat`);
-        }
-        return undefined;
-    }
-
-    let name: string;
-    let load: number | undefined;
-    let exec: number | undefined;
-    let attr: number;
-    let noINF: boolean;
-    const size = hostStat.size;
-
-    if (infBuffer === undefined || infBuffer.length === 0) {
-        name = hostName;
-        load = DEFAULT_LOAD;
-        exec = DEFAULT_EXEC;
-        attr = DEFAULT_ATTR;
-        noINF = true;
-    } else {
-        const infString = getFirstLine(infBuffer);
-
-        if (log !== undefined) {
-            log.p(' - ``' + infString + '\'\'');
-        }
-
-        const infParts = infString.split(new RegExp('\\s+'));
-        if (infParts.length < 3) {
-            if (log !== undefined) {
-                log.pn(' - too few parts');
-            }
-
-            return undefined;
-        }
-
-        let i = 0;
-
-        name = infParts[i++];
-
-        load = tryGetINFAddress(infParts[i++]);
-        if (load === undefined) {
-            if (log !== undefined) {
-                log.pn(' - invalid load');
-            }
-
-            return undefined;
-        }
-
-        exec = tryGetINFAddress(infParts[i++]);
-        if (exec === undefined) {
-            if (log !== undefined) {
-                log.pn(' - invalid exec');
-            }
-
-            return undefined;
-        }
-
-        attr = 0;
-        if (i < infParts.length) {
-            if (infParts[i].startsWith('CRC=')) {
-                // Ignore the CRC entry.
-            } else if (infParts[i] === 'L' || infParts[i] === 'l') {
-                attr = L_ATTR;
-            } else {
-                attr = Number('0x' + infParts[i]);
-                if (Number.isNaN(attr)) {
-                    if (log !== undefined) {
-                        log.pn(' - invalid attributes');
-                    }
-
-                    return undefined;
-                }
-            }
-
-            ++i;
-        }
-
-        noINF = false;
-    }
-
-    if (log !== undefined) {
-        log.pn(` - load=0x${load.toString(16)} exec=0x${exec.toString(16)} size=${size} attr=0x${attr.toString(16)}`);
-    }
-
-    return { hostPath, name, load, exec, size, attr, noINF };
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-// Find all .inf files in the given folder, call tryGetBeebFileInfo as
-// appropriate, and return an array of the results.
-async function getBeebFileInfosForFolder(hostFolderPath: string, log: utils.Log | undefined): Promise<IBeebFileInfo[]> {
-    let hostNames: string[];
-    try {
-        hostNames = await utils.fsReaddir(hostFolderPath);
-    } catch (error) {
-        return [];
-    }
-
-    const beebFileInfos: IBeebFileInfo[] = [];
-
-    const infExtRegExp = new RegExp(`\\${INF_EXT}$$`, 'i');
-
-    if (log !== undefined) {
-        log.pn('getBeebFileInfosForFolder:');
-        log.in(`    `);
-        log.pn(`folder path: ${hostFolderPath}`);
-        log.pn(`.inf regexp: ${infExtRegExp.source}`);
-    }
-
-    for (const hostName of hostNames) {
-        if (infExtRegExp.exec(hostName) !== null) {
-            // skip .inf files.
-            continue;
-        }
-
-        const hostPath = path.join(hostFolderPath, hostName);
-
-        if (log !== undefined) {
-            log.p(`${hostName}: `);
-        }
-
-        const infPath = hostPath + INF_EXT;
-        const infBuffer = await utils.tryReadFile(infPath);
-
-        const beebFileInfo = await tryGetBeebFileInfo(infBuffer, hostPath, hostName, log);
-        if (beebFileInfo === undefined) {
-            continue;
-        }
-
-        beebFileInfos.push(beebFileInfo);
-    }
-
-    if (log !== undefined) {
-        log.out();
-    }
-
-    return beebFileInfos;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-// async function writeHostFile(hostPath: string, data: Buffer, gaManipulator: gitattributes.Manipulator | undefined): Promise<void> {
-//     try {
-//         await utils.fsMkdirAndWriteFile(hostPath, data);
-//     } catch (error) {
-//         return BeebFS.throwServerError(error);
-//     }
-
-//     if (gaManipulator !== undefined) {
-//         gaManipulator.makeFolderNotText(path.dirname(hostPath));
-//     }
-// }
-
-// /////////////////////////////////////////////////////////////////////////
-// /////////////////////////////////////////////////////////////////////////
-
-// async function writeBeebFile(hostPath: string, data: Buffer, gaManipulator: gitattributes.Manipulator | undefined): Promise<void> {
-//     await writeHostFile(hostPath, data, gaManipulator);
-
-//     if (gaManipulator !== undefined) {
-//         gaManipulator.makeFileBASIC(hostPath, utils.isBASIC(data));
-//     }
-// }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -589,24 +344,6 @@ async function writeFile(filePath: string, data: Buffer): Promise<void> {
     } catch (error) {
         return BeebFS.throwServerError(error);
     }
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-// Write INF file to disk. 'name' will be written as-is (since it's
-// FS-specific), as will 'attr' (so DFS-type .inf files can have attributes
-// written as 'L').
-async function writeINFFile(hostPath: string, name: string, load: number, exec: number, attr: string): Promise<void> {
-    let inf = `${name} ${load.toString(16)} ${exec.toString(16)}`;
-
-    if (attr !== '') {
-        inf += ` ${attr}`;
-    }
-
-    inf += os.EOL;//stop git moaning.
-
-    await writeFile(hostPath + INF_EXT, Buffer.from(inf, 'binary'));
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -1217,7 +954,7 @@ class DFSHandler implements IFSType {
 
         for (const driveName of driveNames) {
             const driveHostPath = path.join(volume.path, driveName);
-            const beebFileInfos = await getBeebFileInfosForFolder(driveHostPath, log);
+            const beebFileInfos = await inf.getINFsForFolder(driveHostPath, log);
 
             for (const beebFileInfo of beebFileInfos) {
                 let text = false;
@@ -1361,7 +1098,7 @@ class DFSHandler implements IFSType {
 
     public async deleteFile(file: BeebFile): Promise<void> {
         try {
-            await utils.forceFsUnlink(file.hostPath + INF_EXT);
+            await utils.forceFsUnlink(file.hostPath + inf.ext);
             await utils.forceFsUnlink(file.hostPath);
         } catch (error) {
             BeebFS.throwServerError(error as NodeJS.ErrnoException);
@@ -1384,13 +1121,13 @@ class DFSHandler implements IFSType {
             return BeebFS.throwServerError(error);
         }
 
-        await utils.forceFsUnlink(oldFile.hostPath + INF_EXT);
+        await utils.forceFsUnlink(oldFile.hostPath + inf.ext);
     }
 
     public async writeBeebMetadata(hostPath: string, fqn: IFSFQN, load: number, exec: number, attr: number): Promise<void> {
         const dfsFQN = mustBeDFSFQN(fqn);
 
-        await writeINFFile(hostPath, `${dfsFQN.dir}.${dfsFQN.name}`, load, exec, (attr & L_ATTR) !== 0 ? 'L' : '');
+        await inf.writeFile(hostPath, `${dfsFQN.dir}.${dfsFQN.name}`, load, exec, (attr & L_ATTR) !== 0 ? 'L' : '');
     }
 
     public getNewAttributes(oldAttr: number, attrString: string): number | undefined {
@@ -1409,7 +1146,7 @@ class DFSHandler implements IFSType {
             return DEFAULT_TITLE;
         }
 
-        return getFirstLine(buffer).substr(0, MAX_TITLE_LENGTH);
+        return utils.getFirstLine(buffer).substr(0, MAX_TITLE_LENGTH);
     }
 
     public async loadBootOption(volume: BeebVolume, drive: string): Promise<number> {
@@ -1616,7 +1353,7 @@ export class BeebFS {
                         let volumeName: string;
                         const buffer = await utils.tryReadFile(path.join(fullName, VOLUME_FILE_NAME));
                         if (buffer !== undefined) {
-                            volumeName = getFirstLine(buffer);
+                            volumeName = utils.getFirstLine(buffer);
                         } else {
                             volumeName = name;
                         }
@@ -2280,7 +2017,11 @@ export class BeebFS {
     /////////////////////////////////////////////////////////////////////////
 
     public async writeBeebFileMetadata(file: BeebFile): Promise<void> {
-        await this.writeBeebMetadata(file.hostPath, file.fqn, file.load, file.exec, file.attr);
+        try {
+            await this.writeBeebMetadata(file.hostPath, file.fqn, file.load, file.exec, file.attr);
+        } catch (error) {
+            BeebFS.throwServerError(error);
+        }
     }
 
     /////////////////////////////////////////////////////////////////////////
