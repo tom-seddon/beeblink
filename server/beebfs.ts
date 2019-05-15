@@ -194,27 +194,6 @@ class OpenFile {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export class Drive {
-    public readonly volume: Volume;
-    public readonly name: string;
-    public readonly option: number;
-    public readonly title: string;
-
-    public constructor(volume: Volume, name: string, option: number, title: string) {
-        this.volume = volume;
-        this.name = name;
-        this.option = option;
-        this.title = title;
-    }
-
-    public getOptionDescription(): string {
-        return BOOT_OPTION_DESCRIPTIONS[this.option & 3];
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 export class Volume {
     public readonly path: string;
     public readonly name: string;
@@ -440,9 +419,6 @@ interface IFSType {
     // get *CAT text for FSP.
     getCAT(fsp: FSP, state: IFSState | undefined): Promise<string>;
 
-    // find all drives in the given volume.
-    findDrivesForVolume(volume: Volume): Promise<Drive[]>;
-
     // delete the given file.
     deleteFile(file: File): Promise<void>;
 
@@ -620,6 +596,12 @@ async function getBeebFile(fqn: FQN, wildcardsOK: boolean, throwIfNotFound: bool
 
 const DFS_FIXED_ATTRS = R_ATTR | W_ATTR;
 
+interface IDFSDrive {
+    readonly name: string;
+    readonly option: number;
+    readonly title: string;
+}
+
 class DFSState implements IFSState {
     public readonly volume: Volume;
 
@@ -731,15 +713,19 @@ class DFSState implements IFSState {
     }
 
     public async starDrives(): Promise<string> {
-        const drives = await this.volume.handler.findDrivesForVolume(this.volume);
+        const drives = await mustBeDFSHandler(this.volume.handler).findDrivesForVolume(this.volume);
 
         let text = '';
 
         for (const drive of drives) {
-            text += drive.name + ' - ' + drive.getOptionDescription().padEnd(4, ' ');
+            text += `${drive.name} - ${BOOT_OPTION_DESCRIPTIONS[drive.option & 3].padEnd(4)}: `;
+
             if (drive.title.length > 0) {
-                text += ': ' + drive.title;
+                text += drive.title;
+            } else {
+                text += '(no title)';
             }
+
             text += utils.BNL;
         }
 
@@ -1074,28 +1060,6 @@ class DFSHandler implements IFSType {
         return text;
     }
 
-    public async findDrivesForVolume(volume: Volume): Promise<Drive[]> {
-        let names: string[];
-        try {
-            names = await utils.fsReaddir(volume.path);
-        } catch (error) {
-            return FS.throwServerError(error);
-        }
-
-        const drives = [];
-
-        for (const name of names) {
-            if (this.isValidDrive(name)) {
-                const option = await this.loadBootOption(volume, name);
-                const title = await this.loadTitle(volume, name);
-
-                drives.push(new Drive(volume, name, option, title));
-            }
-        }
-
-        return drives;
-    }
-
     public async deleteFile(file: File): Promise<void> {
         try {
             await utils.forceFsUnlink(file.hostPath + inf.ext);
@@ -1171,6 +1135,28 @@ class DFSHandler implements IFSType {
         return `${dfsFQN.dir}.${dfsFQN.name.padEnd(10)} ${attr} ${load} ${exec} ${size}`;
     }
 
+    public async findDrivesForVolume(volume: Volume): Promise<IDFSDrive[]> {
+        let names: string[];
+        try {
+            names = await utils.fsReaddir(volume.path);
+        } catch (error) {
+            return FS.throwServerError(error);
+        }
+
+        const drives = [];
+
+        for (const name of names) {
+            if (this.isValidDrive(name)) {
+                const option = await this.loadBootOption(volume, name);
+                const title = await this.loadTitle(volume, name);
+
+                drives.push({ name, option, title });
+            }
+        }
+
+        return drives;
+    }
+
     private getHostChars(str: string): string {
         let result = '';
 
@@ -1223,55 +1209,6 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    // public static async findDrivesForVolume(volume: BeebVolume): Promise<BeebDrive[]> {
-    //     let names: string[];
-    //     try {
-    //         names = await utils.fsReaddir(volume.path);
-    //     } catch (error) {
-    //         return BeebFS.throwServerError(error);
-    //     }
-
-    //     const drives = [];
-
-    //     for (const name of names) {
-    //         if (BeebFS.isValidDrive(name)) {
-    //             const option = await BeebFS.loadBootOption(volume, name);
-    //             const title = await BeebFS.loadTitle(volume, name);
-
-    //             drives.push(new BeebDrive(volume, name, option, title));
-    //         }
-    //     }
-
-    //     return drives;
-    // }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // public static async loadTitle(volume: BeebVolume, drive: string): Promise<string> {
-    //     const buffer = await utils.tryReadFile(path.join(volume.path, drive, TITLE_FILE_NAME));
-    //     if (buffer === undefined) {
-    //         return DEFAULT_TITLE;
-    //     }
-
-    //     return getFirstLine(buffer).substr(0, MAX_TITLE_LENGTH);
-    // }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // public static async loadBootOption(volume: BeebVolume, drive: string): Promise<number> {
-    //     const buffer = await utils.tryReadFile(path.join(volume.path, drive, OPT4_FILE_NAME));
-    //     if (buffer === undefined || buffer.length === 0) {
-    //         return DEFAULT_BOOT_OPTION;
-    //     }
-
-    //     return buffer[0] & 3;//ugh.
-    // }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     public static async readFile(file: File): Promise<Buffer> {
         try {
             return await utils.fsReadFile(file.hostPath);
@@ -1279,34 +1216,6 @@ export class FS {
             return FS.throwServerError(error);
         }
     }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // // Get list of BeebFile(s) matching FQN.
-    // public static async getBeebFilesForAFSP(afsp: BeebFQN, log?: utils.Log): Promise<BeebFile[]> {
-    //     if (log !== undefined) {
-    //         log.pn('getBeebFilesForAFSP: ' + afsp);
-    //     }
-
-    //     let files = await BeebFS.getBeebFiles(afsp.volume, afsp.drive, log);
-
-    //     const dirRegExp = utils.getRegExpFromAFSP(afsp.dir);
-    //     const nameRegExp = utils.getRegExpFromAFSP(afsp.name);
-
-    //     if (log !== undefined) {
-    //         log.pn('    dirRegExp: ``' + dirRegExp.source + '\'\'');
-    //         log.pn('    nameRegExp: ``' + nameRegExp.source + '\'\'');
-    //     }
-
-    //     files = files.filter((file) => dirRegExp.exec(file.name.dir) !== null && nameRegExp.exec(file.name.name) !== null);
-
-    //     if (log !== undefined) {
-    //         log.pn('    matched: ' + files.length + ' file(s)');
-    //     }
-
-    //     return files;
-    // }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
@@ -1443,10 +1352,6 @@ export class FS {
 
     private state: IFSState | undefined;
 
-    // private drive!: string;
-    // private dir!: string;
-    // private libDrive!: string;
-    // private libDir!: string;
     private gaManipulator: gitattributes.Manipulator | undefined;
 
     /////////////////////////////////////////////////////////////////////////
@@ -2630,17 +2535,6 @@ export class FS {
         ++openFile.ptr;
         openFile.dirty = true;
     }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // private resetDirs() {
-    //     this.setDrive('0');
-    //     this.setDir('$');
-
-    //     this.setLibDrive('0');
-    //     this.setLibDir('$');
-    // }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
