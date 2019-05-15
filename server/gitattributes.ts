@@ -51,7 +51,7 @@ export class Manipulator {
     }
 
     // Mark files in given volume as -text.
-    public makeVolumeNotText(volume: beebfs.BeebVolume): void {
+    public makeVolumeNotText(volume: beebfs.Volume): void {
         if (volume.isReadOnly()) {
             return;
         }
@@ -77,7 +77,7 @@ export class Manipulator {
         }
     }
 
-    public scanForBASIC(volume: beebfs.BeebVolume): void {
+    public scanForBASIC(volume: beebfs.Volume): void {
         if (volume.isReadOnly()) {
             return;
         }

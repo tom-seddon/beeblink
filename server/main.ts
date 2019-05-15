@@ -763,7 +763,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function createGitattributesManipulator(options: ICommandLineOptions, volumes: beebfs.BeebVolume[]): Promise<gitattributes.Manipulator | undefined> {
+async function createGitattributesManipulator(options: ICommandLineOptions, volumes: beebfs.Volume[]): Promise<gitattributes.Manipulator | undefined> {
     if (!options.git) {
         return undefined;
     }
@@ -796,8 +796,8 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function findDefaultVolume(options: ICommandLineOptions, volumes: beebfs.BeebVolume[]): beebfs.BeebVolume | undefined {
-    let defaultVolume: beebfs.BeebVolume | undefined;
+function findDefaultVolume(options: ICommandLineOptions, volumes: beebfs.Volume[]): beebfs.Volume | undefined {
+    let defaultVolume: beebfs.Volume | undefined;
 
     if (options.default_volume !== null) {
         for (const volume of volumes) {
@@ -1693,7 +1693,7 @@ async function main(options: ICommandLineOptions) {
         return;
     }
 
-    const volumes = await beebfs.BeebFS.findAllVolumes(options.folders, options.pcFolders, log);
+    const volumes = await beebfs.FS.findAllVolumes(options.folders, options.pcFolders, log);
 
     const gaManipulator = await createGitattributesManipulator(options, volumes);
 
@@ -1717,7 +1717,7 @@ async function main(options: ICommandLineOptions) {
         const bfsLogPrefix = options.fs_verbose ? 'FS' + connectionId : undefined;
         const serverLogPrefix = options.server_verbose ? additionalPrefix + 'SRV' + connectionId : undefined;
 
-        const bfs = new beebfs.BeebFS(bfsLogPrefix, options.folders, options.pcFolders, colours, gaManipulator);
+        const bfs = new beebfs.FS(bfsLogPrefix, options.folders, options.pcFolders, colours, gaManipulator);
 
         if (defaultVolume !== undefined) {
             await bfs.mount(defaultVolume);

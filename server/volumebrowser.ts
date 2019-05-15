@@ -28,7 +28,7 @@ import * as beebfs from './beebfs';
 /////////////////////////////////////////////////////////////////////////
 
 class Column {
-    public rows: beebfs.BeebVolume[] = [];
+    public rows: beebfs.Volume[] = [];
     public width: number = 0;
     public x: number = 0;
 }
@@ -39,11 +39,11 @@ class Column {
 export class Result {
     public readonly done: boolean;
     public readonly text: Buffer;
-    public readonly volume: beebfs.BeebVolume | undefined;
+    public readonly volume: beebfs.Volume | undefined;
     public readonly boot: boolean;
     public readonly flushKeyboardBuffer: boolean;
 
-    public constructor(done: boolean, text: Buffer, volume: beebfs.BeebVolume | undefined, boot: boolean, flushKeyboardBuffer: boolean) {
+    public constructor(done: boolean, text: Buffer, volume: beebfs.Volume | undefined, boot: boolean, flushKeyboardBuffer: boolean) {
         this.done = done;
         this.text = text;
         this.volume = volume;
@@ -73,7 +73,7 @@ export class Browser {
     private highlight: string;
     private columns: Column[];
     private numFilteredVolumes: number;
-    private volumes: beebfs.BeebVolume[];
+    private volumes: beebfs.Volume[];
     private x: number;
     private rowIdx: number;
     private colIdx: number;
@@ -94,13 +94,13 @@ export class Browser {
     private flushKeyboardBuffer!: boolean;
     private prints: utils.BufferBuilder;
     private done: boolean;
-    private selectedVolume: beebfs.BeebVolume | undefined;
+    private selectedVolume: beebfs.Volume | undefined;
     private boot: boolean;
 
     // used in filter edit mode
     private filterEditY: number;
 
-    public constructor(charSizeBytes: number, width: number, height: number, m128: boolean, volumes: beebfs.BeebVolume[]) {
+    public constructor(charSizeBytes: number, width: number, height: number, m128: boolean, volumes: beebfs.Volume[]) {
         this.log = new utils.Log('BROWSER', process.stderr, true);
 
         this.width = width;
@@ -227,7 +227,7 @@ export class Browser {
         return buffer;
     }
 
-    private getSelectedVolume(): beebfs.BeebVolume | undefined {
+    private getSelectedVolume(): beebfs.Volume | undefined {
         if (this.colIdx >= 0 && this.colIdx < this.columns.length) {
             if (this.rowIdx >= 0 && this.rowIdx < this.columns[this.colIdx].rows.length) {
                 return this.columns[this.colIdx].rows[this.rowIdx];
@@ -237,7 +237,7 @@ export class Browser {
         return undefined;
     }
 
-    private updateColumns(oldVolume: beebfs.BeebVolume | undefined) {
+    private updateColumns(oldVolume: beebfs.Volume | undefined) {
         //this.log.pn(this.rowIdx + ' ' + this.colIdx + ' ' + this.columns.length);
         // let oldVolume: Volume | undefined;
         // if (this.rowIdx >= 0 && this.colIdx >= 0) {

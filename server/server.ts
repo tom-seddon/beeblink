@@ -122,7 +122,7 @@ class Handler {
 // fine.
 
 export default class Server {
-    private bfs: beebfs.BeebFS;
+    private bfs: beebfs.FS;
     // romPath is set directly from the command line options struct, which is
     // why it's a bit inconistent.
     private romPath: string | null;
@@ -137,7 +137,7 @@ export default class Server {
     private imageParts: Buffer[] | undefined;
     private imagePartIdx: number;
 
-    public constructor(romPath: string | null, bfs: beebfs.BeebFS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
+    public constructor(romPath: string | null, bfs: beebfs.FS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
         this.romPath = romPath;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
@@ -287,7 +287,7 @@ export default class Server {
                 this.log.pn('ROM is ' + rom.length + ' bytes');
                 return newResponse(beeblink.RESPONSE_DATA, rom);
             } catch (error) {
-                return beebfs.BeebFS.throwServerError(error);
+                return beebfs.FS.throwServerError(error);
             }
         }
     }
@@ -905,7 +905,7 @@ export default class Server {
         }
     }
 
-    private async filesInfoResponse(afsp: beebfs.BeebFQN): Promise<Response> {
+    private async filesInfoResponse(afsp: beebfs.FQN): Promise<Response> {
         const files = await this.bfs.findFilesMatching(afsp);
 
         if (files.length === 0) {
@@ -991,7 +991,7 @@ export default class Server {
             return errors.wont();
         }
 
-        const data = await beebfs.BeebFS.readFile(file);
+        const data = await beebfs.FS.readFile(file);
 
         const builder = new utils.BufferBuilder();
 
@@ -1160,7 +1160,7 @@ export default class Server {
             return errors.syntax();
         }
 
-        const data = await beebfs.BeebFS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
+        const data = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
 
         let text = '';
 
@@ -1239,7 +1239,7 @@ export default class Server {
 
         addr &= 0xffff;
 
-        const rom = await beebfs.BeebFS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
+        const rom = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
 
         this.log.pn(`Addr: 0x${utils.hex4(addr)}, bank: 0x${utils.hex2(addr)}, size: 0x${utils.hex4(rom.length)}`);
 
@@ -1299,7 +1299,7 @@ export default class Server {
     }
 
     private async volCommand(commandLine: CommandLine): Promise<Response> {
-        let volume: beebfs.BeebVolume;
+        let volume: beebfs.Volume;
         if (commandLine.parts.length >= 2) {
             const volumes = await this.bfs.findVolumesMatching(commandLine.parts[1]);
             if (volumes.length === 0) {
@@ -1334,7 +1334,7 @@ export default class Server {
         const driveString = commandLine.parts[2];
         const type = commandLine.parts[3].toLowerCase();
 
-        const data = await beebfs.BeebFS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
+        const data = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
 
         if (driveString.length !== 1 || !utils.isdigit(driveString)) {
             return errors.syntax();
