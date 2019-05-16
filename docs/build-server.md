@@ -1,24 +1,3 @@
-# Build BBC ROMs (Windows/OS X/Linux)
-
-Prerequisites (all):
-
-* Python 2.x on PATH
-
-Prerequisites (OS X/Linux):
-
-* GNU make
-* [64tass](https://sourceforge.net/projects/tass64/) on the PATH
-
-Prerequisites
-
-Steps:
-
-0. Change to `rom` folder
-
-1. On OS X/Linux, run `make`; on Windows, run `..\tools\snmake.exe`.
-
-The ROM files are built to the `rom/.build` folder.
-
 # Build and run server (Windows/OS X/Linux)
 
 Prerequisites:
@@ -38,4 +17,5 @@ Steps:
    `sys/ioctl.h` is expected - this is benign, and can be ignored)
 
 2. Run `npm start -- OPTIONS` to start the server, - where `OPTIONS`
-   are the command line options for it.
+   are the command line options for it - see
+   [the server docs](./docs/server.md)

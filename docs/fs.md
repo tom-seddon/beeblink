@@ -1,11 +1,4 @@
-# BeebLink filing system
-
-The BeebLink filing system, or BLFS, stores files on your PC and lets
-you access them from your BBC using a DFS-style interface. Compared to
-your average DFS however it is much faster and has far fewer
-limitations.
-
-# Try it out
+# Using the BeebLink FS
 
 ## Run server on PC
 
@@ -18,13 +11,17 @@ Windows: `beeblink_server --default-volume beeblink ./volumes`
 
 The Tube serial devices you have connected will be autodetected.
 
-After a moment you should get a `Server running...` message.
+After a moment you should get a message along the lines of
+`/dev/tty.usbserial-FT33WLVU: serving.`, indicating that the server is
+ready.
+
+`Server running...` message.
 
 ## Whirlwind tour
 
-With the server running and the ROM installed, press CTRL+B+BREAK.
-Assuming it's all working, you should get the usual message, and a
-BeebLink banner.
+With the server ready and the ROM installed, press CTRL+B+BREAK on the
+BBC. Assuming it's all working, you should get the usual message, and
+a BeebLink banner.
 
     Acorn MOS
 	
@@ -109,88 +106,6 @@ name. The first line of this file should be the name to use.
 If the `.volume` name is invalid, the volume will be ignored, just as
 if the volume's folder name were itself invalid.
 
-## Using existing BBC files with BLFS
-
-Files are stored on the PC in the standard .inf format. Copy such
-files into a drive's folder to make them visible to BLFS.
-
-There are tools available for extracting files from DFS disc images:
-https://www.stairwaytohell.com/essentials/index.html?page=homepage
-
-## Creating BBC files on the server
-
-You can create BBC files on the server, e.g., when using your PC to
-develop BBC software. Create the file with a DFS-like file name: a
-directory character, a `.`, then a name (max 10 chars). (For example:
-`$.!BOOT`.)
-
-If the name is valid, the BBC will see it, under exactly the name it
-has on the PC.
-
-The following rules apply to files with no associated .inf file, or an
-empty .inf file:
-
-* the name seen on the BBC will be exactly the name it has on the PC
-* load and execution addresses will both be &FFFFFFFF (see `Won't`
-  below)
-* the file will be unlocked
-* if the directory name is `!`, it will be treated as a PC-style text
-  file: when opened for random access, double-/single-byte newlines
-  will be converted to ASCII 13, and an ASCII 13 will be added to the
-  end if necessary. This affects data read from `OSBGET`/`OSGBPB`, and
-  the value of `EXT#`. `OSFILE` access is unaffected.
-
-  (This is a hack to make it easy to use PC-style text files with
-  `*EXEC`, e.g., after downloading from the web, or saving copied and
-  pasted data, and it is no cleverer than necessary! Correct results
-  in general are far from guaranteed, and there is deliberately no
-  other way to have a file interpreted this way. This may improve over
-  time)
-
-The .inf file will be created or updated automatically if any of its
-properties change. This will affect the interpretation of files in the
-`!` directory.
-
-## Accessing BBC files on the server
-
-The server does its best to name the PC file after the BBC file when
-creating a file, so it should be easy to find. A simple escaping
-syntax (`#xx`, where `xx` is the ASCII value) is used for BBC
-characters that aren't valid in PC names.
-
-The corresponding .inf file contains BBC name, load address, execution
-address, and lock flag. (In principle, the BBC name can be unrelated
-to the PC name, but the server tries not to do this itself.)
-
-While a file is open on the BBC, it is buffered in RAM. Changes won't
-be seen on disk until the file is closed or flushed with OSARGS A=&FF.
-
-## Accessing PC files on the BBC
-
-Use the `--pc` option to expose a single PC folder as a read-only
-volume. All files in that folder with names of 24 chars or less (in
-total, including any extensions) will be accessible on the BBC under
-their PC names.
-
-This doesn't bother to try to operate like any existing type of BBC
-filing system, nor does it make any real effort at being super-useful
-in general: it's designed for getting quick access to PC files with
-`*WRITE` or `*EXEC`, nothing more, and if it happens to work for
-anything else, that's just a bonus.
-
-The following restrictions apply:
-
-* the folder is read only
-* there are no drives or directories
-* the file names seen on the BBC are exactly the names they have on
-  the PC
-* files' load and execution addresses are always &FFFFFFFF (see
-  `Won't` below)
-* if a file's extension is `.txt`, it will be treated as a PC-style
-  text file (see above)
-* file name chars and case-sensitivity is at the discretion of the
-  server's filing system
-
 ## Quitting the server
 
 Press Ctrl+C.
@@ -232,12 +147,6 @@ With this syntax, the drive and directory are mandatory (the current
 drive and directory only apply to the current volume). You may use
 wildcards in the volume name, but it's an error if it matches more
 than one volume.
-
-This syntax is not supported as widely as maybe it should be. (For
-example, you can't change volume using `*DRIVE`.) But apart from that,
-files on other volumes are treated the same as files on the current
-volume. Aside from the inconvenient, verbose names there should be
-nothing particular to bear in mind when accessing them.
 
 ## Wildcard names
 

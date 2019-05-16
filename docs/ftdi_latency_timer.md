@@ -4,9 +4,8 @@ The default settings for the FTDI serial device mean terrible
 performance for OSBGET and OSBPUT, affecting `*SPOOL*`, `*EXEC`,
 `*DUMP`, and so on. The `*CAT` output speed is also slightly affected.
 
-On OS X, the server can set this up for you, so no action is required.
-
-On Windows, you need to do to it by hand - but it's easy enough, and
+On OS X and Linux, the server can sort this out for you; on Windows,
+unfortunately, you need to do to it by hand. But it's easy enough, and
 it seems to be persistent:
 
 1. Find device in Device Manager (mine appears as `USB Serial Port

@@ -31,7 +31,7 @@ Notes:
 The `diff=bbcbasic` flag lets you use a git diff driver to get text
 diffs of tokenized BBC BASIC files. It's designed for use with
 BBCBasicToText, as described here:
-https://github.com/tom-seddon/beeb/#bbcbasictotext
+https://github.com/tom-seddon/beeb/tree/master/bin#bbcbasictotext
 
 Example output once it's up and running:
 

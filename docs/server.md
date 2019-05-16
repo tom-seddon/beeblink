@@ -21,15 +21,18 @@ Use `--default-volume` to get the server to load a specific volume on
 startup (following the same rules in case of ambiguity). The default
 is `65boot`.
 
-Use `--rom` to tell the server where to find the BLFS ROM image. It
-will then try to load it from this location, not the current folder,
-when using the bootstrap program or `*BLSELFUPDATE`.
+Use `--serial-rom` to tell the server where to find the BLFS ROM
+image. It will then try to load it from this location, not the current
+folder, when using the bootstrap program or `*BLSELFUPDATE`.
 
 The server will autodetect and open any FTDI devices thet look like
 they might be a Tube serial board. If it's opening any such devices
 that you aren't using for BeebLink, use `--serial-exclude` to have
 them excluded. The exclusion is by device name, so watch out for
 changes in COM port assignment.
+
+You can get a full list of the command line options with `npm start --
+-h`.
 
 # Using a config file
 
@@ -52,7 +55,101 @@ it tries to load on startup each time.
 You can also specify config file names manually if you prefer - see
 the help.
 
-# Help
+# How BBC files are stored
 
-You can get a full list of the command line options with `npm start --
--h`.
+BBC files are stored in the standard .inf format: one file holding the
+file contents, and a second file, with the same name and a .inf
+extension, holding the BBC file name and load/execution addresses.
+
+There are various tools available for creating such files from DFS
+disc images:
+
+* https://www.stairwaytohell.com/essentials/index.html?page=homepage
+* https://github.com/tom-seddon/beeb/tree/master/bin#ssd_extract
+
+# PC/BBC interop
+
+## Accessing BBC files from the server
+
+The server does its best to name the PC file after the BBC file when
+creating a file, so it should be easy to find. A simple escaping
+syntax (`#xx`, where `xx` is the ASCII value) is used for BBC
+characters that aren't valid in PC names.
+
+In principle, the BBC name (as stored in the .inf file) can be
+unrelated to the PC name, but the server tries not to do this itself.
+
+While a file is open on the BBC, it is buffered in RAM. Changes won't
+be seen on disk until the file is closed or flushed with OSARGS A=&FF.
+
+## Creating BBC files on the server
+
+You can create BBC files on the server, e.g., when using your PC to
+develop BBC software. Create the file with a DFS-like file name: a
+directory character, a `.`, then a name (max 10 chars). (For example:
+`$.!BOOT`.)
+
+If the name is valid, the BBC will see it, under exactly the name it
+has on the PC.
+
+The following rules apply to files with no associated .inf file, or an
+empty .inf file:
+
+* the name seen on the BBC will be exactly the name it has on the PC
+* load and execution addresses will both be &FFFFFFFF (see the `Won't`
+  error)
+* the file will be unlocked
+* if the directory name is `!`, it will be treated as a text file
+  
+The .inf file will be created or updated automatically if any of its
+properties change. This will affect the interpretation of files in the
+`!` directory.
+
+## Accessing PC files on the BBC
+
+Use the `--pc` option when running the server to expose a PC folder as
+a read-only PC volume. (You can provide this option multiple times to
+add multiple PC volumes.) Files in this folder are accessible on the BBC under their usual PC names.
+
+This doesn't bother to try to operate like any existing type of BBC
+filing system, nor does it make any real effort at being super-useful
+in general: it's designed for getting quick access to PC files with
+`*WRITE`, `*EXEC`, BASIC's `LOAD` - nothing more. If it happens to
+work for anything else, that's just a bonus.
+
+Please note the following:
+
+* only files with names <=25 chars will be available - this stops the
+  `*CAT` and `*INFO`/`*EX` output getting too cluttered
+* the folder is read only
+* there are no drives or directories - every drive is a bad drive, and
+  every dir is a bad dir
+* the file names seen on the BBC are exactly the names they have on
+  the PC
+* PC files don't have load and execution addresses - both are
+  effectively always &FFFFFFFF (see the `Won't` error)
+* a file's extension is `.txt`, it will be treated as a text file
+* valid file name chars are at the discretion of the server's filing
+  system
+* file name matching is case-insensitive (as you'll probably have caps
+  lock on...), which may cause issues with case-sensitive server
+  filing systems
+
+## Text files
+
+The standard BBC Micro newline is a single CR, making it incompatible
+with Windows- or Unix-style text files. If a file is treated as text,
+the server can perform newline translation when the file is opened for
+random access. This is a hack to make it easy to use PC-style text
+files with `*EXEC`, e.g., after downloading from the web.
+
+When opened for random access, double-/single-byte newlines will be
+converted to ASCII 13, and an ASCII 13 will be added to the end if
+necessary. This affects data read from `OSBGET`/`OSGBPB`, and the
+value of `EXT#`.
+
+`OSFILE` access is unaffected.
+
+Correct results in general are far from guaranteed.
+
+This mechanism may improve over time...
