@@ -48,12 +48,12 @@ const DEFAULT_BOOT_OPTION = 0;
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function mustBeDFSHandler(handler: beebfs.IFSType): DFSHandler {
-    if (!(handler instanceof DFSHandler)) {
-        throw new Error('not DFSHandler');
+function mustBeDFSType(type: beebfs.IFSType): DFSType {
+    if (!(type instanceof DFSType)) {
+        throw new Error('not DFSType');
     }
 
-    return handler;
+    return type;
 }
 
 function mustBeDFSState(state: beebfs.IFSState | undefined): DFSState | undefined {
@@ -230,7 +230,7 @@ class DFSState implements beebfs.IFSState {
             tryLibDir = false;
         }
 
-        const curFQN = new beebfs.FQN(fsp.volume, this.volume.handler.createFQN(fspName, this));
+        const curFQN = new beebfs.FQN(fsp.volume, this.volume.type.createFQN(fspName, this));
         const curFile = await beebfs.getBeebFile(curFQN, true, false);
         if (curFile !== undefined) {
             return curFile;
@@ -258,7 +258,7 @@ class DFSState implements beebfs.IFSState {
         }
 
         this.log.pn(`*CAT: drive: ${drive}`);
-        return await this.volume.handler.getCAT(new beebfs.FSP(this.volume, false, new DFSFSP(drive, undefined, undefined)), this);
+        return await this.volume.type.getCAT(new beebfs.FSP(this.volume, false, new DFSFSP(drive, undefined, undefined)), this);
     }
 
     public starDrive(arg: string | undefined): boolean {
@@ -269,7 +269,7 @@ class DFSState implements beebfs.IFSState {
         if (arg.length === 1 && utils.isdigit(arg)) {
             this.drive = arg;
         } else {
-            const fsp = mustBeDFSFSP(this.volume.handler.parseFileOrDirString(arg, 0, true));
+            const fsp = mustBeDFSFSP(this.volume.type.parseFileOrDirString(arg, 0, true));
             if (fsp.drive === undefined || fsp.dir !== undefined) {
                 return errors.badDrive();
             }
@@ -295,7 +295,7 @@ class DFSState implements beebfs.IFSState {
     }
 
     public async starDrives(): Promise<string> {
-        const drives = await mustBeDFSHandler(this.volume.handler).findDrivesForVolume(this.volume);
+        const drives = await mustBeDFSType(this.volume.type).findDrivesForVolume(this.volume);
 
         let text = '';
 
@@ -315,8 +315,8 @@ class DFSState implements beebfs.IFSState {
     }
 
     public async getBootOption(): Promise<number> {
-        const dfsHandler = mustBeDFSHandler(this.volume.handler);
-        return await dfsHandler.loadBootOption(this.volume, this.drive);
+        const dfsType = mustBeDFSType(this.volume.type);
+        return await dfsType.loadBootOption(this.volume, this.drive);
     }
 
     public async setBootOption(option: number): Promise<void> {
@@ -330,12 +330,12 @@ class DFSState implements beebfs.IFSState {
     }
 
     public async getTitle(): Promise<string> {
-        const dfsHandler = mustBeDFSHandler(this.volume.handler);
-        return await dfsHandler.loadTitle(this.volume, this.drive);
+        const dfsType = mustBeDFSType(this.volume.type);
+        return await dfsType.loadTitle(this.volume, this.drive);
     }
 
     public async readNames(): Promise<string[]> {
-        const files = await this.volume.handler.findBeebFilesMatching(this.volume, new DFSFSP(this.drive, this.dir, undefined), undefined);
+        const files = await this.volume.type.findBeebFilesMatching(this.volume, new DFSFSP(this.drive, this.dir, undefined), undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -361,7 +361,7 @@ class DFSState implements beebfs.IFSState {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-class DFSHandler implements beebfs.IFSType {
+class DFSType implements beebfs.IFSType {
     private static isValidFileNameChar(char: string) {
         const c = char.charCodeAt(0);
         return c >= 32 && c < 127;
@@ -390,12 +390,12 @@ class DFSHandler implements beebfs.IFSType {
             return false;
         }
 
-        if (!DFSHandler.isValidFileNameChar(str[0])) {
+        if (!DFSType.isValidFileNameChar(str[0])) {
             return false;
         }
 
         for (let i = 2; i < str.length; ++i) {
-            if (!DFSHandler.isValidFileNameChar(str[i])) {
+            if (!DFSType.isValidFileNameChar(str[i])) {
                 return false;
             }
         }
@@ -422,7 +422,7 @@ class DFSHandler implements beebfs.IFSType {
         }
 
         if (str[i + 1] === '.') {
-            if (!DFSHandler.isValidFileNameChar(str[i])) {
+            if (!DFSType.isValidFileNameChar(str[i])) {
                 return errors.badDir();
             }
 
@@ -431,7 +431,7 @@ class DFSHandler implements beebfs.IFSType {
         }
 
         if (parseAsDir) {
-            if (i < str.length && dir !== undefined || i === str.length - 1 && !DFSHandler.isValidFileNameChar(str[i])) {
+            if (i < str.length && dir !== undefined || i === str.length - 1 && !DFSType.isValidFileNameChar(str[i])) {
                 return errors.badDir();
             }
 
@@ -439,7 +439,7 @@ class DFSHandler implements beebfs.IFSType {
         } else {
             if (i < str.length) {
                 for (let j = i; j < str.length; ++j) {
-                    if (!DFSHandler.isValidFileNameChar(str[j])) {
+                    if (!DFSType.isValidFileNameChar(str[j])) {
                         return errors.badName();
                     }
                 }
@@ -747,4 +747,4 @@ class DFSHandler implements beebfs.IFSType {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export default new DFSHandler();
+export default new DFSType();

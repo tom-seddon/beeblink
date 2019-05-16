@@ -221,18 +221,18 @@ class OpenFile {
 export class Volume {
     public readonly path: string;
     public readonly name: string;
-    public readonly handler: IFSType;
+    public readonly type: IFSType;
     private readOnly: boolean;
 
-    public constructor(volumePath: string, name: string, handler: IFSType) {
+    public constructor(volumePath: string, name: string, type: IFSType) {
         this.path = volumePath;
         this.name = name;
-        this.handler = handler;
+        this.type = type;
         this.readOnly = false;
     }
 
     public isReadOnly(): boolean {
-        if (!this.handler.canWrite()) {
+        if (!this.type.canWrite()) {
             return true;
         }
 
@@ -244,7 +244,7 @@ export class Volume {
     }
 
     public asReadOnly(): Volume {
-        const readOnly = new Volume(this.path, this.name, this.handler);
+        const readOnly = new Volume(this.path, this.name, this.type);
 
         readOnly.readOnly = true;
 
@@ -339,7 +339,7 @@ export async function writeFile(filePath: string, data: Buffer): Promise<void> {
 // Maintain any FS-specific state (at least, probably, current drive/dir, lib
 // drive/dir...), and handle any stuff that might require that state.
 //
-// this.volume.handler points to the appropriate Handler.
+// this.volume.type points to the appropriate IFSType.
 
 export interface IFSState {
     readonly volume: Volume;
@@ -361,7 +361,7 @@ export interface IFSState {
     getFileForRUN(fsp: FSP, tryLibDir: boolean): Promise<File | undefined>;
 
     // get *CAT text, given command line that wasn't a valid FQN - presumably
-    // will figure out some default value(s) and pass on to the Handler getCAT.
+    // will figure out some default value(s) and pass on to the FSType getCAT.
     getCAT(commandLine: string | undefined): Promise<string>;
 
     // handle *DRIVE/*MOUNT.
@@ -487,7 +487,7 @@ export async function getBeebFile(fqn: FQN, wildcardsOK: boolean, throwIfNotFoun
         }
     }
 
-    const files = await fqn.volume.handler.findBeebFilesMatching(fqn.volume, fqn.fsFQN, log);
+    const files = await fqn.volume.type.findBeebFilesMatching(fqn.volume, fqn.fsFQN, log);
     if (log !== undefined) {
         log.pn(`found ${files.length} file(s)`);
     }
@@ -710,7 +710,7 @@ export class FS {
             }
         }
 
-        this.state = volume.handler.createState(volume, this.log);
+        this.state = volume.type.createState(volume, this.log);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -726,7 +726,7 @@ export class FS {
     // Reset dirs and close open files.
     public async reset() {
         if (this.state !== undefined) {
-            this.state = this.state.volume.handler.createState(this.state.volume, this.log);
+            this.state = this.state.volume.type.createState(this.state.volume, this.log);
         }
 
         await this.OSFINDClose(0);
@@ -844,7 +844,7 @@ export class FS {
         const fsp = await this.parseFileString(fileString);
         this.log.pn('    fsp: ' + fsp);
 
-        const fqn = fsp.volume.handler.createFQN(fsp.name, this.state);
+        const fqn = fsp.volume.type.createFQN(fsp.name, this.state);
         this.log.pn(`    fqn: ${fqn}`);
 
         return new FQN(fsp.volume, fqn);
@@ -854,7 +854,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async findFilesMatching(fqn: FQN): Promise<File[]> {
-        return await fqn.volume.handler.findBeebFilesMatching(fqn.volume, fqn.fsFQN, this.log);
+        return await fqn.volume.type.findBeebFilesMatching(fqn.volume, fqn.fsFQN, this.log);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -863,7 +863,7 @@ export class FS {
     public async getInfoText(file: File): Promise<string> {
         const fileSize = await this.tryGetFileSize(file);
 
-        return file.fqn.volume.handler.getInfoText(file, fileSize);
+        return file.fqn.volume.type.getInfoText(file, fileSize);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -877,14 +877,14 @@ export class FS {
         for (const volume of volumes) {
             let fsp: IFSFSP;
             try {
-                fsp = volume.handler.parseFileOrDirString(arg, 0, false);
+                fsp = volume.type.parseFileOrDirString(arg, 0, false);
             } catch (error) {
-                // if the arg wasn't even parseable by this volume's handler, it
+                // if the arg wasn't even parseable by this volume's type, it
                 // presumably won't match any file...
                 continue;
             }
 
-            const files = await volume.handler.findBeebFilesMatching(volume, fsp, undefined);
+            const files = await volume.type.findBeebFilesMatching(volume, fsp, undefined);
 
             for (const file of files) {
                 foundPaths.push(file.fqn.toString());
@@ -945,7 +945,7 @@ export class FS {
 
             if (fsp !== undefined) {
                 this.log.pn(`*CAT with FSP: ${fsp}`);
-                return fsp.volume.handler.getCAT(fsp, this.state);
+                return fsp.volume.type.getCAT(fsp, this.state);
             }
         }
 
@@ -1257,7 +1257,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public getFileWithModifiedAttributes(file: File, attributeString: string): File {
-        const newAttr = file.fqn.volume.handler.getNewAttributes(file.attr, attributeString);
+        const newAttr = file.fqn.volume.type.getNewAttributes(file.attr, attributeString);
         if (newAttr === undefined) {
             return errors.badAttribute();
         }
@@ -1294,12 +1294,12 @@ export class FS {
             return errors.fileNotFound();
         }
 
-        await oldFQN.volume.handler.renameFile(oldFile, newFQN);
+        await oldFQN.volume.type.renameFile(oldFile, newFQN);
 
         if (this.gaManipulator !== undefined) {
             if (!newFQN.volume.isReadOnly()) {
                 // could be cleverer than this.
-                this.gaManipulator.renameFile(oldFile.hostPath, newFQN.volume.handler.getHostPath(newFQN.fsFQN));
+                this.gaManipulator.renameFile(oldFile.hostPath, newFQN.volume.type.getHostPath(newFQN.fsFQN));
             }
         }
     }
@@ -1348,7 +1348,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private getHostPath(fqn: FQN): string {
-        return path.join(fqn.volume.path, fqn.volume.handler.getHostPath(fqn.fsFQN));
+        return path.join(fqn.volume.path, fqn.volume.type.getHostPath(fqn.fsFQN));
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1437,7 +1437,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async writeBeebMetadata(hostPath: string, fqn: FQN, load: number, exec: number, attr: number): Promise<void> {
-        await fqn.volume.handler.writeBeebMetadata(hostPath, fqn.fsFQN, load, exec, attr);
+        await fqn.volume.type.writeBeebMetadata(hostPath, fqn.fsFQN, load, exec, attr);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1526,7 +1526,7 @@ export class FS {
         this.mustNotBeOpen(file);
         this.mustBeWriteableFile(file);
 
-        await file.fqn.volume.handler.deleteFile(file);
+        await file.fqn.volume.type.deleteFile(file);
 
         if (this.gaManipulator !== undefined) {
             this.gaManipulator.deleteFile(file.hostPath);
@@ -1921,7 +1921,7 @@ export class FS {
             wasExplicitVolume = false;
         }
 
-        const fsp = volume.handler.parseFileOrDirString(str, i, parseAsDir);
+        const fsp = volume.type.parseFileOrDirString(str, i, parseAsDir);
 
         return new FSP(volume, wasExplicitVolume, fsp);
     }
