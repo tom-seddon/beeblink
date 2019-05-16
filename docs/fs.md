@@ -167,14 +167,18 @@ be seen on disk until the file is closed or flushed with OSARGS A=&FF.
 
 ## Accessing PC files on the BBC
 
-Use the `--pc` option to expose a PC folder as a read-only volume. All
-files in that folder with names of 24 chars or less (in total,
-including any extensions) will be accessible on the BBC under their PC
-names.
+Use the `--pc` option to expose a single PC folder as a read-only
+volume. All files in that folder with names of 24 chars or less (in
+total, including any extensions) will be accessible on the BBC under
+their PC names.
 
 This doesn't bother to try to operate like any existing type of BBC
-filing system, nor does it make any real effort at being super-useful.
-Note the following:
+filing system, nor does it make any real effort at being super-useful
+in general: it's designed for getting quick access to PC files with
+`*WRITE` or `*EXEC`, nothing more, and if it happens to work for
+anything else, that's just a bonus.
+
+The following restrictions apply:
 
 * the folder is read only
 * there are no drives or directories
@@ -184,9 +188,8 @@ Note the following:
   `Won't` below)
 * if a file's extension is `.txt`, it will be treated as a PC-style
   text file (see above)
-  
-I use this for getting quick access to stuff in my downloads folder.
-That's basically what it's designed for.
+* file name chars and case-sensitivity is at the discretion of the
+  server's filing system
 
 ## Quitting the server
 

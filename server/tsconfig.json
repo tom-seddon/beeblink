@@ -25,6 +25,7 @@
         "./inf.ts",
         "./main.ts",
         "./Message.ts",
+        "./pcType.ts",
         "./Request.ts",
         "./Response.ts",
         "./server.ts",

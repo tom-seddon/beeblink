@@ -1666,7 +1666,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
 
             if (options.serial_exclude !== null) {
                 for (const excludeComName of options.serial_exclude) {
-                    if (utils.arePathsEqual(portInfo.comName, excludeComName)) {
+                    if (utils.getSeparatorAndCaseNormalizedPath(portInfo.comName) === utils.getSeparatorAndCaseNormalizedPath(excludeComName)) {
                         exclude = true;
                         break;
                     }

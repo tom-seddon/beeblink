@@ -31,6 +31,7 @@ import * as errors from './errors';
 import CommandLine from './CommandLine';
 import * as inf from './inf';
 import dfsType from './dfsType';
+import pcType from './pcType';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -43,9 +44,14 @@ const MIN_FILE_HANDLE = 0xa0;
 export const SHOULDNT_LOAD = 0xffffffff;
 export const SHOULDNT_EXEC = 0xffffffff;
 
+export const R_ATTR = 1;
+export const W_ATTR = 2;
+export const E_ATTR = 4;
+export const L_ATTR = 8;
+
 export const DEFAULT_LOAD = SHOULDNT_LOAD;
 export const DEFAULT_EXEC = SHOULDNT_EXEC;
-export const DEFAULT_ATTR = 0;
+export const DEFAULT_ATTR = R_ATTR | W_ATTR;
 
 const VOLUME_FILE_NAME = '.volume';
 
@@ -151,11 +157,6 @@ export class FQN {
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
-
-export const R_ATTR = 1;
-export const W_ATTR = 2;
-export const E_ATTR = 4;
-export const L_ATTR = 8;
 
 export class File {
     // Path of this file on the PC filing system.
@@ -273,16 +274,16 @@ export class FSP {
     public readonly wasExplicitVolume: boolean;
 
     // FS-specific portion of the FSP.
-    public readonly name: IFSFSP;
+    public readonly fsFSP: IFSFSP;
 
     public constructor(volume: Volume, wasExplicitVolume: boolean, name: IFSFSP) {
         this.volume = volume;
         this.wasExplicitVolume = wasExplicitVolume;
-        this.name = name;
+        this.fsFSP = name;
     }
 
     public toString(): string {
-        return `::${this.volume.name}${this.name}`;
+        return `::${this.volume.name}${this.fsFSP}`;
     }
 }
 
@@ -453,7 +454,6 @@ export interface IFSType {
 /////////////////////////////////////////////////////////////////////////
 
 export interface IFSFSP {
-    getName(): string | undefined;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -601,15 +601,15 @@ export class FS {
             await findVolumesMatchingRecursive(folder, '');
         }
 
-        // for (const pcFolder of pcFolders) {
-        //     const volumeName = path.basename(pcFolder);
-        //     if (BeebFS.isValidVolumeName(volumeName)) {
-        //         if (re.exec(volumeName) !== null) {
-        //             const volume = new BeebVolume(pcFolder, volumeName, BeebVolumeType.PC);
-        //             volumes.push(volume);
-        //         }
-        //     }
-        // }
+        for (const pcFolder of pcFolders) {
+            const volumeName = path.basename(pcFolder);
+            if (FS.isValidVolumeName(volumeName)) {
+                if (re.exec(volumeName) !== null) {
+                    const volume = new Volume(pcFolder, volumeName, pcType);
+                    volumes.push(volume);
+                }
+            }
+        }
 
         return volumes;
     }
@@ -844,7 +844,7 @@ export class FS {
         const fsp = await this.parseFileString(fileString);
         this.log.pn('    fsp: ' + fsp);
 
-        const fqn = fsp.volume.type.createFQN(fsp.name, this.state);
+        const fqn = fsp.volume.type.createFQN(fsp.fsFSP, this.state);
         this.log.pn(`    fqn: ${fqn}`);
 
         return new FQN(fsp.volume, fqn);

@@ -723,18 +723,10 @@ export function parseHex(s: string): number {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// Not super clever, nor super reliable.
-export function arePathsEqual(a: string, b: string): boolean {
-    if (process.platform === 'win32') {
-        function getNPath(x: string): string {
-            return x.toLowerCase().replace('\\', '/');
-        }
+// Scrappy path normalization stuff.
 
-        return getNPath(a) === getNPath(b);
-    } else {
-        return a === b;
-    }
-}
+export const getCaseNormalizedPath = process.platform === 'darwin' || process.platform === 'win32' ? (x: string) => x.toLowerCase() : (x: string) => x;
+export const getSeparatorAndCaseNormalizedPath = process.platform === 'win32' ? (x: string) => getCaseNormalizedPath(x).replace('\\', '/') : getCaseNormalizedPath;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////

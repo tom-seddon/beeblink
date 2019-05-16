@@ -149,10 +149,6 @@ class DFSFSP implements beebfs.IFSFSP {
         this.name = name;
     }
 
-    public getName(): string | undefined {
-        return this.name;
-    }
-
     public toString(): string {
         return `:${this.getString(this.drive)}.${this.getString(this.dir)}.${this.getString(this.name)}`;
     }
@@ -162,11 +158,6 @@ class DFSFSP implements beebfs.IFSFSP {
         return x !== undefined ? x : '\u2026';
     }
 }
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-const DFS_FIXED_ATTRS = beebfs.R_ATTR | beebfs.W_ATTR;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -219,7 +210,7 @@ class DFSState implements beebfs.IFSState {
     }
 
     public async getFileForRUN(fsp: beebfs.FSP, tryLibDir: boolean): Promise<beebfs.File | undefined> {
-        const fspName = mustBeDFSFSP(fsp.name);
+        const fspName = mustBeDFSFSP(fsp.fsFSP);
 
         if (fspName.name === undefined) {
             return undefined;
@@ -347,7 +338,7 @@ class DFSState implements beebfs.IFSState {
     }
 
     private getDirOrLibFQN(fsp: beebfs.FSP): DFSFQN {
-        const dfsFSP = mustBeDFSFSP(fsp.name);
+        const dfsFSP = mustBeDFSFSP(fsp.fsFSP);
 
         if (fsp.wasExplicitVolume || dfsFSP.name !== undefined) {
             return errors.badDir();
@@ -455,36 +446,36 @@ class DFSType implements beebfs.IFSType {
         return new DFSFSP(drive, dir, name);
     }
 
-    public createFQN(fsp: DFSFSP, state: beebfs.IFSState | undefined): DFSFQN {
-        mustBeDFSFSP(fsp);
+    public createFQN(fsp: beebfs.IFSFSP, state: beebfs.IFSState | undefined): DFSFQN {
+        const dfsFSP = mustBeDFSFSP(fsp);
         const dfsState = mustBeDFSState(state);
 
         let drive: string;
-        if (fsp.drive === undefined) {
+        if (dfsFSP.drive === undefined) {
             if (dfsState === undefined) {
                 return errors.badName();
             }
 
             drive = dfsState.drive;
         } else {
-            drive = fsp.drive;
+            drive = dfsFSP.drive;
         }
 
         let dir: string;
-        if (fsp.dir === undefined) {
+        if (dfsFSP.dir === undefined) {
             if (dfsState === undefined) {
                 return errors.badName();
             }
             dir = dfsState.dir;
         } else {
-            dir = fsp.dir;
+            dir = dfsFSP.dir;
         }
 
-        if (fsp.name === undefined) {
+        if (dfsFSP.name === undefined) {
             return errors.badName();
         }
 
-        return new DFSFQN(drive, dir, fsp.name);
+        return new DFSFQN(drive, dir, dfsFSP.name);
     }
 
     public getHostPath(fqn: beebfs.IFSFQN): string {
@@ -546,7 +537,7 @@ class DFSType implements beebfs.IFSType {
 
                 const dfsFQN = new DFSFQN(driveName, dir, name);
 
-                const file = new beebfs.File(beebFileInfo.hostPath, new beebfs.FQN(volume, dfsFQN), beebFileInfo.load, beebFileInfo.exec, beebFileInfo.attr | DFS_FIXED_ATTRS, text);
+                const file = new beebfs.File(beebFileInfo.hostPath, new beebfs.FQN(volume, dfsFQN), beebFileInfo.load, beebFileInfo.exec, beebFileInfo.attr | beebfs.DEFAULT_ATTR, text);
 
                 if (log !== undefined) {
                     log.pn(`${file}`);
@@ -564,7 +555,7 @@ class DFSType implements beebfs.IFSType {
     }
 
     public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined): Promise<string> {
-        const fspDFSName = mustBeDFSFSP(fsp.name);
+        const fspDFSName = mustBeDFSFSP(fsp.fsFSP);
         const dfsState = mustBeDFSState(state);
 
         if (fspDFSName.drive === undefined || fspDFSName.name !== undefined) {
@@ -682,9 +673,9 @@ class DFSType implements beebfs.IFSType {
 
     public getNewAttributes(oldAttr: number, attrString: string): number | undefined {
         if (attrString === '') {
-            return DFS_FIXED_ATTRS;
+            return beebfs.DEFAULT_ATTR;
         } else if (attrString.toLowerCase() === 'l') {
-            return DFS_FIXED_ATTRS | beebfs.L_ATTR;
+            return beebfs.DEFAULT_ATTR | beebfs.L_ATTR;
         } else {
             return undefined;
         }
