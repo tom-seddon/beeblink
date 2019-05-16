@@ -15,12 +15,21 @@
         "strictNullChecks": true
     },
     "include": [
-        "./main.ts",
-        "./utils.ts",
-        "./beeblink.ts",
+        "./adfsimage.ts",
         "./beebfs.ts",
+        "./beeblink.ts",
+        "./dfsimage.ts",
+        "./dfsType.ts",
+        "./errors.ts",
+        "./gitattributes.ts",
+        "./inf.ts",
+        "./main.ts",
+        "./Message.ts",
+        "./Request.ts",
+        "./Response.ts",
         "./server.ts",
-        "./volumebrowser.ts",
-        "./speedtest.ts"
+        "./speedtest.ts",
+        "./utils.ts",
+        "./volumebrowser.ts"
     ]
 }

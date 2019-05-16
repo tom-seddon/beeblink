@@ -287,7 +287,7 @@ export default class Server {
                 this.log.pn('ROM is ' + rom.length + ' bytes');
                 return newResponse(beeblink.RESPONSE_DATA, rom);
             } catch (error) {
-                return beebfs.FS.throwServerError(error);
+                return errors.nodeError(error);
             }
         }
     }
