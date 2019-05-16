@@ -600,9 +600,13 @@ class DFSType implements beebfs.IFSType {
             dir = '$';
         }
 
+        for (const beebFile of beebFiles) {
+            mustBeDFSFQN(beebFile.fqn.fsFQN);
+        }
+
         beebFiles.sort((a, b) => {
-            const aNameFSName = mustBeDFSFQN(a.fqn.fsFQN);
-            const bNameFSName = mustBeDFSFQN(b.fqn.fsFQN);
+            const aNameFSName = a.fqn.fsFQN as DFSFQN;
+            const bNameFSName = b.fqn.fsFQN as DFSFQN;
 
             if (aNameFSName.dir === dir && bNameFSName.dir !== dir) {
                 return -1;
