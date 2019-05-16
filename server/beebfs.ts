@@ -453,7 +453,10 @@ export interface IFSType {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+// explicitly mentioning toString avoids the no-empty-interface tslint warning
+// (that I haven't decided what to do about yet).
 export interface IFSFSP {
+    toString(): string;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -844,10 +847,10 @@ export class FS {
         const fsp = await this.parseFileString(fileString);
         this.log.pn('    fsp: ' + fsp);
 
-        const fqn = fsp.volume.type.createFQN(fsp.fsFSP, this.state);
+        const fqn = new FQN(fsp.volume, fsp.volume.type.createFQN(fsp.fsFSP, this.state));
         this.log.pn(`    fqn: ${fqn}`);
 
-        return new FQN(fsp.volume, fqn);
+        return fqn;
     }
 
     /////////////////////////////////////////////////////////////////////////

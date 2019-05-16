@@ -279,6 +279,21 @@ class PCType implements beebfs.IFSType {
                 continue;
             }
 
+            if (nameRegExp.exec(hostName) === null) {
+                continue;
+            }
+
+            const hostPath = path.join(volume.path, hostName);
+
+            const st = await utils.tryStat(hostPath);
+            if (st === undefined) {
+                continue;
+            }
+
+            if (!st.isFile()) {
+                continue;
+            }
+
             let text = false;
             if (utils.getCaseNormalizedPath(path.extname(hostName)) === '.txt') {
                 text = true;
