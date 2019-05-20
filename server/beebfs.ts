@@ -361,9 +361,15 @@ export interface IFSState {
     // drive/directory.
     getFileForRUN(fsp: FSP, tryLibDir: boolean): Promise<File | undefined>;
 
-    // get *CAT text, given command line that wasn't a valid FQN - presumably
-    // will figure out some default value(s) and pass on to the FSType getCAT.
-    getCAT(commandLine: string | undefined): Promise<string>;
+    // get *CAT text, given command line. Handle default case, when
+    // commandLine===undefined, and any straightforward special cases that would
+    // otherwise be ambiguous (e.g., drives in DFS/ADFS), returning *CAT string.
+    // Or return undefined otherwise.
+    //
+    // If returning undefined, the BeebFS class will try to interpret the
+    // command line as a FSP and use the resulting volume's handler type to
+    // catalogue an appropriate drive based on that.
+    getCAT(commandLine: string | undefined): Promise<string | undefined>;
 
     // handle *DRIVE/*MOUNT.
     starDrive(arg: string | undefined): void;
@@ -938,22 +944,19 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async getCAT(commandLine: string | undefined): Promise<string> {
-        if (commandLine !== undefined) {
-            let fsp: FSP | undefined;
-            try {
-                fsp = await this.parseDirString(commandLine);
-            } catch (error) {
-                // Just ignore, and let the active FS try to re-parse it.
-            }
-
-            if (fsp !== undefined) {
-                this.log.pn(`*CAT with FSP: ${fsp}`);
-                return fsp.volume.type.getCAT(fsp, this.state);
-            }
+        const catString = await this.getState().getCAT(commandLine);
+        if (catString !== undefined) {
+            return catString;
         }
 
-        this.log.pn(`*CAT with command line: ${commandLine}`);
-        return await this.getState().getCAT(commandLine);
+        // IFSState.getCAT must handle the undefined case itself.
+        if (commandLine === undefined) {
+            return errors.generic('*CAT internal error');
+        }
+
+        const fsp = await this.parseDirString(commandLine);
+
+        return await fsp.volume.type.getCAT(fsp, this.getState());
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1897,10 +1900,11 @@ export class FS {
 
         // ::x:y.z
         if (str[i] === ':' && str[i + 1] === ':' && str.length > 3) {
-            const end = str.indexOf(':', i + 2);
+            let end = str.indexOf(':', i + 2);
             if (end < 0) {
                 // "::fred" or similar.
-                return errors.badName();
+                end = str.length;
+                //return errors.badName();
             }
 
             const volumeName = str.substring(i + 2, end);

@@ -238,17 +238,16 @@ class DFSState implements beebfs.IFSState {
         return undefined;
     }
 
-    public async getCAT(commandLine: string | undefined): Promise<string> {
+    public async getCAT(commandLine: string | undefined): Promise<string | undefined> {
         let drive: string;
         if (commandLine === undefined) {
             drive = this.drive;
         } else if (commandLine.length === 1 && utils.isdigit(commandLine)) {
             drive = commandLine;
         } else {
-            return errors.badDrive();
+            return undefined;
         }
 
-        this.log.pn(`*CAT: drive: ${drive}`);
         return await this.volume.type.getCAT(new beebfs.FSP(this.volume, false, new DFSFSP(drive, undefined, undefined)), this);
     }
 
@@ -398,6 +397,10 @@ class DFSType implements beebfs.IFSType {
         let drive: string | undefined;
         let dir: string | undefined;
         let name: string | undefined;
+
+        if (i === str.length) {
+            return new DFSFSP(undefined, undefined, undefined);
+        }
 
         if (str[i] === ':' && i + 1 < str.length) {
             if (!this.isValidDrive(str[i + 1])) {
@@ -555,29 +558,35 @@ class DFSType implements beebfs.IFSType {
     }
 
     public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined): Promise<string> {
-        const fspDFSName = mustBeDFSFSP(fsp.fsFSP);
-        const dfsState = mustBeDFSState(state);
+        const dfsFSP = mustBeDFSFSP(fsp.fsFSP);
 
-        if (fspDFSName.drive === undefined || fspDFSName.name !== undefined) {
+        let dfsState: DFSState | undefined;
+        if (state !== undefined) {
+            if (state instanceof DFSState) {
+                dfsState = state;
+            }
+        }
+
+        if (dfsFSP.drive === undefined || dfsFSP.name !== undefined) {
             return errors.badDrive();
         }
 
-        const beebFiles = await this.findBeebFilesMatching(fsp.volume, new DFSFSP(fspDFSName.drive, undefined, undefined), undefined);
+        const beebFiles = await this.findBeebFilesMatching(fsp.volume, new DFSFSP(dfsFSP.drive, undefined, undefined), undefined);
 
         let text = '';
 
-        const title = await this.loadTitle(fsp.volume, fspDFSName.drive);
+        const title = await this.loadTitle(fsp.volume, dfsFSP.drive);
         if (title !== '') {
             text += title + utils.BNL;
         }
 
         text += 'Volume: ' + fsp.volume.name + utils.BNL;
 
-        const boot = await this.loadBootOption(fsp.volume, fspDFSName.drive);
-        text += ('Drive ' + fspDFSName.drive + ' (' + boot + ' - ' + beebfs.getBootOptionDescription(boot) + ')').padEnd(20);
+        const boot = await this.loadBootOption(fsp.volume, dfsFSP.drive);
+        text += ('Drive ' + dfsFSP.drive + ' (' + boot + ' - ' + beebfs.getBootOptionDescription(boot) + ')').padEnd(20);
 
         if (dfsState !== undefined) {
-            text += ('Dir :' + dfsState.dir + '.' + dfsState.dir).padEnd(10);
+            text += ('Dir :' + dfsState.drive + '.' + dfsState.dir).padEnd(10);
 
             text += 'Lib :' + dfsState.libDrive + '.' + dfsState.libDir;
         }
@@ -585,7 +594,9 @@ class DFSType implements beebfs.IFSType {
         text += utils.BNL + utils.BNL;
 
         let dir: string;
-        if (dfsState !== undefined) {
+        if (dfsFSP.dir !== undefined) {
+            dir = dfsFSP.dir;
+        } else if (dfsState !== undefined) {
             dir = dfsState.dir;
         } else {
             dir = '$';

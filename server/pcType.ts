@@ -143,8 +143,12 @@ class PCState implements beebfs.IFSState {
         return undefined;
     }
 
-    public async getCAT(commandLine: string | undefined): Promise<string> {
-        return await this.volume.type.getCAT(new beebfs.FSP(this.volume, false, new PCFSP(undefined)), this);
+    public async getCAT(commandLine: string | undefined): Promise<string | undefined> {
+        if (commandLine === undefined) {
+            return await this.volume.type.getCAT(new beebfs.FSP(this.volume, false, new PCFSP(undefined)), this);
+        } else {
+            return undefined;
+        }
     }
 
     public starDrive(arg: string | undefined): boolean {
@@ -222,7 +226,9 @@ class PCType implements beebfs.IFSType {
     }
 
     public parseFileOrDirString(str: string, i: number, parseAsDir: boolean): PCFSP {
-        if (parseAsDir) {
+        if (i === str.length) {
+            return new PCFSP(undefined);
+        } else if (parseAsDir) {
             // every dir is a bad dir for a PC volume...
             return errors.badDir();
         } else {
