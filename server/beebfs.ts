@@ -37,7 +37,7 @@ import pcType from './pcType';
 /////////////////////////////////////////////////////////////////////////
 
 const MAX_NUM_DRIVES = 8;
-const MAX_FILE_SIZE = 0xffffff;
+export const MAX_FILE_SIZE = 0xffffff;
 
 const MIN_FILE_HANDLE = 0xa0;
 

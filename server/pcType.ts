@@ -31,10 +31,10 @@ import * as errors from './errors';
 //////////////////////////////////////////////////////////////////////////
 
 // A fairly arbitrary choice. *INFO output needs to be printable in Mode 7.
-const MAX_NAME_LENGTH = 25;
+const MAX_NAME_LENGTH = 31;
 
 // 0123456789012345678901234567890123456789
-// ______________________________ 12345678
+// _______________________________  123456
 
 
 function notSupported(): never {
@@ -300,6 +300,10 @@ class PCType implements beebfs.IFSType {
                 continue;
             }
 
+            if (st.size > beebfs.MAX_FILE_SIZE) {
+                continue;
+            }
+
             let text = false;
             if (utils.getCaseNormalizedPath(path.extname(hostName)) === '.txt') {
                 text = true;
@@ -360,7 +364,7 @@ class PCType implements beebfs.IFSType {
     public getInfoText(file: beebfs.File, fileSize: number): string {
         const pcFQN = mustBePCFQN(file.fqn.fsFQN);
 
-        return `${pcFQN.name.padEnd(MAX_NAME_LENGTH)}  ${utils.hex8(fileSize)}`;
+        return `${pcFQN.name.padEnd(MAX_NAME_LENGTH)}  ${utils.hex(fileSize, 6)}`;
     }
 }
 
