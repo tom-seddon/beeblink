@@ -75,6 +75,7 @@ const BEEBLINK_SENDER_ID = 'beeblink-sender-id';
 
 interface IConfigFile {
     folders: string[] | undefined;
+    pc_folders: string[] | undefined;
     default_volume: string | undefined;
     avr_rom: string | undefined;
     serial_rom: string | undefined;
@@ -318,22 +319,22 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
         }
     }
 
-    // Keep config folders first.
-    if (config.folders !== undefined) {
-        for (let i = 0; i < config.folders.length; ++i) {
-            options.folders.splice(i, 0, config.folders[i]);
+    function loadFolders(optionsFolders: string[], configFolders: string[] | undefined): void {
+        // Keep config folders first.
+        if (configFolders !== undefined) {
+            for (let i = 0; i < configFolders.length; ++i) {
+                optionsFolders.splice(i, 0, configFolders[i]);
+            }
         }
-    }
 
-    // Eliminate duplicate folders.
-    {
+        // Eliminate duplicates.
         let i = 0;
-        while (i < options.folders.length) {
+        while (i < optionsFolders.length) {
             let j = i + 1;
 
-            while (j < options.folders.length) {
-                if (path.relative(options.folders[i], options.folders[j]) === '') {
-                    options.folders.splice(j, 1);
+            while (j < optionsFolders.length) {
+                if (path.relative(optionsFolders[i], optionsFolders[j]) === '') {
+                    optionsFolders.splice(j, 1);
                 } else {
                     ++j;
                 }
@@ -342,6 +343,9 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
             ++i;
         }
     }
+
+    loadFolders(options.folders, config.folders);
+    loadFolders(options.pcFolders, config.pc_folders);
 
     options.git = options.git || config.git === true;
 
@@ -352,6 +356,18 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
 
         for (const e of config.serial_exclude) {
             options.serial_exclude.push(e);
+        }
+    }
+
+    if (options.avr_rom === null) {
+        if (config.avr_rom !== undefined) {
+            options.avr_rom = config.avr_rom;
+        }
+    }
+
+    if (options.serial_rom === null) {
+        if (config.serial_rom !== undefined) {
+            options.serial_rom = config.serial_rom;
         }
     }
 }
@@ -732,6 +748,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         const config: IConfigFile = {
             default_volume: options.default_volume !== null ? options.default_volume : undefined,
             folders: options.folders,
+            pc_folders: options.pcFolders,
             avr_rom: options.avr_rom !== null ? options.avr_rom : undefined,
             serial_rom: options.serial_rom !== null ? options.serial_rom : undefined,
             git: options.git,
