@@ -108,20 +108,23 @@ properties change. This will affect the interpretation of files in the
 
 ## Accessing PC files on the BBC
 
-Use the `--pc` option when running the server to expose a PC folder as
-a read-only PC volume. (You can provide this option multiple times to
-add multiple PC volumes.) Files in this folder are accessible on the BBC under their usual PC names.
+You can access PC files by copying them to a BBC volume, and giving
+them a BBC name, as described above, and this is pretty convenient in
+most cases. But you can also access them directly, with some
+limitations, under their usual PC names.
 
-This doesn't bother to try to operate like any existing type of BBC
-filing system, nor does it make any real effort at being super-useful
-in general: it's designed for getting quick access to PC files with
-`*WRITE`, `*EXEC`, BASIC's `LOAD` - nothing more. If it happens to
-work for anything else, that's just a bonus.
+Use the `--pc` option when running the server to do this, specifying a
+folder to make available as a read-only PC volume. This doesn't make
+any great effort to work like any existing type of BBC filing system,
+nor does it make any real effort at being super-useful in general:
+it's designed for getting quick access to PC files for use with
+`*WRITE`, `*EXEC`, and BASIC's `LOAD` - nothing more.
 
-Please note the following:
+Limitations and oddities of 
 
-* only files with names <=25 chars will be available - this stops the
-  `*CAT` and `*INFO`/`*EX` output getting too cluttered
+* only files with names <=31 chars are available - this to ensure that
+  `*INFO`/`*EX` is practical in Mode 7
+* only files smaller than 16 MBytes are available
 * the folder is read only
 * there are no drives or directories - every drive is a bad drive, and
   every dir is a bad dir
@@ -136,6 +139,7 @@ Please note the following:
 * file name matching is case-insensitive (as you'll probably have caps
   lock on...), which may cause issues with case-sensitive server
   filing systems
+* `*OPT 4` and `*TITLE` are not supported
 
 ## Text files
 
