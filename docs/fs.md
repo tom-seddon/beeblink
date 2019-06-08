@@ -5,17 +5,17 @@
 Unzip the server zip file somewhere on your PC, and run it like this
 from the command line:
 
-OS X/Linux: `./beeblink_server --default-volume beeblink ./volumes`
+OS X: `./beeblink_server --default-volume beeblink ./volumes`
 
 Windows: `beeblink_server --default-volume beeblink ./volumes`
+
+
 
 The Tube serial devices you have connected will be autodetected.
 
 After a moment you should get a message along the lines of
 `/dev/tty.usbserial-FT33WLVU: serving.`, indicating that the server is
 ready.
-
-`Server running...` message.
 
 ## Whirlwind tour
 
@@ -473,6 +473,6 @@ load address of &FFFFFFFF. For `*RUN` this will also occur when the
 execution address is &FFFFFFFF. (This usually means the file has a
 0-byte .inf file, but these addresses can also be assigned manually.)
 
-`*SLOAD` produces this error if trying to load a ROM image over the
+`*SRLOAD` produces this error if trying to load a ROM image over the
 BLFS itself, or if the address range would be outside the ROM area of
 &8000-&BFFF.

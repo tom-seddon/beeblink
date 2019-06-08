@@ -99,7 +99,8 @@ empty .inf file:
 * load and execution addresses will both be &FFFFFFFF (see the `Won't`
   error)
 * the file will be unlocked
-* if the directory name is `!`, it will be treated as a text file
+* if the directory name is `!`, it will be treated as a text file (see
+  below)
   
 The .inf file will be created or updated automatically if any of its
 properties change. This will affect the interpretation of files in the
@@ -128,7 +129,8 @@ Please note the following:
   the PC
 * PC files don't have load and execution addresses - both are
   effectively always &FFFFFFFF (see the `Won't` error)
-* a file's extension is `.txt`, it will be treated as a text file
+* a file's extension is `.txt`, it will be treated as a text file (see
+  below)
 * valid file name chars are at the discretion of the server's filing
   system
 * file name matching is case-insensitive (as you'll probably have caps

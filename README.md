@@ -31,10 +31,6 @@ module or battery-backed write-protectable sideways RAM - it's no fun
 having to reload the ROM each time you power on, or have it zapped by
 careless programs!
 
-If you've got some way of getting files to your BBC already, copy
-`beeblink_tube_serial.rom` from the ROMs zip and load it on your BBC;
-otherwise, use the [bootstrap process](./docs/bootstrap.md).
-
 You'll need a Tube USB serial adapter and FT232H module - see
 https://stardot.org.uk/forums/viewtopic.php?f=8&t=14849. (You'll need
 the full kit with the PLD.)
@@ -45,13 +41,19 @@ Comms mode, and connect the device to your PC. If using Windows,
 you'll need to
 [tweak one of the device settings](./docs/ftdi_latency_timer.md).
 
+If you've got some way of getting files to your BBC already, copy
+`beeblink_tube_serial.rom` from the ROMs zip and load it on your BBC;
+otherwise, use the [bootstrap process](./docs/bootstrap.md), and get
+the file that way.
+
 # Use
 
 See [the filing system docs](./docs/fs.md) for some info about how to
 use it from the BBC side.
 
-[The server docs](./docs/server.md) have some notes about useful
-command line options and sharing files between BBC and PC.
+[The server docs](./docs/server.md) have some information about useful
+command line options, and a few notes about sharing files between BBC
+and PC.
 
 [If you use git, some notes on git interop](./docs/git.md).
 
