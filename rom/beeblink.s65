@@ -49,7 +49,7 @@
 ; Config toggles.
 
                 .weak
-; If true, set VON by default on hard reset.
+; If true, set debug verbosity by default on hard reset.
 default_von=false
 
 ; If true, disable debug prints in print_server_string, then restore
@@ -122,7 +122,7 @@ server_string_buffer_size=20
 
 ; ROM status byte flags
 
-; if set, *VON.
+; if set, debug verbosity.
 sf_von=$80
 von_char='V'
 
@@ -276,7 +276,7 @@ rom_version_number:
 rom_name:
                 .text "BeebLink (",link_name,")"
                 .if default_von
-                .text " (VON)"
+                .text " (V)"
                 .endif
 rom_version_string:
                 .text 0
@@ -528,7 +528,7 @@ svc_claim_private_workspace: .proc
                 lda #sf_power_on_defaults
                 sta roms_table,x
 
-                ; Fall through to set the VON flag.
+                ; Fall through to set the debug verbosity flag.
 
 hard:
                 .if default_von
@@ -1007,7 +1007,7 @@ reset_link_started_up_flag: .proc
                 
 ;-------------------------------------------------------------------------
 ;
-; sets status of the *VON/*VOFF flag.
+; sets status of the debug verbosity flag.
 ;
 ; entry: C=1 to set on, C=0 to set off.
 ; preserves: Y

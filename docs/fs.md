@@ -377,7 +377,9 @@ The current ROM options are as follows.
 
 ## `V` - debug verbosity
 
-I find it best to leave this switched off.
+The ROM will print debug messages when the `V` option is on. This is
+handy when working on the ROM, but you probably don't want it
+otherwise!
 
 ## `*` - trap *DISC
 

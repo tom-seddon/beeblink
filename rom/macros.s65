@@ -115,7 +115,7 @@ pop32zx: .macro
 ; print - always prints using osasci
 ; preserves: A; X; Y: p
 ;
-; debug_print - prints using osasci if the VON flag is set
+; debug_print - prints using osasci if the debug verbosity flag is set
 ; preserves: A; X; Y; P
 
 DP_A=-1
