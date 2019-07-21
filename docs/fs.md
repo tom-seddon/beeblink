@@ -348,7 +348,7 @@ The volume browser isn't recommended in 20-column modes.
 
 Produce wide hex dump of file, for use in 80 column modes.
 
-### `WRITE <fsp> <drive> <type> ###
+### `WRITE <fsp> <drive> <type>` ###
 
 **Overwrites I/O processor memory from OSHWM onwards, and writes to
 the disk in the specified drive, no questions asked!**
