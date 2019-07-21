@@ -2,6 +2,33 @@
 
 Brain dump that's on GitHub so I have a backup.
 
+* =--serial-test-XXX=
+
+Send sequences of bytes from PC to BBC and vice versa, to check that
+the underlying link is basically working. The tests run forever, and
+the receiving end will crap out with an error if it receives something
+unexpected.
+
+Find the BBC files in the =beeblink= volume.
+
+** PC to BBC
+
+1. Quit server if it's already running
+
+2. Run =T.PC-TO-BBC= on the Beeb
+
+3. Run server with =--serial-test-pc-to-bbc= when requested
+
+** BBC to PC
+
+1. Quit server if it's already running
+
+2. Run =T.BBC-TO-PC= on the Beeb
+
+3. Run server with =--serial-test-bbc-to-pc=
+
+4. Press any key on the BBC when requested
+
 * Volume types
 
 ** DFS

@@ -7,3 +7,5 @@ $.ROMS diff=bbcbasic
 B.AVR diff=bbcbasic
 B.AVR2 diff=bbcbasic
 B.TUBE diff=bbcbasic
+T.PC-TO-BBC diff=bbcbasic
+T.BBC-TO-PC diff=bbcbasic

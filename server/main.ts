@@ -114,6 +114,8 @@ interface ICommandLineOptions {
     list_usb_devices: boolean;
     serial_exclude: string[] | null;
     pcFolders: string[];
+    serial_test_pc_to_bbc: boolean;
+    serial_test_bbc_to_pc: boolean;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -328,19 +330,21 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
         }
 
         // Eliminate duplicates.
-        let i = 0;
-        while (i < optionsFolders.length) {
-            let j = i + 1;
+        {
+            let i = 0;
+            while (i < optionsFolders.length) {
+                let j = i + 1;
 
-            while (j < optionsFolders.length) {
-                if (path.relative(optionsFolders[i], optionsFolders[j]) === '') {
-                    optionsFolders.splice(j, 1);
-                } else {
-                    ++j;
+                while (j < optionsFolders.length) {
+                    if (path.relative(optionsFolders[i], optionsFolders[j]) === '') {
+                        optionsFolders.splice(j, 1);
+                    } else {
+                        ++j;
+                    }
                 }
-            }
 
-            ++i;
+                ++i;
+            }
         }
     }
 
@@ -704,6 +708,165 @@ async function listUSBDevices(): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+async function getSerialPortList(options: ICommandLineOptions): Promise<SerialPort.PortInfo[]> {
+    const portInfos: SerialPort.PortInfo[] = [];
+
+    for (const portInfo of await SerialPort.list()) {
+        if (portInfo.vendorId === '0403' && portInfo.productId === '6014') {
+            let exclude = false;
+
+            if (options.serial_exclude !== null) {
+                for (const excludeComName of options.serial_exclude) {
+                    if (utils.getSeparatorAndCaseNormalizedPath(portInfo.comName) === utils.getSeparatorAndCaseNormalizedPath(excludeComName)) {
+                        exclude = true;
+                        break;
+                    }
+                }
+            }
+
+            if (exclude) {
+                process.stderr.write(`${portInfo.comName}: serial device is excluded.\n`);
+            } else {
+                portInfos.push(portInfo);
+            }
+        }
+    }
+
+    return portInfos;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+async function openSerialPort(portInfo: SerialPort.PortInfo): Promise<SerialPort> {
+    // The baud rate doesn't appear to matter for the FT232H.
+    const port = new SerialPort(portInfo.comName, { baudRate: 115200, autoOpen: false });
+
+    await new Promise<void>((resolve, reject) => {
+        // don't think the module's TS type definition for the callback is quite
+        // right...
+        port.open((error: Error | undefined | null) => {
+            if (error !== undefined && error !== null) {
+                reject(error);
+            } else {
+                resolve();
+            }
+        });
+    });
+
+    return port;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+async function serialTestPCToBBC2(portInfo: SerialPort.PortInfo): Promise<void> {
+    process.stderr.write(`${portInfo.comName}: sending bytes...\n`);
+
+    let numBytesSent = 0;
+
+    async function printBytesSent(): Promise<void> {
+        let oldNumBytesSent = numBytesSent;
+
+        for (; ;) {
+            await delayMS(1000);
+            if (oldNumBytesSent !== numBytesSent) {
+                process.stderr.write(`${portInfo.comName}: sent ${numBytesSent} bytes\n`);
+                oldNumBytesSent = numBytesSent;
+            }
+        }
+    }
+
+    void printBytesSent();
+
+    const port = await openSerialPort(portInfo);
+
+    for (; ;) {
+        for (let i = 0; i < 256; ++i) {
+            const data = Buffer.alloc(1);
+            data[0] = i;
+
+            //process.stderr.write(`${portInfo.comName}: ${i}\n`);
+
+            await new Promise((resolve, reject): void => {
+                // Despite what the TypeScript definitions appear to say,
+                // the JS code actually only seems to call the callback with
+                // a single argument: an error, or undefined.
+                port.write(data, (error: any): void => {
+                    if (error !== undefined && error !== null) {
+                        reject(error);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
+
+            ++numBytesSent;
+        }
+    }
+}
+
+async function serialTestPCToBBC(options: ICommandLineOptions): Promise<void> {
+    for (const portInfo of await getSerialPortList(options)) {
+        void serialTestPCToBBC2(portInfo);
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+async function serialTestBBCToPC2(portInfo: SerialPort.PortInfo): Promise<void> {
+    const port = await openSerialPort(portInfo);
+
+    await new Promise<void>((resolve, reject) => {
+        port.flush((error: any) => {
+            if (error !== undefined && error !== null) {
+                reject(error);
+            } else {
+                resolve();
+            }
+        });
+    });
+
+    process.stderr.write(`${portInfo.comName}: press any key on the BBC now.\n`);
+
+    let numBytesReceived = 0;
+
+    port.on('data', (data: Buffer): void => {
+        for (const got of data) {
+            const expected = numBytesReceived & 0xff;
+            if (got !== expected) {
+                throw new Error(`${portInfo.comName}: +${numBytesReceived}: expected ${expected}, got ${got}\n`);
+            }
+
+            ++numBytesReceived;
+        }
+    });
+
+    port.on('error', (error: any): void => {
+        throw new Error(`${portInfo.comName}: error: ${error}`);
+    });
+
+    let oldNumBytesReceived = -1;
+    for (; ;) {
+        await delayMS(1000);
+
+        if (oldNumBytesReceived !== numBytesReceived) {
+            process.stderr.write(`${portInfo.comName}: received ${numBytesReceived} bytes\n`);
+            oldNumBytesReceived = numBytesReceived;
+        }
+    }
+}
+
+async function serialTestBBCToPC(options: ICommandLineOptions): Promise<void> {
+    for (const portInfo of await getSerialPortList(options)) {
+        void serialTestBBCToPC2(portInfo);
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 async function handleCommandLineOptions(options: ICommandLineOptions, log: utils.Log): Promise<boolean> {
     if (options.set_serial !== null) {
         await setDeviceSerialNumber(options.set_serial);
@@ -726,6 +889,14 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     }
 
     log.pn('cwd: ``' + process.cwd() + '\'\'');
+
+    if (options.serial_test_pc_to_bbc) {
+        void serialTestPCToBBC(options);
+        return false;
+    } else if (options.serial_test_bbc_to_pc) {
+        void serialTestBBCToPC(options);
+        return false;
+    }
 
     if (options.load_config === null) {
         await loadConfig(options, DEFAULT_CONFIG_FILE_NAME, false);
@@ -796,7 +967,7 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
 
     volumes = volumes.filter((volume) => !volume.isReadOnly());
     volumes = volumes.filter(async (volume) => !(await isGit(volume.path)));
-    process.stderr.write(`Found ${volumes.length}/${oldNumVolumes} writeable git-controlled volumes\n`);
+    process.stderr.write(`Found ${volumes.length} / ${oldNumVolumes} writeable git - controlled volumes\n`);
 
     for (const volume of volumes) {
         gaManipulator.makeVolumeNotText(volume);
@@ -1310,22 +1481,9 @@ async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: Se
     serialLog.pn('Creating server...');
     const server = await createServer('SERIAL', options.serial_rom);
 
-    // The baud rate doesn't actually seem to matter.
-    const port: SerialPort = new SerialPort(portInfo.comName, { baudRate: 115200, autoOpen: false });
+    const port = await openSerialPort(portInfo);
 
     process.stderr.write(`${portInfo.comName}: serving.\n`);
-
-    await new Promise<void>((resolve, reject) => {
-        // don't think the module's TS type definition for the callback is quite
-        // right...
-        port.open((error: Error | undefined | null) => {
-            if (error !== undefined && error !== null) {
-                reject(error);
-            } else {
-                resolve();
-            }
-        });
-    });
 
     let readWaiter: IReadWaiter | undefined;
     const readBuffers: Buffer[] = [];
@@ -1677,25 +1835,8 @@ async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: Se
 }
 
 async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): Promise<void> {
-    for (const portInfo of await SerialPort.list()) {
-        if (portInfo.vendorId === '0403' && portInfo.productId === '6014') {
-            let exclude = false;
-
-            if (options.serial_exclude !== null) {
-                for (const excludeComName of options.serial_exclude) {
-                    if (utils.getSeparatorAndCaseNormalizedPath(portInfo.comName) === utils.getSeparatorAndCaseNormalizedPath(excludeComName)) {
-                        exclude = true;
-                        break;
-                    }
-                }
-            }
-
-            if (exclude) {
-                process.stderr.write(`${portInfo.comName}: excluded, so not serving.\n`);
-            } else {
-                void handleTubeSerialDevice(options, portInfo, createServer);
-            }
-        }
+    for (const portInfo of await getSerialPortList(options)) {
+        void handleTubeSerialDevice(options, portInfo, createServer);
     }
 }
 
@@ -1806,6 +1947,8 @@ function integer(s: string): number {
     parser.addArgument(['--list-usb-devices'], { action: 'storeTrue', help: 'list available USB devices, then exit' });
     parser.addArgument(['--pc'], { dest: 'pcFolders', action: 'append', defaultValue: [], metavar: 'FOLDER', help: 'use %(metavar)s as a PC volume' });
     //parser.addArgument(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
+    parser.addArgument(['--serial-test-pc-to-bbc'], { action: 'storeTrue', help: 'run PC->BBC test (goes with T.PC-TO-BBC on the BBC)' });
+    parser.addArgument(['--serial-test-bbc-to-pc'], { action: 'storeTrue', help: 'run BBC->PC test (goes with T.BBC-TO-PC on the BBC)' });
 
     const options = parser.parseArgs();
 
