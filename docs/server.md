@@ -5,7 +5,10 @@ command line. You can specify multiple folders, and they'll be
 searched for volumes in that order.
 
 Folders are searched recursively to find volumes, but a volume's
-folder, once found, isn't itself searched further.
+folder, once found, isn't itself searched further. You can prevent a
+folder from being searched further by creating a file called
+`.beeblink-ignore` (contents irrelevant - only the name is checked)
+inside that folder.
 
 (When creating a volume with `*NEWVOL`, it will always be created in
 the first folder listed. Create one manually on the PC if you want a

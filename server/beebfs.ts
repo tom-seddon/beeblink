@@ -53,6 +53,8 @@ export const DEFAULT_LOAD = SHOULDNT_LOAD;
 export const DEFAULT_EXEC = SHOULDNT_EXEC;
 export const DEFAULT_ATTR = R_ATTR | W_ATTR;
 
+const IGNORE_DIR_FILE_NAME = utils.getCaseNormalizedPath('.beeblink-ignore');
+
 const VOLUME_FILE_NAME = '.volume';
 
 const HOST_NAME_ESCAPE_CHAR = '#';
@@ -565,36 +567,46 @@ export class FS {
 
             const subfolderPaths: string[] = [];
 
+            let useDir = true;
             for (const name of names) {
-                if (name[0] === '.') {
-                    continue;
+                if (utils.getCaseNormalizedPath(name) === IGNORE_DIR_FILE_NAME) {
+                    useDir = false;
+                    break;
                 }
+            }
 
-                const fullName = path.join(folderPath, name);
+            if (useDir) {
+                for (const name of names) {
+                    if (name[0] === '.') {
+                        continue;
+                    }
 
-                const stat = await utils.tryStat(fullName);
-                if (stat !== undefined && stat.isDirectory()) {
-                    const stat0 = await utils.tryStat(path.join(fullName, '0'));
-                    if (stat0 === undefined) {
-                        // obviously not a BeebLink volume, so save for later.
-                        subfolderPaths.push(fullName);
-                    } else if (stat0.isDirectory()) {
-                        let volumeName: string;
-                        const buffer = await utils.tryReadFile(path.join(fullName, VOLUME_FILE_NAME));
-                        if (buffer !== undefined) {
-                            volumeName = utils.getFirstLine(buffer);
-                        } else {
-                            volumeName = name;
-                        }
+                    const fullName = path.join(folderPath, name);
 
-                        if (FS.isValidVolumeName(volumeName)) {
-                            const volume = new Volume(fullName, volumeName, dfsType);
-                            if (log !== undefined) {
-                                log.pn('Found volume ' + volume.path + ': ' + volume.name);
+                    const stat = await utils.tryStat(fullName);
+                    if (stat !== undefined && stat.isDirectory()) {
+                        const stat0 = await utils.tryStat(path.join(fullName, '0'));
+                        if (stat0 === undefined) {
+                            // obviously not a BeebLink volume, so save for later.
+                            subfolderPaths.push(fullName);
+                        } else if (stat0.isDirectory()) {
+                            let volumeName: string;
+                            const buffer = await utils.tryReadFile(path.join(fullName, VOLUME_FILE_NAME));
+                            if (buffer !== undefined) {
+                                volumeName = utils.getFirstLine(buffer);
+                            } else {
+                                volumeName = name;
                             }
 
-                            if (re.exec(volume.name) !== null) {
-                                volumes.push(volume);
+                            if (FS.isValidVolumeName(volumeName)) {
+                                const volume = new Volume(fullName, volumeName, dfsType);
+                                if (log !== undefined) {
+                                    log.pn('Found volume ' + volume.path + ': ' + volume.name);
+                                }
+
+                                if (re.exec(volume.name) !== null) {
+                                    volumes.push(volume);
+                                }
                             }
                         }
                     }
