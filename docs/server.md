@@ -123,7 +123,7 @@ nor does it make any real effort at being super-useful in general:
 it's designed for getting quick access to PC files for use with
 `*WRITE`, `*EXEC`, and BASIC's `LOAD` - nothing more.
 
-Limitations and oddities of 
+Limitations and oddities of PC volumes:
 
 * only files with names <=31 chars are available - this to ensure that
   `*INFO`/`*EX` is practical in Mode 7
