@@ -5126,11 +5126,11 @@ recv_next_disk_image_part: .proc
                 jsr get_write_image_buffers
                 
                 ; save DFS/ADFS workspace.
-                ldy #31
+                ldx #31
 -
-                lda $b0,y       ;abs,y :(
-                sta (write_image_temp),y
-                dey
+                lda $b0,x
+                pha
+                dex
                 bpl -
 
                 lda #REQUEST_NEXT_DISK_IMAGE_PART
@@ -5165,12 +5165,13 @@ recv_next_disk_image_part: .proc
                 jsr recv_file_data
 
                 ; restore DFS/ADFS workspace.
-                ldy #31
+                ldx #0
 -
-                lda (write_image_temp),y
-                sta $b0,y       ;abs,y
-                dey
-                bpl -
+                pla
+                sta $b0,x
+                inx
+                cpx #32
+                bne -
 
                 ; though carry almost certainly clear already...
                 clc
