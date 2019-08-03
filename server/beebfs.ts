@@ -1910,8 +1910,20 @@ export class FS {
         let volume: Volume;
         let wasExplicitVolume: boolean;
 
-        // ::x:y.z
         if (str[i] === ':' && str[i + 1] === ':' && str.length > 3) {
+            // ::x:whatever
+            //
+            // The : is doing double duty here: it's the terminator of the
+            // volume name, but (with the DFS syntax that I had in mind when
+            // adding this stuff originally) it's also the prefix for the drive
+            // name. So it has to get passed through to the FS type handler.
+            //
+            // This is good for FS types with drives, because then the volume
+            // name is just a ::WHATEVER prefix, followed by a fully-specified
+            // path, drive and all. Not so good for the PC type, though, because
+            // the : prefix is sent through just the same, and it has to be
+            // stripped off. 
+
             let end = str.indexOf(':', i + 2);
             if (end < 0) {
                 // "::fred" or similar.

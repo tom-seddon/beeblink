@@ -226,6 +226,20 @@ class PCType implements beebfs.IFSType {
     }
 
     public parseFileOrDirString(str: string, i: number, parseAsDir: boolean): PCFSP {
+        // See note in FS.parseFileOrDirString.
+        //
+        // The i!==0 check is supposed to make sure this only comes in to play
+        // with the volume syntax, so that '::fred:x' refers to 'x' in the
+        // 'fred' volume but ':x' refers to a file called ':x' in the current
+        // volume.
+        //
+        // This isn't very nice, but it'll probably be OK...
+        if (i !== 0) {
+            if (str.charAt(i) === ':') {
+                ++i;
+            }
+        }
+
         if (i === str.length) {
             return new PCFSP(undefined);
         } else if (parseAsDir) {
@@ -247,6 +261,8 @@ class PCType implements beebfs.IFSType {
         if (pcFSP.name === undefined) {
             return errors.badName();
         }
+
+        //process.stderr.write(`PCType.createFQN: pcFSP.name="${pcFSP.name}"\n`);
 
         return new PCFQN(pcFSP.name);
     }
