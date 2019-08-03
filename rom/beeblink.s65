@@ -93,7 +93,7 @@ dfs_fs_number=4
 adfs_fs_number=8
 
 ; Where to copy BRKstuff to
-brkthunk=$104
+brkthunk=$100
 
 ; Maximum size of BRKstuff
 ;
