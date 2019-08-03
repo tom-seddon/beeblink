@@ -3863,6 +3863,17 @@ recv_rom:
                 .text 255
                 
                 sty abr_offset
+
+                ; tya
+                ; jsr get_ascii_hi_nybble
+                ; jsr oswrch
+
+                ; tya
+                ; jsr get_ascii_lo_nybble
+                ; jsr oswrch
+
+                ; lda #' '
+                ; jsr oswrch
                 
                 lda #<new_rom
                 sta payload_addr+0
@@ -3947,15 +3958,8 @@ print_done:
                 ldy abr_offset
                 bmi hang
 
-                lda $fe34
-                pha
-                ora #$20        ;access cartridge
-                sta $fe34
-
-                sta $fcdd,y
-
-                pla
-                sta $fe34
+                iny             ;form lock offset
+                jsr write_ABR_m128
                 
 hang:
                 jmp hang
@@ -4648,21 +4652,19 @@ unlock_ABR: .proc
                                  ;ABR, or already unlocked
 
                 lda #$81
-                ldx #$0
+                ldx #$00
                 ldy #$ff
                 jsr osbyte
 
-                cpx #1
-                beq try_unlock  ;taken if Electron
-
                 cpx #$fd
                 beq try_unlock  ;taken if Master 128
-
+                
                 cpx #$f7
                 beq try_unlock  ;taken if Master ET
 
-                clc             ;not writeable, and no fix
+                ; could probably support Electron as well...
 
+                clc
 not_unlocked:
                 ldy #$80
                 rts
@@ -4671,48 +4673,52 @@ try_unlock:
                 lda $f4
                 cmp #4
                 bcs not_unlocked ;taken if not in a M128 cartridge
-                                 ;slot
+                                 ;slot - i.e., unlock impossible
 
                 lda $f4
                 and #1
                 asl a
                 tay
 
-                lda $fe34
+                jsr write_ABR_m128
+
+                tya
                 pha
-                ora #$20        ;access cartridge
-                sta $fe34
-
-                sta $fcdc,y     ;unlock
-
-                pla
-                sta $fe34
-
                 jsr is_sideways_ram
-                bcc not_unlocked
+                pla
+                tay
+                
+                bcc not_unlocked ;taken if still not sideways RAM -
+                                 ;i.e., probably not an ABR
                 rts
                 .pend
 
 ;-------------------------------------------------------------------------
 ;
-access_ABR: .proc
-                cpy #$80
-                bcs done
-
+; Access ABR on Master.
+;
+; entry: Y = offset from $fcdc
+;
+write_ABR_m128: .proc
+                php
+                sei
+                
                 lda $fe34
                 pha
-                ora #$20 ;make FRED/JIM access cartridge, not 1MHz bus
+                
+                ora #$20        ;$FCxx=cartridge
                 sta $fe34
 
-                sta $fcdc,y
+                sta $fcdc,y     ;value irrelevant.
 
                 pla
                 sta $fe34
-
-done:
+                
+                plp
                 rts
+                
                 .pend
-
+                
 ;-------------------------------------------------------------------------
 ;
 ; *BUILD
