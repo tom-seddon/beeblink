@@ -546,7 +546,7 @@ itu_wait_for_status: .proc
                 pha
                 jsr itu_cli_briefly
                 pla
-                bit status.rx_data
+                bit status
                 beq itu_wait_for_status
                 rts
                 .pend
