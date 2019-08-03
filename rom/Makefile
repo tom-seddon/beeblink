@@ -12,7 +12,8 @@ PYTHON?=python
 DEST:=.build
 TASSCMD:=$(TASS) --m65xx --nostart -Wall -Wno-implied-reg -C --line-numbers --long-branch
 GIT_VER:=$(shell git log -1 '--format=%cd-%h' '--date=format:%Y%m%d-%H%M%S')
-SHELLCMD:=$(PYTHON) ../tools/shellcmd.py
+SHELLCMD:=$(PYTHON) ../submodules/shellcmd.py/shellcmd.py
+SMLOAD_JOIN:=$(PYTHON) ../submodules/beeb/bin/smload_join.py
 COMMIT:=$(shell git log -1 '--format=%H')
 
 # The ROMs are also copied to drive 1 on the example beeblink volume.
@@ -105,7 +106,7 @@ ifdef TOM_LAPTOP
 # Create a third copy of the ROM: the FS ROM, but with some extra
 # stuff added in. This is for use in my BBC B.
 
-	smload_join $(STEM).rom $(HOME)/beeb/beeb-files/stuff/65boot/0/$$.TUBEROM '../../startup_rom/.build/.tmp/startup_module.rom' -o $(BEEB_DEST)/B.$(ROM_BEEB_NAME)
+	$(SMLOAD_JOIN) $(STEM).rom $(HOME)/beeb/beeb-files/stuff/65boot/0/$$.TUBEROM '../../startup_rom/.build/.tmp/startup_module.rom' -o $(BEEB_DEST)/B.$(ROM_BEEB_NAME)
 	touch $(BEEB_DEST)/B.$(ROM_BEEB_NAME).inf
 
 endif
