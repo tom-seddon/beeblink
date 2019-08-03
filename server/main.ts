@@ -996,7 +996,7 @@ function findDefaultVolume(options: ICommandLineOptions, volumes: beebfs.Volume[
         }
 
         if (defaultVolume === undefined) {
-            process.stderr.write('Default volume not found: ' + options.default_volume);
+            process.stderr.write(`Default volume not found: ${options.default_volume}\n`);
         }
     }
 
