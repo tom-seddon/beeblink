@@ -117,7 +117,7 @@ class PCState implements beebfs.IFSState {
 
     private readonly log: utils.Log;
 
-    public constructor(volume: beebfs.Volume, log: utils.Log) {
+    public constructor(volume: beebfs.Volume, settings: any | undefined, log: utils.Log) {
         this.volume = volume;
         this.log = log;
     }
@@ -136,6 +136,14 @@ class PCState implements beebfs.IFSState {
 
     public getLibraryDir(): string {
         return '';
+    }
+
+    public getSettings(): any | undefined {
+        return undefined;
+    }
+
+    public getSettingsString(settings: any | undefined): string {
+        return ``;
     }
 
     public async getFileForRUN(fsp: beebfs.FSP, tryLibDir: boolean): Promise<beebfs.File | undefined> {
@@ -202,8 +210,8 @@ class PCState implements beebfs.IFSState {
 class PCType implements beebfs.IFSType {
     public readonly matchAllFSP: beebfs.IFSFSP = new PCFSP(undefined);
 
-    public createState(volume: beebfs.Volume, log: utils.Log): beebfs.IFSState {
-        return new PCState(volume, log);
+    public createState(volume: beebfs.Volume, settings: any | undefined, log: utils.Log): beebfs.IFSState {
+        return new PCState(volume, settings, log);
     }
 
     public canWrite(): boolean {

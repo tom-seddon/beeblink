@@ -359,6 +359,15 @@ export interface IFSState {
     // get library directory.
     getLibraryDir(): string;
 
+    // get object holding current settings - drives and dirs and whatever else.
+    // Use when recreating the state, to restore the current settings.
+    //
+    // The naming is crappy because 'state' was already taken.
+    getSettings(): any | undefined;
+
+    // get text description of settings as returned by getSettings.
+    getSettingsString(settings: any | undefined): string;
+
     // get file to use for *RUN. If tryLibDir is false, definitely don't try lib
     // drive/directory.
     getFileForRUN(fsp: FSP, tryLibDir: boolean): Promise<File | undefined>;
@@ -412,7 +421,7 @@ export interface IFSType {
     readonly matchAllFSP: IFSFSP;
 
     // create new state for this type of FS.
-    createState(volume: Volume, log: utils.Log): IFSState;
+    createState(volume: Volume, state: any | undefined, log: utils.Log): IFSState;
 
     // whether this FS supports writing.
     canWrite(): boolean;
@@ -683,6 +692,7 @@ export class FS {
     private log: utils.Log;
 
     private state: IFSState | undefined;
+    private defaults: any | undefined;
 
     private gaManipulator: gitattributes.Manipulator | undefined;
 
@@ -731,7 +741,8 @@ export class FS {
             }
         }
 
-        this.state = volume.type.createState(volume, this.log);
+        this.state = volume.type.createState(volume, undefined, this.log);
+        this.resetDefaults();
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -744,10 +755,39 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    public setDefaults(): void {
+        if (this.state === undefined) {
+            return errors.discFault('No volume');
+        } else {
+            this.defaults = this.state.getSettings();
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public resetDefaults(): void {
+        this.defaults = undefined;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public getDefaultsString(): string {
+        if (this.state === undefined) {
+            return errors.discFault('No volume');
+        } else {
+            return this.state.getSettingsString(this.defaults);
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     // Reset dirs and close open files.
     public async reset() {
         if (this.state !== undefined) {
-            this.state = this.state.volume.type.createState(this.state.volume, this.log);
+            this.state = this.state.volume.type.createState(this.state.volume, this.defaults, this.log);
         }
 
         await this.OSFINDClose(0);

@@ -130,7 +130,8 @@ Limitations and oddities of PC volumes:
 * only files smaller than 16 MBytes are available
 * the folder is read only
 * there are no drives or directories - every drive is a bad drive, and
-  every dir is a bad dir
+  every dir is a bad dir. This also means there's no library, and
+  `*DEFAULTS` does nothing
 * the file names seen on the BBC are exactly the names they have on
   the PC
 * PC files don't have load and execution addresses - both are

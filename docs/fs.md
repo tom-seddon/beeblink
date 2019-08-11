@@ -218,6 +218,30 @@ possible the behaviour won't be identical.)
 Lock or unlock file(s). `<mode>` can be blank to unlock, or `L` to
 lock.
 
+### `DEFAULTS ([SFP])`
+
+Manage filing system defaults for use after a hard reset (CTRL+BREAK
+or power on).
+
+By default, after a hard reset, the dir is `:0.$` and the library is
+`:0.$`. Use `*DEFAULTS` to set the current dir/library as the defaults
+instead - this can save a bit of time when doing something that
+requires pressing CTRL+BREAK a lot.
+
+Use `*DEFAULTS` or `*DEFAULTS S` - `S` for "set" - to save the
+current values.
+
+Use `*DEFAULTS R` - `R` for "reset" - to reset the saved defaults to
+the default defaults.
+
+Use `*DEFAULTS P` - `P` for "print" - to print the current defaults to
+the screen.
+
+This command never affects the current settings - it just selects the
+values to be used after the next hard reset.
+
+The defaults are reset when changing volume.
+
 ### `DELETE <fsp>` (*B/B+*)
 
 Delete a file.

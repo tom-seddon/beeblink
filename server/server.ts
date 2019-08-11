@@ -108,6 +108,15 @@ class Handler {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+enum DefaultsCommandMode {
+    Set,
+    Reset,
+    Print,
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 // This handles the front-end duties of decomposing payloads, parsing command
 // lines, routing requests to the appropriate methods of BeebFS, and dealing
 // with the packet writing. The plan is that the BeebFS part could be
@@ -145,6 +154,7 @@ export default class Server {
 
         this.commands = [
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
+            new Command('DEFAULTS', '([SRP])', this.defaultsCommand),
             new Command('DELETE', '<fsp>', this.deleteCommand),
             new Command('DIR', '(<dir>)', this.dirCommand),
             new Command('DRIVE', '(<drive>)', this.driveCommand),
@@ -1379,5 +1389,32 @@ export default class Server {
         } else {
             return errors.syntax();
         }
+    }
+
+    private async defaultsCommand(commandLine: CommandLine): Promise<Response> {
+        let mode: DefaultsCommandMode;
+
+        if (commandLine.parts.length >= 2) {
+            const modeStr = commandLine.parts[1].toLowerCase();
+            if (modeStr === 's') {
+                mode = DefaultsCommandMode.Set;
+            } else if (modeStr === 'r') {
+                mode = DefaultsCommandMode.Reset;
+            } else if (modeStr === 'p') {
+                mode = DefaultsCommandMode.Print;
+            } else {
+                return errors.syntax();
+            }
+        } else {
+            mode = DefaultsCommandMode.Set;
+        }
+
+        if (mode === DefaultsCommandMode.Set) {
+            this.bfs.setDefaults();
+        } else if (mode === DefaultsCommandMode.Reset) {
+            this.bfs.resetDefaults();
+        }
+
+        return this.textResponse(this.bfs.getDefaultsString());
     }
 }

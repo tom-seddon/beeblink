@@ -171,7 +171,39 @@ interface IDFSDrive {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+// this is a class purely so that 'instanceof' can be used.
+class DFSSettings {
+    public readonly drive: string;
+    public readonly dir: string;
+    public readonly libDrive: string;
+    public readonly libDir: string;
+
+    public constructor(drive: string, dir: string, libDrive: string, libDir: string) {
+        this.drive = drive;
+        this.dir = dir;
+        this.libDrive = libDrive;
+        this.libDir = libDir;
+    }
+}
+
+const gDefaultSettings = new DFSSettings('0', '$', '0', '$');
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 class DFSState implements beebfs.IFSState {
+    private static getDFSSettings(settings: any | undefined): DFSSettings {
+        if (settings === undefined) {
+            return gDefaultSettings;
+        }
+
+        if (!(settings instanceof DFSSettings)) {
+            return gDefaultSettings;
+        }
+
+        return settings;
+    }
+
     public readonly volume: beebfs.Volume;
 
     public drive: string;
@@ -182,15 +214,16 @@ class DFSState implements beebfs.IFSState {
 
     private readonly log: utils.Log;
 
-    public constructor(volume: beebfs.Volume, log: utils.Log) {
+    public constructor(volume: beebfs.Volume, settings: any | undefined, log: utils.Log) {
         this.volume = volume;
         this.log = log;
 
-        this.drive = '0';
-        this.dir = '$';
+        settings = DFSState.getDFSSettings(settings);
 
-        this.libDrive = '0';
-        this.libDir = '$';
+        this.drive = settings.drive;
+        this.dir = settings.dir;
+        this.libDrive = settings.libDrive;
+        this.libDir = settings.libDir;
     }
 
     public getCurrentDrive(): string {
@@ -207,6 +240,16 @@ class DFSState implements beebfs.IFSState {
 
     public getLibraryDir(): string {
         return this.libDir;
+    }
+
+    public getSettings(): DFSSettings {
+        return new DFSSettings(this.drive, this.dir, this.libDrive, this.libDir);
+    }
+
+    public getSettingsString(settings: any | undefined): string {
+        settings = DFSState.getDFSSettings(settings);
+
+        return `Default dir :${settings.drive}.${settings.dir}${utils.BNL}Default lib :${settings.libDrive}.${settings.libDir}${utils.BNL}`;
     }
 
     public async getFileForRUN(fsp: beebfs.FSP, tryLibDir: boolean): Promise<beebfs.File | undefined> {
@@ -359,8 +402,8 @@ class DFSType implements beebfs.IFSType {
 
     public readonly matchAllFSP: beebfs.IFSFSP = new DFSFSP(undefined, undefined, undefined);
 
-    public createState(volume: beebfs.Volume, log: utils.Log): beebfs.IFSState {
-        return new DFSState(volume, log);
+    public createState(volume: beebfs.Volume, settings: any | undefined, log: utils.Log): beebfs.IFSState {
+        return new DFSState(volume, settings, log);
     }
 
     public canWrite(): boolean {

@@ -7,12 +7,10 @@ No more swapping discs, no more noisy drives, no more 31 file limit,
 file access is very fast, and it's super-easy to share BBC files with
 your PC.
 
-If you've got multiple BBCs, they can all connect at once.
+If you've got multiple BBCs, they can all connect at once and share
+files.
 
 ["Action" screen grabs](./docs/screens.md)
-
-I use this as the default filing system for my BBC Master and my BBC
-B, and will be improving it over time...
 
 # Setting up
 
