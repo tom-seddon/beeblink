@@ -366,14 +366,15 @@ export default class Server {
         const part0UC = commandLine.parts[0].toUpperCase();
 
         for (const command of this.commands) {
-            // Computers are so fast now that it's actually OK to do it like
-            // this.
             for (let i = 0; i < command.nameUC.length; ++i) {
                 let abbrevUC: string = command.nameUC.slice(0, 1 + i);
 
                 if (abbrevUC.length < command.nameUC.length) {
                     abbrevUC += '.';
-                    if (part0UC.substr(0, abbrevUC.length) === abbrevUC) {
+                    if (part0UC === abbrevUC) {
+                        matchedCommand = command;
+                        break;
+                    } else if (part0UC.substr(0, abbrevUC.length) === abbrevUC) {
                         // The '.' is a part separator, so split into two.
                         commandLine.parts.splice(0, 1, part0UC.substr(0, abbrevUC.length), part0UC.substr(abbrevUC.length));
                         matchedCommand = command;
@@ -405,6 +406,11 @@ export default class Server {
             if (matchedCommand !== undefined) {
                 break;
             }
+        }
+
+        this.log.pn(`${commandLine.parts.length} command line parts:`);
+        for (let i = 0; i < commandLine.parts.length; ++i) {
+            this.log.pn(`    ${i}. "${commandLine.parts[i]}"`);
         }
 
         if (matchedCommand !== undefined) {
