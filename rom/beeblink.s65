@@ -41,7 +41,7 @@
 
                 .include "common.s65"
                 .include ".build/beeblink_constants.s65"
-                .include "beeb.s65"
+                .include "../submodules/beeb/include/beeb.s65"
                 .include "macros.s65"
                 
 ;-------------------------------------------------------------------------
