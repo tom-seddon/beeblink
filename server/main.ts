@@ -967,7 +967,7 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
 
     volumes = volumes.filter((volume) => !volume.isReadOnly());
     volumes = volumes.filter(async (volume) => !(await isGit(volume.path)));
-    process.stderr.write(`Found ${volumes.length} / ${oldNumVolumes} writeable git - controlled volumes\n`);
+    process.stderr.write(`Found ${volumes.length}/${oldNumVolumes} writeable git-controlled volumes.\n`);
 
     for (const volume of volumes) {
         gaManipulator.makeVolumeNotText(volume);
