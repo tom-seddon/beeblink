@@ -62,7 +62,8 @@ const BEEBLINK_USB_PID = 0xbeeb;
 const DEVICE_RETRY_DELAY_MS = 1000;
 
 const DEFAULT_BEEBLINK_AVR_ROM = './beeblink_avr_fe60.rom';
-const DEFAULT_BEEBLINK_SERIAL_ROM = './beeblink_tube_serial.rom';
+const DEFAULT_BEEBLINK_TUBE_SERIAL_ROM = './beeblink_tube_serial.rom';
+const DEFAULT_BEEBLINK_UPURS_ROM = './beeblink_upurs.rom';
 
 const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
 
@@ -78,7 +79,8 @@ interface IConfigFile {
     pc_folders: string[] | undefined;
     default_volume: string | undefined;
     avr_rom: string | undefined;
-    serial_rom: string | undefined;
+    tube_serial_rom: string | undefined;
+    upurs_rom: string | undefined;
     git: boolean | undefined;
     serial_exclude: string[] | undefined;
 }
@@ -89,7 +91,8 @@ interface IConfigFile {
 interface ICommandLineOptions {
     verbose: boolean;
     avr_rom: string | null;
-    serial_rom: string | null;
+    tube_serial_rom: string | null;
+    upurs_rom: string | null;
     fs_verbose: boolean;
     server_verbose: boolean;
     default_volume: string | null;
@@ -369,9 +372,15 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
         }
     }
 
-    if (options.serial_rom === null) {
-        if (config.serial_rom !== undefined) {
-            options.serial_rom = config.serial_rom;
+    if (options.tube_serial_rom === null) {
+        if (config.tube_serial_rom !== undefined) {
+            options.tube_serial_rom = config.tube_serial_rom;
+        }
+    }
+
+    if (options.upurs_rom === null) {
+        if (config.upurs_rom !== undefined) {
+            options.upurs_rom = config.upurs_rom;
         }
     }
 }
@@ -921,7 +930,8 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
             folders: options.folders,
             pc_folders: options.pcFolders,
             avr_rom: options.avr_rom !== null ? options.avr_rom : undefined,
-            serial_rom: options.serial_rom !== null ? options.serial_rom : undefined,
+            tube_serial_rom: options.tube_serial_rom !== null ? options.tube_serial_rom : undefined,
+            upurs_rom: options.upurs_rom !== null ? options.upurs_rom : undefined,
             git: options.git,
             serial_exclude: options.serial_exclude !== null ? options.serial_exclude : undefined,
         };
@@ -933,16 +943,24 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         options.avr_rom = DEFAULT_BEEBLINK_AVR_ROM;
     }
 
-    if (options.serial_rom === null) {
-        options.serial_rom = DEFAULT_BEEBLINK_SERIAL_ROM;
+    if (options.tube_serial_rom === null) {
+        options.tube_serial_rom = DEFAULT_BEEBLINK_TUBE_SERIAL_ROM;
+    }
+
+    if (options.upurs_rom === null) {
+        options.upurs_rom = DEFAULT_BEEBLINK_UPURS_ROM;
     }
 
     if (!await utils.fsExists(options.avr_rom)) {
-        process.stderr.write('AVR ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.avr_rom + '\n');
+        process.stderr.write(`AVR ROM image not found for *BLSELFUPDATE/bootstrap: ${options.avr_rom}\n`);
     }
 
-    if (!await utils.fsExists(options.serial_rom)) {
-        process.stderr.write('Serial ROM image not found for *BLSELFUPDATE/bootstrap: ' + options.serial_rom + '\n');
+    if (!await utils.fsExists(options.tube_serial_rom)) {
+        process.stderr.write(`Tube Serial ROM image not found for *BLSELFUPDATE/bootstrap: ${options.tube_serial_rom}\n`);
+    }
+
+    if (!await utils.fsExists(options.upurs_rom)) {
+        process.stderr.write(`UPURS ROM image not found for *BLSELFUPDATE/bootstrap: ${options.upurs_rom}\n`);
     }
 
     return true;
@@ -1006,7 +1024,37 @@ function findDefaultVolume(options: ICommandLineOptions, volumes: beebfs.Volume[
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): void {
+function getRomPathsForAVR(options: ICommandLineOptions): Map<number, string> {
+    const map = new Map<number, string>();
+
+    if (options.avr_rom !== null) {
+        map.set(beeblink.AVR_SUBTYPE_AVR, options.avr_rom);
+    }
+
+    return map;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+function getRomPathsForSerial(options: ICommandLineOptions): Map<number, string> {
+    const map = new Map<number, string>();
+
+    if (options.upurs_rom !== null) {
+        map.set(beeblink.SERIAL_SUBTYPE_UPURS, options.upurs_rom);
+    }
+
+    if (options.tube_serial_rom !== null) {
+        map.set(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL, options.tube_serial_rom);
+    }
+
+    return map;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): void {
     if (!options.http) {
         return;
     }
@@ -1075,7 +1123,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
             // Find the Server for this sender id.
             let server = serverBySenderId.get(senderId);
             if (server === undefined) {
-                server = await createServer('HTTP', options.avr_rom);
+                server = await createServer('HTTP', getRomPathsForAVR(options));
                 serverBySenderId.set(senderId, server);
             }
 
@@ -1126,7 +1174,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function handleUSB(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): Promise<void> {
+async function handleUSB(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
     const usbLog = new utils.Log('USB', process.stdout, options.usb_verbose);
 
     const blUSBDevices: usb.Device[] = [];
@@ -1190,7 +1238,7 @@ async function handleUSB(options: ICommandLineOptions, createServer: (additional
             // try to find the server. Make a new one, if none found.
             let server = serversByUSBSerial.get(blDevice.usbSerial);
             if (server === undefined) {
-                server = await createServer('USB', options.avr_rom);
+                server = await createServer('USB', getRomPathsForAVR(options));
                 serversByUSBSerial.set(blDevice.usbSerial, server);
             }
 
@@ -1473,13 +1521,13 @@ interface IReadWaiter {
 //     return `Device ${portInfo.comName}`;
 // }
 
-async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): Promise<void> {
+async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
     const serialLog = new utils.Log(portInfo.comName, process.stdout, options.serial_verbose);
 
     await setFTDILatencyTimer(portInfo, serialLog);
 
     serialLog.pn('Creating server...');
-    const server = await createServer('SERIAL', options.serial_rom);
+    const server = await createServer('SERIAL', getRomPathsForSerial(options));
 
     const port = await openSerialPort(portInfo);
 
@@ -1834,7 +1882,7 @@ async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: Se
     }
 }
 
-async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPath: string | null) => Promise<Server>): Promise<void> {
+async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
     for (const portInfo of await getSerialPortList(options)) {
         void handleTubeSerialDevice(options, portInfo, createServer);
     }
@@ -1868,7 +1916,7 @@ async function main(options: ICommandLineOptions) {
 
     let nextConnectionId = 1;
 
-    async function createServer(additionalPrefix: string, romPath: string | null): Promise<Server> {
+    async function createServer(additionalPrefix: string, romPathByLinkSubtype: Map<number, string>): Promise<Server> {
         const connectionId = nextConnectionId++;
         const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
 
@@ -1881,7 +1929,7 @@ async function main(options: ICommandLineOptions) {
             await bfs.mount(defaultVolume);
         }
 
-        const server = new Server(romPath, bfs, serverLogPrefix, colours, options.server_data_verbose);
+        const server = new Server(romPathByLinkSubtype, bfs, serverLogPrefix, colours, options.server_data_verbose);
         return server;
     }
 
@@ -1919,7 +1967,8 @@ function integer(s: string): number {
 
     parser.addArgument(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });
     parser.addArgument(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink AVR ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM });
-    parser.addArgument(['--serial-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_SERIAL_ROM });
+    parser.addArgument(['--tube-serial-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink Tube Serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ROM });
+    parser.addArgument(['--upurs-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink UPURS ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_UPURS_ROM });
     parser.addArgument(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
     parser.addArgument(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
     parser.addArgument(['--server-data-verbose'], { action: 'storeTrue', help: 'dump request/response data (requires --server-verbose)' });

@@ -43,6 +43,10 @@
 // - Requests don't mention ERROR as a possible response, because the server can
 //   always send it back in response to anything
 //
+// - The upgrade/versioning path is not super awesome: it basically consists of
+//   adding further bytes to payloads, or dropping support for certain
+//   request/response types
+//
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -50,6 +54,16 @@
 // mismatch between server, AVR and ROM then the problem parties will refuse to
 // connect.
 export const AVR_PROTOCOL_VERSION = 1;
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// link subtypes for AVR.
+export const AVR_SUBTYPE_AVR = 0;
+
+// link subtypes for serial.
+export const SERIAL_SUBTYPE_TUBE_SERIAL = 0;
+export const SERIAL_SUBTYPE_UPURS = 1;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -115,7 +129,8 @@ export const REQUEST_GET_ROM = 0x02;
 //
 // Response is YES.
 //
-// P = reset type as per OSBYTE 253 (AUG p244)
+// P = reset type as per OSBYTE 253 (AUG p244); (optional) link subtype,
+// inferred as 0 if not present
 export const REQUEST_RESET = 0x03;
 
 // Request an echo'd DATA response with whatever payload accompanies this

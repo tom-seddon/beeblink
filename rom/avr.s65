@@ -43,8 +43,6 @@ link_avr_via=$fe60
                 .endweak
                 
 avr: .block
-                
-                
                 .section code
 
 via=link_avr_via
@@ -664,7 +662,12 @@ nop:
 
 ; Link interface.
 
+; Name of the link, as included in the ROM name.
 link_name="AVR "..format("%04x",avr.via)
+
+; Link subtype, for links that aren't otherwise distinguishable from
+; the PC end.
+link_subtype=AVR_SUBTYPE_AVR
 
 ; Prepare link. Get everything ready and put it in send mode.
 ;

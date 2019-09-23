@@ -1528,6 +1528,8 @@ itu:
 ;-------------------------------------------------------------------------
                 
 link_name='Tube Serial'
+link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL
+                
 link_prepare=tube_serial.prepare
 link_unprepare=tube_serial.unprepare
 

@@ -132,9 +132,8 @@ enum DefaultsCommandMode {
 
 export default class Server {
     private bfs: beebfs.FS;
-    // romPath is set directly from the command line options struct, which is
-    // why it's a bit inconistent.
-    private romPath: string | null;
+    private linkSubtype: number | undefined;
+    private romPathByLinkSubtype: Map<number, string>;
     private stringBuffer: Buffer | undefined;
     private stringBufferIdx: number;
     private commands: Command[];
@@ -146,8 +145,9 @@ export default class Server {
     private imageParts: Buffer[] | undefined;
     private imagePartIdx: number;
 
-    public constructor(romPath: string | null, bfs: beebfs.FS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
-        this.romPath = romPath;
+    public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
+        this.romPathByLinkSubtype = romPathByLinkSubtype;
+        this.linkSubtype = undefined;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
         this.imagePartIdx = 0;
@@ -289,22 +289,33 @@ export default class Server {
     }
 
     private async handleGetROM(handler: Handler, p: Buffer): Promise<Response> {
-        if (this.romPath === null) {
+        if (this.romPathByLinkSubtype.size === 0) {
             return errors.generic('No ROM available');
+        } else if (this.linkSubtype === undefined) {
+            return errors.generic('Link subtype not set');
         } else {
-            try {
-                const rom = await utils.fsReadFile(this.romPath);
-                this.log.pn('ROM is ' + rom.length + ' bytes');
-                return newResponse(beeblink.RESPONSE_DATA, rom);
-            } catch (error) {
-                return errors.nodeError(error);
+            const romPath = this.romPathByLinkSubtype.get(this.linkSubtype);
+            if (romPath === undefined) {
+                return errors.generic('No ROM for link subtype');
+            } else {
+                try {
+                    const rom = await utils.fsReadFile(romPath);
+                    this.log.pn('ROM is ' + rom.length + ' bytes');
+                    return newResponse(beeblink.RESPONSE_DATA, rom);
+                } catch (error) {
+                    return errors.nodeError(error);
+                }
             }
         }
     }
 
     private async handleReset(handler: Handler, p: Buffer): Promise<Response> {
-        this.log.pn('reset type=' + p[0]);
+        let linkSubtype = 0;
+        if (p.length > 1) {
+            linkSubtype = p[1];
+        }
 
+        this.log.pn('reset type=' + p[0]);
         if (p[0] === 1 || p[0] === 2) {
             // Power-on reset or CTRL+BREAK
             try {
@@ -316,6 +327,14 @@ export default class Server {
                     throw error;
                 }
             }
+        }
+
+        if (p.length > 1) {
+            this.linkSubtype = p[1];
+            this.log.pn(`link subtype=${this.linkSubtype}`);
+        } else {
+            this.linkSubtype = 0;
+            this.log.pn(`link subtype=${this.linkSubtype} (inferred)`);
         }
 
         return newResponse(beeblink.RESPONSE_YES, 0);
