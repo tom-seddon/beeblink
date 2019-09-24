@@ -297,6 +297,8 @@ link_tube_serial=false
                 .include "avr.s65"
                 .elsif link_tube_serial
                 .include "tube_serial.s65"
+                .elsif link_upurs
+                .include "upurs.s65"
                 .else
                 .error "unknown link type"
                 .endif
