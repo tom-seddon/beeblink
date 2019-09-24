@@ -71,6 +71,9 @@ const HTTP_LISTEN_PORT = 48875;//0xbeeb;
 
 const BEEBLINK_SENDER_ID = 'beeblink-sender-id';
 
+// FTDI's vendor id.
+const VENDOR_ID_FTDI = '0403';
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -721,7 +724,8 @@ async function getSerialPortList(options: ICommandLineOptions): Promise<SerialPo
     const portInfos: SerialPort.PortInfo[] = [];
 
     for (const portInfo of await SerialPort.list()) {
-        if (portInfo.vendorId === '0403' && portInfo.productId === '6014') {
+        // TODO - make a better decision here
+        if (portInfo.vendorId === VENDOR_ID_FTDI) {
             let exclude = false;
 
             if (options.serial_exclude !== null) {
@@ -1521,10 +1525,12 @@ interface IReadWaiter {
 //     return `Device ${portInfo.comName}`;
 // }
 
-async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
+async function handleSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
     const serialLog = new utils.Log(portInfo.comName, process.stdout, options.serial_verbose);
 
-    await setFTDILatencyTimer(portInfo, serialLog);
+    if (portInfo.vendorId === VENDOR_ID_FTDI) {
+        await setFTDILatencyTimer(portInfo, serialLog);
+    }
 
     serialLog.pn('Creating server...');
     const server = await createServer('SERIAL', getRomPathsForSerial(options));
@@ -1884,7 +1890,7 @@ async function handleTubeSerialDevice(options: ICommandLineOptions, portInfo: Se
 
 async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
     for (const portInfo of await getSerialPortList(options)) {
-        void handleTubeSerialDevice(options, portInfo, createServer);
+        void handleSerialDevice(options, portInfo, createServer);
     }
 }
 
