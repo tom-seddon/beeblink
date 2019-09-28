@@ -15,21 +15,21 @@
   "license": "GPL-3.0-or-later",
   "dependencies": {
     "argparse": "^1.0.10",
-    "chalk": "^2.4.1",
-    "serialport": "^7.1.4",
-    "usb": "^1.5.0"
+    "chalk": "^2.4.2",
+    "serialport": "^7.1.5",
+    "usb": "^1.6.0"
   },
   "optionalDependencies": {
     "ioctl": "^2.0.1"
   },
   "devDependencies": {
-    "@types/argparse": "^1.0.35",
+    "@types/argparse": "^1.0.36",
     "@types/chalk": "^2.2.0",
-    "@types/node": "^10.12.7",
-    "@types/serialport": "^7",
-    "@types/usb": "^1.1.6",
-    "pkg": "^4.3.4",
-    "tslint": "^5.16.0",
-    "typescript": "^3.1.6"
+    "@types/node": "^10.14.19",
+    "@types/serialport": "^7.0.4",
+    "@types/usb": "^1.5.1",
+    "pkg": "^4.4.0",
+    "tslint": "^5.20.0",
+    "typescript": "^3.6.3"
   }
 }
