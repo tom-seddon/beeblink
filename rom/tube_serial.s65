@@ -1534,7 +1534,6 @@ link_prepare=tube_serial.prepare
 link_unprepare=tube_serial.unprepare
 
 link_begin_recv=tube_serial.nop
-link_begin_send=tube_serial.nop
 
 link_send_header_byte=tube_serial.send_header_byte
 link_send_payload_byte=tube_serial.send_payload_byte
