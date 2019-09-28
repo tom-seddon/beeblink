@@ -113,9 +113,9 @@ interface ICommandLineOptions {
     server_data_verbose: boolean;
     http_all_interfaces: boolean;
     libusb_debug_level: number | null;
-    serial_verbose: boolean;
-    serial_sync_verbose: boolean;
-    serial_data_verbose: boolean;
+    serial_verbose: string[] | null;
+    serial_sync_verbose: string[] | null;
+    serial_data_verbose: string[] | null;
     list_serial_devices: boolean;
     list_usb_devices: boolean;
     serial_exclude: string[] | null;
@@ -1525,8 +1525,24 @@ interface IReadWaiter {
 //     return `Device ${portInfo.comName}`;
 // }
 
+function isSerialDeviceVerbose(portInfo: SerialPort.PortInfo, verboseOptions: string[] | null): boolean {
+    if (verboseOptions !== null) {
+        if (verboseOptions.includes('')) {
+            // --whatever, applying to all devices was provided on its own at some
+            // point
+            return true;
+        }
+
+        if (verboseOptions.includes(portInfo.comName)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 async function handleSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
-    const serialLog = new utils.Log(portInfo.comName, process.stdout, options.serial_verbose);
+    const serialLog = new utils.Log(portInfo.comName, process.stdout, isSerialDeviceVerbose(portInfo, options.serial_verbose));
 
     if (portInfo.vendorId === VENDOR_ID_FTDI) {
         await setFTDILatencyTimer(portInfo, serialLog);
@@ -1537,15 +1553,15 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
 
     const port = await openSerialPort(portInfo);
 
-    process.stderr.write(`${portInfo.comName}: serving.\n`);
-
     let readWaiter: IReadWaiter | undefined;
     const readBuffers: Buffer[] = [];
     let readIndex = 0;
 
-    const dataInLog = new utils.Log(portInfo.comName, serialLog.f, options.serial_data_verbose);
-    const dataOutLog = new utils.Log(portInfo.comName, serialLog.f, options.serial_data_verbose);
-    const syncLog = new utils.Log(`${portInfo.comName}: sync`, serialLog.f, options.serial_sync_verbose);
+    const dataInLog = new utils.Log(portInfo.comName, serialLog.f, isSerialDeviceVerbose(portInfo, options.serial_data_verbose));
+    const dataOutLog = new utils.Log(portInfo.comName, serialLog.f, isSerialDeviceVerbose(portInfo, options.serial_data_verbose));
+    const syncLog = new utils.Log(`${portInfo.comName}: sync`, serialLog.f, isSerialDeviceVerbose(portInfo, options.serial_sync_verbose));
+
+    process.stderr.write(`${portInfo.comName}: serving. (verbose=${serialLog.enabled}, data-verbose=${dataInLog.enabled}, sync-verbose=${syncLog.enabled})\n`);
 
     port.on('data', (data: Buffer): void => {
         readBuffers.push(data);
@@ -1995,9 +2011,9 @@ function integer(s: string): number {
     parser.addArgument(['--http'], { action: 'storeTrue', help: 'enable HTTP server' });
     parser.addArgument(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
     parser.addArgument(['--serial-exclude'], { action: 'append', metavar: 'DEVICE', help: 'don\'t listen on serial port DEVICE' });
-    parser.addArgument(['--serial-verbose'], { action: 'storeTrue', help: 'extra serial-related output' });
-    parser.addArgument(['--serial-sync-verbose'], { action: 'storeTrue', help: 'extra serial sync-related output (requires --serial-verbose)' });
-    parser.addArgument(['--serial-data-verbose'], { action: 'storeTrue', help: 'dump raw serial data sent/received (requires --serial-verbose)' });
+    parser.addArgument(['--serial-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial-related output (specify devices individually to be verbose for just those, or just --serial-verbose on its own for all devices)' });
+    parser.addArgument(['--serial-sync-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial sync-related output (specify specify same as --serial-verbose)' });
+    parser.addArgument(['--serial-data-verbose'], { action: 'append', nargs: '?', constant: '', help: 'dump raw serial data sent/received (specify devices same as --serial-verbose)' });
     parser.addArgument(['--list-serial-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
     parser.addArgument(['--list-usb-devices'], { action: 'storeTrue', help: 'list available USB devices, then exit' });
     parser.addArgument(['--pc'], { dest: 'pcFolders', action: 'append', defaultValue: [], metavar: 'FOLDER', help: 'use %(metavar)s as a PC volume' });
