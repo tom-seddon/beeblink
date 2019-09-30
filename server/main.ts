@@ -752,8 +752,20 @@ async function getSerialPortList(options: ICommandLineOptions): Promise<SerialPo
 /////////////////////////////////////////////////////////////////////////
 
 async function openSerialPort(portInfo: SerialPort.PortInfo): Promise<SerialPort> {
-    // The baud rate doesn't appear to matter for the FT232H.
-    const port = new SerialPort(portInfo.comName, { baudRate: 115200, autoOpen: false });
+    // The baud rate is a fixed 115,200. That's the fixed rate supported by the
+    // UPURS code, and for the Tube Serial device the baud rate doesn't seem to
+    // matter.
+    const port = new SerialPort(portInfo.comName, {
+        autoOpen: false,
+        baudRate: 115200,
+        dataBits: 8,
+        stopBits: 1,
+        parity: 'none',
+        rtscts: true,
+        xon: false,
+        xoff: false,
+        xany: false
+    });
 
     await new Promise<void>((resolve, reject) => {
         // don't think the module's TS type definition for the callback is quite
@@ -845,7 +857,7 @@ async function serialTestBBCToPC2(portInfo: SerialPort.PortInfo): Promise<void> 
 
     let numBytesReceived = 0;
 
-    port.on('data', (data: Buffer): void => {
+    function handleData(data: Buffer): void {
         for (const got of data) {
             const expected = numBytesReceived & 0xff;
             if (got !== expected) {
@@ -854,6 +866,22 @@ async function serialTestBBCToPC2(portInfo: SerialPort.PortInfo): Promise<void> 
 
             ++numBytesReceived;
         }
+    }
+
+    // port.on('readable', () => {
+    //     const data = port.read();
+
+    //     if (data instanceof Buffer) {
+    //         handleData(data);
+    //     } else if (typeof (data) === 'string') {
+    //         handleData(Buffer.from(data, 'binary'));
+    //     } else {
+    //         // ignore
+    //     }
+    // });
+
+    port.on('data', (data: Buffer): void => {
+        handleData(data);
     });
 
     port.on('error', (error: any): void => {
@@ -956,15 +984,15 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     }
 
     if (!await utils.fsExists(options.avr_rom)) {
-        process.stderr.write(`AVR ROM image not found for *BLSELFUPDATE/bootstrap: ${options.avr_rom}\n`);
+        process.stderr.write(`AVR ROM image not found for * BLSELFUPDATE / bootstrap: ${options.avr_rom} \n`);
     }
 
     if (!await utils.fsExists(options.tube_serial_rom)) {
-        process.stderr.write(`Tube Serial ROM image not found for *BLSELFUPDATE/bootstrap: ${options.tube_serial_rom}\n`);
+        process.stderr.write(`Tube Serial ROM image not found for * BLSELFUPDATE / bootstrap: ${options.tube_serial_rom} \n`);
     }
 
     if (!await utils.fsExists(options.upurs_rom)) {
-        process.stderr.write(`UPURS ROM image not found for *BLSELFUPDATE/bootstrap: ${options.upurs_rom}\n`);
+        process.stderr.write(`UPURS ROM image not found for * BLSELFUPDATE / bootstrap: ${options.upurs_rom} \n`);
     }
 
     return true;
@@ -989,7 +1017,7 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
 
     volumes = volumes.filter((volume) => !volume.isReadOnly());
     volumes = volumes.filter(async (volume) => !(await isGit(volume.path)));
-    process.stderr.write(`Found ${volumes.length}/${oldNumVolumes} writeable git-controlled volumes.\n`);
+    process.stderr.write(`Found ${volumes.length} /${oldNumVolumes} writeable git-controlled volumes.\n`);
 
     for (const volume of volumes) {
         gaManipulator.makeVolumeNotText(volume);
@@ -1561,7 +1589,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
     const dataOutLog = new utils.Log(portInfo.comName, serialLog.f, isSerialDeviceVerbose(portInfo, options.serial_data_verbose));
     const syncLog = new utils.Log(`${portInfo.comName}: sync`, serialLog.f, isSerialDeviceVerbose(portInfo, options.serial_sync_verbose));
 
-    process.stderr.write(`${portInfo.comName}: serving. (verbose=${serialLog.enabled}, data-verbose=${dataInLog.enabled}, sync-verbose=${syncLog.enabled})\n`);
+    process.stderr.write(`${portInfo.comName}: serving. (verbose=${serialLog.enabled}, data-verbose=(in: ${dataInLog.enabled}, out: ${dataOutLog.enabled}), sync-verbose=${syncLog.enabled})\n`);
 
     port.on('data', (data: Buffer): void => {
         readBuffers.push(data);

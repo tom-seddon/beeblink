@@ -97,7 +97,7 @@ configured=$08
 tube_serial: .block
 
 txdp: .macro items
-                ; .debug_print \items
+                ; .debug_print \items 
                 .endm
                 
 ;-------------------------------------------------------------------------

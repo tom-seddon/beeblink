@@ -19,91 +19,747 @@
 ;
 ;-------------------------------------------------------------------------
 
+upurs: .block
+
+; txdp: .macro items
+;                 ; .debug_print \items
+; .endm
+
+;-------------------------------------------------------------------------
+
+                .virtual link_upurs_via
+via: .dstruct VIA
+                .endv
+                
+;-------------------------------------------------------------------------
+;-------------------------------------------------------------------------
+
+                .section nmi_workspace
+                
+                ; offset from serbuf of next byte to read.
+serbuf_index:
+                .fill 1
+
+                ; num bytes in serbuf, or $00 if serbuf empty.
+serbuf_size:
+                .fill 1
+
+old_acr:
+                .fill 1
+
+old_x:
+                .fill 1
+                
+                .send nmi_workspace
+
+;-------------------------------------------------------------------------
+;
+
+serbuf_max_size=70
+
+; The UPURS receive routine receives (and rightly so...) as many bytes
+; as are being sent. If the sender keeps sending for a while after CTS
+; is dropped, that needs to be handled.
+;
+; So, book a portion of the buffer for overrun. Drop CTS when the
+; overrun area is reached, and the sender can send up to overrun_size
+; more bytes without it being a problem.
+; 
+; The typical overrun with my Mac appears to be 1 byte. (Drop CTS
+; while receiving a byte, and you get 1 more byte again.) 8 is
+; hopefully generous.
+
+serbuf_overrun_size=8
+
+                .section nmi_area
+                .fill 1         ;RTI
+
+                ; don't use the link startup workspace for this stuff
+                ; - leave open the option of re-syncing as part of
+                ; another request, without trampling on $a8...$af (OK
+                ; if part of a * command, but not for OS calls)
+num_sync_zeros_received:
+                .fill 2
+startup_counter:
+                .fill 2
+serbuf:
+                .fill serbuf_max_size
+                .send nmi_area
+
+;-------------------------------------------------------------------------
+
                 .section code
 
 ;-------------------------------------------------------------------------
+;
+; Serial sync process.
+;
 
-upurs: .block
+startup: .proc
+                jsr prepare
+
+                ; lda #%11111111
+                ; sta via.ddrb
+                ; sta via.orb
+
+                ; lda #%01111101
+                ; sta via.ddrb
+                ; sta via.orb
+
+                jsr startup2
+
+                php
+                pha
+                jsr unprepare
+                pla
+                plp
+                rts
+
+startup2:
+                
+; During service call 3, IRQs appear to be disabled. So the startup
+; process doesn't check the system clock - it just counts number of
+; iterations of each of the various initialisation loops, and classes
+; it as a timeout if some maximum number of iterations is exceeded.
+
+                lda #4
+                jsr reset_startup_counter
+                
+start_sync:
+                lda #0
+                sta num_sync_zeros_received+0
+                sta num_sync_zeros_received+1
+
+                .block
+                .debug_print ['Sync step 0...\r']
+                lda #$80
+                jsr send_byte
+                .bend
+
+                .block
+                .debug_print ['Sync step 1...\r']
+                lda #255
+                jsr reset_startup_counter
+sync_step_1_loop:
+; .print ['&00: sent: &',num_sync_zeros_sent+1,num_sync_zeros_sent+0,'; received: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r']
+                ldy #status_text.sync_timed_out_1-status_text
+                jsr check_startup_counter
+
+                ; Try to write $00. If it didn't get sent, no
+                ; problem... plenty more where that came from.
+                lda #$00
+                jsr send_byte
+                
+                ; Try to get more data. If none available, just carry
+                ; on looping.
+                jsr recv_byte
+                bcc sync_step_1_loop
+
+                ; If a non-0 was received, restart the sync process.
+                cmp #0
+                bne start_sync
+
+                ; Count one more zero received.
+                inc num_sync_zeros_received+0
+                bne +
+                inc num_sync_zeros_received+1
++
+
+                ; Keep going if required number not reached.
+                lda num_sync_zeros_received+0
+                cmp #<NUM_SERIAL_SYNC_ZEROS
+                bne sync_step_1_loop
+
+                lda num_sync_zeros_received+1
+                cmp #>NUM_SERIAL_SYNC_ZEROS
+                bne sync_step_1_loop
+                .bend
+
+                .block
+                ; Keep reading until the 1 byte is received. Continue
+                ; sending zeros meanwhile.
+                .debug_print ['Sync step 2...\r']
+                lda #16
+                jsr reset_startup_counter
+sync_step_2_loop:
+                ldy #status_text.sync_timed_out_2-status_text
+                jsr check_startup_counter
+
+                lda #$00
+                jsr send_byte
+
+                jsr recv_byte
+                bcc sync_step_2_loop
+
+                cmp #0
+                beq sync_step_2_loop
+
+                cmp #1
+                bne failed
+                .bend
+
+                ; Send a single non-zero byte.
+                .debug_print ['Sync step 3...\r']
+                lda #$01
+                jsr send_byte
+ok:
+                .debug_print ['Sync success (probably)\r']
+                clc             ;good
+                rts
+
+failed:
+                ldx #status_text.sync_failed-status_text
+                sec             ;no good
+                rts
+
+                ; A = counter/256
+reset_startup_counter:
+                eor #$ff
+                clc
+                adc #1
+                sta startup_counter+1
+                lda #0
+                sta startup_counter+0
+                rts
+                
+check_startup_counter:
+                inc startup_counter+0
+                bne +
+                inc startup_counter+1
++
+                bne +
+                ; naughty hack.
+                pla
+                pla
+                tya
+                tax
+                ; ldx #status_text.sync_timed_out-status_text
+                sec
++
+                rts
+
+                
+                
+                .pend
+
+status_text: .block
+sync_failed:
+                .text 'Sync failed',0
+sync_timed_out_0:
+                .text 'Sync timeout (step 0)',0
+sync_timed_out_1:
+                .text 'Sync timeout (step 1)',0
+sync_timed_out_2:
+                .text 'Sync timeout (step 2)',0
+; sync_timed_out_3:
+;                 .text 'Sync timeout (step 3)',0
+                .bend
                 
 ;-------------------------------------------------------------------------
-
+; 
+; Prepare link. Get everything ready and put it in send mode.
+;
+; Preserve A/X/Y.
+; 
 prepare: .proc
+                pha
+                txa
+                pha
+                tya
+                pha
+                
+                jsr claim_nmi
+                
+                lda #0
+                sta serbuf_index
+                sta serbuf_size
+
+                ; lda via.acr
+                ; sta old_acr
+
+                ; No port B latching. Disable PB7 output.
+                lda #$00
+                sta via.acr
+
+                ; lda #%11111111
+                ; sta via.ddrb
+                ; sta via.orb
+
+                lda #%01111101
+                sta via.ddrb
+                lda #%01111100
+                sta via.orb
+
+                pla
+                tay
+                pla
+                tax
+                pla
                 rts
                 .pend
                 
 ;-------------------------------------------------------------------------
-
+;
+; Unrepare link. Do whatever's necessary.
+; 
 unprepare: .proc
+                pha
+                txa
+                pha
+                tya
+                pha
+                
+                ; lda old_acr
+                ; sta via.acr
+                
+                jsr release_nmi
+                
+                pla
+                tay
+                pla
+                tax
+                pla
+                rts
                 .pend
 
 
 ;-------------------------------------------------------------------------
-
+;
+; Put prepared link in receive mode.
+; 
 begin_recv: .proc
                 rts
                 .pend
 
 ;-------------------------------------------------------------------------
-
-begin_send: .proc
-                rts
-                .pend
-                
-;-------------------------------------------------------------------------
-
+;
+; Send 1 byte over the link as part of the header: the type byte, or
+; one of the size bytes.
+;
+; Preserve X/Y.
+; 
 send_header_byte: .proc
+                stx old_x
+                jsr send_byte
+                ldx old_x
                 rts
                 .pend
                 
 ;-------------------------------------------------------------------------
-
+; 
+; Send 1 byte over the link as part of the payload. 
+; payload_counter is the byte's negated offset.
+;
+; Preserve X/Y.
+; 
 send_payload_byte: .proc
+                stx old_x
+
+                ; send payload byte
+                jsr send_byte
+
+                ; send status byte?
+                lda payload_counter+0
+                bne +
+
+                lda #1
+                jsr send_byte
+
++
+                ldx old_x
                 rts
                 .pend
                 
 ;-------------------------------------------------------------------------
-
+; 
+; Receive 1 byte over the link as part of the header: the type byte,
+; or one of the size bytes.
+;
+; Preserve X/Y.
+; 
 recv_header_byte: .proc
+                stx old_x
+                
+-
+                jsr recv_byte
+                bcc -
+                
+                ldx old_x
                 rts
                 .pend
                 
 ;-------------------------------------------------------------------------
-
+;
+; Receive 1 byte over the link as part of the payload.
+; payload_counter is the byte's negated offset.
+;
+; Preserve X/Y.
+;
 recv_payload_byte: .proc
+                stx old_x
+
+                lda payload_counter+0
+                beq recv_status_byte
+
+-
+                jsr recv_byte
+                bcc -
+                
+                ldx old_x
+                rts
+
+recv_status_byte:
+                jsr recv_byte
+                pha
+
+-
+                jsr recv_byte
+                bcc -
+
+                pla
+                ldx old_x
                 rts
                 .pend
 
 ;-------------------------------------------------------------------------
+; 
+; transfer byte via UPURS. 64tass'd version of code from UPURSFS.
+;
+; entry: A = byte to send
+; exit:
+; preserves: Y
 
-startup: .proc
+                .align 256
+send_byte: .proc
+                php
+                sei
+
+                eor #$ff
+                tax
+
+                ; test PC RTS
+                lda via.irb
+                and #$02
+                beq send
+
+wait_for_rts:
+                lda via.irb
+                and #$02
+                beq wait_for_rts
+
+                lda #$f0
+                clc
+delay_after_rts:
+                adc #$01
+                bcc delay_after_rts
+
+send:
+                lda     #1
+                sta     via.orb
+                nop             ; (2)
+                txa             ; (2)
+                ror     a       ; (2)
+                tax             ; (2)   start bit (9 us)
+                lda     #0      ; (2)
+                adc     #0      ; (2)
+                sta     via.orb ; (6)
+ 
+                txa             ; (2)
+                ror     a       ; (2)
+                tax             ; (2)   bit 0 (8 us)
+                lda     #0      ; (2)
+                adc     #0      ; (2)
+                sta     via.orb ; (6)
+ 
+                nop             ; (2)
+                txa             ; (2)
+                ror     a       ; (2)
+                tax             ; (2)   bit 1 (9 us)
+                lda     #0      ; (2)
+                adc     #0      ; (2)
+                sta     via.orb ; (6)
+ 
+                nop             ; (2)
+                txa             ; (2)
+                ror     a       ; (2)
+                tax             ; (2)   bit 2 (9 us)
+                lda     #0      ; (2)
+                adc     #0      ; (2)
+                sta     via.orb ; (6)
+ 
+                txa             ; (2)
+                ror     a       ; (2)
+                tax             ; (2)   bit 3 (8 us)
+                lda     #0      ; (2)
+                adc     #0      ; (2)
+                sta     via.orb ; (6)
+ 
+                nop             ; (2)
+                txa             ; (2)
+                ror     a       ; (2)
+                tax             ; (2)   bit 4 (9 us)
+                lda     #0      ; (2)
+                adc     #0      ; (2)
+                sta     via.orb ; (6)
+ 
+                nop             ; (2)
+                txa             ; (2)
+                ror     a       ; (2)
+                tax             ; (2)   bit 5 (9 us)
+                lda     #0      ; (2)
+                adc     #0      ; (2)
+                sta     via.orb ; (6)
+ 
+                txa             ; (2)
+                ror     a       ; (2)
+                tax             ; (2)   bit 6 (8 us)
+                lda     #0      ; (2)
+                adc     #0      ; (2)
+                sta     via.orb ; (6)
+ 
+                nop             ; (2)
+                nop             ; (2)
+                nop             ; (2)   bit 7 (9 us)
+                nop             ; (2)
+                nop             ; (2)
+                lda     #0      ; (2) 
+                sta     via.orb ; (6) stop bit
+
+                plp
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; receive a byte via UPURS.
+;
+; entry:
+; exit: C=1, A = byte read
+;       C=0 if no data
+; preserves: Y
+; 
+                .align 256
+recv_byte: .proc
+                lda serbuf_size
+                bne got_bytes
+
+                tya
+                pha
+                jsr recv_buf
+                pla
+                tay
+                stx serbuf_size
+                cpx #0
+                beq no_bytes
+
+;                 cpx max_serbuf_size
+;                 bcc +
+;                 stx max_serbuf_size
+; +
+                ; inc sizecounts,x
+                
+                ; jsr osnewl
+                ; lda #'g'
+                ; jsr oswrch
+                ; txa
+                ; jsr print_hex_byte
+                ; jsr osnewl
+                
+                lda #0
+                sta serbuf_index
+
+got_bytes:
+                ldx serbuf_index
+                lda serbuf,x
+                eor #$ff
+                inx
+                cpx serbuf_size
+                bcc +
+                ; consumed everything.
+                ldx #0
+                stx serbuf_size
++
+                stx serbuf_index
+                sec
+                rts
+
+no_bytes:
+                clc
                 rts
                 .pend
                 
 ;-------------------------------------------------------------------------
+;-------------------------------------------------------------------------
+;
+; fill serial buffer via UPURS. 64tass'd version of code from UPURSFS.
+; 
+; further ideas:
+;
+; 1. do the bit inversions as part of the read - looks like there's
+; enough dead time?
+;
+; 2. add a second copy of sb...T0 after the bit reading, to avoid the
+; jmp - squeeze the eor #$ff in there instead?
+;
+; exit: X = num bytes read
+                
+                .align 256
+                
+recv_buf: .proc
+                php
+                sei             ; disable interrupts (critical!)
+                ldy #0
+                ldx #0          ; reset buffer pointer
+                lda #$40        ; assert CTS
+                sta via.irb 
+idle:
+                lda via.irb     ; wait for Tx line idle (low)
+                bmi idle
 
-status_text: .proc
-                rts
+sb:
+                .rept 12        ;
+                lda via.irb     ; and wait for start bit
+                bmi T0		; via detection delay list 
+                .next
+
+                ; If no start bit detected drop CTS but continue
+                ; looking for start bit
+                ; 
+                ; Using ASL is the faster way to drop CTS while
+                ; continuing to sample
+                ; 
+                ; The alternative, using LDA then STA, would take 2
+                ; extra cycles
+                ; 
+                ; branching to T1/T2 compensates for additional cycles
+                ; already consumed interleaving the ASL/BCS and
+                ; LDA/BMI reduces the worst case sampling interval
+                ; from 6us to 5us. (i.e. 4,6,4,4 becomes 4,5,5,4)
+                asl via.irb     ; (3 + 7)
+                lda via.irb     ; (3 + 3)
+                bcs T3		; (2) or (3)
+                bmi T2		; (2) or (3)
+                lda via.irb     ; (3 + 3)
+                bmi T1		; (2) or (3)
+                .rept 10
+                lda via.irb     ; (3 + 3)
+                bmi T0		; (2) or (3)
+                .next
+                plp
+                rts             ; and return 
+
+                ; To implement n byte buffer, CTS is turned off after
+                ; buf top is reached
+                ; 
+                ; This section is exactly 15 cycles, like the original
+                ; code, but only ever drops CTS.
+
+T0:
+
+                ; see note about serbuf_overrun_size. 
+                cpx #serbuf_size-serbuf_overrun_size ; (2)  (2)
+T1:
+                bcs xcts        ; (2)  (3)
+T2:
+                nop             ; (2)
+                nop             ; (2)
+                nop             ; (2)
+T3:
+                lda #0		; (2)
+                beq xskip       ; (3)
+xcts:
+                nop             ;      (2)
+                lda #0		;      (2)
+                sta via.irb     ;      (4 + 2)
+xskip:				; (15) (15)
+                
+; sequential bit reads
+                lda via.irb     ; bit 0
+                asl a
+                tya
+                ror a
+                inx             ; inc buffer pointer in spare cycles
+                nop
+
+                tay             ; bit 1
+                lda via.irb
+                asl a
+                tya
+                ror a
+                nop
+                nop
+
+                tay             ; bit 2
+                lda via.irb
+                asl a
+                tya
+                ror a
+                nop
+
+                tay             ; bit 3
+                lda via.irb
+                asl a
+                tya
+                ror a
+                nop
+                nop
+
+                tay             ; bit 4
+                lda via.irb
+                asl a
+                tya
+                ror a
+                nop
+
+                tay             ; bit 5
+                lda via.irb
+                asl a
+                tya
+                ror a
+                nop
+                nop
+
+                tay             ; bit 6
+                lda via.irb
+                asl a
+                tya
+                ror a
+                nop
+
+                tay             ; bit 7
+                lda via.irb
+                asl a
+                tya
+                ror a
+
+                ; Note that buffer index is pre-incremented. But fold
+                ; the -1 into the address here. Don't start X at $ff,
+                ; because of the bcs above.
+                
+                sta serbuf-1,x	; save byte in buffer
+                jmp sb		; and loop for next byte start bit
                 .pend
                 
 ;-------------------------------------------------------------------------
 
-                .bend
-
-;-------------------------------------------------------------------------
-
+                
                 .send code
 
 ;-------------------------------------------------------------------------
+
+                .bend
+                
+;-------------------------------------------------------------------------
 ;-------------------------------------------------------------------------
 
-link_name='UPURS'
+link_name='UPURS '..format("%04x",upurs.via)
 link_subtype=SERIAL_SUBTYPE_UPURS
 
 link_prepare=upurs.prepare
 link_unprepare=upurs.unprepare
 
 link_begin_recv=upurs.begin_recv
-link_begin_send=upurs.begin_send
 
 link_send_header_byte=upurs.send_header_byte
 link_send_payload_byte=upurs.send_payload_byte

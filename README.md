@@ -29,9 +29,13 @@ module or battery-backed write-protectable sideways RAM - it's no fun
 having to reload the ROM each time you power on, or have it zapped by
 careless programs!
 
-You'll need a Tube USB serial adapter and FT232H module - see
-https://stardot.org.uk/forums/viewtopic.php?f=8&t=14849. (You'll need
-the full kit with the PLD.)
+You can connect BBC and PC using a Tube USB serial adapter
+(recommended - it's much faster) or a UPURS cable.
+
+## Tube USB serial adapter
+
+See https://stardot.org.uk/forums/viewtopic.php?f=8&t=14849. You'll
+need the full kit with the PLD.
 
 Connect the Tube serial board to the BBC's Tube connector, connect any
 second processor to the Tube serial board, use the jumper to select
@@ -44,6 +48,21 @@ If you've got some way of getting files to your BBC already, copy
 otherwise, use the [bootstrap process](./docs/bootstrap.md), and get
 the file that way.
 
+## UPURS cable /(experimental)/
+
+**UPURS support is experimental**
+
+See https://www.retro-kit.co.uk/UPURS/. Unless your PC is rather old,
+you'll also probably need a USB serial port adapter.
+
+If using an FTDI USB to serial adapter on Windows, you'll need to
+[tweak one of the device settings](./docs/ftdi_latency_timer.md).
+
+There's no bootstrap process for the UPURS cable - use the UPURS tools
+to get `beeblink_upurs_fe60.rom` copied onto your BBC.
+
+**UPURS support is experimental**
+
 # Use
 
 See [the filing system docs](./docs/fs.md) for some info about how to
@@ -54,6 +73,8 @@ command line options, and a few notes about sharing files between BBC
 and PC.
 
 [If you use git, some notes on git interop](./docs/git.md).
+
+[Some notes about using BeebLink with the UPURS cable](./docs/upurs.md).
 
 # Building it yourself
 

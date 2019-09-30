@@ -140,6 +140,9 @@ ignore_disc_char='I'
 
 ; if set, link_startup succeeded, so no need to try again.
 sf_link_started_up=$08
+
+; if set, BeebLink owns NMI resources.
+sf_got_nmi=$04
                 
 sf_power_on_defaults=0
                 
@@ -167,6 +170,12 @@ struct_section: .macro
                 
 ;-------------------------------------------------------------------------
 
+*=$a0
+old_nmi_owner:
+                .fill 1
+                .dsection nmi_workspace
+                .cerror *>$a8,'NMI owner workspace overflow'
+                
 *=$a8
                 .union
                 .struct_section is_sideways_ram_workspace
@@ -212,6 +221,14 @@ fs_workspace_start:
 
                 .cerror *>$d0,'FS workspace overflow'
 
+;-------------------------------------------------------------------------
+
+*=$d00
+                .dsection nmi_area
+
+                ; MasRef F.6-4 (you get >128 bytes on the B!)
+                .cerror *>$d60,'NMI area overflow'
+                
 ;-------------------------------------------------------------------------
 
                 .section misc_workspace
@@ -391,6 +408,10 @@ svc: .proc
                 beq svc_star
                 cmp #$09
                 beq svc_help
+                ; cmp #$0b
+                ; beq svc_release_nmi
+                cmp #$0c
+                beq svc_claim_nmi
                 cmp #$12
                 beq svc_fs_init
                 cmp #$25
@@ -402,6 +423,110 @@ svc: .proc
 done:
                 ldx $f4
                 rts
+                .pend
+
+; ;-------------------------------------------------------------------------
+; ;
+; ; $0b - Release NMI
+; ;
+; ; "Return ownership of the NMI resource plus workspace to the previous
+; ; owner. Because NMIs are unmaskable, only one task may be allowed to
+; ; produce NMIs at once. The Y register should contain the previous
+; ; owner when this call is made."
+; ;
+; svc_release_nmi: .proc
+;                 cpy #blfs_fs_number
+;                 bne +
+
+;                 ; it me. NMI area owned again.
+                
+
+;                 rts
+
+;-------------------------------------------------------------------------
+;
+; $0c - Claim NMI
+;
+; "NMI claim. This call should be made with Y=&FF, and if a ROM is
+; currently the owner of the NMI space, it should return in the Y
+; register its filing system id, and clear from the NMI space any
+; important data. Y should not be altered if the NMI space was not
+; previously in use. The claimer of NMI should store the returned id
+; number for use when releasing the NMI claim."
+;
+svc_claim_nmi: .proc
+                pha
+
+                lda roms_table,x
+                and #(~sf_got_nmi)&$ff
+                cmp roms_table,x
+                beq done
+
+                sta roms_table,x
+
+                ; BLFS was the previous owner.
+                ldy #blfs_fs_number
+
+done:
+                pla
+                jmp svc.done
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Claim the NMI resources.
+;
+claim_nmi: .proc
+                ldx $f4
+                lda roms_table,x
+                and #sf_got_nmi
+                bne done
+
+                lda #143        ;issue paged ROM service request, AUG
+                                ;167/MasRef D.2-44
+                ldx #$0c        ;claim NMI
+                ldy #$ff        ;see above
+                jsr osbyte
+
+                sty old_nmi_owner
+
+                ; no harm in being careful.
+                lda #$40
+                sta $d00
+
+                ldx $f4
+                lda roms_table,x
+                ora #sf_got_nmi
+                sta roms_table,x
+
+done:
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Release the NMI resources.
+; 
+release_nmi: .proc
+                ldx $f4
+                lda roms_table,x
+                and #sf_got_nmi
+                beq done
+
+                lda #143
+                ldx #$0b        ;release NMI
+                ldy old_nmi_owner
+                jsr osbyte
+
+                ldx $f4
+                lda roms_table,x
+                and #(~sf_got_nmi)&$ff
+                sta roms_table,x
+
+done:
+                rts
+                
                 .pend
                 
 ;-------------------------------------------------------------------------
@@ -1531,9 +1656,13 @@ reg:
 ;
 ; Start sending a request with an N-byte payload.
 ;
-; 1. Initialise 4-byte request payload size in ZP
+; 1. Initialise 4-byte request payload size in !payload_counter, e.g.,
+; by using set_payload_counter
+;
 ; 2. Call send_request_n
+;
 ; 3. Call send_payload_byte as many times as necessary
+;
 ; 4. Call recv_response
 ;
 ; entry: A = packet T (bit 7 must be clear)
@@ -2142,10 +2271,21 @@ link_ok:
                 lda #253        ;get reset type in X (AUG 244)
                 jsr osbyte_x00_yff
 
-                .debug_print ['i_b_i: sending REQUEST_RESET... (reset type: &',DP_X,')\r']
+                .debug_print ['i_b_i: sending REQUEST_RESET... (reset type: &',DP_X,', link_subtype: '..format('%d',link_subtype)..')\r']
+
+                lda #2
+                jsr set_payload_counter
                 
                 lda #REQUEST_RESET
-                jsr send_request_1
+                jsr send_request_n
+
+                ; reset type
+                txa
+                jsr send_payload_byte
+
+                ; link subtype
+                lda #link_subtype
+                jsr send_payload_byte
 
                 ; whatever it was, I'm sure it was fine...
                 jsr recv_response_and_discard_payload

@@ -1,15 +1,15 @@
 # FTDI latency timer (Windows only)
 
-The default settings for the FTDI serial device mean terrible
-performance for OSBGET and OSBPUT, affecting `*SPOOL*`, `*EXEC`,
-`*DUMP`, and so on. The `*CAT` output speed is also slightly affected.
+The default settings for FTDI serial devices mean terrible performance
+for OSBGET and OSBPUT, affecting `*SPOOL*`, `*EXEC`, `*DUMP`, and so
+on. The `*CAT` output speed is also slightly affected.
 
 On OS X and Linux, the server can sort this out for you; on Windows,
 unfortunately, you need to do to it by hand. But it's easy enough, and
 it seems to be persistent:
 
-1. Find device in Device Manager (mine appears as `USB Serial Port
-   (COM5)` in the `Ports (COM & LPT)` section)
+1. Find device in Device Manager, somewhere in the `Ports (COM & LPT)`
+   section)
    
 2. Right click device and select `Properties` from the popup menu
 

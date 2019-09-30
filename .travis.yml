@@ -36,6 +36,7 @@ script:
   - (7z a $SERVER_ZIP_NAME ./volumes)
   - (cd ./rom/.build && 7z a ../../$ROMS_ZIP_NAME beeblink_avr_fe60.rom)
   - (cd ./rom/.build && 7z a ../../$ROMS_ZIP_NAME beeblink_tube_serial.rom)
+  - (cd ./rom/.build && 7z a ../../$ROMS_ZIP_NAME beeblink_upurs_fe60.rom)
 
 before_deploy:
   - pwd
