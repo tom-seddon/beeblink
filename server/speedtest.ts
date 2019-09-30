@@ -9,8 +9,13 @@ import * as assert from 'assert';
 class Stats {
     public numTests = 0;
     public numBytes = 0;
-    public sendTimeSeconds = 0;
-    public recvTimeSeconds = 0;
+
+    // send and recv are always from the BBC perspective. Send = BBC->PC and
+    // Recv = PC->BBC.
+    public beebSendTimeSeconds = 0;
+    public beebRecvTimeSeconds = 0;
+    public serverSendTimeSeconds = 0;
+    public serverRecvTimeSeconds = 0;
 
     public originalData: Buffer | undefined;
     public expectedData: Buffer | undefined;
@@ -24,10 +29,12 @@ class Stats {
 export class SpeedTest {
     private hostStats: Stats;
     private parasiteStats: Stats;
+    private lastHRTime: [number, number];
 
     public constructor() {
         this.hostStats = new Stats();
         this.parasiteStats = new Stats();
+        this.lastHRTime = process.hrtime();
     }
 
     public gotTestData(parasite: boolean, data: Buffer, log: utils.Log): Buffer {
@@ -67,15 +74,23 @@ export class SpeedTest {
             stats.expectedData = stats.originalData;
         }
 
+        const diff = process.hrtime(this.lastHRTime);
+        stats.serverRecvTimeSeconds += diff[0] + diff[1] / 1e9;
+        this.lastHRTime = process.hrtime();
+
         return stats.expectedData;
     }
 
-    public addStats(parasite: boolean, sizeBytes: number, sendTimeSeconds: number, recvTimeSeconds: number) {
+    public addStats(parasite: boolean, sizeBytes: number, beebSendTimeSeconds: number, beebRecvTimeSeconds: number) {
         const stats = parasite ? this.parasiteStats : this.hostStats;
 
         stats.numBytes += sizeBytes;
-        stats.sendTimeSeconds += sendTimeSeconds;
-        stats.recvTimeSeconds += recvTimeSeconds;
+        stats.beebSendTimeSeconds += beebSendTimeSeconds;
+        stats.beebRecvTimeSeconds += beebRecvTimeSeconds;
+
+        const diff = process.hrtime(this.lastHRTime);
+        stats.serverSendTimeSeconds += diff[0] + diff[1] / 1e9;
+        this.lastHRTime = process.hrtime();
     }
 
     public getString(): string {
@@ -102,8 +117,12 @@ export class SpeedTest {
                 process.stderr.write('Not all speed test transfers matched...\n');
             }
 
-            s += '  Send: ' + (stats.numBytes / stats.sendTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
-            s += '  Recv: ' + (stats.numBytes / stats.recvTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
+            s += '  Reported by BBC:' + BNL;
+            s += '    BBC->PC: ' + (stats.numBytes / stats.beebSendTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
+            s += '    PC->BBC: ' + (stats.numBytes / stats.beebRecvTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
+            s += '  Calculated by server:' + BNL;
+            s += '    BBC->PC: ' + (stats.numBytes / stats.serverSendTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
+            s += '    PC->BBC: ' + (stats.numBytes / stats.serverRecvTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
         }
 
         return s;
