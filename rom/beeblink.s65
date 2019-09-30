@@ -1658,7 +1658,8 @@ recv_response_1: .block
 
 without_prepare:
                 jsr link_recv_header_byte
-                bmi got_n
+                cmp #$80
+                bcs got_n
 
                 tax             ;save response C
                 
@@ -1727,7 +1728,8 @@ recv_response: .proc
                 jsr link_begin_recv
 
                 jsr link_recv_header_byte
-                bmi got_n
+                cmp #$80
+                bcs got_n
 got_1:
                 pha
                 lda #$ff
