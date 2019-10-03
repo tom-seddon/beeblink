@@ -16,6 +16,8 @@ upurs: .block
 ;                 ; .debug_print \items
 ; .endm
 
+new_recv=true
+                
 ;-------------------------------------------------------------------------
 
                 .virtual link_upurs_via
@@ -613,10 +615,10 @@ recv_byte: .proc
                 tya
                 pha
                 jsr recv_buf
+                sty serbuf_size
                 pla
                 tay
-                stx serbuf_size
-                cpx #0
+                lda serbuf_size
                 beq no_bytes
 
 ;                 cpx max_serbuf_size
@@ -638,7 +640,9 @@ recv_byte: .proc
 got_bytes:
                 ldx serbuf_index
                 lda serbuf,x
+                .if !new_recv
                 eor #$ff
+                .endif
                 inx
                 cpx serbuf_size
                 bcc +
@@ -656,6 +660,17 @@ no_bytes:
                 .pend
                 
 ;-------------------------------------------------------------------------
+;
+; Helper for receiving 1 byte.
+;
+; 
+
+recv_1_byte_prefix: .macro
+                .endm
+
+recv_1_byte_suffix: .macro
+                .endm
+                
 ;-------------------------------------------------------------------------
 ;
 ; fill serial buffer via UPURS. 64tass'd version of code from UPURSFS.
@@ -668,15 +683,15 @@ no_bytes:
 ; 2. add a second copy of sb...T0 after the bit reading, to avoid the
 ; jmp - squeeze the eor #$ff in there instead?
 ;
-; exit: X = num bytes read
+; exit: Y = num bytes read
+
                 
                 .align 256
                 
 recv_buf: .proc
                 php
                 sei             ; disable interrupts (critical!)
-                ldy #0
-                ldx #0          ; reset buffer pointer
+                ldy #0          ; reset buffer pointer
                 lda #$40        ; assert CTS
                 sta via.irb 
 idle:
@@ -724,7 +739,7 @@ sb:
 T0:
 
                 ; see note about serbuf_overrun_size. 
-                cpx #serbuf_size-serbuf_overrun_size ; (2)  (2)
+                cpy #serbuf_size-serbuf_overrun_size ; (2)  (2)
 T1:
                 bcs xcts        ; (2)  (3)
 T2:
@@ -741,69 +756,78 @@ xcts:
 xskip:				; (15) (15)
                 
 ; sequential bit reads
-                lda via.irb     ; bit 0
-                asl a
-                tya
-                ror a
-                inx             ; inc buffer pointer in spare cycles
-                nop
 
-                tay             ; bit 1
-                lda via.irb
-                asl a
-                tya
+                ;bit 0 +12
+                ldx via.irb
+                cpx #$80
                 ror a
+                nop
+                nop
                 nop
                 nop
 
-                tay             ; bit 2
-                lda via.irb
-                asl a
-                tya
+                ; bit 1 +12
+                ldx via.irb
+                cpx #$80
                 ror a
                 nop
+                nop
+                nop
+                nop
+                
+                ;bit 2 +10
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                nop
+                
+                ;bit 3 +12
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                nop
+                nop
+                
+                ;bit 4 +10
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                nop
+                
+                ;bit 5 +12
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                nop
+                nop
+                
+                ;bit 6 +10
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                iny             ;bump buffer pointer
 
-                tay             ; bit 3
-                lda via.irb
-                asl a
-                tya
+                ; bit 7 +...
+                ldx via.irb
+                cpx #$80
                 ror a
-                nop
-                nop
-
-                tay             ; bit 4
-                lda via.irb
-                asl a
-                tya
-                ror a
-                nop
-
-                tay             ; bit 5
-                lda via.irb
-                asl a
-                tya
-                ror a
-                nop
-                nop
-
-                tay             ; bit 6
-                lda via.irb
-                asl a
-                tya
-                ror a
-                nop
-
-                tay             ; bit 7
-                lda via.irb
-                asl a
-                tya
-                ror a
+                eor #$ff
 
                 ; Note that buffer index is pre-incremented. But fold
                 ; the -1 into the address here. Don't start X at $ff,
                 ; because of the bcs above.
                 
-                sta serbuf-1,x	; save byte in buffer
+                sta serbuf-1,y	; save byte in buffer
                 jmp sb		; and loop for next byte start bit
                 .pend
                 
