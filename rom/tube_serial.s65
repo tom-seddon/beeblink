@@ -1531,6 +1531,8 @@ link_name='Tube Serial'
 link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL
                 
 link_prepare=tube_serial.prepare
+link_prepare_and_maybe_restart=link_prepare
+                
 link_unprepare=tube_serial.unprepare
 
 link_begin_recv=tube_serial.nop

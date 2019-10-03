@@ -873,7 +873,7 @@ blfs:
 
                 lda #REQUEST_HELP_BLFS
                 ldx #0
-                jsr send_request_1_recv_response_1
+                jsr send_request_1_recv_response_1_and_maybe_restart
 
                 jsr print_server_string
                 jmp done
@@ -1669,9 +1669,16 @@ reg:
 ; exit: Request payload size negated
 ; preserves: X
 ;
+
+send_request_n_and_maybe_restart: .proc
+                jsr link_prepare_and_maybe_restart
+                jmp send_request_n.without_prepare
+                .pend
+                
 send_request_n: .proc
                 jsr link_prepare
-
+                
+without_prepare:
                 .debug_print ["send_request_n: Request: T=&",DP_A," payload_size=&",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,"\r"]
 
                 ; If payload size is 1, it could just do a 2-byte
@@ -1735,6 +1742,11 @@ more:
 ; entry: A = packet T (bit 7 must be clear);
 ;        X = packet P
 ;
+send_request_1_and_maybe_restart: .proc
+                jsr link_prepare_and_maybe_restart
+                jmp send_request_1.without_prepare
+                .pend
+                
 send_request_1: .proc
                 jsr link_prepare
                 
@@ -1766,6 +1778,11 @@ without_prepare:
 ; exit: A = response P (*not* C!) (0 if response payload was 0 bytes)
 ;       X = response C (*not* P!)
 
+send_request_1_recv_response_1_and_maybe_restart: .proc
+                jsr link_prepare_and_maybe_restart
+                jmp send_request_1_recv_response_1.without_prepare
+                .pend
+                
 send_request_1_recv_response_1: .block
                 jsr link_prepare
 
@@ -2152,11 +2169,18 @@ ignore_disc_text:
 ;
 init_blfs: .proc
                 jsr init_blfs_internal
-                bcs not_ok
+                bcs link_status_brk
                 .debug_print ['init_blfs succeeded\r']
                 rts
+                .pend
 
-not_ok:
+;-------------------------------------------------------------------------
+;
+; Does a brk, taking the message from the link_status_text table.
+;
+; entry: X = offset into link_status_text
+; 
+link_status_brk: .proc
                 .debug_print ['init_blfs failed: X=&',DP_X,'\r']
                 lda #0
                 sta brkthunk+0
@@ -2662,7 +2686,7 @@ not_save:
 
                 ; Send the request.
                 lda #REQUEST_OSFILE
-                jsr send_request_n
+                jsr send_request_n_and_maybe_restart
 
                 lda reason
                 jsr send_payload_byte
@@ -2805,7 +2829,7 @@ handle:
                 jsr set_payload_counter
 
                 lda #REQUEST_OSARGS
-                jsr send_request_n
+                jsr send_request_n_and_maybe_restart
 
                 lda old_a
                 jsr send_payload_byte
@@ -2991,7 +3015,7 @@ write:
 read_or_write:
                 
                 lda #REQUEST_OSGBPB
-                jsr send_request_n
+                jsr send_request_n_and_maybe_restart
 
                 ; Send reason code.
                 lda reason
@@ -3099,7 +3123,7 @@ close_handle:
                 pha
                 tax
                 lda #REQUEST_OSFIND_CLOSE
-                jsr send_request_1
+                jsr send_request_1_and_maybe_restart
                 
                 jsr recv_response_and_discard_payload
 
@@ -3126,7 +3150,7 @@ open:
                 jsr add_y_to_payload_counter
 
                 lda #REQUEST_OSFIND_OPEN
-                jsr send_request_n
+                jsr send_request_n_and_maybe_restart
 
                 pla             ;open mode
                 jsr send_payload_byte
@@ -3215,7 +3239,7 @@ fsc_opt: .proc
                 jsr set_payload_counter
 
                 lda #REQUEST_OPT
-                jsr send_request_n
+                jsr send_request_n_and_maybe_restart
 
                 pla
                 jsr send_payload_byte ;x
@@ -3384,7 +3408,7 @@ exec: .fill 4
                 sty payload_counter+0
 
                 pla
-                jsr send_request_n
+                jsr send_request_n_and_maybe_restart
 
                 ldy #0
 send_loop:
@@ -3988,7 +4012,7 @@ relocator=brkthunk+1            ;where to put the relocating code
 
                 lda #REQUEST_GET_ROM
                 ldx #0
-                jsr send_request_1
+                jsr send_request_1_and_maybe_restart
 
                 jsr recv_response
 
@@ -4144,7 +4168,7 @@ old_escape_mode: .fill 1
                 jsr set_payload_counter
 
                 lda #REQUEST_VOLUME_BROWSER
-                jsr send_request_n
+                jsr send_request_n_and_maybe_restart
 
                 lda #REQUEST_VOLUME_BROWSER_RESET
                 jsr send_payload_byte

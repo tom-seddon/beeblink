@@ -2,20 +2,11 @@
 ;
 ; BeebLink - BBC Micro file storage system
 ; Copyright (C) 2019 Tom Seddon
-; 
-; This program is free software: you can redistribute it and/or
-; modify it under the terms of the GNU General Public License as
-; published by the Free Software Foundation, either version 3 of the
-; License, or (at your option) any later version.
-; 
-; This program is distributed in the hope that it will be useful, but
-; WITHOUT ANY WARRANTY; without even the implied warranty of
-; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-; General Public License for more details.
-; 
-; You should have received a copy of the GNU General Public License
-; along with this program. If not, see
-; <https://www.gnu.org/licenses/>.
+;
+; Parts of this file copyright Martin Barr (stardot: MartinB), Stephen
+; Harris (stardot: sweh), David Banks (stardot: hoglet)
+;
+; Licence TBC. 
 ;
 ;-------------------------------------------------------------------------
 
@@ -254,7 +245,82 @@ sync_timed_out_2:
 ; sync_timed_out_3:
 ;                 .text 'Sync timeout (step 3)',0
                 .bend
+
+;-------------------------------------------------------------------------
+;
+; Prepare link. Restart if the connection seems broken.
+;
+; Preserve A/X/Y.
+;
+prepare_and_maybe_restart: .proc
+random_number=$98               ;chosen at random
                 
+                jsr prepare
+
+                pha
+                txa
+                pha
+                tya
+                pha
+
+                ; send a test command, to see if server is still
+                ; listening.
+                
+                lda #REQUEST_ECHO_DATA
+                jsr send_byte
+
+                lda #random_number
+                jsr send_byte
+
+                ; send status byte
+                lda #1
+                jsr send_byte
+
+                ; receive byte. Restart if timeout or not
+                ; RESPONSE_DATA with 1-byte payload.
+                jsr recv_byte_with_timeout
+                bcc restart
+                cmp #RESPONSE_DATA
+                bne restart
+
+                jsr recv_byte_with_timeout
+                bcc restart
+                cmp #random_number
+                bne restart
+
+                jsr recv_byte_with_timeout
+                bcc restart
+                cmp #1
+                bne restart
+
+
+prepared:
+                ; link is good.
+                pla
+                tay
+                pla
+                tax
+                pla
+                rts
+
+; Restart.
+restart:
+                jsr startup.startup2
+                bcc prepared
+                jmp link_status_brk
+
+recv_byte_with_timeout:
+                ldy #0
+-
+                jsr recv_byte
+                bcs +
+                iny
+                bne -
++
+                rts
+                
+                .pend
+
 ;-------------------------------------------------------------------------
 ; 
 ; Prepare link. Get everything ready and put it in send mode.
@@ -757,6 +823,7 @@ link_name='UPURS '..format("%04x",upurs.via)
 link_subtype=SERIAL_SUBTYPE_UPURS
 
 link_prepare=upurs.prepare
+link_prepare_and_maybe_restart=upurs.prepare_and_maybe_restart
 link_unprepare=upurs.unprepare
 
 link_begin_recv=upurs.begin_recv
