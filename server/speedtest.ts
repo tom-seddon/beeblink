@@ -10,10 +10,11 @@ class Stats {
     public numTests = 0;
     public numBytes = 0;
 
-    // send and recv are always from the BBC perspective. Send = BBC->PC and
-    // Recv = PC->BBC.
+    // send and recv are from the BBC perspective.
     public beebSendTimeSeconds = 0;
     public beebRecvTimeSeconds = 0;
+
+    // send and recv are from the PC perspective.
     public serverSendTimeSeconds = 0;
     public serverRecvTimeSeconds = 0;
 
@@ -121,8 +122,8 @@ export class SpeedTest {
             s += '    BBC->PC: ' + (stats.numBytes / stats.beebSendTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
             s += '    PC->BBC: ' + (stats.numBytes / stats.beebRecvTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
             s += '  Calculated by server:' + BNL;
-            s += '    BBC->PC: ' + (stats.numBytes / stats.serverSendTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
-            s += '    PC->BBC: ' + (stats.numBytes / stats.serverRecvTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
+            s += '    BBC->PC: ' + (stats.numBytes / stats.serverRecvTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
+            s += '    PC->BBC: ' + (stats.numBytes / stats.serverSendTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
         }
 
         return s;
