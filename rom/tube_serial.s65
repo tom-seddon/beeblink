@@ -1552,3 +1552,6 @@ link_send_file_data_host=tube_serial.send_file_data_host
 link_recv_file_data_parasite=tube_serial.recv_file_data_parasite
 
 link_recv_file_data_host=tube_serial.recv_file_data_host
+
+link_num_speedtest_iterations=10
+

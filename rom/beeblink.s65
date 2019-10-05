@@ -4400,8 +4400,7 @@ parasite: .fill 1
                 .send speed_test_workspace
 
 parasite_oshwm_page=$08              ;you just have to assume...
-num_iterations=10
-                .cerror num_iterations%2!=0,"no"
+                .cerror link_num_speedtest_iterations%2!=0,"no"
 
                 jsr check_if_sure
                 bcc done
@@ -4447,7 +4446,7 @@ speed_test:
                 jsr pcprint
                 .text " transfers: ",255
                 
-                lda #num_iterations
+                lda #link_num_speedtest_iterations
                 jsr print_hex_byte
 
                 jsr pcprint
@@ -4473,7 +4472,7 @@ speed_test:
                 jsr oswrch
                 
 start:
-                lda #num_iterations
+                lda #link_num_speedtest_iterations
                 sta counter   ;# iterations
 
 loop:

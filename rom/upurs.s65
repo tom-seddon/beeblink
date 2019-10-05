@@ -865,5 +865,6 @@ link_status_text=upurs.status_text
 ; link_send_file_data_host=upurs.send_file_data_host
 
 ; link_recv_file_data_parasite=upurs.recv_file_data_parasite
-
 ; link_recv_file_data_host=upurs.recv_file_data_host
+
+link_num_speedtest_iterations=4
