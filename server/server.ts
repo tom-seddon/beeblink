@@ -884,14 +884,12 @@ export default class Server {
         } else if (p[0] === beeblink.REQUEST_SPEED_TEST_STATS && this.speedTest !== undefined) {
             this.log.pn('REQUEST_SPEED_TEST_STATS');
 
-            this.payloadMustBeAtLeast(handler, p, 10);
+            this.payloadMustBeAtLeast(handler, p, 6);
 
             const parasite = p[1] !== 0;
             const numBytes = p.readUInt32LE(2);
-            const sendTimeSeconds = p.readUInt16LE(6) / 100;
-            const recvTimeSeconds = p.readUInt16LE(8) / 100;
 
-            this.speedTest.addStats(parasite, numBytes, sendTimeSeconds, recvTimeSeconds);
+            this.speedTest.addStats(parasite, numBytes);
 
             return newResponse(beeblink.RESPONSE_YES);
         } else if (p[0] === beeblink.REQUEST_SPEED_TEST_DONE && this.speedTest !== undefined) {

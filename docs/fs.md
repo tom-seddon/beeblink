@@ -321,11 +321,6 @@ This is mainly for my benefit when working on the ROM code.
 
 Performs a benchmark.
 
-Two sets of transfer rates are printed: those reported by the BBC, and
-those calculated by the server. The server figure is always roughly
-right, but if both sets are mostly in agreement then the BBC figures
-will be slightly more accurate.
-
 ### `TITLE <title>`
 
 Set current drive's title.

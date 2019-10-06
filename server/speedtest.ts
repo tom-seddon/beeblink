@@ -10,10 +10,6 @@ class Stats {
     public numTests = 0;
     public numBytes = 0;
 
-    // send and recv are from the BBC perspective.
-    public beebSendTimeSeconds = 0;
-    public beebRecvTimeSeconds = 0;
-
     // send and recv are from the PC perspective.
     public serverSendTimeSeconds = 0;
     public serverRecvTimeSeconds = 0;
@@ -64,6 +60,27 @@ export class SpeedTest {
             }
 
             if (!data.equals(stats.expectedData)) {
+                if (data.length !== stats.expectedData.length) {
+                    process.stderr.write(`Speed test expected ${stats.expectedData.length} bytes, got ${data.length} bytes\n`);
+                } else {
+                    for (let i = 0; i < data.length; ++i) {
+                        if (data[i] !== stats.expectedData[i]) {
+                            const stderr = new utils.Log('', process.stderr, true);
+
+                            stderr.pn(`Speed test first mismatch at +${i} (0x${utils.hex8(i)}) - expected 0x${utils.hex2(stats.expectedData[i])}, got 0x${utils.hex2(data[i])}`);
+
+                            stderr.pn(`Expected:`);
+                            stderr.dumpBuffer(stats.expectedData);
+                            stderr.pn(``);
+
+                            stderr.pn(`Got:`);
+                            stderr.dumpBuffer(data);
+                            stderr.pn(``);
+
+                            break;
+                        }
+                    }
+                }
                 stats.allMatch = false;
             }
         }
@@ -82,12 +99,10 @@ export class SpeedTest {
         return stats.expectedData;
     }
 
-    public addStats(parasite: boolean, sizeBytes: number, beebSendTimeSeconds: number, beebRecvTimeSeconds: number) {
+    public addStats(parasite: boolean, sizeBytes: number) {
         const stats = parasite ? this.parasiteStats : this.hostStats;
 
         stats.numBytes += sizeBytes;
-        stats.beebSendTimeSeconds += beebSendTimeSeconds;
-        stats.beebRecvTimeSeconds += beebRecvTimeSeconds;
 
         const diff = process.hrtime(this.lastHRTime);
         stats.serverSendTimeSeconds += diff[0] + diff[1] / 1e9;
@@ -118,12 +133,8 @@ export class SpeedTest {
                 process.stderr.write('Not all speed test transfers matched...\n');
             }
 
-            s += '  Reported by BBC:' + BNL;
-            s += '    BBC->PC: ' + (stats.numBytes / stats.beebSendTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
-            s += '    PC->BBC: ' + (stats.numBytes / stats.beebRecvTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
-            s += '  Calculated by server:' + BNL;
-            s += '    BBC->PC: ' + (stats.numBytes / stats.serverRecvTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
-            s += '    PC->BBC: ' + (stats.numBytes / stats.serverSendTimeSeconds / 1024).toFixed(2) + ' KBytes/sec' + BNL;
+            s += '    BBC->PC: ' + (stats.numBytes / stats.serverRecvTimeSeconds / 1024).toFixed(1) + ' KBytes/sec' + BNL;
+            s += '    PC->BBC: ' + (stats.numBytes / stats.serverSendTimeSeconds / 1024).toFixed(1) + ' KBytes/sec' + BNL;
         }
 
         return s;

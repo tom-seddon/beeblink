@@ -44,8 +44,8 @@
 //   always send it back in response to anything
 //
 // - The upgrade/versioning path is not super awesome: it basically consists of
-//   adding further bytes to payloads, or dropping support for certain
-//   request/response types
+//   adding further bytes to payloads, never removing bytes from payloads, or
+//   dropping support for certain request/response types
 //
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -309,6 +309,9 @@ export const REQUEST_SET_FILE_HANDLE_RANGE = 0x1a;
 /////////////////////////////////////////////////////////////////////////
 
 // REQUEST_AVR types.
+//
+// Payload contents descriptions exclude the first byte, which is the sub-type
+// itself.
 
 // Check if AVR is ready. Response (if present) is YES or NO with a payload of
 // AVR_PROTOCOL_VERSION.
@@ -321,6 +324,9 @@ export const REQUEST_AVR_ERROR = 1;
 /////////////////////////////////////////////////////////////////////////
 
 // REQUEST_VOLUME_BROWSER sub-types.
+//
+// Payload contents descriptions exclude the first byte, which is the sub-type
+// itself.
 
 // Request a reset.
 //
@@ -347,6 +353,9 @@ export const REQUEST_VOLUME_BROWSER_KEYPRESS = 1;
 /////////////////////////////////////////////////////////////////////////
 
 // REQUEST_SPEED_TEST sub-types.
+//
+// Payload contents descriptions exclude the first byte, which is the sub-type
+// itself.
 
 // Start speed test.
 //
@@ -368,10 +377,7 @@ export const REQUEST_SPEED_TEST_TEST = 1;
 // Response is YES.
 //
 // P = 1 byte, parasite memory flag (0 = host memory, else = parasite); 4 bytes,
-// number of bytes; 2 bytes, transmit centiseconds; 2 bytes, receive
-// centiseconds
-//
-// (65535 centiseconds = ~10 minutes...)
+// number of bytes; 4 bytes, ignored
 export const REQUEST_SPEED_TEST_STATS = 2;
 
 // Get server to calculate the stats and fill in the server string with the

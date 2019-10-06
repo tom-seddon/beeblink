@@ -1365,6 +1365,8 @@ done:
 ;        Y = value to add
 ; preserves: A; X; Y; P
 ;
+; TODO - does this really need to preserve anything any more?
+;
 addyz16: .proc
                 php
                 pha
@@ -4393,8 +4395,6 @@ inactive:
 speed_test_special: .proc
 
                 .section speed_test_workspace
-time: .fill 2
-send_time: .fill 2
 counter: .fill 1
 parasite: .fill 1
                 .send speed_test_workspace
@@ -4517,15 +4517,7 @@ loop:
                 ; Time sending of everything else.
                 jsr init_test_address
 
-                jsr reset_TIME
                 jsr send_file_data
-                jsr get_TIME16
-
-                ; Save send time.
-                lda time+0
-                sta send_time+0
-                lda time+1
-                sta send_time+1
 
                 ; Receive response.
                 jsr recv_response
@@ -4537,9 +4529,7 @@ loop:
                 ; Time receiving of everything else.
                 jsr init_test_address
 
-                jsr reset_TIME
                 jsr recv_file_data
-                jsr get_TIME16
 
                 ; Account for response.
                 lda #10
@@ -4567,16 +4557,14 @@ loop:
                 pla             ;size bits 24-31
                 jsr send_payload_byte
 
-                ; Send send time.
-                lda send_time+0
+                ; Send dummy values 
+                lda #0
                 jsr send_payload_byte
-                lda send_time+1
+                lda #0
                 jsr send_payload_byte
-
-                ; Send recv time.
-                lda time+0
+                lda #0
                 jsr send_payload_byte
-                lda time+1
+                lda #0
                 jsr send_payload_byte
 
                 jsr recv_response_and_discard_payload
@@ -4670,52 +4658,6 @@ host_size:
 parasite_size:
                 lda #$80-parasite_oshwm_page ;another assumption...
                 sta payload_counter+1
-                rts
-                .pend
-
-;
-; reset system clock. (A bit rude, I know...)
-; 
-reset_TIME: .proc
-                lda #0
-                pha
-                pha
-                pha
-                pha
-                tsx
-                pha
-                ldy #$01
-                lda #2
-                jsr osword
-                pla
-                pla
-                pla
-                pla
-                pla
-                rts
-                .pend
-
-;
-; get low 16 bits of system clock, effectively counting elapsed time
-; (up to ~11 minutes) due to the reset.
-; 
-get_TIME16: .proc
-                pha
-                pha
-                pha
-                pha
-                tsx
-                pha
-                ldy #$01
-                lda #1          ;read system clock
-                jsr osword
-                pla
-                sta time+0
-                pla
-                sta time+1
-                pla
-                pla
-                pla
                 rts
                 .pend
 
