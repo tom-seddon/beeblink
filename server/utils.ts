@@ -627,6 +627,18 @@ export function isBASIC(b: Buffer): boolean {
 export const MATCH_N_CHAR = '*';
 export const MATCH_ONE_CHAR = '#';
 
+export function isAmbiguousAFSP(afsp: string): boolean {
+    if (afsp.includes(MATCH_N_CHAR)) {
+        return true;
+    }
+
+    if (afsp.includes(MATCH_ONE_CHAR)) {
+        return true;
+    }
+
+    return false;
+}
+
 // The regexp is actually a bit cleverer than the afsp, at least compared to
 // how DFS does it, in that a * will match chars in the middle of a string,
 // not just at the end.

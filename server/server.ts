@@ -800,7 +800,7 @@ export default class Server {
             const height = p[3];
             const m128 = p[4] >= 3;
 
-            const volumePaths = await this.bfs.findVolumesMatching('*');
+            const volumePaths = await this.bfs.findAllVolumesMatching('*');
 
             this.volumeBrowser = new volumebrowser.Browser(charSizeBytes, width, height, m128, volumePaths);
 
@@ -1041,7 +1041,7 @@ export default class Server {
     private async volsCommand(commandLine: CommandLine): Promise<Response> {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : '*';
 
-        const volumes = await this.bfs.findVolumesMatching(arg);
+        const volumes = await this.bfs.findAllVolumesMatching(arg);
 
         let text = 'Matching volumes:';
 
@@ -1336,7 +1336,7 @@ export default class Server {
     private async volCommand(commandLine: CommandLine): Promise<Response> {
         let volume: beebfs.Volume;
         if (commandLine.parts.length >= 2) {
-            const volumes = await this.bfs.findVolumesMatching(commandLine.parts[1]);
+            const volumes = await this.bfs.findFirstVolumeMatching(commandLine.parts[1]);
             if (volumes.length === 0) {
                 return errors.fileNotFound('Volume not found');
             }

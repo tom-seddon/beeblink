@@ -534,7 +534,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public static async findAllVolumes(folders: string[], pcFolders: string[], log: utils.Log | undefined): Promise<Volume[]> {
-        return await FS.findVolumes('*', folders, pcFolders, log);
+        return await FS.findVolumes('*', false, folders, pcFolders, log);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -553,12 +553,35 @@ export class FS {
 
     // Logging for this probably isn't proving especially useful. Maybe it
     // should go away?
-    private static async findVolumes(afsp: string, folders: string[], pcFolders: string[], log: utils.Log | undefined): Promise<Volume[]> {
+    //
+    // If findFirstMatchingVolume is true, the search will early out once the
+    // result clear: that is, is if the voume spec is unambiguous, when the
+    // first matching volume is found, or, if the volume spec is ambiguous, when
+    // the second matching volume is found.
+    private static async findVolumes(afsp: string, findFirstMatchingVolume: boolean, folders: string[], pcFolders: string[], log: utils.Log | undefined): Promise<Volume[]> {
         const volumes: Volume[] = [];
 
         const re = utils.getRegExpFromAFSP(afsp);
+        const ambiguous = utils.isAmbiguousAFSP(afsp);
 
-        const findVolumesMatchingRecursive = async (folderPath: string, indent: string): Promise<void> => {
+        function isDone(): boolean {
+            if (findFirstMatchingVolume) {
+                if (ambiguous) {
+                    if (volumes.length === 2) {
+                        return true;
+                    }
+                } else {
+                    if (volumes.length === 1) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        // returns true if 
+        async function findVolumesMatchingRecursive(folderPath: string, indent: string): Promise<boolean> {
             if (log !== undefined) {
                 log.pn(indent + 'Looking in: ' + folderPath + '...');
             }
@@ -571,7 +594,7 @@ export class FS {
                 if (log !== undefined) {
                     log.pn('Error was: ' + error);
                 }
-                return;
+                return false;
             }
 
             const subfolderPaths: string[] = [];
@@ -615,20 +638,30 @@ export class FS {
 
                                 if (re.exec(volume.name) !== null) {
                                     volumes.push(volume);
+
+                                    if (isDone()) {
+                                        return true;
+                                    }
                                 }
                             }
                         }
                     }
                 }
+
+                for (const subfolderPath of subfolderPaths) {
+                    if (await findVolumesMatchingRecursive(subfolderPath, indent + '    ')) {
+                        return true;
+                    }
+                }
             }
 
-            for (const subfolderPath of subfolderPaths) {
-                await findVolumesMatchingRecursive(subfolderPath, indent + '    ');
-            }
-        };
+            return false;
+        }
 
         for (const folder of folders) {
-            await findVolumesMatchingRecursive(folder, '');
+            if (await findVolumesMatchingRecursive(folder, '')) {
+                return volumes;
+            }
         }
 
         for (const pcFolder of pcFolders) {
@@ -637,6 +670,10 @@ export class FS {
                 if (re.exec(volumeName) !== null) {
                     const volume = new Volume(pcFolder, volumeName, pcType);
                     volumes.push(volume);
+
+                    if (isDone()) {
+                        return volumes;
+                    }
                 }
             }
         }
@@ -855,8 +892,20 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async findVolumesMatching(afsp: string): Promise<Volume[]> {
-        return await FS.findVolumes(afsp, this.folders, this.pcFolders, undefined);
+    // Finds all volumes matching the given afsp.
+    public async findAllVolumesMatching(afsp: string): Promise<Volume[]> {
+        return await FS.findVolumes(afsp, false, this.folders, this.pcFolders, undefined);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    // If afsp is unambiguous, finds first volume matching, if any.
+    //
+    // If afsp is ambiguous, finds single volume matching it, or two volumes
+    // that match it (no matter how many other volumes might also match).
+    public async findFirstVolumeMatching(afsp: string): Promise<Volume[]> {
+        return await FS.findVolumes(afsp, true, this.folders, this.pcFolders, undefined);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -931,7 +980,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async starLocate(arg: string): Promise<string[]> {
-        const volumes = await this.findVolumesMatching('*');
+        const volumes = await this.findAllVolumesMatching('*');
 
         const foundPaths: string[] = [];
 
@@ -1973,7 +2022,7 @@ export class FS {
 
             const volumeName = str.substring(i + 2, end);
 
-            const volumes = await this.findVolumesMatching(volumeName);
+            const volumes = await this.findFirstVolumeMatching(volumeName);
 
             if (volumes.length === 0) {
                 return errors.fileNotFound('Volume not found');
