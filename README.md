@@ -81,3 +81,11 @@ and PC.
 [How to build the server](./docs/build-server.md).
 
 [How to build the ROM](./docs/build-rom.md).
+
+# Problems?
+
+Please
+[file a GitHub issue](https://github.com/tom-seddon/beeblink/issues)
+or
+[post in the StarDot BeebLink thread](https://stardot.org.uk/forums/viewtopic.php?f=53&t=15605)
+if you run into any difficulties!
