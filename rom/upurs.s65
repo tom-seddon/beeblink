@@ -16,8 +16,6 @@ upurs: .block
 ;                 ; .debug_print \items
 ; .endm
 
-new_recv=true
-                
 ;-------------------------------------------------------------------------
 
                 .virtual link_upurs_via
@@ -508,7 +506,7 @@ send_byte: .proc
                 ; test PC RTS
                 lda via.irb
                 and #$02
-                beq send
+                bne send
 
 wait_for_rts:
                 lda via.irb
@@ -602,75 +600,52 @@ send:
 ;
 ; receive a byte via UPURS.
 ;
+; Fastest path through this routine is 30 cycles.
+;
 ; entry:
 ; exit: C=1, A = byte read
 ;       C=0 if no data
 ; preserves: Y
-; 
+;
                 .align 256
 recv_byte: .proc
                 lda serbuf_size
-                bne got_bytes
-
-                tya
-                pha
-                jsr recv_buf
-                sty serbuf_size
-                pla
-                tay
-                lda serbuf_size
-                beq no_bytes
-
-;                 cpx max_serbuf_size
-;                 bcc +
-;                 stx max_serbuf_size
-; +
-                ; inc sizecounts,x
-                
-                ; jsr osnewl
-                ; lda #'g'
-                ; jsr oswrch
-                ; txa
-                ; jsr print_hex_byte
-                ; jsr osnewl
-                
-                lda #0
-                sta serbuf_index
-
+                beq refill
 got_bytes:
                 ldx serbuf_index
                 lda serbuf,x
-                .if !new_recv
-                eor #$ff
-                .endif
                 inx
                 cpx serbuf_size
-                bcc +
-                ; consumed everything.
-                ldx #0
-                stx serbuf_size
-+
+                bcs exhausted
+
                 stx serbuf_index
                 sec
                 rts
 
-no_bytes:
+exhausted:
+                ldx #0
+                stx serbuf_size
+                stx serbuf_index
+                sec
+                rts
+
+refill:
+                tya
+                pha
+                jsr fill_serbuf
+                pla
+                tay
+                
+                lda #0
+                sta serbuf_index
+                
+                lda serbuf_size
+                bne got_bytes
+                
                 clc
                 rts
                 .pend
-                
-;-------------------------------------------------------------------------
-;
-; Helper for receiving 1 byte.
-;
-; 
 
-recv_1_byte_prefix: .macro
-                .endm
-
-recv_1_byte_suffix: .macro
-                .endm
-                
 ;-------------------------------------------------------------------------
 ;
 ; fill serial buffer via UPURS. 64tass'd version of code from UPURSFS.
@@ -683,12 +658,12 @@ recv_1_byte_suffix: .macro
 ; 2. add a second copy of sb...T0 after the bit reading, to avoid the
 ; jmp - squeeze the eor #$ff in there instead?
 ;
-; exit: Y = num bytes read
+; exit: ?serbuf_size = bytes read
 
                 
                 .align 256
                 
-recv_buf: .proc
+fill_serbuf: .proc
                 php
                 sei             ; disable interrupts (critical!)
                 ldy #0          ; reset buffer pointer
@@ -727,6 +702,7 @@ sb:
                 lda via.irb     ; (3 + 3)
                 bmi T0		; (2) or (3)
                 .next
+                sty serbuf_size
                 plp
                 rts             ; and return 
 
@@ -833,7 +809,253 @@ xskip:				; (15) (15)
                 
 ;-------------------------------------------------------------------------
 
+recv_file_data_host: .proc
+                jsr negate_payload_counter
+
+                lda payload_counter+0
+                beq got_bytes
+
+                ldy #0
+recv_bytes:
+                jsr recv_byte
+                bcc recv_bytes
+
+                sta (payload_addr),y
+                iny
+                dec payload_counter+0
+                bne recv_bytes
+
+                ldx #payload_addr
+                jsr addyz16
+
+-
+                jsr recv_byte
+                bcc -
+
+got_bytes:
+                jsr test_payload_counter
+                beq got_pages
+
+                jsr negate_payload_counter
+
+                ldy #0
+
+recv_pages:
+                jsr recv_byte
+                bcc recv_pages
+
+                sta (payload_addr),y
+                iny
+                bne recv_pages
+
+-
+                jsr recv_byte
+                bcc -
+
+                inc payload_addr+1
                 
+                inc payload_counter+1
+                bne recv_pages
+                inc payload_counter+2
+                bne recv_pages
+                inc payload_counter+3
+                bne recv_pages
+
+got_pages:
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+
+recv_file_data_parasite: .proc
+                jsr claim_tube
+                
+                jsr negate_payload_counter
+
+                ldx #<payload_addr
+                ldy #>payload_addr
+                lda #tube_multi_byte_host_to_parasite
+                jsr $406
+
+                ldy payload_counter+0
+                beq got_bytes
+
+recv_bytes:
+                jsr recv_byte
+                bcc recv_bytes
+
+-
+                bit $fee4
+                bvc -
+                
+                sta $fee5
+
+                dey
+                bne recv_bytes
+
+-
+                jsr recv_byte
+                bcc -
+
+                lda #0
+                sta payload_counter+0
+got_bytes:
+                jsr test_payload_counter
+                beq got_pages
+
+                jsr negate_payload_counter
+
+recv_pages:
+                jsr recv_byte
+                bcc recv_pages
+
+-
+                bit $fee4
+                bvc -
+
+                sta $fee5
+
+                iny
+                bne recv_pages
+
+-
+                jsr recv_byte
+                bcc -
+                
+                inc payload_counter+1
+                bne recv_pages
+                inc payload_counter+2
+                bne recv_pages
+                inc payload_counter+3
+                bne recv_pages
+
+got_pages:
+                jsr release_tube
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+send_file_data_host: .proc
+                jsr negate_payload_counter
+
+                lda payload_counter+0
+                beq sent_bytes
+
+                ldy #0
+send_bytes:
+                lda (payload_addr),y
+                jsr send_byte
+
+                iny
+                dec payload_counter+0
+                bne send_bytes
+
+                ldx #payload_addr
+                jsr addyz16
+                
+                ; send status byte
+                lda #$01
+                jsr send_byte
+
+sent_bytes:
+                jsr test_payload_counter
+                beq sent_pages
+
+                jsr negate_payload_counter
+
+                ldy #0
+send_pages:
+                lda (payload_addr),y
+                jsr send_byte
+
+                iny
+                bne send_pages
+
+                lda #$01
+                jsr send_byte
+
+                inc payload_addr+1
+
+                inc payload_counter+1
+                bne send_pages
+                inc payload_counter+2
+                bne send_pages
+                inc payload_counter+3
+                bne send_pages
+
+sent_pages:
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+
+send_file_data_parasite: .proc
+                jsr claim_tube
+
+                jsr negate_payload_counter
+
+                ldx #<payload_addr
+                ldy #>payload_addr
+                lda #tube_multi_byte_parasite_to_host
+                jsr $406
+
+                ldy payload_counter+0
+                beq sent_bytes
+
+send_bytes:
+                bit $fee4
+                bpl send_bytes
+                lda $fee5
+
+                jsr send_byte
+
+                dey
+                bne send_bytes
+
+                lda #$01
+                jsr send_byte
+
+                lda #0
+                sta payload_counter+0
+
+sent_bytes:
+                jsr test_payload_counter
+                beq sent_pages
+
+                jsr negate_payload_counter
+
+send_pages:
+                bit $fee4
+                bpl send_pages
+                lda $fee5
+
+                jsr send_byte
+
+                iny
+                bne send_pages
+
+                lda #$01
+                jsr send_byte
+                
+                inc payload_counter+1
+                bne send_pages
+                inc payload_counter+2
+                bne send_pages
+                inc payload_counter+3
+                bne send_pages
+
+sent_pages:
+                jsr release_tube
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------
+
                 .send code
 
 ;-------------------------------------------------------------------------
@@ -860,11 +1082,10 @@ link_recv_payload_byte=upurs.recv_payload_byte
 link_startup=upurs.startup
 link_status_text=upurs.status_text
                 
-; link_send_file_data_parasite=upurs.send_file_data_parasite
+link_send_file_data_parasite=upurs.send_file_data_parasite
+link_send_file_data_host=upurs.send_file_data_host
 
-; link_send_file_data_host=upurs.send_file_data_host
-
-; link_recv_file_data_parasite=upurs.recv_file_data_parasite
-; link_recv_file_data_host=upurs.recv_file_data_host
+link_recv_file_data_parasite=upurs.recv_file_data_parasite
+link_recv_file_data_host=upurs.recv_file_data_host
 
 link_num_speedtest_iterations=4
