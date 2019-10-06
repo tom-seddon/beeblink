@@ -9,8 +9,6 @@ OS X: `./beeblink_server --default-volume beeblink ./volumes`
 
 Windows: `beeblink_server --default-volume beeblink ./volumes`
 
-
-
 The Tube serial devices you have connected will be autodetected.
 
 After a moment you should get a message along the lines of
@@ -105,6 +103,10 @@ name. The first line of this file should be the name to use.
 
 If the `.volume` name is invalid, the volume will be ignored, just as
 if the volume's folder name were itself invalid.
+
+A volume doesn't have to have a unique name, but if you have multiple
+volumes with the same name there's no way to control which one `*VOL`
+will select.
 
 ## Quitting the server
 
@@ -353,10 +355,9 @@ The list of available volumes is shown. Use the cursor keys to
 navigate. Press ESCAPE to cancel, RETURN to load that volume, or
 SHIFT+RETURN to load that volume and attempt to auto-boot it.
 
-Press SPACE to display the volume's path on the server. (If you try
-hard enough, you can have multiple volumes with the same name. This
-lets you figure out which is which. The one you have selected will be
-the one loaded.)
+Press SPACE to display the volume's path on the server. (If you have
+multiple volumes with the same name, this lets you figure out which is
+which. The specific volume selected will be the one loaded.)
 
 You can filter the list by just typing stuff in. Press ESCAPE to
 cancel, or RETURN to narrow the list down to the discs whose names

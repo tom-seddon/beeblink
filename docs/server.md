@@ -14,12 +14,6 @@ inside that folder.
 the first folder listed. Create one manually on the PC if you want a
 new one somewhere else.)
 
-With multiple folders, or a nested folder structure, you can end up
-with multiple volumes with the same name this way - something you can
-see from the `*VOLS` output or in the volume browser. When loading a
-volume with `*VOL`, the first one matched will be used, but you can
-use the volume browser to be explicit.
-
 Use `--default-volume` to get the server to load a specific volume on
 startup (following the same rules in case of ambiguity). The default
 is `65boot`.
