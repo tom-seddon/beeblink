@@ -63,7 +63,7 @@ const DEVICE_RETRY_DELAY_MS = 1000;
 
 const DEFAULT_BEEBLINK_AVR_ROM = './beeblink_avr_fe60.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_ROM = './beeblink_tube_serial.rom';
-const DEFAULT_BEEBLINK_UPURS_ROM = './beeblink_upurs.rom';
+const DEFAULT_BEEBLINK_UPURS_ROM = './beeblink_upurs_fe60.rom';
 
 const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
 
@@ -2015,39 +2015,56 @@ function integer(s: string): number {
         epilog: epi,
     });
 
-    parser.addArgument(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });
+    // ROM paths
     parser.addArgument(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink AVR ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM });
     parser.addArgument(['--tube-serial-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink Tube Serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ROM });
     parser.addArgument(['--upurs-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink UPURS ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_UPURS_ROM });
+
+    // Verbosity
+    parser.addArgument(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });
     parser.addArgument(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
     parser.addArgument(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
     parser.addArgument(['--server-data-verbose'], { action: 'storeTrue', help: 'dump request/response data (requires --server-verbose)' });
-    parser.addArgument(['--usb-verbose'], { action: 'storeTrue', help: 'extra USB-related output' });
     parser.addArgument(['--libusb-debug-level'], { type: integer, metavar: 'LEVEL', help: 'if provided, set libusb debug logging level to %(metavar)s' });
-    // don't use the argparse default mechanism here - this makes it easier to
-    // later detect the absence of --default-volume.
-    parser.addArgument(['--default-volume'], { metavar: 'DEFAULT-VOLUME', help: 'load volume %(metavar)s on startup' });
-    parser.addArgument(['--no-retry-device'], { action: 'storeTrue', help: 'don\'t try to rediscover device if it goes away' });
     parser.addArgument(['--fatal-verbose'], { action: 'storeTrue', help: 'print debugging info on a fatal error' });
-    parser.addArgument(['--avr-verbose'], { action: 'storeTrue', help: 'enable AVR serial output' });
-    parser.addArgument(['--load-config'], { metavar: 'FILE', help: 'load config from %(metavar)s' });
-    parser.addArgument(['--save-config'], { metavar: 'FILE', nargs: '?', constant: DEFAULT_CONFIG_FILE_NAME, help: 'save config to %(metavar)s (%(constant)s if not specified)' });
-    parser.addArgument(['--set-serial'], { metavar: 'SERIAL', type: integer, help: 'set device\'s USB serial number to %(metavar)s and exit' });
-    parser.addArgument(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'folder to search for volumes' });
+
+    // Git
     parser.addArgument(['--git'], { action: 'storeTrue', help: 'enable git-related functionality' });
     parser.addArgument(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output' });
-    parser.addArgument(['--http'], { action: 'storeTrue', help: 'enable HTTP server' });
-    parser.addArgument(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
+
+    // BeebLink AVR devices
+    parser.addArgument(['--no-retry-device'], { action: 'storeTrue', help: 'don\'t try to rediscover BeebLink AVR device if it goes away' });
+    parser.addArgument(['--set-serial'], { metavar: 'SERIAL', type: integer, help: 'set BeebLink AVR device\'s USB serial number to %(metavar)s and exit' });
+    parser.addArgument(['--list-usb-devices'], { action: 'storeTrue', help: 'list available AVR BeebLink devices, then exit' });
+    parser.addArgument(['--avr-verbose'], { action: 'storeTrue', help: 'enable serial output from BeebLink AVR device' });
+    parser.addArgument(['--usb-verbose'], { action: 'storeTrue', help: 'extra USB-related output' });
+
+    // Serial devices
     parser.addArgument(['--serial-exclude'], { action: 'append', metavar: 'DEVICE', help: 'don\'t listen on serial port DEVICE' });
     parser.addArgument(['--serial-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial-related output (specify devices individually to be verbose for just those, or just --serial-verbose on its own for all devices)' });
     parser.addArgument(['--serial-sync-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial sync-related output (specify specify same as --serial-verbose)' });
     parser.addArgument(['--serial-data-verbose'], { action: 'append', nargs: '?', constant: '', help: 'dump raw serial data sent/received (specify devices same as --serial-verbose)' });
-    parser.addArgument(['--list-serial-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
-    parser.addArgument(['--list-usb-devices'], { action: 'storeTrue', help: 'list available USB devices, then exit' });
-    parser.addArgument(['--pc'], { dest: 'pcFolders', action: 'append', defaultValue: [], metavar: 'FOLDER', help: 'use %(metavar)s as a PC volume' });
-    //parser.addArgument(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
     parser.addArgument(['--serial-test-pc-to-bbc'], { action: 'storeTrue', help: 'run PC->BBC test (goes with T.PC-TO-BBC on the BBC)' });
     parser.addArgument(['--serial-test-bbc-to-pc'], { action: 'storeTrue', help: 'run BBC->PC test (goes with T.BBC-TO-PC on the BBC)' });
+    parser.addArgument(['--list-serial-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
+
+    // HTTP server (for b2)
+    parser.addArgument(['--http'], { action: 'storeTrue', help: 'enable HTTP server' });
+    parser.addArgument(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
+    //parser.addArgument(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
+
+    // Config file
+    parser.addArgument(['--load-config'], { metavar: 'FILE', help: 'load config from %(metavar)s' });
+    parser.addArgument(['--save-config'], { metavar: 'FILE', nargs: '?', constant: DEFAULT_CONFIG_FILE_NAME, help: 'save config to %(metavar)s (%(constant)s if not specified)' });
+
+    // Volumes
+
+    // don't use the argparse default mechanism for --default-volume - this
+    // makes it easier to later detect the absence of --default-volume.
+    parser.addArgument(['--default-volume'], { metavar: 'DEFAULT-VOLUME', help: 'load volume %(metavar)s on startup' });
+    parser.addArgument(['--pc'], { dest: 'pcFolders', action: 'append', defaultValue: [], metavar: 'FOLDER', help: 'use %(metavar)s as a PC volume' });
+    parser.addArgument(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'folder to search for volumes' });
+
 
     const options = parser.parseArgs();
 
