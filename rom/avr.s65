@@ -674,9 +674,10 @@ link_subtype=AVR_SUBTYPE_AVR
 ; Preserve A/X/Y.
 link_prepare=avr.via_prepare
 
-; Prepare link. As link_prepare, but that if the link might have gone
-; wrong, and it's possible to detect that, do a restart. If the
-; restart fails, call link_status_brk.
+; Prepare link. As link_prepare, but: if it's possible to check the
+; link status reasonably quickly (milliseconds...), do that, and
+; re-initialise the link if anything has gone wrong. If the
+; reinitialise fails, call link_status_brk.
 ;
 ; This should be considered the default, and link_prepare the special
 ; case, as the FS uses this entry point for pretty much every request

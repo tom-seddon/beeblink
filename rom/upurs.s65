@@ -665,7 +665,7 @@ refill:
 ; further ideas:
 ;
 ; 1. do the bit inversions as part of the read - looks like there's
-; enough dead time?
+; enough dead time? [done]
 ;
 ; 2. add a second copy of sb...T0 after the bit reading, to avoid the
 ; jmp - squeeze the eor #$ff in there instead?
