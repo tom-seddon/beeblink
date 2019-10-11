@@ -71,8 +71,38 @@ const HTTP_LISTEN_PORT = 48875;//0xbeeb;
 
 const BEEBLINK_SENDER_ID = 'beeblink-sender-id';
 
-// FTDI's vendor id.
-const VENDOR_ID_FTDI = '0403';
+interface IUSBSerialDevice {
+    description: string;
+    vid: number;
+    pid: number;
+}
+
+function isSerialPortUSBDevice(portInfo: SerialPort.PortInfo, usbDevice: IUSBSerialDevice): boolean {
+    if (portInfo.vendorId !== undefined && utils.strieq(portInfo.vendorId, utils.hex4(usbDevice.vid))) {
+        if (portInfo.productId !== undefined && utils.strieq(portInfo.productId, utils.hex4(usbDevice.pid))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// FTDI devices that I've tested it with.
+const TUBE_SERIAL_DEVICE: IUSBSerialDevice = { description: 'Tube Serial', vid: 0x0403, pid: 0x6014 };
+const FTDI_USB_SERIAL_DEVICE: IUSBSerialDevice = { description: 'FTDI USB Serial', vid: 0x0403, pid: 0x6001 };
+
+const SUPPORTED_USB_SERIAL_DEVICES: IUSBSerialDevice[] = [
+    TUBE_SERIAL_DEVICE,
+    FTDI_USB_SERIAL_DEVICE,
+
+    // No good - though, annoyingly, it does work fine with Hercules and the
+    // standard UPURS tools. So clearly there's something screwy.
+
+    //{ description: 'CH34x USB Serial', vid: 0x1a86, pid: 0x7523 },
+];
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -85,6 +115,7 @@ interface IConfigFile {
     tube_serial_rom: string | undefined;
     upurs_rom: string | undefined;
     git: boolean | undefined;
+    serial_include: string[] | undefined;
     serial_exclude: string[] | undefined;
 }
 
@@ -122,6 +153,7 @@ interface ICommandLineOptions {
     pcFolders: string[];
     serial_test_pc_to_bbc: boolean;
     serial_test_bbc_to_pc: boolean;
+    serial_include: string[] | null;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -609,7 +641,57 @@ async function handleStallError(blDevice: BeebLinkDevice, endpoint: usb.Endpoint
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function listSerialDevices(): Promise<void> {
+interface IShouldOpenSerialDeviceResult {
+    shouldOpen: boolean;
+    reason: string;
+}
+
+function shouldOpenSerialDevice(portInfo: SerialPort.PortInfo, options: ICommandLineOptions): IShouldOpenSerialDeviceResult {
+    function isSerialPortComNameInList(comNames: string[] | null): boolean {
+        if (comNames !== null) {
+            for (const comName of comNames) {
+                if (utils.getSeparatorAndCaseNormalizedPath(portInfo.comName) === utils.getSeparatorAndCaseNormalizedPath(comName)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    if (isSerialPortComNameInList(options.serial_exclude)) {
+        return {
+            shouldOpen: false,
+            reason: 'device explicitly excluded',
+        };
+    }
+
+    if (isSerialPortComNameInList(options.serial_include)) {
+        return {
+            shouldOpen: true,
+            reason: 'device explicitly included',
+        };
+    }
+
+    for (const supportedDevice of SUPPORTED_USB_SERIAL_DEVICES) {
+        if (isSerialPortUSBDevice(portInfo, supportedDevice)) {
+            return {
+                shouldOpen: true,
+                reason: `auto-detected device as: ${supportedDevice.description}`,
+            };
+        }
+    }
+
+    return {
+        shouldOpen: false,
+        reason: `unknown device`,
+    };
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+async function listSerialDevices(options: ICommandLineOptions): Promise<void> {
     const portInfos = await SerialPort.list();
     process.stdout.write(portInfos.length + ' serial devices:\n');
 
@@ -637,6 +719,13 @@ async function listSerialDevices(): Promise<void> {
         }
 
         process.stdout.write(`${i}. ${description}\n`);
+
+        const shouldOpen = shouldOpenSerialDevice(p, options);
+        if (shouldOpen.shouldOpen) {
+            process.stdout.write(`    Will use device: ${shouldOpen.reason}\n`);
+        } else {
+            process.stdout.write(`    Will not use device: ${shouldOpen.reason}\n`);
+        }
     }
 }
 
@@ -680,9 +769,9 @@ async function listUSBDevices(): Promise<void> {
     for (let i = 0; i < devices.length; ++i) {
         const device: usb.Device = devices[i];
 
-        process.stdout.write(`${i}. BusNumber: ${device.busNumber}, DeviceAddress:${device.deviceAddress}`);
+        process.stdout.write(`${i}.BusNumber: ${device.busNumber}, DeviceAddress: ${device.deviceAddress}`);
         if (process.platform === 'darwin') {
-            process.stdout.write(` (LocationId: 0x${getOSXLocationId(device)} / ${device.deviceAddress})`);
+            process.stdout.write(` (LocationId: 0x${getOSXLocationId(device)}/${device.deviceAddress})`);
         }
 
         process.stdout.write(`\n`);
@@ -724,24 +813,8 @@ async function getSerialPortList(options: ICommandLineOptions): Promise<SerialPo
     const portInfos: SerialPort.PortInfo[] = [];
 
     for (const portInfo of await SerialPort.list()) {
-        // TODO - make a better decision here
-        if (portInfo.vendorId === VENDOR_ID_FTDI) {
-            let exclude = false;
-
-            if (options.serial_exclude !== null) {
-                for (const excludeComName of options.serial_exclude) {
-                    if (utils.getSeparatorAndCaseNormalizedPath(portInfo.comName) === utils.getSeparatorAndCaseNormalizedPath(excludeComName)) {
-                        exclude = true;
-                        break;
-                    }
-                }
-            }
-
-            if (exclude) {
-                process.stderr.write(`${portInfo.comName}: serial device is excluded.\n`);
-            } else {
-                portInfos.push(portInfo);
-            }
+        if (shouldOpenSerialDevice(portInfo, options).shouldOpen) {
+            portInfos.push(portInfo);
         }
     }
 
@@ -811,7 +884,7 @@ async function serialTestPCToBBC2(portInfo: SerialPort.PortInfo): Promise<void> 
             const data = Buffer.alloc(1);
             data[0] = i;
 
-            //process.stderr.write(`${portInfo.comName}: ${i}\n`);
+            //process.stderr.write(`${ portInfo.comName }: ${ i }\n`);
 
             await new Promise((resolve, reject): void => {
                 // Despite what the TypeScript definitions appear to say,
@@ -915,7 +988,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     }
 
     if (options.list_serial_devices) {
-        await listSerialDevices();
+        await listSerialDevices(options);
         return false;
     }
 
@@ -965,6 +1038,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
             tube_serial_rom: options.tube_serial_rom !== null ? options.tube_serial_rom : undefined,
             upurs_rom: options.upurs_rom !== null ? options.upurs_rom : undefined,
             git: options.git,
+            serial_include: options.serial_include !== null ? options.serial_include : undefined,
             serial_exclude: options.serial_exclude !== null ? options.serial_exclude : undefined,
         };
 
@@ -984,15 +1058,15 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     }
 
     if (!await utils.fsExists(options.avr_rom)) {
-        process.stderr.write(`AVR ROM image not found for * BLSELFUPDATE / bootstrap: ${options.avr_rom} \n`);
+        process.stderr.write(`AVR ROM image not found for *BLSELFUPDATE/bootstrap: ${options.avr_rom} \n`);
     }
 
     if (!await utils.fsExists(options.tube_serial_rom)) {
-        process.stderr.write(`Tube Serial ROM image not found for * BLSELFUPDATE / bootstrap: ${options.tube_serial_rom} \n`);
+        process.stderr.write(`Tube Serial ROM image not found for *BLSELFUPDATE/bootstrap: ${options.tube_serial_rom} \n`);
     }
 
     if (!await utils.fsExists(options.upurs_rom)) {
-        process.stderr.write(`UPURS ROM image not found for * BLSELFUPDATE / bootstrap: ${options.upurs_rom} \n`);
+        process.stderr.write(`UPURS ROM image not found for *BLSELFUPDATE/bootstrap: ${options.upurs_rom} \n`);
     }
 
     return true;
@@ -1017,7 +1091,7 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
 
     volumes = volumes.filter((volume) => !volume.isReadOnly());
     volumes = volumes.filter(async (volume) => !(await isGit(volume.path)));
-    process.stderr.write(`Found ${volumes.length} /${oldNumVolumes} writeable git-controlled volumes.\n`);
+    process.stderr.write(`Found ${volumes.length}/${oldNumVolumes} writeable git-controlled volumes.\n`);
 
     for (const volume of volumes) {
         gaManipulator.makeVolumeNotText(volume);
@@ -1572,14 +1646,20 @@ function isSerialDeviceVerbose(portInfo: SerialPort.PortInfo, verboseOptions: st
 async function handleSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
     const serialLog = new utils.Log(portInfo.comName, process.stdout, isSerialDeviceVerbose(portInfo, options.serial_verbose));
 
-    if (portInfo.vendorId === VENDOR_ID_FTDI) {
+    if (isSerialPortUSBDevice(portInfo, TUBE_SERIAL_DEVICE) || isSerialPortUSBDevice(portInfo, FTDI_USB_SERIAL_DEVICE)) {
         await setFTDILatencyTimer(portInfo, serialLog);
     }
 
     serialLog.pn('Creating server...');
     const server = await createServer('SERIAL', getRomPathsForSerial(options));
 
-    const port = await openSerialPort(portInfo);
+    let port: SerialPort;
+    try {
+        port = await openSerialPort(portInfo);
+    } catch (error) {
+        process.stderr.write(`Error opening serial port ${portInfo.comName}: ${error}\n`);
+        return;
+    }
 
     let readWaiter: IReadWaiter | undefined;
     const readBuffers: Buffer[] = [];
@@ -1874,7 +1954,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                 });
             });
 
-            serialLog.pn(`Done one request / response.`);
+            serialLog.pn(`Done one request/response.`);
         }
 
         // Sync loop.
@@ -2040,6 +2120,7 @@ function integer(s: string): number {
     parser.addArgument(['--usb-verbose'], { action: 'storeTrue', help: 'extra USB-related output' });
 
     // Serial devices
+    parser.addArgument(['--serial-include'], { action: 'append', metavar: 'DEVICE', help: 'listen on serial port DEVICE' });
     parser.addArgument(['--serial-exclude'], { action: 'append', metavar: 'DEVICE', help: 'don\'t listen on serial port DEVICE' });
     parser.addArgument(['--serial-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial-related output (specify devices individually to be verbose for just those, or just --serial-verbose on its own for all devices)' });
     parser.addArgument(['--serial-sync-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial sync-related output (specify specify same as --serial-verbose)' });

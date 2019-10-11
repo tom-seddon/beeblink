@@ -61,6 +61,8 @@ If using an FTDI USB to serial adapter on Windows, you'll need to
 There's no bootstrap process for the UPURS cable - use the UPURS tools
 to get `beeblink_upurs_fe60.rom` copied onto your BBC.
 
+[There are some notes about using BeebLink with the UPURS cable](./docs/upurs.md).
+
 **UPURS support is experimental**
 
 # Use
