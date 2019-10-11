@@ -2,18 +2,20 @@
 
 ## Run server on PC
 
-Unzip the server zip file somewhere on your PC, and run it like this
-from the command line:
+Unzip the server zip file somewhere on your PC.
+
+If using the Tube serial device, run it just like this from the
+command line; if using the experimental UPURS support, see
+[the UPURS notes](./upurs.md) for advice about additional command line
+parameters you may need to supply.
 
 OS X: `./beeblink_server --default-volume beeblink ./volumes`
 
 Windows: `beeblink_server --default-volume beeblink ./volumes`
 
-The Tube serial devices you have connected will be autodetected.
-
-After a moment you should get a message along the lines of
-`/dev/tty.usbserial-FT33WLVU: serving.`, indicating that the server is
-ready.
+However you run it, after a moment you should get a message along the
+lines of `/dev/tty.usbserial-FT33WLVU: serving.`, indicating that the
+server is ready.
 
 ## Whirlwind tour
 

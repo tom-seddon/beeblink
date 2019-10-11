@@ -15,11 +15,12 @@
 # UPURS auto-detection
 
 If you are using the specific type of FTDI USB serial adapter I tested
-the UPURS cable with, the server will auto-detect it on startup.
+the UPURS cable with - USB vendor id 0403, product id 6001 - the
+server will auto-detect it on startup.
 
 Otherwise, you will have to specify the serial device to use on the
-command line. If you know its device name, use `--serial-include` to
-include it, e.g.:
+command line. If you know its device name already, use
+`--serial-include` to include it, e.g.:
 
     beeblink-server --serial-include /dev/tty.usbserial-FT93T5RD
 	
@@ -31,4 +32,12 @@ knows about:
 	
 For each device, it shows the path (this is what you should pass to
 `--serial-include`), info about the USB device it corresponds to, and
-a note about whether the device will be used or not.
+a note about whether the device will be used or not and why.
+
+# UPURS support is experimental
+
+Please
+[file a GitHub issue](https://github.com/tom-seddon/beeblink/issues)
+or
+[post in the StarDot BeebLink thread](https://stardot.org.uk/forums/viewtopic.php?f=53&t=15605)
+if you have any problems!

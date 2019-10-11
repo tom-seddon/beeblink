@@ -48,7 +48,7 @@ If you've got some way of getting files to your BBC already, copy
 otherwise, use the [bootstrap process](./docs/bootstrap.md), and get
 the file that way.
 
-## UPURS cable /(experimental)/
+## UPURS cable _(experimental)_
 
 **UPURS support is experimental**
 
