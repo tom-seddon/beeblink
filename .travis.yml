@@ -32,7 +32,7 @@ script:
   - (cd ./server && npm run compile)
   - (cd ./server && ./node_modules/.bin/pkg -t macos-x64 .)
   - find . -iname '*.node'
-  - (cd ./server && 7z a ../$SERVER_ZIP_NAME beeblink-server ./node_modules/usb/src/binding/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node)
+  - (cd ./server && 7z a ../$SERVER_ZIP_NAME beeblink-server ./node_modules/usb/build/Release/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node)
   - (7z a $SERVER_ZIP_NAME ./volumes)
   - (cd ./rom/.build && 7z a ../../$ROMS_ZIP_NAME beeblink_avr_fe60.rom)
   - (cd ./rom/.build && 7z a ../../$ROMS_ZIP_NAME beeblink_tube_serial.rom)

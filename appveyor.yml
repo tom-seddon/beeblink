@@ -22,7 +22,7 @@ build_script:
   - npm install
   - npm run compile
   - .\node_modules\.bin\pkg -t win .
-  - 7z a ..\%OUTPUT_NAME% .\beeblink-server.exe .\node_modules\@serialport\bindings\build\Release\bindings.node .\node_modules\usb\src\binding\usb_bindings.node
+  - 7z a ..\%OUTPUT_NAME% .\beeblink-server.exe .\node_modules\@serialport\bindings\build\Release\bindings.node .\node_modules\usb\build\Release\usb_bindings.node
   - cd ..
   - 7z a %OUTPUT_NAME% .\volumes
 
