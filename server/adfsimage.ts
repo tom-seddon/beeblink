@@ -63,7 +63,7 @@ interface IPart {
     data: Buffer;
 }
 
-export function getADFSImage(data: Buffer, drive: number, log: utils.Log): IADFSImage {
+export function getADFSImage(data: Buffer, drive: number, allSectors: boolean, log: utils.Log): IADFSImage {
     log.pn('getADFSImage: data=' + data.length + ' byte(s)');
     // Check image size. Rearrange ADFS L images so they're in ADFS logical
     // sector order.
@@ -122,28 +122,43 @@ export function getADFSImage(data: Buffer, drive: number, log: utils.Log): IADFS
     }
 
     // Get list of used sectors.
-    log.pn('Find unused sectors');
     const isSectorUsed: boolean[] = [];
     for (let i = 0; i < totalNumSectors; ++i) {
         isSectorUsed.push(true);
     }
 
-    for (let i = 0; i < sector1[0xfe]; i += 3) {
-        const startSector = utils.getUInt24LE(sector0, i);
-        const numSectors = utils.getUInt24LE(sector1, i);
+    if (allSectors) {
+        log.pn(`Assuming all sectors used`);
+    } else {
+        log.pn('Find unused sectors');
 
-        for (let j = 0; j < numSectors; ++j) {
-            const sector = startSector + j;
-            if (sector >= totalNumSectors) {
-                return errors.generic('Bad ADFS image (invalid free space map)');
+        for (let i = 0; i < sector1[0xfe]; i += 3) {
+            const startSector = utils.getUInt24LE(sector0, i);
+            const numSectors = utils.getUInt24LE(sector1, i);
+
+            for (let j = 0; j < numSectors; ++j) {
+                const sector = startSector + j;
+                if (sector >= totalNumSectors) {
+                    return errors.generic('Bad ADFS image (invalid free space map)');
+                }
+
+                if (!isSectorUsed[sector]) {
+                    return errors.generic('Bad ADFS image (free space overlap)');
+                }
+
+                isSectorUsed[sector] = false;
             }
-
-            if (!isSectorUsed[sector]) {
-                return errors.generic('Bad ADFS image (free space overlap)');
-            }
-
-            isSectorUsed[sector] = false;
         }
+    }
+
+    {
+        let numUsedSectors = 0;
+        for (const used of isSectorUsed) {
+            if (used) {
+                ++numUsedSectors;
+            }
+        }
+        log.pn(`${numUsedSectors}/${totalNumSectors} sector(s) used`);
     }
 
     // Group used sectors into parts that don't exceed the max part size.

@@ -117,6 +117,22 @@ enum DefaultsCommandMode {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+enum DiskImageType {
+    ADFS,
+    SSD,
+    DSD,
+}
+
+interface IDiskImageDetails {
+    fileName: string;
+    drive: number;
+    type: DiskImageType;
+    allSectors: boolean;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 // This handles the front-end duties of decomposing payloads, parsing command
 // lines, routing requests to the appropriate methods of BeebFS, and dealing
 // with the packet writing. The plan is that the BeebFS part could be
@@ -166,6 +182,7 @@ export default class Server {
             new Command('LIST', '<fsp>', this.listCommand),
             new Command('LOCATE', '<afsp>', this.locateCommand),
             new Command('NEWVOL', '<vsp>', this.newvolCommand),
+            new Command('READ', '<fsp> <drive> <type>', this.readCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
             new Command('SELFUPDATE', undefined, this.selfupdateCommand),
             new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand),
@@ -907,9 +924,15 @@ export default class Server {
 
     private async handleNextDiskImagePart(handler: Handler, p: Buffer): Promise<Response> {
         if (this.imageParts === undefined || this.imagePartIdx >= this.imageParts.length) {
+            if (this.imageParts === undefined) {
+                this.log.pn(`no image`);
+            } else {
+                this.log.pn(`image write done (part=${this.imagePartIdx}/${this.imageParts.length})`);
+            }
             this.imageParts = undefined;
             return newResponse(beeblink.RESPONSE_NO);
         } else {
+            this.log.pn(`${this.imageParts[this.imagePartIdx].length} byte(s) (part=${this.imagePartIdx}/${this.imageParts.length})`);
             return newResponse(beeblink.RESPONSE_DATA, this.imageParts[this.imagePartIdx++]);
         }
     }
@@ -1357,54 +1380,132 @@ export default class Server {
         return this.textResponse('Volume: ' + volume.name + BNL + 'Path: ' + volume.path + BNL);
     }
 
-    private async writeCommand(commandLine: CommandLine): Promise<Response> {
+    private getDiskImageDetails(commandLine: CommandLine): IDiskImageDetails {
         if (commandLine.parts.length < 4) {
             return errors.syntax();
         }
 
-        this.imageParts = undefined;
-        this.imagePartIdx = 0;
-
-        const fileName = commandLine.parts[1];
-        const driveString = commandLine.parts[2];
-        const type = commandLine.parts[3].toLowerCase();
-
-        const data = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
-
-        if (driveString.length !== 1 || !utils.isdigit(driveString)) {
+        const driveStr = commandLine.parts[2];
+        if (driveStr.length !== 1 || !utils.isdigit(driveStr)) {
             return errors.syntax();
         }
-        const drive: number = +driveString;
 
-        if (type === 'a') {
-            // there's only a 3-bit field for ADFS drives.
-            if (drive < 0 || drive > 7) {
-                return errors.badDrive();
-            }
+        const typeStr = commandLine.parts[3].toLowerCase();
 
-            const image = adfsimage.getADFSImage(data, drive, this.log);
-
-            this.imageParts = image.parts;
-
-            const p = Buffer.alloc(5);
-            p[0] = beeblink.RESPONSE_SPECIAL_WRITE_ADFS_IMAGE;
-            utils.setUInt24LE(p, 1, image.totalNumSectors);
-            p[4] = drive;
-
-            return newResponse(beeblink.RESPONSE_SPECIAL, p);
-        } else if (type === 's') {
-            this.imageParts = dfsimage.getSSDParts(data, drive, this.log);
-            return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_WRITE_DFS_IMAGE);
-        } else if (type === 'd') {
-            if (drive !== 0 && drive !== 1) {
-                return errors.badDrive();
-            }
-
-            this.imageParts = dfsimage.getDSDParts(data, drive, this.log);
-
-            return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_WRITE_DFS_IMAGE);
-        } else {
+        if (typeStr.length === 0) {
             return errors.syntax();
+        }
+
+        let type: DiskImageType;
+        switch (typeStr.charAt(0)) {
+            case 'a':
+                type = DiskImageType.ADFS;
+                break;
+
+            case 's':
+                type = DiskImageType.SSD;
+                break;
+
+            case 'd':
+                type = DiskImageType.DSD;
+                break;
+
+            default:
+                return errors.syntax();
+        }
+
+        let allSectors = false;
+        if (typeStr.length >= 2) {
+            if (typeStr.length > 2) {
+                return errors.syntax();
+            }
+
+            if (typeStr.charAt(1) === '*') {
+                allSectors = true;
+            } else {
+                return errors.syntax();
+            }
+        }
+
+        return {
+            fileName: commandLine.parts[1],
+            drive: +driveStr,
+            type,
+            allSectors,
+        };
+    }
+
+    private async readCommand(commandLine: CommandLine): Promise<Response> {
+        const details = this.getDiskImageDetails(commandLine);
+
+        switch (details.type) {
+            case DiskImageType.ADFS:
+                return errors.generic("ADFS = TODO");
+            //return newResponse(beeblink.RESPONSE_SPECIAL, p);
+
+            case DiskImageType.SSD: {
+                const p = Buffer.alloc(2);
+                p[0] = beeblink.RESPONSE_SPECIAL_READ_SSD_IMAGE;
+                p[1] = details.drive;
+                return newResponse(beeblink.RESPONSE_SPECIAL, p);
+            }
+
+            case DiskImageType.DSD: {
+                if (details.drive !== 0 && details.drive !== 1) {
+                    return errors.badDrive();
+                }
+
+                const p = Buffer.alloc(1);
+                p[0] = beeblink.RESPONSE_SPECIAL_READ_DSD_IMAGE;
+                p[1] = details.drive;
+                return newResponse(beeblink.RESPONSE_SPECIAL, p);
+            }
+        }
+    }
+
+    private setImageParts(imageParts: Buffer[]): void {
+        this.imageParts = imageParts.slice();
+        this.imagePartIdx = 0;
+    }
+
+    private async writeCommand(commandLine: CommandLine): Promise<Response> {
+        const details = this.getDiskImageDetails(commandLine);
+
+        const data = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(details.fileName)));
+
+        switch (details.type) {
+            case DiskImageType.ADFS: {
+                // there's only a 3-bit field for ADFS drives.
+                if (details.drive < 0 || details.drive > 7) {
+                    return errors.badDrive();
+                }
+
+                const image = adfsimage.getADFSImage(data, details.drive, details.allSectors, this.log);
+
+                this.setImageParts(image.parts);
+
+                const p = Buffer.alloc(5);
+                p[0] = beeblink.RESPONSE_SPECIAL_WRITE_ADFS_IMAGE;
+                utils.setUInt24LE(p, 1, image.totalNumSectors);
+                p[4] = details.drive;
+
+                return newResponse(beeblink.RESPONSE_SPECIAL, p);
+            }
+
+            case DiskImageType.SSD: {
+                this.setImageParts(dfsimage.getSSDParts(data, details.drive, details.allSectors, this.log));
+                return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_WRITE_DFS_IMAGE);
+            }
+
+            case DiskImageType.DSD: {
+                if (details.drive !== 0 && details.drive !== 1) {
+                    return errors.badDrive();
+                }
+
+                this.setImageParts(dfsimage.getDSDParts(data, details.drive, details.allSectors, this.log));
+
+                return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_WRITE_DFS_IMAGE);
+            }
         }
     }
 

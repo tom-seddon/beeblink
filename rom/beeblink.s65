@@ -5055,8 +5055,16 @@ parts_loop:
                 jsr recv_next_disk_image_part
                 bcc +
 
+                .if write_adfs_verbose
+                jsr pcprint
+                .text "Done.",13,255
+                .endif
                 pla
                 jsr remount
+                .if write_adfs_verbose
+                jsr pcprint
+                .text "Remounted.",13,255
+                .endif
                 jmp write_image_done
 
 +
@@ -5239,6 +5247,10 @@ write_image_done: .block
 ;                                  ready for OSWORD $72/$7f
 recv_next_disk_image_part: .proc
                 jsr get_write_image_buffers
+
+                ; claim NMI now, while DFS/ADFS is properly set up, in
+                ; case the link needs it. No harm if it doesn't.
+                jsr claim_nmi
                 
                 ; save DFS/ADFS workspace.
                 ldx #31
@@ -5258,7 +5270,9 @@ recv_next_disk_image_part: .proc
                 bne +
 
                 ; return with C=1
-                rts
+                ldy #1
+                jmp done
+                
 +
                 cmp #RESPONSE_DATA
                 beq +
@@ -5277,9 +5291,30 @@ recv_next_disk_image_part: .proc
                 lda #$ff
                 sta payload_addr+2
                 sta payload_addr+3
+
+                ; Hack! - before receiving the file data, unset the
+                ; NMI flag. Don't let the link potentially try to
+                ; release it with the FS zero page in its current
+                ; weird state, in case DFS/ADFS ends up examining its
+                ; workspace.
+                ldx $f4
+                lda roms_table,x
+                and #(~sf_got_nmi)&$ff
+                sta roms_table,x
+                
                 jsr recv_file_data
 
-                ; restore DFS/ADFS workspace.
+                ; Restore the NMI flag.
+                ldx $f4
+                lda roms_table,x
+                ora #sf_got_nmi
+                sta roms_table,x
+
+                ; return with C=0
+                ldy #0
+
+done:
+                ; restore DFS/ADFS workspace
                 ldx #0
 -
                 pla
@@ -5288,9 +5323,16 @@ recv_next_disk_image_part: .proc
                 cpx #32
                 bne -
 
-                ; though carry almost certainly clear already...
-                clc
+                tya
+                pha
 
+                ; reinstate NMI
+                jsr release_nmi
+
+                ; set carry flag appropriately.
+                pla
+                lsr a
+                
                 rts
                 .pend
                 

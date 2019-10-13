@@ -703,8 +703,8 @@ async function listSerialDevices(options: ICommandLineOptions): Promise<void> {
     const portInfos = await SerialPort.list();
     process.stdout.write(portInfos.length + ' serial devices:\n');
 
-    for (let i = 0; i < portInfos.length; ++i) {
-        const p = portInfos[i];
+    for (let portInfoIdx = 0; portInfoIdx < portInfos.length; ++portInfoIdx) {
+        const p = portInfos[portInfoIdx];
 
         const attrs: string[] = [];
 
@@ -721,12 +721,9 @@ async function listSerialDevices(options: ICommandLineOptions): Promise<void> {
         attr(p.locationId, `Location ID`);
         attr(p.pnpId, `PNP ID`);
 
-        const prefix = `${i}. `;
+        const prefix = `${portInfoIdx}. `;
 
-        let indent = ``;
-        for (let i = 0; i < prefix.length; ++i) {
-            indent += ` `;
-        }
+        const indent = ` `.repeat(prefix.length);
 
         process.stdout.write(`${prefix}Path: ${getSerialPortPath(p)}\n`);
         if (attrs.length > 0) {

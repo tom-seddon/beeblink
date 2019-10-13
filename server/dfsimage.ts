@@ -40,6 +40,11 @@ function checkSize(data: Buffer, minSize: number): void {
     }
 }
 
+interface IUsedTrack {
+    index: number;
+    sectors: number[];
+}
+
 interface ITrack {
     drive: number;
     index: number;
@@ -64,58 +69,119 @@ function compareTracks(a: ITrack, b: ITrack): number {
     return 0;
 }
 
-function getSideTracks(diskImageData: Buffer, drive: number, diskImageTrack0Offset: number, diskImageTrackSizeBytes: number, log: utils.Log): ITrack[] {
+function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, log: utils.Log | undefined): IUsedTrack[] {
+    if (data[track0Offset + 0x105] % 8 !== 0) {
+        return errors.generic('Bad DFS format (file count)');
+    }
+
+    const cat0 = Buffer.from(data.buffer, track0Offset, SECTOR_SIZE_BYTES);
+    const cat1 = Buffer.from(data.buffer, track0Offset + SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES);
+
+    if (allSectors) {
+        const numSectors = cat1[0x07] | ((cat1[0x06] & 0x03) << 8);
+
+        if (numSectors % TRACK_SIZE_SECTORS !== 0) {
+            return errors.generic('Bad DFS format (sector count)');
+        }
+
+        const usedTracks: IUsedTrack[] = [];
+        for (let index = 0; index < Math.floor(numSectors / TRACK_SIZE_SECTORS); ++index) {
+            const sectors: number[] = [];
+            for (let i = 0; i < TRACK_SIZE_SECTORS; ++i) {
+                sectors.push(i);
+            }
+
+            usedTracks.push({ index, sectors });
+        }
+
+        return usedTracks;
+    } else {
+        const usedSectorsByTrack = new Map<number, Set<number>>();
+
+        for (let offset = 8; offset <= cat1[0x05]; offset += 8) {
+
+            let size = 0;
+            size |= cat1[offset + 4] << 0;
+            size |= cat1[offset + 5] << 8;
+            size |= (cat1[offset + 6] >> 4 & 3) << 16;
+
+            let startSector = 0;
+            startSector |= cat1[offset + 7] << 0;
+            startSector |= (cat1[offset + 6] & 3) << 8;
+
+            if (log !== undefined) {
+                const name = `${String.fromCharCode(cat0[offset + 7])}.${cat0.toString('binary', offset + 0, offset + 7).trimRight()}`;
+                log.pn(`    ${name}: size=0x${utils.hex8(size)}, start sector=${startSector} (0x${utils.hex8(startSector)})`);
+            }
+
+            for (let i = 0; i < size; i += 256) {
+                const sector = startSector + Math.floor(i / SECTOR_SIZE_BYTES);
+
+                const track = Math.floor(sector / TRACK_SIZE_SECTORS);
+
+                let usedSectors = usedSectorsByTrack.get(track);
+                if (usedSectors === undefined) {
+                    usedSectors = new Set<number>();
+                    usedSectorsByTrack.set(track, usedSectors);
+                }
+
+                usedSectors.add(sector % TRACK_SIZE_SECTORS);
+            }
+        }
+
+        const usedTracks: IUsedTrack[] = [];
+        for (const index of usedSectorsByTrack.keys()) {
+            const sectors: number[] = [];
+            for (const sector of usedSectorsByTrack.get(index)!) {
+                sectors.push(sector);
+            }
+
+            sectors.sort();
+
+            usedTracks.push({ index, sectors, });
+        }
+
+        usedTracks.sort((a: IUsedTrack, b: IUsedTrack) => {
+            if (a.index < b.index) {
+                return -1;
+            } else if (a.index > b.index) {
+                return 1;
+            } else {
+                return 0;
+            }
+        });
+
+        return usedTracks;
+    }
+}
+
+function getSideTracks(diskImageData: Buffer, drive: number, diskImageTrack0Offset: number, diskImageTrackSizeBytes: number, allSectors: boolean, log: utils.Log): ITrack[] {
     if (diskImageData[diskImageTrack0Offset + 0x105] % 8 !== 0) {
         return errors.generic('Bad DFS format (file count)');
     }
 
-    const usedTracksMap = new Map<number, boolean>();
-
     log.pn('Files on drive ' + drive + ':');
-
-    const cat0 = Buffer.from(diskImageData.buffer, diskImageTrack0Offset, SECTOR_SIZE_BYTES);
-    const cat1 = Buffer.from(diskImageData.buffer, diskImageTrack0Offset + SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES);
-
-    for (let offset = 8; offset <= diskImageData[diskImageTrack0Offset + 0x105]; offset += 8) {
-        let name = ':' + drive + '.';
-        name += String.fromCharCode(cat0[offset + 7]);
-        name += '.';
-        name += cat0.toString('binary', offset + 0, offset + 7).trimRight();
-
-        let size = 0;
-        size |= cat1[offset + 4] << 0;
-        size |= cat1[offset + 5] << 8;
-        size |= (cat1[offset + 6] >> 4 & 3) << 16;
-
-        let startSector = 0;
-        startSector |= cat1[offset + 7] << 0;
-        startSector |= (cat1[offset + 6] & 3) << 8;
-
-        log.pn('    ' + name + ': size=0x' + utils.hex8(size) + ', start sector=' + startSector + ' (0x' + utils.hex8(startSector) + ')');
-
-        for (let i = 0; i < size; i += 256) {
-            const sector = startSector + Math.floor(i / SECTOR_SIZE_BYTES);
-            usedTracksMap.set(Math.floor(sector / TRACK_SIZE_SECTORS), true);
-        }
-    }
+    const usedTracks = getUsedTracks(diskImageData, diskImageTrack0Offset, allSectors, log);
 
     const tracks: ITrack[] = [];
-    for (const index of usedTracksMap.keys()) {
-        const begin = diskImageTrack0Offset + index * diskImageTrackSizeBytes;
-        if (begin >= diskImageData.length) {
-            return errors.generic('Bad DFS format (overrun)');
-        }
+    for (const usedTrack of usedTracks) {
+        // If the image finishes early, just assume it's a truncated image.
 
-        // Assume end overrun isn't an error, just a correctly truncated image. 
-        let end = begin + TRACK_SIZE_BYTES;
-        if (end > diskImageData.length) {
-            end = diskImageData.length;
+        const begin = diskImageTrack0Offset + usedTrack.index * diskImageTrackSizeBytes;
+        const end = begin + TRACK_SIZE_BYTES;
+
+        const data = Buffer.alloc(TRACK_SIZE_BYTES, 0);
+
+        let destIdx = 0;
+        let srcIdx = 0;
+        while (srcIdx < end && srcIdx < diskImageData.length) {
+            data[destIdx++] = diskImageData[srcIdx++];
         }
 
         tracks.push({
             drive,
-            index,
-            data: Buffer.from(diskImageData.buffer, begin, end - begin),
+            index: usedTrack.index,
+            data,
         });
     }
 
@@ -152,19 +218,19 @@ function getPartBuffers(tracks: ITrack[]): Buffer[] {
     return buffers;
 }
 
-export function getSSDParts(diskImageData: Buffer, drive: number, log: utils.Log): Buffer[] {
+export function getSSDParts(diskImageData: Buffer, drive: number, allSectors: boolean, log: utils.Log): Buffer[] {
     checkSize(diskImageData, 2 * SECTOR_SIZE_BYTES);
 
-    const tracks = getSideTracks(diskImageData, drive, 0, TRACK_SIZE_BYTES, log);
+    const tracks = getSideTracks(diskImageData, drive, 0, TRACK_SIZE_BYTES, allSectors, log);
 
     return getPartBuffers(tracks);
 }
 
-export function getDSDParts(diskImageData: Buffer, drive: number, log: utils.Log): Buffer[] {
+export function getDSDParts(diskImageData: Buffer, drive: number, allSectors: boolean, log: utils.Log): Buffer[] {
     checkSize(diskImageData, TRACK_SIZE_BYTES + 2 * SECTOR_SIZE_BYTES);
 
-    let tracks = getSideTracks(diskImageData, drive, 0, 2 * TRACK_SIZE_BYTES, log);
-    tracks = tracks.concat(getSideTracks(diskImageData, drive | 2, TRACK_SIZE_BYTES, 2 * TRACK_SIZE_BYTES, log));
+    let tracks = getSideTracks(diskImageData, drive, 0, 2 * TRACK_SIZE_BYTES, allSectors, log);
+    tracks = tracks.concat(getSideTracks(diskImageData, drive | 2, TRACK_SIZE_BYTES, 2 * TRACK_SIZE_BYTES, allSectors, log));
 
     return getPartBuffers(tracks);
 }

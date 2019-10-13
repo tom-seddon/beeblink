@@ -386,10 +386,13 @@ Write a DFS/ADFS disk image to a formatted disk.
 
 `<type>` is the type of image:
 
-* `S`: .ssd
-* `D`: .dsd, track order
+* `S`: .ssd (may be truncated)
+* `D`: .dsd, track order (may be truncated)
 * `A`: ADFS S/M/L (ADFS L images must be track order) (image size must
   match the disk to be written to)
+  
+By default, `*WRITE` will only write used areas of the disk. Add a `*`
+to the type to have it write the entire disk instead.
 
 # `BLCONFIG` options
 

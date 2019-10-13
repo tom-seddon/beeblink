@@ -475,7 +475,10 @@ export const RESPONSE_VOLUME_BROWSER = 0x10;
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// RESPONSE_SPECIAL types.
+// RESPONSE_SPECIAL sub-types.
+//
+// Payload contents descriptions exclude the first byte, which is the sub-type
+// itself.
 
 // Do the volume browser.
 export const RESPONSE_SPECIAL_VOLUME_BROWSER = 0;
@@ -502,6 +505,12 @@ export const RESPONSE_SPECIAL_SELFUPDATE = 5;
 //
 // P = 1 byte, bank; 2 bytes, 16-bit address to load to; rest, data to load.
 export const RESPONSE_SPECIAL_SRLOAD = 6;
+
+// Do DFS disk image read, SSD or DSD.
+//
+// P = 1 byte, drive (for DSD reads, infer the other drive); 1 byte, 
+export const RESPONSE_SPECIAL_READ_SSD_IMAGE = 7;
+export const RESPONSE_SPECIAL_READ_DSD_IMAGE = 8;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
