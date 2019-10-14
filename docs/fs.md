@@ -391,8 +391,9 @@ Write a DFS/ADFS disk image to a formatted disk.
 * `A`: ADFS S/M/L (ADFS L images must be track order) (image size must
   match the disk to be written to)
   
-By default, `*WRITE` will only write used areas of the disk. Add a `*`
-to the type to have it write the entire disk instead.
+By default, `*WRITE` will only write used areas of the image, so that
+the writing is quicker. Add a `*` to the type to have it write the
+entire image instead.
 
 # `BLCONFIG` options
 

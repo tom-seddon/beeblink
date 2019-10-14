@@ -37,15 +37,17 @@
 // - These constants are not in any rational order. I just added each one as I
 //   found the need for it and/or got round to writing it
 //
-// - There don't need to be so many different response types, but there appears
-//   to be no risk (yet) of running out
-//
 // - Requests don't mention ERROR as a possible response, because the server can
 //   always send it back in response to anything
 //
 // - The upgrade/versioning path is not super awesome: it basically consists of
 //   adding further bytes to payloads, never removing bytes from payloads, or
 //   dropping support for certain request/response types
+//
+// - I started out with this 2-level type/sub-type arrangement in a couple of
+//   places, to try to avoid request/response type exhaustion. But there appears
+//   to be actually no real risk of running out, so I haven't bothered doing
+//   this with later features
 //
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -289,7 +291,7 @@ export const REQUEST_SPEED_TEST = 0x18;
 // The address value in the parameter block (bytes 1...5 inclusive) is an offset
 // relative to the start of the parameter block, and must have the parameter
 // block address added to it.
-export const REQUEST_NEXT_DISK_IMAGE_PART = 0x19;
+export const REQUEST_NEXT_DISK_IMAGE_WRITE_PART = 0x19;
 
 // Set file handle range.
 //
@@ -304,6 +306,52 @@ export const REQUEST_NEXT_DISK_IMAGE_PART = 0x19;
 //
 // P = first file handle; num file handles
 export const REQUEST_SET_FILE_HANDLE_RANGE = 0x1a;
+
+// Start a disk image read.
+//
+// P = 2 bytes, OSHWM; 2 bytes, HIMEM
+//
+// Response is data to be stored at OSHWM:
+
+// byte  - filing system to select
+// byte  - code for first OSWORD block
+// word  - address of first OSWORD block
+// byte  - offset of error result for first OSWORD call
+// byte  - code for second OSWORD block, or 0 if none
+// word  - address of second OSWORD block, if appropriate
+// byte  - offset of error result for second OSWORD call, if appropriate
+// dword - payload addr for the SET_DISK_IMAGE_CAT
+// dword - payload size for the SET_DISK_IMAGE_CAT
+
+// Select other filing system, do the OSWORDs as appropriate, then do a
+// SET_DISK_IMAGE CAT to set things going.
+export const REQUEST_START_READ_DISK_IMAGE = 0x1b;
+
+// Set catalogue read from disk.
+//
+// P = as requested by START_READ_DISK_IMAGE
+export const REQUEST_SET_READ_DISK_IMAGE_CAT = 0x1c;
+
+// Request next *READ disk image part.
+//
+// Response is NO if all parts have been read.
+//
+// Response is DATA if there is another part. Storet at OSHWM:
+
+// byte   - code for OSWORD block
+// word   - address of OSWORD block
+// byte   - offset of error result for OSWORD
+// word   - address of message to print
+// dword - payload addr for the SET_READ_DISK_IMAGE_PART
+// dword - payload size for the SET_READ_DISK_IMAGE_PART
+
+// Use REQUEST_SET_DISK_IMAGE_READ_PART to tell the server about the data read.
+export const REQUEST_NEXT_READ_DISK_IMAGE_OSWORD = 0x1d;
+
+// Submit last *READ disk image part.
+//
+// P = as requested by NEXT_READ_DISK_IMAGE_OSWORD
+export const REQUEST_SET_READ_DISK_IMAGE_PART = 0x1e;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -506,11 +554,8 @@ export const RESPONSE_SPECIAL_SELFUPDATE = 5;
 // P = 1 byte, bank; 2 bytes, 16-bit address to load to; rest, data to load.
 export const RESPONSE_SPECIAL_SRLOAD = 6;
 
-// Do DFS disk image read, SSD or DSD.
-//
-// P = 1 byte, drive (for DSD reads, infer the other drive); 1 byte, 
-export const RESPONSE_SPECIAL_READ_SSD_IMAGE = 7;
-export const RESPONSE_SPECIAL_READ_DSD_IMAGE = 8;
+// Do a disk image read.
+export const RESPONSE_SPECIAL_READ_DISK_IMAGE = 7;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////

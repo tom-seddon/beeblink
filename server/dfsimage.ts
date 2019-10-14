@@ -25,6 +25,7 @@
 import * as utils from './utils';
 import * as beebfs from './beebfs';
 import * as errors from './errors';
+import * as server from './server';
 
 const TRACK_SIZE_SECTORS = 10;
 const SECTOR_SIZE_BYTES = 256;
@@ -38,11 +39,6 @@ function checkSize(data: Buffer, minSize: number): void {
     if (data.length < minSize) {
         throw Error('Bad image size (must be >=' + minSize + ')');
     }
-}
-
-interface IUsedTrack {
-    index: number;
-    sectors: number[];
 }
 
 interface ITrack {
@@ -69,7 +65,11 @@ function compareTracks(a: ITrack, b: ITrack): number {
     return 0;
 }
 
-function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, log: utils.Log | undefined): IUsedTrack[] {
+function getNumSectors(data: Buffer, cat1Offset: number): number {
+    return data[cat1Offset + 0x07] | ((data[cat1Offset + 0x06] & 0x03) << 8);
+}
+
+function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, log: utils.Log | undefined): number[] {
     if (data[track0Offset + 0x105] % 8 !== 0) {
         return errors.generic('Bad DFS format (file count)');
     }
@@ -78,25 +78,20 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
     const cat1 = Buffer.from(data.buffer, track0Offset + SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES);
 
     if (allSectors) {
-        const numSectors = cat1[0x07] | ((cat1[0x06] & 0x03) << 8);
+        const numSectors = getNumSectors(cat1, 0);
 
         if (numSectors % TRACK_SIZE_SECTORS !== 0) {
             return errors.generic('Bad DFS format (sector count)');
         }
 
-        const usedTracks: IUsedTrack[] = [];
+        const usedTracks: number[] = [];
         for (let index = 0; index < Math.floor(numSectors / TRACK_SIZE_SECTORS); ++index) {
-            const sectors: number[] = [];
-            for (let i = 0; i < TRACK_SIZE_SECTORS; ++i) {
-                sectors.push(i);
-            }
-
-            usedTracks.push({ index, sectors });
+            usedTracks.push(index);
         }
 
         return usedTracks;
     } else {
-        const usedSectorsByTrack = new Map<number, Set<number>>();
+        const usedTracksSet = new Set<number>();
 
         for (let offset = 8; offset <= cat1[0x05]; offset += 8) {
 
@@ -110,46 +105,27 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
             startSector |= (cat1[offset + 6] & 3) << 8;
 
             if (log !== undefined) {
-                const name = `${String.fromCharCode(cat0[offset + 7])}.${cat0.toString('binary', offset + 0, offset + 7).trimRight()}`;
-                log.pn(`    ${name}: size=0x${utils.hex8(size)}, start sector=${startSector} (0x${utils.hex8(startSector)})`);
+                const name = `${String.fromCharCode(cat0[offset + 7])}.${cat0.toString('binary', offset + 0, offset + 7).trimRight()} `;
+                log.pn(`    ${name}: size = 0x${utils.hex8(size)}, start sector = ${startSector} (0x${utils.hex8(startSector)})`);
             }
 
             for (let i = 0; i < size; i += 256) {
                 const sector = startSector + Math.floor(i / SECTOR_SIZE_BYTES);
 
-                const track = Math.floor(sector / TRACK_SIZE_SECTORS);
-
-                let usedSectors = usedSectorsByTrack.get(track);
-                if (usedSectors === undefined) {
-                    usedSectors = new Set<number>();
-                    usedSectorsByTrack.set(track, usedSectors);
-                }
-
-                usedSectors.add(sector % TRACK_SIZE_SECTORS);
+                usedTracksSet.add(Math.floor(sector / TRACK_SIZE_SECTORS));
             }
         }
 
-        const usedTracks: IUsedTrack[] = [];
-        for (const index of usedSectorsByTrack.keys()) {
-            const sectors: number[] = [];
-            for (const sector of usedSectorsByTrack.get(index)!) {
-                sectors.push(sector);
-            }
-
-            sectors.sort();
-
-            usedTracks.push({ index, sectors, });
+        const usedTracks: number[] = [];
+        for (const usedTrack of usedTracksSet) {
+            usedTracks.push(usedTrack);
         }
 
-        usedTracks.sort((a: IUsedTrack, b: IUsedTrack) => {
-            if (a.index < b.index) {
-                return -1;
-            } else if (a.index > b.index) {
-                return 1;
-            } else {
-                return 0;
-            }
-        });
+        usedTracks.sort();
+
+        // if (log !== undefined) {
+        //     log.pn(`Used tracks: ${usedTracks}`);
+        // }
 
         return usedTracks;
     }
@@ -164,25 +140,21 @@ function getSideTracks(diskImageData: Buffer, drive: number, diskImageTrack0Offs
     const usedTracks = getUsedTracks(diskImageData, diskImageTrack0Offset, allSectors, log);
 
     const tracks: ITrack[] = [];
-    for (const usedTrack of usedTracks) {
+    for (const index of usedTracks) {
         // If the image finishes early, just assume it's a truncated image.
 
-        const begin = diskImageTrack0Offset + usedTrack.index * diskImageTrackSizeBytes;
+        const begin = diskImageTrack0Offset + index * diskImageTrackSizeBytes;
         const end = begin + TRACK_SIZE_BYTES;
 
         const data = Buffer.alloc(TRACK_SIZE_BYTES, 0);
 
         let destIdx = 0;
-        let srcIdx = 0;
+        let srcIdx = begin;
         while (srcIdx < end && srcIdx < diskImageData.length) {
             data[destIdx++] = diskImageData[srcIdx++];
         }
 
-        tracks.push({
-            drive,
-            index: usedTrack.index,
-            data,
-        });
+        tracks.push({ drive, index, data, });
     }
 
     return tracks;
@@ -233,4 +205,201 @@ export function getDSDParts(diskImageData: Buffer, drive: number, allSectors: bo
     tracks = tracks.concat(getSideTracks(diskImageData, drive | 2, TRACK_SIZE_BYTES, 2 * TRACK_SIZE_BYTES, allSectors, log));
 
     return getPartBuffers(tracks);
+}
+
+interface IReadTrack {
+    side: number;
+    track: number;
+}
+
+interface IReadPart {
+    side: number;
+    track: number;
+    oswordBuffer: Buffer;
+    dataBuffer: Buffer | undefined;
+}
+
+export class Reader implements server.IDiskImageReader {
+    private drive: number;
+    private doubleSided: boolean;
+    private allSectors: boolean;
+    private parts: IReadPart[] | undefined;
+    private partIdx: number;
+    private log: utils.Log | undefined;
+    private oshwm: number | undefined;
+
+    public constructor(drive: number, doubleSided: boolean, allSectors: boolean, log: utils.Log | undefined) {
+        this.drive = drive;
+        this.doubleSided = doubleSided;
+        this.allSectors = allSectors;
+        this.partIdx = 0;
+        this.log = log;
+    }
+
+    public start(oshwm: number, himem: number): Buffer {
+        const b = new utils.BufferBuilder();
+
+        b.writeUInt8(4);//4=DFS
+
+        // first OSWORD info
+        b.writeUInt8(0x7f);
+        const osword0AddrOffset = b.writeUInt16LE(0);//filled in later
+        const osword0ResultOffsetOffset = b.writeUInt8(0);//filled in later
+
+        // second OSWORD info
+        b.writeUInt8(this.doubleSided ? 0x7f : 0x00);
+        const osword1AddrOffset = b.writeUInt16LE(0);
+        const osword1ResultOffsetOffset = b.writeUInt8(0);
+
+        const payloadAddrOffset = b.writeUInt32LE(0);
+        b.writeUInt32LE(this.doubleSided ? 1024 : 512);
+
+        // first OSWORD block
+        b.setUInt16LE(oshwm + b.getLength(), osword0AddrOffset);
+        b.setUInt8(b.getLength() + 10, osword0ResultOffsetOffset);
+        const osword0BlockOffset = this.addOSWORD7f(b, this.drive, 0, 0, 2);
+
+        let osword1BlockOffset: number | undefined;
+        if (this.doubleSided) {
+            // second OSWORD block
+            b.setUInt16LE(oshwm + b.getLength(), osword1AddrOffset);
+            b.setUInt8(b.getLength() + 10, osword1ResultOffsetOffset);
+            osword1BlockOffset = this.addOSWORD7f(b, this.drive | 2, 0, 0, 2);
+        }
+
+        const payloadAddr = 0xffff0000 | (oshwm + b.getLength());
+        b.setUInt32LE(payloadAddr, osword0BlockOffset + 1);
+        b.setUInt32LE(payloadAddr, payloadAddrOffset);
+
+        if (this.doubleSided) {
+            b.setUInt32LE(payloadAddr + 512, osword1BlockOffset! + 1);
+        }
+
+        this.oshwm = oshwm;
+
+        return b.createBuffer();
+    }
+
+    public setCat(p: Buffer): void {
+        if (this.parts !== undefined) {
+            return errors.generic(`Invalid setCat`);
+        }
+
+        const tracks: IReadTrack[] = [];
+
+        if (this.doubleSided) {
+            if (p.length !== 1024) {
+                return errors.generic(`Bad cat size`);
+            }
+
+            for (const track of getUsedTracks(p, 0, this.allSectors, this.log)) {
+                tracks.push({ side: 0, track });
+            }
+
+            for (const track of getUsedTracks(p, 512, this.allSectors, this.log)) {
+                tracks.push({ side: 1, track });
+            }
+        } else {
+            if (p.length !== 512) {
+                return errors.generic(`Bad cat size`);
+            }
+
+            for (const track of getUsedTracks(p, 0, this.allSectors, this.log)) {
+                tracks.push({ side: 0, track });
+            }
+        }
+
+        tracks.sort((a: IReadTrack, b: IReadTrack) => {
+            if (a.track < b.track) {
+                return -1;
+            } else if (a.track > b.track) {
+                return 1;
+            } else {
+                if (a.side < b.side) {
+                    return -1;
+                } else if (a.side > b.side) {
+                    return 1;
+                }
+            }
+
+            return 0;
+        });
+
+        this.parts = [];
+        for (let i = 0; i < tracks.length; ++i) {
+            this.addReadPart(tracks[i].side, tracks[i].track, (i + 1) / tracks.length);
+        }
+
+        if (this.log !== undefined) {
+            this.log.pn(`${this.parts.length} part(s)`);
+        }
+    }
+
+    public getNextOSWORD(): Buffer | undefined {
+        if (this.parts === undefined || this.partIdx >= this.parts.length) {
+            return undefined;
+        }
+
+        return this.parts[this.partIdx].oswordBuffer;
+    }
+
+    public setPart(data: Buffer): void {
+        if (this.parts === undefined || this.partIdx >= this.parts.length) {
+            return errors.generic(`Invalid setLastReadPart`);
+        }
+
+        this.parts[this.partIdx++].dataBuffer = data;
+    }
+
+    public getImage(): Buffer {
+        return Buffer.alloc(0);
+    }
+
+    private addOSWORD7f(b: utils.BufferBuilder, drive: number, track: number, sector: number, numSectors: number): number {
+        const offset = b.writeUInt8(this.drive);
+
+        b.writeUInt32LE(0);//fixed up later
+
+        b.writeUInt8(3);
+        b.writeUInt8(0x53);
+        b.writeUInt8(track);
+        b.writeUInt8(sector);
+        b.writeUInt8(1 << 5 | numSectors);
+        b.writeUInt8(0);
+
+        return offset;
+    }
+
+    private addReadPart(side: number, track: number, frac: number): void {
+        if (this.parts === undefined || this.oshwm === undefined) {
+            return errors.generic(`Invalid addReadPart`);
+        }
+
+        const b = new utils.BufferBuilder();
+
+        b.writeUInt8(0x7f);
+        const oswordBlockAddrOffset = b.writeUInt16LE(0);
+        const oswordResultOffsetOffset = b.writeUInt8(0);
+        const messageAddrOffset = b.writeUInt16LE(0);
+        const payloadAddrOffset = b.writeUInt32LE(0);
+        b.writeUInt32LE(TRACK_SIZE_BYTES);
+
+        const oswordBlockOffset = this.addOSWORD7f(b, this.drive + side * 2, track, 0, TRACK_SIZE_SECTORS);
+        b.setUInt16LE(this.oshwm + oswordBlockOffset, oswordBlockAddrOffset);
+        b.setUInt8(oswordBlockOffset + 10, oswordResultOffsetOffset);
+
+        b.setUInt16LE(this.oshwm + b.getLength(), messageAddrOffset);
+        b.writeString(`${String.fromCharCode(13)}Reading: ${(frac * 100.0).toFixed(1)}%${String.fromCharCode(255)}`);
+
+        const payloadAddr = 0xffff0000 | (this.oshwm + b.getLength());
+        b.setUInt32LE(payloadAddr, oswordBlockOffset + 1);
+        b.setUInt32LE(payloadAddr, payloadAddrOffset);
+
+        this.parts.push({
+            side,
+            track,
+            oswordBuffer: b.createBuffer(),
+            dataBuffer: undefined,
+        });
+    }
 }

@@ -130,6 +130,16 @@ interface IDiskImageDetails {
     allSectors: boolean;
 }
 
+export interface IDiskImageReader {
+    start(oshwm: number, himem: number): Buffer;
+
+    setCat(cat: Buffer): void;
+
+    getNextOSWORD(): Buffer | undefined;
+
+    setPart(data: Buffer): void;
+}
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -158,15 +168,16 @@ export default class Server {
     private volumeBrowser: volumebrowser.Browser | undefined;
     private speedTest: speedtest.SpeedTest | undefined;
     private dumpPackets: boolean;
-    private imageParts: Buffer[] | undefined;
-    private imagePartIdx: number;
+    private writeImageParts: Buffer[] | undefined;
+    private writeImagePartIdx: number;
+    private diskImageReader: IDiskImageReader | undefined;
 
     public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
         this.romPathByLinkSubtype = romPathByLinkSubtype;
         this.linkSubtype = undefined;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
-        this.imagePartIdx = 0;
+        this.writeImagePartIdx = 0;
 
         this.commands = [
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
@@ -220,8 +231,12 @@ export default class Server {
         this.handlers[beeblink.REQUEST_BOOT_OPTION] = new Handler('GET_BOOT_OPTION', this.handleGetBootOption);
         this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('REQUEST_VOLUME_BROWSER', this.handleVolumeBrowser);
         this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('REQUEST_SPEED_TEST', this.handleSpeedTest);
-        this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('REQUEST_NEXT_DISK_IMAGE_PART', this.handleNextDiskImagePart);
+        this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_WRITE_PART] = new Handler('REQUEST_NEXT_DISK_IMAGE_WRITE_PART', this.handleNextDiskImageWritePart);
         this.handlers[beeblink.REQUEST_SET_FILE_HANDLE_RANGE] = new Handler('REQUEST_SET_FILE_HANDLE_RANGE', this.handleSetFileHandleRange);
+        this.handlers[beeblink.REQUEST_START_READ_DISK_IMAGE] = new Handler('REQUEST_START_READ_DISK_IMAGE', this.handleStartReadDiskImage);
+        this.handlers[beeblink.REQUEST_SET_READ_DISK_IMAGE_CAT] = new Handler('REQUEST_SET_READ_DISK_IMAGE_CAT', this.handleSetReadDiskImageCat);
+        this.handlers[beeblink.REQUEST_NEXT_READ_DISK_IMAGE_OSWORD] = new Handler('REQUEST_NEXT_READ_DISK_IMAGE_OSWORD', this.handleNextReadDiskImageOSWORD);
+        this.handlers[beeblink.REQUEST_SET_READ_DISK_IMAGE_PART] = new Handler('REQUEST_SET_READ_DISK_IMAGE_PART', this.handleSetReadDiskImagePart);
 
         this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stderr, logPrefix !== undefined);
         this.log.colours = colours;
@@ -922,23 +937,70 @@ export default class Server {
         }
     }
 
-    private async handleNextDiskImagePart(handler: Handler, p: Buffer): Promise<Response> {
-        if (this.imageParts === undefined || this.imagePartIdx >= this.imageParts.length) {
-            if (this.imageParts === undefined) {
+    private async handleNextDiskImageWritePart(handler: Handler, p: Buffer): Promise<Response> {
+        if (this.writeImageParts === undefined || this.writeImagePartIdx >= this.writeImageParts.length) {
+            if (this.writeImageParts === undefined) {
                 this.log.pn(`no image`);
             } else {
-                this.log.pn(`image write done (part=${this.imagePartIdx}/${this.imageParts.length})`);
+                this.log.pn(`image write done (part=${this.writeImagePartIdx}/${this.writeImageParts.length})`);
             }
-            this.imageParts = undefined;
+            this.writeImageParts = undefined;
             return newResponse(beeblink.RESPONSE_NO);
         } else {
-            this.log.pn(`${this.imageParts[this.imagePartIdx].length} byte(s) (part=${this.imagePartIdx}/${this.imageParts.length})`);
-            return newResponse(beeblink.RESPONSE_DATA, this.imageParts[this.imagePartIdx++]);
+            this.log.pn(`${this.writeImageParts[this.writeImagePartIdx].length} byte(s) (part=${this.writeImagePartIdx}/${this.writeImageParts.length})`);
+            return newResponse(beeblink.RESPONSE_DATA, this.writeImageParts[this.writeImagePartIdx++]);
         }
     }
 
     private async handleSetFileHandleRange(handler: Handler, p: Buffer): Promise<Response> {
         await this.bfs.setFileHandleRange(p[0], p[1]);
+
+        return newResponse(beeblink.RESPONSE_YES);
+    }
+
+    private async handleStartReadDiskImage(handler: Handler, p: Buffer): Promise<Response> {
+        this.payloadMustBeAtLeast(handler, p, 4);
+
+        if (this.diskImageReader === undefined) {
+            return errors.generic(`No disk image reader`);
+        }
+
+        const oshwm = p.readUInt16LE(0);
+        const himem = p.readUInt16LE(2);
+
+        const buffer = this.diskImageReader.start(oshwm, himem);
+        return newResponse(beeblink.RESPONSE_DATA, buffer);
+    }
+
+    private async handleSetReadDiskImageCat(handler: Handler, p: Buffer): Promise<Response> {
+        if (this.diskImageReader === undefined) {
+            return errors.generic(`No disk image reader`);
+        }
+
+        this.diskImageReader.setCat(p);
+
+        return newResponse(beeblink.RESPONSE_YES);
+    }
+
+    private async handleNextReadDiskImageOSWORD(handler: Handler, p: Buffer): Promise<Response> {
+        if (this.diskImageReader === undefined) {
+            return errors.generic(`No disk image reader`);
+        }
+
+        const data = this.diskImageReader.getNextOSWORD();
+        if (data === undefined) {
+            return newResponse(beeblink.RESPONSE_NO);
+        } else {
+            return newResponse(beeblink.RESPONSE_DATA, data);
+        }
+    }
+
+    private async handleSetReadDiskImagePart(handler: Handler, p: Buffer): Promise<Response> {
+        if (this.diskImageReader === undefined) {
+            return errors.generic(`No disk image reader`);
+        }
+
+        this.diskImageReader.setPart(p);
 
         return newResponse(beeblink.RESPONSE_YES);
     }
@@ -1444,9 +1506,9 @@ export default class Server {
             //return newResponse(beeblink.RESPONSE_SPECIAL, p);
 
             case DiskImageType.SSD: {
-                const p = Buffer.alloc(2);
-                p[0] = beeblink.RESPONSE_SPECIAL_READ_SSD_IMAGE;
-                p[1] = details.drive;
+                this.diskImageReader = new dfsimage.Reader(details.drive, false, details.allSectors, this.log);
+                const p = Buffer.alloc(1);
+                p[0] = beeblink.RESPONSE_SPECIAL_READ_DISK_IMAGE;
                 return newResponse(beeblink.RESPONSE_SPECIAL, p);
             }
 
@@ -1455,17 +1517,17 @@ export default class Server {
                     return errors.badDrive();
                 }
 
+                this.diskImageReader = new dfsimage.Reader(details.drive, true, details.allSectors, this.log);
                 const p = Buffer.alloc(1);
-                p[0] = beeblink.RESPONSE_SPECIAL_READ_DSD_IMAGE;
-                p[1] = details.drive;
+                p[0] = beeblink.RESPONSE_SPECIAL_READ_DISK_IMAGE;
                 return newResponse(beeblink.RESPONSE_SPECIAL, p);
             }
         }
     }
 
     private setImageParts(imageParts: Buffer[]): void {
-        this.imageParts = imageParts.slice();
-        this.imagePartIdx = 0;
+        this.writeImageParts = imageParts.slice();
+        this.writeImagePartIdx = 0;
     }
 
     private async writeCommand(commandLine: CommandLine): Promise<Response> {

@@ -91,18 +91,46 @@ export class BufferBuilder {
         return this.bytes.length;
     }
 
-    public writeUInt8(...values: number[]) {
+    public writeUInt8(...values: number[]): number {
+        const offset = this.bytes.length;
+
         for (const value of values) {
             this.bytes.push(value);
         }
+
+        return offset;
     }
 
-    public writeUInt16LE(value: number) {
+    public setUInt8(value: number, offset: number): void {
+        this.bytes[offset] = value;
+    }
+
+    public setUInt16LE(value: number, offset: number): void {
+        this.bytes[offset + 0] = (value >> 0) & 0xff;
+        this.bytes[offset + 1] = (value >> 8) & 0xff;
+    }
+
+    public writeUInt16LE(value: number): number {
+        const offset = this.bytes.length;
+
         this.writeUInt8((value >> 0) & 0xff, (value >> 8) & 0xff);
+
+        return offset;
     }
 
-    public writeUInt32LE(value: number) {
+    public setUInt32LE(value: number, offset: number): void {
+        this.bytes[offset + 0] = (value >> 0) & 0xff;
+        this.bytes[offset + 1] = (value >> 8) & 0xff;
+        this.bytes[offset + 2] = (value >> 16) & 0xff;
+        this.bytes[offset + 3] = (value >> 24) & 0xff;
+    }
+
+    public writeUInt32LE(value: number): number {
+        const offset = this.bytes.length;
+
         this.writeUInt8((value >> 0) & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff, (value >> 24) & 0xff);
+
+        return offset;
     }
 
     public writeBuffer(bytes: Buffer | BufferBuilder) {
