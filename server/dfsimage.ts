@@ -26,6 +26,7 @@ import * as utils from './utils';
 import * as beebfs from './beebfs';
 import * as errors from './errors';
 import * as server from './server';
+import * as diskimage from './diskimage';
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -124,7 +125,7 @@ function getAddrString(side: number, track: number): string {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-function createReadOSWORD(drive: number, track: number, sector: number, numSectors: number): server.IDiskOSWORD {
+function createReadOSWORD(drive: number, track: number, sector: number, numSectors: number): diskimage.IDiskOSWORD {
     const block = Buffer.alloc(11);
 
     block.writeUInt8(drive, 0);
@@ -143,7 +144,7 @@ function createReadOSWORD(drive: number, track: number, sector: number, numSecto
 }
 
 // always write whole tracks.
-function createWriteOSWORD(drive: number, track: number, data: Buffer): server.IDiskOSWORD {
+function createWriteOSWORD(drive: number, track: number, data: Buffer): diskimage.IDiskOSWORD {
     const block = Buffer.alloc(11);
 
     block.writeUInt8(drive, 0);
@@ -193,7 +194,7 @@ function sortTrackAddresses(tracks: ITrackAddress[]): void {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-export class WriteFlow implements server.IDiskImageFlow {
+export class WriteFlow implements diskimage.IFlow {
     private drive: number;
     private doubleSided: boolean;
     private tracks: ITrackAddress[];
@@ -241,7 +242,7 @@ export class WriteFlow implements server.IDiskImageFlow {
         return this.oshwm;
     }
 
-    public start(oshwm: number, himem: number): server.IStartDiskImageFlow {
+    public start(oshwm: number, himem: number): diskimage.IStartFlow {
         if (oshwm + 4096 > himem) {
             return errors.generic(`No room`);
         }
@@ -255,7 +256,7 @@ export class WriteFlow implements server.IDiskImageFlow {
         // ...
     }
 
-    public getNextPart(): server.IDiskImagePart | undefined {
+    public getNextPart(): diskimage.IPart | undefined {
         if (this.partIdx >= this.tracks.length) {
             return undefined;
         }
@@ -284,7 +285,7 @@ export class WriteFlow implements server.IDiskImageFlow {
         ++this.partIdx;
     }
 
-    public async finish(): Promise<server.IFinishDiskImageFlow> {
+    public async finish(): Promise<diskimage.IFinishFlow> {
         return {
             fsStarCommand: `DISC`,
             starCommand: ``,
@@ -295,7 +296,7 @@ export class WriteFlow implements server.IDiskImageFlow {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-export class ReadFlow implements server.IDiskImageFlow {
+export class ReadFlow implements diskimage.IFlow {
     private drive: number;
     private doubleSided: boolean;
     private allSectors: boolean;
@@ -323,7 +324,7 @@ export class ReadFlow implements server.IDiskImageFlow {
         return this.oshwm;
     }
 
-    public start(oshwm: number, himem: number): server.IStartDiskImageFlow {
+    public start(oshwm: number, himem: number): diskimage.IStartFlow {
         if (oshwm + 4096 > himem) {
             return errors.generic(`No room`);
         }
@@ -332,7 +333,7 @@ export class ReadFlow implements server.IDiskImageFlow {
 
         const osword1 = createReadOSWORD(this.drive, 0, 0, 2);
 
-        let osword2: server.IDiskOSWORD | undefined;
+        let osword2: diskimage.IDiskOSWORD | undefined;
         if (this.doubleSided) {
             osword2 = createReadOSWORD(this.drive | 2, 0, 0, 2);
         }
@@ -388,7 +389,7 @@ export class ReadFlow implements server.IDiskImageFlow {
         }
     }
 
-    public getNextPart(): server.IDiskImagePart | undefined {
+    public getNextPart(): diskimage.IPart | undefined {
         if (this.tracks === undefined || this.partIdx >= this.tracks.length) {
             return undefined;
         }
@@ -424,7 +425,7 @@ export class ReadFlow implements server.IDiskImageFlow {
         ++this.partIdx;
     }
 
-    public async finish(): Promise<server.IFinishDiskImageFlow> {
+    public async finish(): Promise<diskimage.IFinishFlow> {
         if (this.tracks === undefined || this.partIdx !== this.tracks.length || this.image === undefined) {
             return errors.generic(`Invalid finish`);
         }

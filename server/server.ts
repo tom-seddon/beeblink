@@ -36,6 +36,7 @@ import Request from './Request';
 import Response from './Response';
 import * as errors from './errors';
 import CommandLine from './CommandLine';
+import * as diskimage from './diskimage';
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -130,81 +131,6 @@ interface IDiskImageDetails {
     allSectors: boolean;
 }
 
-export interface IDiskOSWORD {
-    reason: 0x72 | 0x7f;
-    block: Buffer;
-
-    // data to write, if a write operation.
-    data: Buffer | undefined;
-}
-
-function getDiskOSWORDTransferSizeBytes(o: IDiskOSWORD): number {
-    if (o.data !== undefined) {
-        return o.data.length;
-    }
-
-    switch (o.reason) {
-        case 0x72:
-            return o.block.readUInt8(9) * 256;
-
-        case 0x7f:
-            return (o.block.readUInt8(9) & 31) * 256;
-    }
-}
-
-function getDiskOSWORDErrorOffset(o: IDiskOSWORD): number {
-    switch (o.reason) {
-        case 0x72:
-            return 0;
-
-        case 0x7f:
-            return 10;
-    }
-}
-
-export interface IStartDiskImageFlow {
-    // * command to use to select filing system.
-    fsStarCommand: string;
-
-    // * command to execute once filing system selected.
-    starCommand: string;
-
-    // Max 2 disk OSWORDs to execute. Must be reads.
-    osword1: IDiskOSWORD | undefined;
-    osword2: IDiskOSWORD | undefined;
-}
-
-export interface IDiskImagePart {
-    // Message to print.
-    message: string;
-
-    // OSWORD to execute. If a read, reply payload addr/size will be calculated
-    // appropriately.
-    osword: IDiskOSWORD;
-}
-
-export interface IFinishDiskImageFlow {
-    // * command to use to select filing system.
-    fsStarCommand: string;
-
-    // * command to execute once filing system selected.
-    starCommand: string;
-}
-
-export interface IDiskImageFlow {
-    start(oshwm: number, himem: number): IStartDiskImageFlow;
-
-    getOSHWM(): number;
-
-    setCat(cat: Buffer): void;
-
-    getNextPart(): IDiskImagePart | undefined;
-
-    setLastOSWORDResult(data: Buffer): void;
-
-    finish(): Promise<IFinishDiskImageFlow>;
-}
-
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -224,16 +150,8 @@ function encodeForOSCLI(command: string): Buffer {
 
 // This handles the front-end duties of decomposing payloads, parsing command
 // lines, routing requests to the appropriate methods of BeebFS, and dealing
-// with the packet writing. The plan is that the BeebFS part could be
-// replaceable (e.g., providing something more like ADFS), while leaving the
-// command syntax mostly intact, but that's so far only a theory.
-//
-// There are various special cases and bits of odd behaviour that presumably
-// just arise naturally from whatever the DFS does internally. I just left them
-// as special cases, and didn't sweat the details too much - it's supposed to
-// accept whatever the DFS would accept, and reject whatever it would reject,
-// and if you get (say) a 'Bad drive' rather than 'Syntax: xxx', then that's
-// fine.
+// with the packet writing. Try to isolate the lower levels from the packet
+// format.
 
 export default class Server {
     private bfs: beebfs.FS;
@@ -247,7 +165,7 @@ export default class Server {
     private volumeBrowser: volumebrowser.Browser | undefined;
     private speedTest: speedtest.SpeedTest | undefined;
     private dumpPackets: boolean;
-    private diskImageFlow: IDiskImageFlow | undefined;
+    private diskImageFlow: diskimage.IFlow | undefined;
 
     public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
         this.romPathByLinkSubtype = romPathByLinkSubtype;
@@ -1068,7 +986,7 @@ export default class Server {
             buffer.writeUInt16LE(nextAddr, nextOffset);
             nextOffset += 2;
 
-            buffer.writeUInt8(nextAddr + getDiskOSWORDErrorOffset(start.osword1) - oshwm, nextOffset);
+            buffer.writeUInt8(nextAddr + diskimage.getDiskOSWORDErrorOffset(start.osword1) - oshwm, nextOffset);
             ++nextOffset;
 
             nextAddr += start.osword1.block.length;
@@ -1083,7 +1001,7 @@ export default class Server {
             buffer.writeUInt16LE(nextAddr, nextOffset);
             nextOffset += 2;
 
-            buffer.writeUInt8(nextAddr + getDiskOSWORDErrorOffset(start.osword2) - oshwm, nextOffset);
+            buffer.writeUInt8(nextAddr + diskimage.getDiskOSWORDErrorOffset(start.osword2) - oshwm, nextOffset);
             ++nextOffset;
 
             nextAddr += start.osword2.block.length;
@@ -1099,14 +1017,14 @@ export default class Server {
             start.osword1.block.writeUInt32LE(getIOAddress(nextAddr), 1);
             buffers.push(start.osword1.block);
 
-            nextAddr += getDiskOSWORDTransferSizeBytes(start.osword1);
+            nextAddr += diskimage.getDiskOSWORDTransferSizeBytes(start.osword1);
         }
 
         if (start.osword2 !== undefined) {
             start.osword2.block.writeUInt32LE(getIOAddress(nextAddr), 1);
             buffers.push(start.osword2.block);
 
-            nextAddr += getDiskOSWORDTransferSizeBytes(start.osword2);
+            nextAddr += diskimage.getDiskOSWORDTransferSizeBytes(start.osword2);
         }
 
         buffer.writeUInt32LE(getIOAddress(payloadAddr), nextOffset);
@@ -1145,7 +1063,7 @@ export default class Server {
 
             buffer.writeUInt8(part.osword.reason, 0);
             buffer.writeUInt16LE(this.diskImageFlow.getOSHWM() + buffer.length, 1);
-            buffer.writeUInt8(buffer.length + getDiskOSWORDErrorOffset(part.osword), 3);
+            buffer.writeUInt8(buffer.length + diskimage.getDiskOSWORDErrorOffset(part.osword), 3);
             buffer.writeUInt16LE(this.diskImageFlow.getOSHWM() + buffer.length + part.osword.block.length, 4);
 
             part.osword.block.writeUInt32LE(payloadAddr, 1);
@@ -1154,7 +1072,7 @@ export default class Server {
             if (part.osword.data === undefined) {
                 // read - set up payload.
                 buffer.writeUInt32LE(getIOAddress(payloadAddr), 6);
-                buffer.writeUInt32LE(getDiskOSWORDTransferSizeBytes(part.osword), 10);
+                buffer.writeUInt32LE(diskimage.getDiskOSWORDTransferSizeBytes(part.osword), 10);
             } else {
                 // write - add data to read. Leave payload at 0 bytes.
                 buffers.push(part.osword.data);
@@ -1692,7 +1610,7 @@ export default class Server {
         };
     }
 
-    private startDiskImageFlow(diskImageFlow: IDiskImageFlow): Response {
+    private startDiskImageFlow(diskImageFlow: diskimage.IFlow): Response {
         this.diskImageFlow = diskImageFlow;
 
         const p = Buffer.alloc(1);

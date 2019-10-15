@@ -20,6 +20,7 @@
         "./beeblink.ts",
         "./dfsimage.ts",
         "./dfsType.ts",
+        "./diskimage.ts",
         "./errors.ts",
         "./gitattributes.ts",
         "./inf.ts",
@@ -31,6 +32,6 @@
         "./server.ts",
         "./speedtest.ts",
         "./utils.ts",
-        "./volumebrowser.ts"
+        "./volumebrowser.ts",
     ]
 }

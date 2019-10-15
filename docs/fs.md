@@ -292,6 +292,28 @@ may not contain volume or drive specifiers.)
 
 Create a new volume.
 
+### `READ <fsp> <drive> <type>` ###
+
+**Overwrites I/O processor memory from OSHWM onwards**
+
+Create a DFS/ADFS disk image.
+
+`<fsp>` is the file to write to. (The file is created as an ordinary
+BBC file, so it needs a BBC-style name.)
+
+`<drive>` is the drive to read from.
+
+`<type>` is the type of image to create:
+
+* `S`: .ssd
+* `D`: .dsd
+* `A`: ADFS S/M/L
+  
+By default, `*READ` will only read used areas of the disk, so that the
+operation is quicker. (It can create truncated .ssd/.dsd files this
+way.) Add a `*` to the type to have it read the entire disk instead,
+creating a full-size image.
+
 ### `RENAME <old fsp> <new fsp>`
 
 Rename file.
