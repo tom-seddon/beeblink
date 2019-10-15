@@ -551,6 +551,51 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    public static async writeFile(file: File, data: Buffer): Promise<void> {
+        try {
+            FS.mustBeWriteableFile(file);
+            FS.mustNotBeTooBig(data.length);
+
+            await utils.fsWriteFile(file.hostPath, data);
+        } catch (error) {
+            return errors.nodeError(error);
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    // Causes a 'Too big' error if the value is larger than the max file size.
+    private static mustNotBeTooBig(amount: number): void {
+        if (amount > MAX_FILE_SIZE) {
+            return errors.tooBig();
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    // Causes a 'Locked' error if the file exists and is locked.
+    private static mustBeWriteableFile(file: File | undefined): void {
+        if (file !== undefined) {
+            if ((file.attr & L_ATTR) !== 0) {
+                return errors.locked();
+            }
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private static mustBeWriteableVolume(volume: Volume): void {
+        if (volume.isReadOnly()) {
+            return errors.volumeReadOnly();
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     // Logging for this probably isn't proving especially useful. Maybe it
     // should go away?
     //
@@ -1204,8 +1249,8 @@ export class FS {
             hostPath = file.hostPath;
 
             if (write) {
-                this.mustBeWriteableVolume(fqn.volume);
-                this.mustBeWriteableFile(file);
+                FS.mustBeWriteableVolume(fqn.volume);
+                FS.mustBeWriteableFile(file);
             }
 
             if (write && !read) {
@@ -1328,11 +1373,30 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    // get File matching FQN, that must be writeable.
+    public async getBeebFileForWrite(fqn: FQN): Promise<File> {
+        FS.mustBeWriteableVolume(fqn.volume);
+
+        let file = await getBeebFile(fqn, false, false);
+        if (file !== undefined) {
+            this.mustNotBeOpen(file);
+        } else {
+            file = new File(this.getHostPath(fqn), fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, 0, false);
+        }
+
+        FS.mustBeWriteableFile(file);
+
+        return file;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     public async OPT(x: number, y: number): Promise<void> {
         if (x === 4) {
             const state = this.getState();
 
-            this.mustBeWriteableVolume(state.volume);
+            FS.mustBeWriteableVolume(state.volume);
 
             await state.setBootOption(y & 3);
         }
@@ -1344,7 +1408,7 @@ export class FS {
     public async setTitle(title: string): Promise<void> {
         const state = this.getState();
 
-        this.mustBeWriteableVolume(state.volume);
+        FS.mustBeWriteableVolume(state.volume);
 
         await state.setTitle(title);
     }
@@ -1482,7 +1546,7 @@ export class FS {
 
         const data = await FS.readFile(file);
 
-        this.mustNotBeTooBig(data.length);
+        FS.mustNotBeTooBig(data.length);
 
         let dataLoadAddress;
         if ((exec & 0xff) === 0) {
@@ -1502,15 +1566,15 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILESave(fqn: FQN, load: number, exec: number, data: Buffer): Promise<OSFILEResult> {
-        this.mustBeWriteableVolume(fqn.volume);
-        this.mustNotBeTooBig(data.length);
+        FS.mustBeWriteableVolume(fqn.volume);
+        FS.mustNotBeTooBig(data.length);
 
         let hostPath: string;
 
         const file = await getBeebFile(fqn, false, false, this.log);
         if (file !== undefined) {
             this.mustNotBeOpen(file);
-            this.mustBeWriteableFile(file);
+            FS.mustBeWriteableFile(file);
 
             hostPath = file.hostPath;
         } else {
@@ -1569,7 +1633,7 @@ export class FS {
         load: number | undefined,
         exec: number | undefined,
         attr: number | undefined): Promise<OSFILEResult> {
-        this.mustBeWriteableVolume(fqn.volume);
+        FS.mustBeWriteableVolume(fqn.volume);
 
         const file = await getBeebFile(fqn, false, false);
         if (file === undefined) {
@@ -1629,9 +1693,9 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async deleteFile(file: File): Promise<void> {
-        this.mustBeWriteableVolume(file.fqn.volume);
+        FS.mustBeWriteableVolume(file.fqn.volume);
         this.mustNotBeOpen(file);
-        this.mustBeWriteableFile(file);
+        FS.mustBeWriteableFile(file);
 
         await file.fqn.volume.type.deleteFile(file);
 
@@ -1644,8 +1708,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILECreate(fqn: FQN, load: number, exec: number, size: number): Promise<OSFILEResult> {
-        this.mustBeWriteableVolume(fqn.volume);
-        this.mustNotBeTooBig(size);//block.attr - block.size);
+        FS.mustBeWriteableVolume(fqn.volume);
+        FS.mustNotBeTooBig(size);//block.attr - block.size);
 
         // Cheat.
         return await this.OSFILESave(fqn, load, exec, Buffer.alloc(size));
@@ -1685,37 +1749,6 @@ export class FS {
         }
 
         return openFile;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // Causes a 'Too big' error if the value is larger than the max file size.
-    private mustNotBeTooBig(amount: number): void {
-        if (amount > MAX_FILE_SIZE) {
-            return errors.tooBig();
-        }
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // Causes a 'Locked' error if the file exists and is locked.
-    private mustBeWriteableFile(file: File | undefined): void {
-        if (file !== undefined) {
-            if ((file.attr & L_ATTR) !== 0) {
-                return errors.locked();
-            }
-        }
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    private mustBeWriteableVolume(volume: Volume): void {
-        if (volume.isReadOnly()) {
-            return errors.volumeReadOnly();
-        }
     }
 
     /////////////////////////////////////////////////////////////////////////

@@ -27,9 +27,17 @@ import * as beebfs from './beebfs';
 import * as errors from './errors';
 import * as server from './server';
 
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 const TRACK_SIZE_SECTORS = 10;
 const SECTOR_SIZE_BYTES = 256;
 const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
+
+const DFS_STAR_COMMAND = 'DISC';
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
 function checkSize(data: Buffer, minSize: number): void {
     if (data.length % SECTOR_SIZE_BYTES !== 0) {
@@ -37,37 +45,12 @@ function checkSize(data: Buffer, minSize: number): void {
     }
 
     if (data.length < minSize) {
-        throw Error('Bad image size (must be >=' + minSize + ')');
+        return errors.generic(`Bad image size (must be >=${minSize})`);
     }
 }
 
-interface ITrack {
-    drive: number;
-    index: number;
-    data: Buffer;
-}
-
-function compareTracks(a: ITrack, b: ITrack): number {
-    // Sort by track first, to minimize seeks.
-
-    if (a.index < b.index) {
-        return -1;
-    } else if (a.index > b.index) {
-        return 1;
-    }
-
-    if (a.drive < b.drive) {
-        return -1;
-    } else if (a.drive > b.drive) {
-        return 1;
-    }
-
-    return 0;
-}
-
-function getNumSectors(data: Buffer, cat1Offset: number): number {
-    return data[cat1Offset + 0x07] | ((data[cat1Offset + 0x06] & 0x03) << 8);
-}
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
 function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, log: utils.Log | undefined): number[] {
     if (data[track0Offset + 0x105] % 8 !== 0) {
@@ -78,7 +61,7 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
     const cat1 = Buffer.from(data.buffer, track0Offset + SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES);
 
     if (allSectors) {
-        const numSectors = getNumSectors(cat1, 0);
+        const numSectors = cat1[0x07] | ((cat1[0x08] & 0x03) << 8);
 
         if (numSectors % TRACK_SIZE_SECTORS !== 0) {
             return errors.generic('Bad DFS format (sector count)');
@@ -131,161 +114,238 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
     }
 }
 
-function getSideTracks(diskImageData: Buffer, drive: number, diskImageTrack0Offset: number, diskImageTrackSizeBytes: number, allSectors: boolean, log: utils.Log): ITrack[] {
-    if (diskImageData[diskImageTrack0Offset + 0x105] % 8 !== 0) {
-        return errors.generic('Bad DFS format (file count)');
-    }
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
-    log.pn('Files on drive ' + drive + ':');
-    const usedTracks = getUsedTracks(diskImageData, diskImageTrack0Offset, allSectors, log);
+function getAddrString(side: number, track: number): string {
+    return `T${track.toString().padStart(2, '0')}`;
+}
 
-    const tracks: ITrack[] = [];
-    for (const index of usedTracks) {
-        // If the image finishes early, just assume it's a truncated image.
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
-        const begin = diskImageTrack0Offset + index * diskImageTrackSizeBytes;
-        const end = begin + TRACK_SIZE_BYTES;
+function createReadOSWORD(drive: number, track: number, sector: number, numSectors: number): server.IDiskOSWORD {
+    const block = Buffer.alloc(11);
 
-        const data = Buffer.alloc(TRACK_SIZE_BYTES, 0);
+    block.writeUInt8(drive, 0);
+    block.writeUInt32LE(0xffffffff, 1);//filled in later.
+    block.writeUInt8(3, 5);
+    block.writeUInt8(0x53, 6);
+    block.writeUInt8(track, 7);
+    block.writeUInt8(sector, 8);
+    block.writeUInt8(1 << 5 | numSectors, 9);
 
-        let destIdx = 0;
-        let srcIdx = begin;
-        while (srcIdx < end && srcIdx < diskImageData.length) {
-            data[destIdx++] = diskImageData[srcIdx++];
+    return {
+        reason: 0x7f,
+        block,
+        data: undefined,
+    };
+}
+
+// always write whole tracks.
+function createWriteOSWORD(drive: number, track: number, data: Buffer): server.IDiskOSWORD {
+    const block = Buffer.alloc(11);
+
+    block.writeUInt8(drive, 0);
+    block.writeUInt32LE(0xffffffff, 1);//filled in later.
+    block.writeUInt8(3, 5);
+    block.writeUInt8(0x4b, 6);
+    block.writeUInt8(track, 7);
+    block.writeUInt8(0, 8);
+    block.writeUInt8(1 << 5 | TRACK_SIZE_SECTORS, 9);
+
+    return {
+        reason: 0x7f,
+        block,
+        data,
+    };
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+interface ITrackAddress {
+    side: number;
+    track: number;
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+function sortTrackAddresses(tracks: ITrackAddress[]): void {
+    tracks.sort((a: ITrackAddress, b: ITrackAddress) => {
+        if (a.track < b.track) {
+            return -1;
+        } else if (a.track > b.track) {
+            return 1;
+        } else {
+            if (a.side < b.side) {
+                return -1;
+            } else if (a.side > b.side) {
+                return 1;
+            }
         }
 
-        tracks.push({ drive, index, data, });
-    }
-
-    return tracks;
+        return 0;
+    });
 }
 
-function getPartBuffers(tracks: ITrack[]): Buffer[] {
-    const buffers: Buffer[] = [];
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
-    tracks.sort(compareTracks);
-
-    for (let i = 0; i < tracks.length; ++i) {
-        const messageString = String.fromCharCode(13) + 'Writing: ' + (((i + 1) / tracks.length) * 100.0).toFixed(1) + '%' + String.fromCharCode(0);
-        const messageData = Buffer.from(messageString, 'binary');
-
-        const data = Buffer.concat([
-            Buffer.alloc(16),
-            messageData,
-            tracks[i].data,
-        ]);
-
-        data.writeUInt8(tracks[i].drive, 0);//drive number
-        data.writeUInt32LE(16 + messageData.length, 1);//data offset
-        data.writeUInt8(3, 5);//parameter count
-        data.writeUInt8(0x4b, 6);//write
-        data.writeUInt8(tracks[i].index, 7);//track number
-        data.writeUInt8(0, 8);//sector number
-        data.writeUInt8(1 << 5 | TRACK_SIZE_SECTORS, 9);//sector size (1=256 bytes)/count
-        data.writeUInt8(0, 10);//space for result
-
-        buffers.push(data);
-    }
-
-    return buffers;
-}
-
-export function getSSDParts(diskImageData: Buffer, drive: number, allSectors: boolean, log: utils.Log): Buffer[] {
-    checkSize(diskImageData, 2 * SECTOR_SIZE_BYTES);
-
-    const tracks = getSideTracks(diskImageData, drive, 0, TRACK_SIZE_BYTES, allSectors, log);
-
-    return getPartBuffers(tracks);
-}
-
-export function getDSDParts(diskImageData: Buffer, drive: number, allSectors: boolean, log: utils.Log): Buffer[] {
-    checkSize(diskImageData, TRACK_SIZE_BYTES + 2 * SECTOR_SIZE_BYTES);
-
-    let tracks = getSideTracks(diskImageData, drive, 0, 2 * TRACK_SIZE_BYTES, allSectors, log);
-    tracks = tracks.concat(getSideTracks(diskImageData, drive | 2, TRACK_SIZE_BYTES, 2 * TRACK_SIZE_BYTES, allSectors, log));
-
-    return getPartBuffers(tracks);
-}
-
-interface IReadTrack {
-    side: number;
-    track: number;
-}
-
-interface IReadPart {
-    side: number;
-    track: number;
-    oswordBuffer: Buffer;
-    dataBuffer: Buffer | undefined;
-}
-
-export class Reader implements server.IDiskImageReader {
+export class WriteFlow implements server.IDiskImageFlow {
     private drive: number;
     private doubleSided: boolean;
-    private allSectors: boolean;
-    private parts: IReadPart[] | undefined;
+    private tracks: ITrackAddress[];
     private partIdx: number;
     private log: utils.Log | undefined;
     private oshwm: number | undefined;
+    private image: Buffer;
 
-    public constructor(drive: number, doubleSided: boolean, allSectors: boolean, log: utils.Log | undefined) {
+    public constructor(drive: number, doubleSided: boolean, allSectors: boolean, image: Buffer, log: utils.Log | undefined) {
+        this.drive = drive;
+        this.doubleSided = doubleSided;
+        this.partIdx = 0;
+        this.log = log;
+
+        this.image = image;
+
+        this.tracks = [];
+
+        if (this.doubleSided) {
+            checkSize(image, TRACK_SIZE_BYTES + 512);
+
+            for (const track of getUsedTracks(this.image, 0, allSectors, this.log)) {
+                this.tracks.push({ side: 0, track });
+            }
+
+            for (const track of getUsedTracks(this.image, TRACK_SIZE_BYTES, allSectors, this.log)) {
+                this.tracks.push({ side: 1, track });
+            }
+        } else {
+            checkSize(image, 512);
+
+            for (const track of getUsedTracks(this.image, 0, allSectors, this.log)) {
+                this.tracks.push({ side: 0, track });
+            }
+        }
+
+        sortTrackAddresses(this.tracks);
+    }
+
+    public getOSHWM(): number {
+        if (this.oshwm === undefined) {
+            return errors.generic(`Bad flow (!)`);
+        }
+
+        return this.oshwm;
+    }
+
+    public start(oshwm: number, himem: number): server.IStartDiskImageFlow {
+        if (oshwm + 4096 > himem) {
+            return errors.generic(`No room`);
+        }
+
+        this.oshwm = oshwm;
+
+        return { fsStarCommand: DFS_STAR_COMMAND, starCommand: ``, osword1: undefined, osword2: undefined };
+    }
+
+    public setCat(p: Buffer): void {
+        // ...
+    }
+
+    public getNextPart(): server.IDiskImagePart | undefined {
+        if (this.partIdx >= this.tracks.length) {
+            return undefined;
+        }
+
+        const addr = this.tracks[this.partIdx];
+
+        let imageOffset: number;
+        if (this.doubleSided) {
+            imageOffset = addr.track * 2 * TRACK_SIZE_BYTES + addr.side * TRACK_SIZE_BYTES;
+        } else {
+            imageOffset = addr.track * TRACK_SIZE_BYTES;
+        }
+
+        const data = Buffer.alloc(TRACK_SIZE_BYTES);
+        for (let i = 0; i < TRACK_SIZE_BYTES && imageOffset + i < this.image.length; ++i) {
+            data.writeUInt8(this.image.readUInt8(imageOffset + i), i);
+        }
+
+        return {
+            message: `${String.fromCharCode(13)}Writing: S${addr.side.toString()} ${getAddrString(addr.side, addr.track)} (${((this.partIdx + 1) / this.tracks.length * 100.0).toFixed(1)}%)`,
+            osword: createWriteOSWORD(this.drive + addr.side * 2, addr.track, data),
+        };
+    }
+
+    public setLastOSWORDResult(data: Buffer): void {
+        ++this.partIdx;
+    }
+
+    public async finish(): Promise<server.IFinishDiskImageFlow> {
+        return {
+            fsStarCommand: `DISC`,
+            starCommand: ``,
+        };
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+export class ReadFlow implements server.IDiskImageFlow {
+    private drive: number;
+    private doubleSided: boolean;
+    private allSectors: boolean;
+    private tracks: ITrackAddress[] | undefined;
+    private partIdx: number;
+    private log: utils.Log | undefined;
+    private oshwm: number | undefined;
+    private file: beebfs.File;
+    private image: Buffer | undefined;
+
+    public constructor(drive: number, doubleSided: boolean, allSectors: boolean, file: beebfs.File, log: utils.Log | undefined) {
         this.drive = drive;
         this.doubleSided = doubleSided;
         this.allSectors = allSectors;
         this.partIdx = 0;
         this.log = log;
+        this.file = file;
     }
 
-    public start(oshwm: number, himem: number): Buffer {
-        const b = new utils.BufferBuilder();
-
-        b.writeUInt8(4);//4=DFS
-
-        // first OSWORD info
-        b.writeUInt8(0x7f);
-        const osword0AddrOffset = b.writeUInt16LE(0);//filled in later
-        const osword0ResultOffsetOffset = b.writeUInt8(0);//filled in later
-
-        // second OSWORD info
-        b.writeUInt8(this.doubleSided ? 0x7f : 0x00);
-        const osword1AddrOffset = b.writeUInt16LE(0);
-        const osword1ResultOffsetOffset = b.writeUInt8(0);
-
-        const payloadAddrOffset = b.writeUInt32LE(0);
-        b.writeUInt32LE(this.doubleSided ? 1024 : 512);
-
-        // first OSWORD block
-        b.setUInt16LE(oshwm + b.getLength(), osword0AddrOffset);
-        b.setUInt8(b.getLength() + 10, osword0ResultOffsetOffset);
-        const osword0BlockOffset = this.addOSWORD7f(b, this.drive, 0, 0, 2);
-
-        let osword1BlockOffset: number | undefined;
-        if (this.doubleSided) {
-            // second OSWORD block
-            b.setUInt16LE(oshwm + b.getLength(), osword1AddrOffset);
-            b.setUInt8(b.getLength() + 10, osword1ResultOffsetOffset);
-            osword1BlockOffset = this.addOSWORD7f(b, this.drive | 2, 0, 0, 2);
+    public getOSHWM(): number {
+        if (this.oshwm === undefined) {
+            return errors.generic(`Bad flow (!)`);
         }
 
-        const payloadAddr = 0xffff0000 | (oshwm + b.getLength());
-        b.setUInt32LE(payloadAddr, osword0BlockOffset + 1);
-        b.setUInt32LE(payloadAddr, payloadAddrOffset);
+        return this.oshwm;
+    }
 
-        if (this.doubleSided) {
-            b.setUInt32LE(payloadAddr + 512, osword1BlockOffset! + 1);
+    public start(oshwm: number, himem: number): server.IStartDiskImageFlow {
+        if (oshwm + 4096 > himem) {
+            return errors.generic(`No room`);
         }
 
         this.oshwm = oshwm;
 
-        return b.createBuffer();
+        const osword1 = createReadOSWORD(this.drive, 0, 0, 2);
+
+        let osword2: server.IDiskOSWORD | undefined;
+        if (this.doubleSided) {
+            osword2 = createReadOSWORD(this.drive | 2, 0, 0, 2);
+        }
+
+        return { fsStarCommand: DFS_STAR_COMMAND, starCommand: ``, osword1, osword2, };
     }
 
     public setCat(p: Buffer): void {
-        if (this.parts !== undefined) {
+        if (this.tracks !== undefined) {
             return errors.generic(`Invalid setCat`);
         }
 
-        const tracks: IReadTrack[] = [];
+        this.tracks = [];
 
         if (this.doubleSided) {
             if (p.length !== 1024) {
@@ -293,11 +353,11 @@ export class Reader implements server.IDiskImageReader {
             }
 
             for (const track of getUsedTracks(p, 0, this.allSectors, this.log)) {
-                tracks.push({ side: 0, track });
+                this.tracks.push({ side: 0, track });
             }
 
             for (const track of getUsedTracks(p, 512, this.allSectors, this.log)) {
-                tracks.push({ side: 1, track });
+                this.tracks.push({ side: 1, track });
             }
         } else {
             if (p.length !== 512) {
@@ -305,101 +365,75 @@ export class Reader implements server.IDiskImageReader {
             }
 
             for (const track of getUsedTracks(p, 0, this.allSectors, this.log)) {
-                tracks.push({ side: 0, track });
+                this.tracks.push({ side: 0, track });
             }
         }
 
-        tracks.sort((a: IReadTrack, b: IReadTrack) => {
-            if (a.track < b.track) {
-                return -1;
-            } else if (a.track > b.track) {
-                return 1;
-            } else {
-                if (a.side < b.side) {
-                    return -1;
-                } else if (a.side > b.side) {
-                    return 1;
-                }
-            }
+        sortTrackAddresses(this.tracks);
 
-            return 0;
-        });
+        // find max track.
+        let numTracks = 0;
+        for (const addr of this.tracks) {
+            numTracks = Math.max(numTracks, addr.track + 1);
+        }
 
-        this.parts = [];
-        for (let i = 0; i < tracks.length; ++i) {
-            this.addReadPart(tracks[i].side, tracks[i].track, (i + 1) / tracks.length);
+        if (this.doubleSided) {
+            this.image = Buffer.alloc(numTracks * 2 * TRACK_SIZE_BYTES);
+        } else {
+            this.image = Buffer.alloc(numTracks * TRACK_SIZE_BYTES);
         }
 
         if (this.log !== undefined) {
-            this.log.pn(`${this.parts.length} part(s)`);
+            this.log.pn(`${this.tracks.length} part(s)`);
         }
     }
 
-    public getNextOSWORD(): Buffer | undefined {
-        if (this.parts === undefined || this.partIdx >= this.parts.length) {
+    public getNextPart(): server.IDiskImagePart | undefined {
+        if (this.tracks === undefined || this.partIdx >= this.tracks.length) {
             return undefined;
         }
 
-        return this.parts[this.partIdx].oswordBuffer;
+        const addr = this.tracks[this.partIdx];
+
+        return {
+            message: `${String.fromCharCode(13)}Reading: S${addr.side.toString()} ${getAddrString(addr.side, addr.track)} (${((this.partIdx + 1) / this.tracks.length * 100.0).toFixed(1)}%)`,
+            osword: createReadOSWORD(this.drive + addr.side * 2, addr.track, 0, TRACK_SIZE_SECTORS),
+        };
     }
 
-    public setPart(data: Buffer): void {
-        if (this.parts === undefined || this.partIdx >= this.parts.length) {
-            return errors.generic(`Invalid setLastReadPart`);
+    public setLastOSWORDResult(data: Buffer): void {
+        if (this.tracks === undefined || this.partIdx >= this.tracks.length || this.image === undefined) {
+            return errors.generic(`Invalid setLastOSWORDResult`);
         }
 
-        this.parts[this.partIdx++].dataBuffer = data;
-    }
-
-    public getImage(): Buffer {
-        return Buffer.alloc(0);
-    }
-
-    private addOSWORD7f(b: utils.BufferBuilder, drive: number, track: number, sector: number, numSectors: number): number {
-        const offset = b.writeUInt8(this.drive);
-
-        b.writeUInt32LE(0);//fixed up later
-
-        b.writeUInt8(3);
-        b.writeUInt8(0x53);
-        b.writeUInt8(track);
-        b.writeUInt8(sector);
-        b.writeUInt8(1 << 5 | numSectors);
-        b.writeUInt8(0);
-
-        return offset;
-    }
-
-    private addReadPart(side: number, track: number, frac: number): void {
-        if (this.parts === undefined || this.oshwm === undefined) {
-            return errors.generic(`Invalid addReadPart`);
+        if (data.length !== TRACK_SIZE_BYTES) {
+            return errors.generic(`Invalid track data (bad size{`);
         }
 
-        const b = new utils.BufferBuilder();
+        const addr = this.tracks[this.partIdx];
 
-        b.writeUInt8(0x7f);
-        const oswordBlockAddrOffset = b.writeUInt16LE(0);
-        const oswordResultOffsetOffset = b.writeUInt8(0);
-        const messageAddrOffset = b.writeUInt16LE(0);
-        const payloadAddrOffset = b.writeUInt32LE(0);
-        b.writeUInt32LE(TRACK_SIZE_BYTES);
+        let offset: number;
+        if (this.doubleSided) {
+            offset = addr.track * 2 * TRACK_SIZE_BYTES + addr.side * TRACK_SIZE_BYTES;
+        } else {
+            offset = addr.track * TRACK_SIZE_BYTES;
+        }
 
-        const oswordBlockOffset = this.addOSWORD7f(b, this.drive + side * 2, track, 0, TRACK_SIZE_SECTORS);
-        b.setUInt16LE(this.oshwm + oswordBlockOffset, oswordBlockAddrOffset);
-        b.setUInt8(oswordBlockOffset + 10, oswordResultOffsetOffset);
+        data.copy(this.image, offset);
 
-        b.setUInt16LE(this.oshwm + b.getLength(), messageAddrOffset);
-        b.writeString(`${String.fromCharCode(13)}Reading: ${(frac * 100.0).toFixed(1)}%${String.fromCharCode(255)}`);
+        ++this.partIdx;
+    }
 
-        const payloadAddr = 0xffff0000 | (this.oshwm + b.getLength());
-        b.setUInt32LE(payloadAddr, oswordBlockOffset + 1);
-        b.setUInt32LE(payloadAddr, payloadAddrOffset);
+    public async finish(): Promise<server.IFinishDiskImageFlow> {
+        if (this.tracks === undefined || this.partIdx !== this.tracks.length || this.image === undefined) {
+            return errors.generic(`Invalid finish`);
+        }
 
-        this.parts.push({
-            side,
-            track,
-            oswordBuffer: b.createBuffer(),
-            dataBuffer: undefined,
-        });
+        await beebfs.FS.writeFile(this.file, this.image);
+
+        return {
+            fsStarCommand: '',
+            starCommand: '',
+        };
     }
 }

@@ -278,20 +278,8 @@ export const REQUEST_VOLUME_BROWSER = 0x17;
 // the comments below.
 export const REQUEST_SPEED_TEST = 0x18;
 
-// Request next disk image part.
-//
-// Response is NO if all parts have been consumed.
-//
-// Response is DATA if there is another part:
-
-// +0     - OSWORD $72/$7f parameter block, max 16 bytes
-// +16... - string to print, CR-terminated
-// +N...  - OSWORD $72/$7f data
-
-// The address value in the parameter block (bytes 1...5 inclusive) is an offset
-// relative to the start of the parameter block, and must have the parameter
-// block address added to it.
-export const REQUEST_NEXT_DISK_IMAGE_WRITE_PART = 0x19;
+// No longer used.
+export const REQUEST_19 = 0x19;
 
 // Set file handle range.
 //
@@ -307,51 +295,68 @@ export const REQUEST_NEXT_DISK_IMAGE_WRITE_PART = 0x19;
 // P = first file handle; num file handles
 export const REQUEST_SET_FILE_HANDLE_RANGE = 0x1a;
 
-// Start a disk image read.
+// Start a disk image command, *READ or *WRITE. The server knows which it is,
+// and will produce appropriate data. The same flow handles both reading and
+// writing.
 //
 // P = 2 bytes, OSHWM; 2 bytes, HIMEM
 //
 // Response is data to be stored at OSHWM:
 
-// byte  - filing system to select
-// byte  - code for first OSWORD block
-// word  - address of first OSWORD block
-// byte  - offset of error result for first OSWORD call
-// byte  - code for second OSWORD block, or 0 if none
-// word  - address of second OSWORD block, if appropriate
-// byte  - offset of error result for second OSWORD call, if appropriate
-// dword - payload addr for the SET_DISK_IMAGE_CAT
-// dword - payload size for the SET_DISK_IMAGE_CAT
+// +0  word  - address of * command to execute to select FS
+// +2  word  - address of * command to execute after selecting FS
+// +4  byte  - code for first OSWORD block, or 0 if none
+// +5  word  - address of first OSWORD block
+// +7  byte  - offset from OSHWM of error result for first OSWORD call
+// +8  byte  - code for second OSWORD block, or 0 if none
+// +9  word  - address of second OSWORD block
+// +11  byte  - offset from OSHWM of error result for second OSWORD call
+// +12  dword - payload addr for the SET_DISK_IMAGE_CAT
+// +16 dword - payload size for the SET_DISK_IMAGE_CAT (may be 0)
+// +20
 
 // Select other filing system, do the OSWORDs as appropriate, then do a
 // SET_DISK_IMAGE CAT to set things going.
-export const REQUEST_START_READ_DISK_IMAGE = 0x1b;
+//
+// If the SET_DISK_IMAGE_CAT payload is 0 bytes, send it anyway.
+export const REQUEST_START_DISK_IMAGE_FLOW = 0x1b;
 
 // Set catalogue read from disk.
 //
 // P = as requested by START_READ_DISK_IMAGE
-export const REQUEST_SET_READ_DISK_IMAGE_CAT = 0x1c;
+export const REQUEST_SET_DISK_IMAGE_CAT = 0x1c;
 
-// Request next *READ disk image part.
+// Request next disk image part.
 //
 // Response is NO if all parts have been read.
 //
-// Response is DATA if there is another part. Storet at OSHWM:
+// Response is DATA if there is another part. Store at OSHWM:
 
-// byte   - code for OSWORD block
-// word   - address of OSWORD block
-// byte   - offset of error result for OSWORD
-// word   - address of message to print
-// dword - payload addr for the SET_READ_DISK_IMAGE_PART
-// dword - payload size for the SET_READ_DISK_IMAGE_PART
+// +0  byte  - code for OSWORD block
+// +1  word  - address of OSWORD block
+// +3  byte  - offset from OSHWM of error result for OSWORD
+// +4  word  - address of message to print
+// +6  dword - payload addr for the REQUEST_LAST_DISK_IMAGE_OSWORD_RESULT
+// +10 dword - payload size for the REQUEST_LAST_DISK_IMAGE_OSWORD_RESULT (may be 0 bytes)
+// +14
 
-// Use REQUEST_SET_DISK_IMAGE_READ_PART to tell the server about the data read.
-export const REQUEST_NEXT_READ_DISK_IMAGE_OSWORD = 0x1d;
+// Use REQUEST_LAST_DISK_IMAGE_OSWORD_RESULT to tell the server about the
+// result.
+export const REQUEST_NEXT_DISK_IMAGE_PART = 0x1d;
 
-// Submit last *READ disk image part.
+// Submit result of last disk image read/write OSWORD.
 //
 // P = as requested by NEXT_READ_DISK_IMAGE_OSWORD
-export const REQUEST_SET_READ_DISK_IMAGE_PART = 0x1e;
+export const REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT = 0x1e;
+
+// Finish disk image flow.
+//
+// Response is DATA: max 2 command lines to execute.
+
+// +0  word - address of * command to execute to select FS
+// +2  word - address of * command to execute after selecting FS
+
+export const REQUEST_FINISH_DISK_IMAGE_FLOW = 0x1f;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -535,16 +540,8 @@ export const RESPONSE_SPECIAL_VOLUME_BROWSER = 0;
 export const RESPONSE_SPECIAL_SPEED_TEST = 1;//check if sure
 export const RESPONSE_SPECIAL_SPEED_TEST_SURE = 2;//don't check if sure
 
-// Do a DFS disk image write. The image has been prepared and the data is ready
-// for fetching.
-export const RESPONSE_SPECIAL_WRITE_DFS_IMAGE = 3;
-
-// Do an ADFS disk image write. The image has been prepared and the data is
-// ready for fetching.
-//
-// P = 1 byte, drive; 3 bytes, LE number of sectors on disk (should check, to
-// ensure that current disk is the right format)
-export const RESPONSE_SPECIAL_WRITE_ADFS_IMAGE = 4;
+export const RESPONSE_SPECIAL_03 = 3;
+export const RESPONSE_SPECIAL_04 = 4;
 
 // Do a *SELFUPDATE.
 export const RESPONSE_SPECIAL_SELFUPDATE = 5;
@@ -554,8 +551,10 @@ export const RESPONSE_SPECIAL_SELFUPDATE = 5;
 // P = 1 byte, bank; 2 bytes, 16-bit address to load to; rest, data to load.
 export const RESPONSE_SPECIAL_SRLOAD = 6;
 
-// Do a disk image read.
-export const RESPONSE_SPECIAL_READ_DISK_IMAGE = 7;
+// Start disk image flow.
+//
+// P = none
+export const RESPONSE_SPECIAL_DISK_IMAGE_FLOW = 7;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
