@@ -4985,10 +4985,12 @@ version_cmd: .proc
 ; require the FS to be actually initialised, so it's fine
 ;
 ; 2. the BLFS transfer routines might need the NMI area. Claim and
-; release these manually (with a hack for the release case) - don't
-; let the routines handle this automatically in their usual fashion,
-; in case the other FS ends up examining its overwritten workspace as
-; part of the NMI claim/release handling.
+; release these manually - don't let the routines handle this
+; automatically in their usual fashion, in case the other FS ends up
+; examining its overwritten workspace as part of the NMI claim/release
+; handling. This needs a hack in the release case, so that if the
+; transfer routines try to release the NMI area it doesn't actually
+; get released.
 ;
 ; This ain't so nice, but it seems to just about hang together...
 ; 
@@ -5194,8 +5196,14 @@ parts_loop:
 
 parts_done:
                 jsr osnewl
-                
-                jsr init_blfs
+
+                lda #blfs_fs_number
+                jsr select_fs
+
+                ; lda #0
+                ; ldy #0
+                ; jsr osargs
+                ; jsr print_hex_byte
 
                 lda #REQUEST_FINISH_DISK_IMAGE_FLOW
                 ldx #0
@@ -5212,13 +5220,26 @@ parts_done:
                 jsr fetch_xy
                 jsr oscli
                 
-done:                
+                ; lda #0
+                ; ldy #0
+                ; jsr osargs
+                ; jsr print_hex_byte
+                
+done:
                 rts
 
 canceled:
-                jsr init_blfs
-                jsr osnewl
-                rts
+                lda #blfs_fs_number
+                jsr select_fs
+                jmp osnewl
+
+select_fs:
+                cmp #0
+                beq done
+                tay
+                lda #$8f        ;ROM service call, AUG p167
+                ldx #$12        ;select FS, AUG p325
+                jmp osbyte
 
 unset_nmi_flag_hack:
                 ; Hack! - before receiving the file data, unset the
