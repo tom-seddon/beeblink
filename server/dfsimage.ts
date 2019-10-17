@@ -194,16 +194,17 @@ function sortTrackAddresses(tracks: ITrackAddress[]): void {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-export class WriteFlow implements diskimage.IFlow {
+export class WriteFlow extends diskimage.Flow {
     private drive: number;
     private doubleSided: boolean;
     private tracks: ITrackAddress[];
     private partIdx: number;
     private log: utils.Log | undefined;
-    private oshwm: number | undefined;
     private image: Buffer;
 
     public constructor(drive: number, doubleSided: boolean, allSectors: boolean, image: Buffer, log: utils.Log | undefined) {
+        super();
+
         this.drive = drive;
         this.doubleSided = doubleSided;
         this.partIdx = 0;
@@ -234,20 +235,8 @@ export class WriteFlow implements diskimage.IFlow {
         sortTrackAddresses(this.tracks);
     }
 
-    public getOSHWM(): number {
-        if (this.oshwm === undefined) {
-            return errors.generic(`Bad flow (!)`);
-        }
-
-        return this.oshwm;
-    }
-
     public start(oshwm: number, himem: number): diskimage.IStartFlow {
-        if (oshwm + 4096 > himem) {
-            return errors.generic(`No room`);
-        }
-
-        this.oshwm = oshwm;
+        this.init(oshwm, himem, 4096);
 
         return {
             fs: DFS_FS,
@@ -303,18 +292,19 @@ export class WriteFlow implements diskimage.IFlow {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-export class ReadFlow implements diskimage.IFlow {
+export class ReadFlow extends diskimage.Flow {
     private drive: number;
     private doubleSided: boolean;
     private allSectors: boolean;
     private tracks: ITrackAddress[] | undefined;
     private partIdx: number;
     private log: utils.Log | undefined;
-    private oshwm: number | undefined;
     private file: beebfs.File;
     private image: Buffer | undefined;
 
     public constructor(drive: number, doubleSided: boolean, allSectors: boolean, file: beebfs.File, log: utils.Log | undefined) {
+        super();
+
         this.drive = drive;
         this.doubleSided = doubleSided;
         this.allSectors = allSectors;
@@ -323,20 +313,8 @@ export class ReadFlow implements diskimage.IFlow {
         this.file = file;
     }
 
-    public getOSHWM(): number {
-        if (this.oshwm === undefined) {
-            return errors.generic(`Bad flow (!)`);
-        }
-
-        return this.oshwm;
-    }
-
     public start(oshwm: number, himem: number): diskimage.IStartFlow {
-        if (oshwm + 4096 > himem) {
-            return errors.generic(`No room`);
-        }
-
-        this.oshwm = oshwm;
+        this.init(oshwm, himem, 4096);
 
         const osword1 = createReadOSWORD(this.drive, 0, 0, 2);
 

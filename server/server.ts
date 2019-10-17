@@ -165,7 +165,7 @@ export default class Server {
     private volumeBrowser: volumebrowser.Browser | undefined;
     private speedTest: speedtest.SpeedTest | undefined;
     private dumpPackets: boolean;
-    private diskImageFlow: diskimage.IFlow | undefined;
+    private diskImageFlow: diskimage.Flow | undefined;
 
     public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
         this.romPathByLinkSubtype = romPathByLinkSubtype;
@@ -1600,7 +1600,7 @@ export default class Server {
         };
     }
 
-    private startDiskImageFlow(diskImageFlow: diskimage.IFlow): Response {
+    private startDiskImageFlow(diskImageFlow: diskimage.Flow): Response {
         this.diskImageFlow = diskImageFlow;
 
         const p = Buffer.alloc(1);

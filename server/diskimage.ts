@@ -22,6 +22,11 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+import * as errors from './errors';
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 // Represents a disk low-level read/write OSWORD.
 export interface IDiskOSWORD {
     // Reason code - 0x72 (ADFS) or 0x7f (DFS).
@@ -126,25 +131,40 @@ export interface IFinishFlow {
 //////////////////////////////////////////////////////////////////////////
 
 // Represents a disk image read/write flow.
-export interface IFlow {
+export abstract class Flow {
+    private oshwm: number | undefined;
+
     // Start the flow. Determine buffer address, size and overall feasibility
     // based on supplied OSHWM and HIMEM values, and produce data for response.
-    start(oshwm: number, himem: number): IStartFlow;
-
-    // Return OSHWM supplied to start.
-    getOSHWM(): number;
+    public abstract start(oshwm: number, himem: number): IStartFlow;
 
     // Set catalogue, if reading, as returned by BBC.
-    setCat(cat: Buffer): void;
+    public abstract setCat(cat: Buffer): void;
 
     // Get next part.
-    getNextPart(): IPart | undefined;
+    public abstract getNextPart(): IPart | undefined;
 
     // Set result of last OSWORD, or just an empty buffer if writing.
-    setLastOSWORDResult(data: Buffer): void;
+    public abstract setLastOSWORDResult(data: Buffer): void;
 
     // Finish the operation.
-    finish(): Promise<IFinishFlow>;
+    public abstract finish(): Promise<IFinishFlow>;
+
+    public getOSHWM(): number {
+        if (this.oshwm === undefined) {
+            return errors.generic(`Flow error`);
+        }
+
+        return this.oshwm;
+    }
+
+    protected init(oshwm: number, himem: number, minRequired: number): void {
+        if (oshwm + minRequired > himem) {
+            return errors.generic(`No room`);
+        }
+
+        this.oshwm = oshwm;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////
