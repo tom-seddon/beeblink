@@ -5028,27 +5028,32 @@ temp_ptr=$a8                    ;ugh.
 
                 ; Select other FS.
                 ldy #0
+                jsr fetch_byte
+                jsr select_fs
+                
+                ldy #1
                 jsr fetch_xy
                 jsr oscli
 
                 ; Do initial * command.
-                ldy #2
+                ldy #3
                 jsr fetch_xy
                 jsr oscli
 
                 ; Do first OSWORD.
-                ldy #4
+                ldy #5
                 jsr do_osword
 
                 ; Do second OSWORD.
-                ldy #8
+                ldy #9
                 jsr do_osword
 
                 ; Re-select BLFS.
-                jsr init_blfs
+                lda #blfs_fs_number
+                jsr select_fs
 
                 ; Send the cat data.
-                ldy #12
+                ldy #13
                 
                 ldx #payload_addr
                 jsr fetch_dword
@@ -5066,12 +5071,16 @@ temp_ptr=$a8                    ;ugh.
 
                 ; Re-select whatever FS.
                 ldy #0
+                jsr fetch_byte
+                jsr select_fs
+
+                ldy #1
                 jsr fetch_xy
                 jsr oscli
 
                 ; want to do this??
                 
-                ; ldy #2
+                ; ldy #3
                 ; jsr fetch_xy
                 ; jsr oscli
                 
@@ -5213,10 +5222,14 @@ parts_done:
                 jsr recv_file_data_to_oshwm
 
                 ldy #0
+                jsr fetch_byte
+                jsr select_fs
+
+                ldy #1
                 jsr fetch_xy
                 jsr oscli
 
-                ldy #2
+                ldy #3
                 jsr fetch_xy
                 jsr oscli
                 

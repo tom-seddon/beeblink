@@ -35,7 +35,7 @@ const TRACK_SIZE_SECTORS = 10;
 const SECTOR_SIZE_BYTES = 256;
 const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
 
-const DFS_STAR_COMMAND = 'DISC';
+const DFS_FS = 4;
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -249,7 +249,13 @@ export class WriteFlow implements diskimage.IFlow {
 
         this.oshwm = oshwm;
 
-        return { fsStarCommand: DFS_STAR_COMMAND, starCommand: ``, osword1: undefined, osword2: undefined };
+        return {
+            fs: DFS_FS,
+            fsStarCommand: ``,
+            starCommand: ``,
+            osword1: undefined,
+            osword2: undefined
+        };
     }
 
     public setCat(p: Buffer): void {
@@ -287,7 +293,8 @@ export class WriteFlow implements diskimage.IFlow {
 
     public async finish(): Promise<diskimage.IFinishFlow> {
         return {
-            fsStarCommand: `DISC`,
+            fs: DFS_FS,
+            fsStarCommand: ``,
             starCommand: ``,
         };
     }
@@ -338,7 +345,7 @@ export class ReadFlow implements diskimage.IFlow {
             osword2 = createReadOSWORD(this.drive | 2, 0, 0, 2);
         }
 
-        return { fsStarCommand: DFS_STAR_COMMAND, starCommand: ``, osword1, osword2, };
+        return { fs: DFS_FS, fsStarCommand: ``, starCommand: ``, osword1, osword2, };
     }
 
     public setCat(p: Buffer): void {
@@ -432,7 +439,9 @@ export class ReadFlow implements diskimage.IFlow {
 
         await beebfs.FS.writeFile(this.file, this.image);
 
+        // Leave BLFS active.
         return {
+            fs: 0,
             fsStarCommand: '',
             starCommand: '',
         };

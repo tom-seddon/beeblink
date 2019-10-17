@@ -931,21 +931,6 @@ export default class Server {
         }
     }
 
-    // private async handleNextDiskImageWritePart(handler: Handler, p: Buffer): Promise<Response> {
-    //     if (this.writeImageParts === undefined || this.writeImagePartIdx >= this.writeImageParts.length) {
-    //         if (this.writeImageParts === undefined) {
-    //             this.log.pn(`no image`);
-    //         } else {
-    //             this.log.pn(`image write done (part=${this.writeImagePartIdx}/${this.writeImageParts.length})`);
-    //         }
-    //         this.writeImageParts = undefined;
-    //         return newResponse(beeblink.RESPONSE_NO);
-    //     } else {
-    //         this.log.pn(`${this.writeImageParts[this.writeImagePartIdx].length} byte(s) (part=${this.writeImagePartIdx}/${this.writeImageParts.length})`);
-    //         return newResponse(beeblink.RESPONSE_DATA, this.writeImageParts[this.writeImagePartIdx++]);
-    //     }
-    // }
-
     private async handleSetFileHandleRange(handler: Handler, p: Buffer): Promise<Response> {
         await this.bfs.setFileHandleRange(p[0], p[1]);
 
@@ -964,12 +949,15 @@ export default class Server {
 
         const start = this.diskImageFlow.start(oshwm, himem);
 
-        const buffer = Buffer.alloc(20);
+        const buffer = Buffer.alloc(21);
         const fsStarCommandBuffer = encodeForOSCLI(start.fsStarCommand);
         const starCommandBuffer = encodeForOSCLI(start.starCommand);
 
         let nextAddr = oshwm + buffer.length;
         let nextOffset = 0;
+
+        buffer.writeUInt8(start.fs, nextOffset);
+        ++nextOffset;
 
         buffer.writeUInt16LE(nextAddr, nextOffset);
         nextOffset += 2;
@@ -1099,16 +1087,18 @@ export default class Server {
 
         const finish = await this.diskImageFlow.finish();
 
-        const buffer = Buffer.alloc(4);
+        const buffer = Buffer.alloc(5);
         let nextAddr = this.diskImageFlow.getOSHWM() + buffer.length;
 
         const fsStarCommandBuffer = encodeForOSCLI(finish.fsStarCommand);
         const starCommandBuffer = encodeForOSCLI(finish.starCommand);
 
-        buffer.writeUInt16LE(nextAddr, 0);
+        buffer.writeUInt8(finish.fs, 0);
+
+        buffer.writeUInt16LE(nextAddr, 1);
         nextAddr += fsStarCommandBuffer.length;
 
-        buffer.writeUInt16LE(nextAddr, 2);
+        buffer.writeUInt16LE(nextAddr, 3);
         nextAddr += starCommandBuffer.length;
 
         const buffers: Buffer[] = [buffer, fsStarCommandBuffer, starCommandBuffer];

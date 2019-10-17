@@ -303,20 +303,25 @@ export const REQUEST_SET_FILE_HANDLE_RANGE = 0x1a;
 //
 // Response is data to be stored at OSHWM:
 
-// +0  word  - address of * command to execute to select FS
-// +2  word  - address of * command to execute after selecting FS
-// +4  byte  - code for first OSWORD block, or 0 if none
-// +5  word  - address of first OSWORD block
-// +7  byte  - offset from OSHWM of error result for first OSWORD call
-// +8  byte  - code for second OSWORD block, or 0 if none
-// +9  word  - address of second OSWORD block
-// +11  byte  - offset from OSHWM of error result for second OSWORD call
-// +12  dword - payload addr for the SET_DISK_IMAGE_CAT
-// +16 dword - payload size for the SET_DISK_IMAGE_CAT (may be 0)
-// +20
+// +0  byte  - FS to select with ROM service call $12, or 0 if not selecting FS this way
+// +1  word  - address of * command to execute to select FS
+// +3  word  - address of * command to execute after selecting FS
+// +5  byte  - code for first OSWORD block, or 0 if none
+// +6  word  - address of first OSWORD block
+// +8  byte  - offset from OSHWM of error result for first OSWORD call
+// +9  byte  - code for second OSWORD block, or 0 if none
+// +10  word  - address of second OSWORD block
+// +12  byte  - offset from OSHWM of error result for second OSWORD call
+// +13  dword - payload addr for the SET_DISK_IMAGE_CAT
+// +17 dword - payload size for the SET_DISK_IMAGE_CAT (may be 0)
+// +21
 
 // Select other filing system, do the OSWORDs as appropriate, then do a
 // SET_DISK_IMAGE CAT to set things going.
+//
+// (Select by FS code is to accommodate selecting DFS, which is safe to select
+// this way, and avoids any problems with the BLFS ROM catching *DISC. Select by
+// * command is for ADFS, which needs to be selected with *FADFS.)
 //
 // If the SET_DISK_IMAGE_CAT payload is 0 bytes, send it anyway.
 export const REQUEST_START_DISK_IMAGE_FLOW = 0x1b;
@@ -353,8 +358,9 @@ export const REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT = 0x1e;
 //
 // Response is DATA: max 2 command lines to execute.
 
-// +0  word - address of * command to execute to select FS
-// +2  word - address of * command to execute after selecting FS
+// +0  byte  - FS to select with ROM service call $12, or 0 if not selecting FS this way
+// +1  word - address of * command to execute to select FS
+// +3  word - address of * command to execute after selecting FS
 
 export const REQUEST_FINISH_DISK_IMAGE_FLOW = 0x1f;
 

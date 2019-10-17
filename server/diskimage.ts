@@ -80,6 +80,9 @@ export function getDiskOSWORDErrorOffset(o: IDiskOSWORD): number {
 
 // Object representing a response to the REQUEST_START_DISK_IMAGE_FLOW request.
 export interface IStartFlow {
+    // FS to select, or 0 for none.
+    fs: number;
+
     // * command to use to select filing system.
     fsStarCommand: string;
 
@@ -109,6 +112,9 @@ export interface IPart {
 
 // Object representing a response to the REQUEST_FINISH_DISK_IMAGE_FLOW request.
 export interface IFinishFlow {
+    // FS to select, or 0 for none.
+    fs: number;
+
     // * command to use to select filing system.
     fsStarCommand: string;
 
