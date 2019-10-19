@@ -1684,7 +1684,7 @@ send_request_n: .proc
                 jsr link_prepare
                 
 without_prepare:
-                .debug_print ["send_request_n: Request: T=&",DP_A," payload_size=&",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,"\r"]
+                .debug_print ["send_request_n: Request: T=&",DP_A," payload_size=&",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,"\r\n"]
 
                 ; If payload size is 1, it could just do a 2-byte
                 ; send. But it's so annoying to check for.
@@ -1756,7 +1756,7 @@ send_request_1: .proc
                 jsr link_prepare
                 
 without_prepare:
-                .debug_print ["send_request_1: T=&",DP_A," P=&",DP_X,"\r"]
+                .debug_print ["send_request_1: T=&",DP_A," P=&",DP_X,"\r\n"]
 
                 jsr link_send_header_byte
 
@@ -1889,7 +1889,7 @@ got_1:
                 sta payload_counter+2
                 sta payload_counter+3
                 pla
-                .debug_print ["recv_response: T=&",DP_A," p_size=1\r"]
+                .debug_print ["recv_response: T=&",DP_A," p_size=1\r\n"]
                 cmp #RESPONSE_ERROR
                 beq got_error
                 sec
@@ -1908,7 +1908,7 @@ got_n:
                 jsr negate_payload_counter
                 pla
                 and #$7f
-                .debug_print ["recv_response: T=&",DP_A," payload_size=&",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,"\r"]
+                .debug_print ["recv_response: T=&",DP_A," payload_size=&",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,"\r\n"]
                 cmp #RESPONSE_ERROR
                 beq got_error
                 clc
@@ -1917,7 +1917,7 @@ done:
                 rts
 
 got_error:
-                .debug_print ["recv_response: handling error.\r"]
+                .debug_print ["recv_response: handling error.\r\n"]
                 
                 ; For debugging, make sure there's a valid error of
                 ; some kind in the right place already.
@@ -2175,7 +2175,7 @@ ignore_disc_text:
 init_blfs: .proc
                 jsr init_blfs_internal
                 bcs link_status_brk
-                .debug_print ['init_blfs succeeded\r']
+                .debug_print ['init_blfs succeeded\r\n']
                 rts
                 .pend
 
@@ -2186,7 +2186,7 @@ init_blfs: .proc
 ; entry: X = offset into link_status_text
 ; 
 link_status_brk: .proc
-                .debug_print ['init_blfs failed: X=&',DP_X,'\r']
+                .debug_print ['init_blfs failed: X=&',DP_X,'\r\n']
                 lda #0
                 sta brkthunk+0
 
@@ -2292,7 +2292,7 @@ link_ok:
                 ora #sf_link_started_up
                 sta roms_table,x
 
-                .debug_print ['i_b_i: initialising FS...\r']
+                .debug_print ['i_b_i: initialising FS...\r\n']
 
                 ; claim vectors and so on
                 jsr init_fs
@@ -2300,7 +2300,7 @@ link_ok:
                 lda #253        ;get reset type in X (AUG 244)
                 jsr osbyte_x00_yff
 
-                .debug_print ['i_b_i: sending REQUEST_RESET... (reset type: &',DP_X,', link_subtype: '..format('%d',link_subtype)..')\r']
+                .debug_print ['i_b_i: sending REQUEST_RESET... (reset type: &',DP_X,', link_subtype: '..format('%d',link_subtype)..')\r\n']
 
                 lda #2
                 jsr set_payload_counter
@@ -2319,7 +2319,7 @@ link_ok:
                 ; whatever it was, I'm sure it was fine...
                 jsr recv_response_and_discard_payload
 
-                .debug_print ['i_b_i: sending REQUEST_SET_FILE_HANDLE_RANGE...\r']
+                .debug_print ['i_b_i: sending REQUEST_SET_FILE_HANDLE_RANGE...\r\n']
                 
                 lda #2
                 jsr set_payload_counter
@@ -2335,7 +2335,7 @@ link_ok:
 
                 jsr recv_response_and_discard_payload
 
-                .debug_print ['i_b_i: OK, probably.\r']
+                .debug_print ['i_b_i: OK, probably.\r\n']
 
                 clc             ;init ok
                 rts
@@ -2752,14 +2752,14 @@ recv_block_loop:
 
                 .if enable_debug_print
                 jsr negate_payload_counter
-                .debug_print ["Receive &",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0," @ &",payload_addr+3,payload_addr+2,payload_addr+1,payload_addr+0,"\r"]
+                .debug_print ["Receive &",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0," @ &",payload_addr+3,payload_addr+2,payload_addr+1,payload_addr+0,"\r\n"]
                 jsr negate_payload_counter
                 .endif
 
                 ; Get the file data.
                 jsr recv_file_data
 
-                .debug_print ["Received\r"]
+                .debug_print ["Received\r\n"]
 
 done:
                 pla             ;restore result
@@ -3316,7 +3316,7 @@ fsc_cat: .proc
 ; FSCV A=6 - Shut down FS
 ;be
 fsc_shut_down_fs: .proc
-                .debug_print ["OSFSC shut down\r"]
+                .debug_print ["OSFSC shut down\r\n"]
                 lda #$77
                 jsr osbyte
                 rts
@@ -3403,12 +3403,12 @@ exec: .fill 4
                 lda #0
                 jsr set_payload_counter
 
-                .debug_print ["ptr=&",ptr+1,ptr+0,"\r"]
+                .debug_print ["ptr=&",ptr+1,ptr+0,"\r\n"]
 
                 ldx #ptr
                 jsr strlen_cr
 
-                .debug_print ["_ptr=&",ptr+1,ptr+0,", len=",DP_Y,"\r"]
+                .debug_print ["_ptr=&",ptr+1,ptr+0,", len=",DP_Y,"\r\n"]
 
                 sty payload_counter+0
 
@@ -3758,12 +3758,12 @@ send_host_done:
 ; transfer mode.
 ;
 send_file_data_parasite_bytewise: .proc
-                .debug_print ["Send from parasite memory\r"],verbose_file_data
+                .debug_print ["Send from parasite memory\r\n"],verbose_file_data
 
-                .debug_print ["  claiming tube\r"],verbose_file_data
+                .debug_print ["  claiming tube\r\n"],verbose_file_data
                 jsr claim_tube
 
-                .debug_print ["  initiating transfer\r"],verbose_file_data
+                .debug_print ["  initiating transfer\r\n"],verbose_file_data
                 ldx #<payload_addr
                 ldy #>payload_addr
                 lda #tube_multi_byte_parasite_to_host
@@ -3787,9 +3787,9 @@ send_tube_loop:
                 jmp send_tube_loop
 
 send_tube_done:
-                .debug_print ["  releasing tube\r"],verbose_file_data
+                .debug_print ["  releasing tube\r\n"],verbose_file_data
                 jsr release_tube
-                .debug_print ["  done\r"],verbose_file_data
+                .debug_print ["  done\r\n"],verbose_file_data
                 rts
                 
                 .pend

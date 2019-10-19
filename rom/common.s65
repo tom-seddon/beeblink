@@ -19,8 +19,9 @@
 ;
 ;-------------------------------------------------------------------------
 
-; Set up C-style escape for CR.
+; Set up C-style escapes for newlines.
                 .edef "\r",13
+                .edef "\n",10
 
 ; This one isn't strictly necessary, but my Emacs mode for 6502 source
 ; code doesn't colourize single quoted apostrophes properly, and this

@@ -133,11 +133,9 @@ print: .macro items
 
                 .if type(\items[print__item_index])==str
 
-                .if \items[print__item_index]=="\r"
-                jsr osnewl
-                .elsif len(\items[print__item_index])==1
+                .if len(\items[print__item_index])==1
                 lda #\items[print__item_index][0]
-                jsr osasci
+                jsr oswrch
                 .else
                 jsr pcprint
                 .text \items[print__item_index],255
