@@ -53,6 +53,9 @@ old_acr:
 old_x:
                 .fill 1
                 
+timeout_counter:
+                .fill 2
+                
                 .send nmi_workspace
 
 ;-------------------------------------------------------------------------
@@ -136,7 +139,14 @@ start_sync:
                 .block
                 .debug_print ['Sync step 0...\r']
                 lda #$80
-                jsr send_byte
+                jsr send_byte_with_timeout
+                bcc +
+
+                ldx #status_text.sync_timed_out_0-status_text
+                sec             ;no good
+                rts
+
++
                 .bend
 
                 .block
@@ -500,38 +510,13 @@ recv_status_byte:
                 .pend
 
 ;-------------------------------------------------------------------------
-; 
-; transfer byte via UPURS. 64tass'd version of code from UPURSFS.
 ;
-; entry: A = byte to send
-; exit:
+; macro to generate UPURS byte send.
+;
+; entry: X = byte to send
 ; preserves: Y
-
-                .align 256
-send_byte: .proc
-                php
-                sei
-
-                eor #$ff
-                tax
-
-                ; test PC RTS
-                lda via.irb
-                and #$02
-                bne send
-
-wait_for_rts:
-                lda via.irb
-                and #$02
-                beq wait_for_rts
-
-                lda #$f0
-                clc
-delay_after_rts:
-                adc #$01
-                bcc delay_after_rts
-
-send:
+;
+upurs_send_byte: .macro
                 lda     #1
                 sta     via.orb
                 nop             ; (2)
@@ -602,6 +587,108 @@ send:
                 nop             ; (2)
                 lda     #0      ; (2) 
                 sta     via.orb ; (6) stop bit
+                .endm
+
+;-------------------------------------------------------------------------
+;
+; transfer byte via UPURS, with timeout.
+;
+; entry: A = byte to send
+; exit: C=0 = byte sent
+;       C=1 = timed out
+; preserves: Y
+;
+send_byte_with_timeout: .proc
+
+                php
+                sei
+
+                eor #$ff
+                tax
+
+                ; test PC RTS
+                lda via.irb
+                and #$02
+                bne send
+
+                ; Each iteration = ~18 cycles, so this means a timeout
+                ; of approx half a second.
+                lda #0
+                sta timeout_counter+0
+                sta timeout_counter+1
+
+                ; .debug_print ["Timeout: &",timeout_counter+1,timeout_counter+0,"\r\n"]
+                
+wait_for_rts:
+                lda via.irb
+                and #$02
+                bne got_rts
+
+                inc timeout_counter+0
+                bne wait_for_rts
+
+                inc timeout_counter+1
+                
+                ; .debug_print ["Timeout counter: &",timeout_counter+1,timeout_counter+0,"\r\n"]                
+                bne wait_for_rts
+
+                ; timed out.
+                ; .debug_print ["Timed out\r\n"]
+                plp
+                sec
+                rts
+
+got_rts:
+                lda #$f0
+                clc
+-
+                adc #$01
+                bcc -
+
+send:
+                .upurs_send_byte
+
+                plp
+                clc
+                rts
+                
+                .pend
+                
+;-------------------------------------------------------------------------
+; 
+; transfer byte via UPURS. 64tass'd version of code from UPURSFS.
+;
+; entry: A = byte to send
+; exit:
+; preserves: Y
+
+                .align 256
+send_byte: .proc
+                php
+                sei
+
+                eor #$ff
+                tax
+
+                ; test PC RTS
+                lda via.irb
+                and #$02
+                bne send
+
+wait_for_rts:
+                lda via.irb
+                and #$02
+                beq wait_for_rts
+
+got_rts:
+                lda #$f0
+                clc
+delay_after_rts:
+                adc #$01
+                bcc delay_after_rts
+
+send:
+                .upurs_send_byte
 
                 plp
                 rts
