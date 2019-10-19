@@ -59,14 +59,16 @@ print_server_string_voff=true
 
 ; If false, the .debug_print macro turns into nothing.
 ;
-; 
+; (The .debug_print stuff does bloat the ROM a bit, but it hasn't
+; proven enough of a problem (yet) to warrant thinking much about
+; switching this off.)
 enable_debug_print=true
 
 ; Various verbosity flags.
 verbose_file_data=false
 
-; If true, extra logging when writing ADFS disks.
-write_adfs_verbose=false
+; If true, extra logging for *READ/*WRITE.
+disk_image_verbose=false
 
 ; At some point I found that it might be useful for multiple versions
 ; of the BeebLink FS to coexist, so that I can have a WIP version
@@ -5027,18 +5029,7 @@ temp_ptr=$a8                    ;ugh.
                 jsr recv_file_data_to_oshwm
 
                 ; Select other FS.
-                ldy #0
-                jsr fetch_byte
-                jsr select_fs
-                
-                ldy #1
-                jsr fetch_xy
-                jsr oscli
-
-                ; Do initial * command.
-                ldy #3
-                jsr fetch_xy
-                jsr oscli
+                jsr select_other_fs
 
                 ; Do first OSWORD.
                 ldy #5
@@ -5049,6 +5040,9 @@ temp_ptr=$a8                    ;ugh.
                 jsr do_osword
 
                 ; Re-select BLFS.
+                .if disk_image_verbose
+                .print ["Re-select BLFS\r\n"]
+                .endif
                 lda #blfs_fs_number
                 jsr select_fs
 
@@ -5070,19 +5064,7 @@ temp_ptr=$a8                    ;ugh.
                 jsr discard_remaining_payload
 
                 ; Re-select whatever FS.
-                ldy #0
-                jsr fetch_byte
-                jsr select_fs
-
-                ldy #1
-                jsr fetch_xy
-                jsr oscli
-
-                ; want to do this??
-                
-                ; ldy #3
-                ; jsr fetch_xy
-                ; jsr oscli
+                jsr select_other_fs
                 
 parts_loop:
 
@@ -5148,6 +5130,10 @@ parts_loop:
                 jsr fetch_byte
                 tay
                 jsr printyx
+
+                .if disk_image_verbose
+                jsr osnewl
+                .endif
 
                 bit $ff
                 bmi canceled
@@ -5246,6 +5232,35 @@ canceled:
                 jsr select_fs
                 jmp osnewl
 
+select_other_fs:
+                ; Select other FS by number, maybe.
+                ldy #0
+                jsr fetch_byte
+
+                .if disk_image_verbose
+                .print ["Other FS #: ",DP_A,"\r\n"]
+                .endif
+                
+                jsr select_fs
+
+                ; Select other FS by * command, maybe.
+                ldy #1
+                jsr fetch_xy
+                .if disk_image_verbose
+                .print ["Other FS *: "]
+                jsr print_xy_oscli
+                .endif
+                jsr oscli
+                
+                ; Do initial * command, if there is one.
+                ldy #3
+                jsr fetch_xy
+                .if disk_image_verbose
+                .print ["Post-init *: "]
+                jsr print_xy_oscli
+                .endif
+                jmp oscli
+                
 select_fs:
                 cmp #0
                 beq done
@@ -5279,6 +5294,7 @@ do_osword:
                 pha
                 
                 jsr fetch_byte  ;OSWORD type
+
                 cmp #0
                 bne +
                 
@@ -5286,10 +5302,13 @@ do_osword:
                 rts
 +
                 pha             ;OSWORD type
-
                 jsr fetch_xy
-                
                 pla             ;OSWORD type
+
+                .if disk_image_verbose
+                .print ["Do OSWORD: &",DP_A,", block=&",DP_Y,DP_X,"\r\n"]
+                .endif
+                
                 jsr osword
 
                 pla             ;offset
@@ -5300,6 +5319,9 @@ do_osword:
                 jsr fetch_byte  ;offset of OSWORD result
                 tay
                 jsr fetch_byte  ;OSWORD result
+                .if disk_image_verbose
+                .print ["OSWORD result: &",DP_A,"\r\n"]
+                .endif
                 cmp #0
                 bne disk_io_error
                 rts
@@ -5379,6 +5401,29 @@ recv_file_data_to_oshwm:
                 sta payload_addr+2
                 sta payload_addr+3
                 jmp recv_file_data
+
+print_xy_oscli: .proc
+                lda temp_ptr+1
+                pha
+                lda temp_ptr+0
+                pha
+                stx temp_ptr+0
+                sty temp_ptr+1
+                ldy #0
+-
+                lda (temp_ptr),y
+                jsr osasci
+                iny
+                cmp #13
+                bne -
+                ldx temp_ptr+0
+                ldy temp_ptr+1
+                pla
+                sta temp_ptr+0
+                pla
+                sta temp_ptr+1
+                rts
+                .pend
                 .pend
                 
 ;-------------------------------------------------------------------------

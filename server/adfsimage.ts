@@ -27,14 +27,31 @@ import * as utils from './utils';
 import * as beebfs from './beebfs';
 import { MAX_DISK_IMAGE_PART_SIZE } from './beeblink';
 import * as errors from './errors';
+import * as diskimage from './diskimage';
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
 const TRACK_SIZE_SECTORS = 16;
 const SECTOR_SIZE_BYTES = 256;
 const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
 
+// 32 sectors = 8 KB. 8 KB takes about 1 second to transfer with UPURS.
+//
+// Don't exceed 2 seconds'-worth of data - the drive will spin down.
+const MAX_PART_SIZE_SECTORS = 32;
+
+const MAX_PART_SIZE_BYTES = MAX_PART_SIZE_SECTORS * SECTOR_SIZE_BYTES;
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 const S_SIZE_BYTES = 1 * 40 * TRACK_SIZE_BYTES;
 const M_SIZE_BYTES = 1 * 80 * TRACK_SIZE_BYTES;
 const L_SIZE_BYTES = 2 * 80 * TRACK_SIZE_BYTES;
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
 function checkChecksum(sector: Buffer, index: number): void {
     let sum = 255;
@@ -53,88 +70,57 @@ function checkChecksum(sector: Buffer, index: number): void {
     }
 }
 
-export interface IADFSImage {
-    totalNumSectors: number;
-    parts: Buffer[];
+function getNumSectors(image: Buffer): number {
+    return utils.getUInt24LE(image, 0xfc);
 }
 
-interface IPart {
-    sector: number;
-    data: Buffer;
+function getSectorOffset(image: Buffer, logicalSector: number): number {
+    if (image.length === L_SIZE_BYTES) {
+        let track = Math.floor(logicalSector / TRACK_SIZE_SECTORS);
+        const side = Math.floor(track / 80);
+        track %= 80;
+        const sector = logicalSector % TRACK_SIZE_SECTORS;
+
+        return ((track * 2 + side) * TRACK_SIZE_SECTORS + sector) * SECTOR_SIZE_BYTES;
+    } else {
+        return logicalSector * SECTOR_SIZE_BYTES;
+    }
 }
 
-export function getADFSImage(data: Buffer, drive: number, allSectors: boolean, log: utils.Log): IADFSImage {
-    log.pn('getADFSImage: data=' + data.length + ' byte(s)');
-    // Check image size. Rearrange ADFS L images so they're in ADFS logical
-    // sector order.
-    switch (data.length) {
-        case S_SIZE_BYTES:
-        case M_SIZE_BYTES:
-            // good as-is.
-            break;
+function checkCat(image: Buffer): void {
+    checkChecksum(Buffer.from(image, 0 * SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES), 0);
+    checkChecksum(Buffer.from(image, 1 * SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES), 1);
 
-        case L_SIZE_BYTES:
-            const tmp = Buffer.alloc(L_SIZE_BYTES);
-            for (let i = 0; i < L_SIZE_BYTES; ++i) {
-                tmp[i] = data[i];
-            }
+    if (getNumSectors(image) >= (1 << 21)) {
+        return errors.generic(`Bad ADFS image (too many sectors)`);
+    }
+}
 
-            let destIdx = 0;
-            for (let side = 0; side < 2; ++side) {
-                for (let track = 0; track < 80; ++track) {
-                    let srcIdx = (track * 2 + side) * TRACK_SIZE_BYTES;
-                    for (let sector = 0; sector < TRACK_SIZE_SECTORS; ++sector) {
-                        for (let i = 0; i < SECTOR_SIZE_BYTES; ++i) {
-                            data[destIdx++] = tmp[srcIdx++];
-                        }
-                    }
-                }
-            }
-            break;
-
-        default:
-            return errors.generic('Bad ADFS image (unsupported size)');
+function checkImage(image: Buffer): void {
+    if (image.length !== S_SIZE_BYTES && image.length !== M_SIZE_BYTES && image.length !== L_SIZE_BYTES) {
+        return errors.generic(`Bad ADFS image (bad size)`);
     }
 
-    // Check ADFS format.
-    log.pn('Check ADFS format');
-    if (data.toString('binary', 0x201, 0x205) !== 'Hugo') {
-        return errors.generic('Bad ADFS image (no Hugo)');
-    }
+    checkCat(image);
+}
 
-    const sector0 = Buffer.from(data.buffer, 0, 256);
-    const sector1 = Buffer.from(data.buffer, 256, 256);
+interface ISectors {
+    beginSector: number;
+    numSectors: number;
+}
 
-    checkChecksum(sector0, 0);
-    checkChecksum(sector1, 1);
+function getUsedSectors(image: Buffer, maxNumSectors: number, allSectors: boolean): ISectors[] {
+    const totalNumSectors = getNumSectors(image);
 
-    if (sector1[0xfe] % 3 !== 0) {
-        return errors.generic('Bad ADFS image (bad free space list size)');
-    }
-
-    const totalNumSectors = utils.getUInt24LE(sector0, 0xfc);
-    if (totalNumSectors * SECTOR_SIZE_BYTES !== data.length) {
-        return errors.generic('Bad ADFS image (bad sector count)');
-    }
-
-    if (totalNumSectors >= (1 << 21)) {
-        return errors.generic('Bad ADFS image (sector count too large)');
-    }
-
-    // Get list of used sectors.
     const isSectorUsed: boolean[] = [];
     for (let i = 0; i < totalNumSectors; ++i) {
         isSectorUsed.push(true);
     }
 
-    if (allSectors) {
-        log.pn(`Assuming all sectors used`);
-    } else {
-        log.pn('Find unused sectors');
-
-        for (let i = 0; i < sector1[0xfe]; i += 3) {
-            const startSector = utils.getUInt24LE(sector0, i);
-            const numSectors = utils.getUInt24LE(sector1, i);
+    if (!allSectors) {
+        for (let i = 0; i < image[0x1fe]; i += 3) {
+            const startSector = utils.getUInt24LE(image, 0 * SECTOR_SIZE_BYTES + i);
+            const numSectors = utils.getUInt24LE(image, 1 * SECTOR_SIZE_BYTES + i);
 
             for (let j = 0; j < numSectors; ++j) {
                 const sector = startSector + j;
@@ -151,66 +137,275 @@ export function getADFSImage(data: Buffer, drive: number, allSectors: boolean, l
         }
     }
 
-    {
-        let numUsedSectors = 0;
-        for (const used of isSectorUsed) {
-            if (used) {
-                ++numUsedSectors;
+    const parts: ISectors[] = [];
+    let part: ISectors | undefined;
+
+    for (let i = 0; i < totalNumSectors; ++i) {
+        if (isSectorUsed[i]) {
+            if (part === undefined) {
+                part = { beginSector: i, numSectors: 0 };
+                parts.push(part);
             }
-        }
-        log.pn(`${numUsedSectors}/${totalNumSectors} sector(s) used`);
-    }
 
-    // Group used sectors into parts that don't exceed the max part size.
-    log.pn('Collect used sectors');
-    const maxPartSizeBytes = Math.floor((MAX_DISK_IMAGE_PART_SIZE & 0xff00) / SECTOR_SIZE_BYTES) * SECTOR_SIZE_BYTES;
-    log.pn('(max part size: ' + maxPartSizeBytes + ')');
-    const parts: IPart[] = [];
-    {
-        let part: IPart | undefined;
+            ++part.numSectors;
 
-        for (let sector = 0; sector < totalNumSectors; ++sector) {
-            if (isSectorUsed[sector]) {
-                if (part === undefined) {
-                    part = { sector, data: Buffer.alloc(0) };
-                    parts.push(part);
-                }
-
-                part.data = Buffer.concat([part.data, Buffer.from(data.buffer, sector * SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES)]);
-
-                if (part.data.length === maxPartSizeBytes) {
-                    part = undefined;
-                }
-            } else {
+            if (part.numSectors === maxNumSectors) {
                 part = undefined;
             }
+        } else {
+            part = undefined;
         }
     }
 
-    log.pn(parts.length + ' parts');
+    return parts;
+}
 
-    // Add an OSWORD $72 parameter block and a message to each part.
-    const parts2: Buffer[] = [];//nope... not sure about the naming here.
+// MasRef J.11-13 says (regarding the drive argument for OSWORD $72): "Bits 5-7
+// of XY +6 are ORed with the current drive number to give the drive number to
+// be accessed. The absolute sector number is a 21-bit value, high order bits
+// first."
+//
+// So set the drive elsewhere. Doesn't matter that it might be mounting a disk
+// that's about to be overwritten - the target disk has to be a valid ADFS disk
+// anyway.
 
-    for (let partIdx = 0; partIdx < parts.length; ++partIdx) {
-        const part = parts[partIdx];
+function createReadOSWORD(sector: number, numSectors: number): diskimage.IDiskOSWORD {
+    const block = Buffer.alloc(15);
 
-        const messageString = String.fromCharCode(13) + 'Writing: ' + (((partIdx + 1) / parts.length) * 100.0).toFixed(1) + '%' + String.fromCharCode(0);
-        const messageData = Buffer.from(messageString, 'binary');
+    block.writeUInt32LE(0xffffffff, 1);//fileld in later.
+    block.writeUInt8(0x08, 5);//8 = read
+    utils.writeUInt24BE(block, sector & 0x1fffff, 6);
+    block.writeUInt8(numSectors, 9);
 
-        const part2 = Buffer.concat([Buffer.alloc(16), messageData, part.data]);
+    return {
+        reason: 0x72,
+        block,
+        data: undefined,
+    };
+}
 
-        part2.writeInt32LE(16 + messageData.length, 1);//data pointer
-        part2.writeUInt8(0x0a, 5);//0x0a=write
+function createWriteOSWORD(sector: number, data: Buffer): diskimage.IDiskOSWORD {
+    const block = Buffer.alloc(15);
 
-        // disk address is big-endian.
-        part2.writeUInt8(part.sector >> 16 & 31, 6);//drive/sector number
-        part2.writeUInt16BE(part.sector & 0xffff, 7);//sector number
+    block.writeUInt32LE(0xffffffff, 1);//fileld in later.
+    block.writeUInt8(0x0a, 5);//a = read
+    utils.writeUInt24BE(block, sector & 0x1fffff, 6);
+    block.writeUInt32LE(data.length, 11);
 
-        part2.writeUInt32LE(part.data.length, 11);
+    return {
+        reason: 0x72,
+        block,
+        data,
+    };
+}
 
-        parts2.push(part2);
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+function getMessage(sector: number, numSectorsTransferred: number, numSectorsUsed: number): string {
+    return `S${utils.hex(sector, 6).toUpperCase()} (${(numSectorsTransferred / numSectorsUsed * 100.0).toFixed(1)}%)`;
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+export class WriteFlow extends diskimage.Flow {
+    private drive: number;
+    private allSectors: boolean;
+    private image: Buffer;
+    private log: utils.Log | undefined;
+    private parts: ISectors[];
+    private numSectorsUsed: number;
+    private numSectorsWritten: number;
+    private partIdx: number;
+
+    public constructor(drive: number, allSectors: boolean, image: Buffer, log: utils.Log | undefined) {
+        super();
+
+        this.drive = drive;
+        this.allSectors = allSectors;
+        this.image = image;
+        this.log = log;
+
+        this.parts = getUsedSectors(this.image, MAX_PART_SIZE_SECTORS, this.allSectors);
+        this.partIdx = 0;
+
+        this.numSectorsWritten = 0;
+
+        this.numSectorsUsed = 0;
+        for (const part of this.parts) {
+            this.numSectorsUsed += part.numSectors;
+        }
+
+        checkImage(image);
     }
 
-    return { totalNumSectors, parts: parts2 };
+    public start(oshwm: number, himem: number): diskimage.IStartFlow {
+        // 8 KB = ~1 second with UPURS. Don't exceed 2 seconds'-worth of data,
+        // as the disk will spin down.
+        this.init(oshwm, himem, 256 + MAX_PART_SIZE_BYTES);
+
+        return {
+            fs: 0,
+            fsStarCommand: `FADFS`,
+            starCommand: `MOUNT ${this.drive}`,
+            osword1: createReadOSWORD(0, 2),
+            osword2: undefined,
+        };
+    }
+
+    public setCat(p: Buffer): void {
+        if (getNumSectors(p) !== getNumSectors(this.image)) {
+            return errors.generic(`Disk/image size mismatch`);
+        }
+    }
+
+    public getNextPart(): diskimage.IPart | undefined {
+        if (this.partIdx >= this.parts.length) {
+            return undefined;
+        }
+
+        const part = this.parts[this.partIdx];
+
+        this.numSectorsWritten += part.numSectors;
+
+        const message = `${String.fromCharCode(13)}Write ${getMessage(part.beginSector, this.numSectorsWritten, this.numSectorsUsed)}`;
+
+        const data = Buffer.alloc(part.numSectors * SECTOR_SIZE_BYTES);
+
+        let destOffset = 0;
+
+        for (let i = 0; i < part.numSectors; ++i) {
+            const offset = getSectorOffset(this.image, part.beginSector + i);
+
+            for (let j = 0; j < SECTOR_SIZE_BYTES; ++j) {
+                data[destOffset++] = this.image[offset + j];
+            }
+        }
+
+        return {
+            message,
+            osword: createWriteOSWORD(part.beginSector, data),
+        };
+    }
+
+    public setLastOSWORDResult(data: Buffer): void {
+        ++this.partIdx;
+    }
+
+    public async finish(): Promise<diskimage.IFinishFlow> {
+        return {
+            fs: 0,
+            fsStarCommand: `FADFS`,
+            starCommand: `MOUNT ${this.drive}`,
+        };
+    }
 }
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+export class ReadFlow extends diskimage.Flow {
+    private drive: number;
+    private allSectors: boolean;
+    private file: beebfs.File;
+    private log: utils.Log | undefined;
+    private parts: ISectors[];
+    private partIdx: number;
+    private image: Buffer | undefined;
+    private numSectorsRead: number;
+    private numSectorsUsed: number;
+
+    public constructor(drive: number, allSectors: boolean, file: beebfs.File, log: utils.Log | undefined) {
+        super();
+
+        this.drive = drive;
+        this.allSectors = allSectors;
+        this.file = file;
+        this.log = log;
+        this.parts = [];
+        this.partIdx = 0;
+
+        this.numSectorsRead = 0;
+        this.numSectorsUsed = 0;
+    }
+
+    public start(oshwm: number, himem: number): diskimage.IStartFlow {
+        this.init(oshwm, himem, 256 + MAX_PART_SIZE_BYTES);
+
+        return {
+            fs: 0,
+            fsStarCommand: `FADFS`,
+            starCommand: `MOUNT ${this.drive}`,
+            osword1: createReadOSWORD(0, 2),
+            osword2: undefined,
+        };
+    }
+
+    public setCat(p: Buffer): void {
+        checkCat(p);
+        this.parts = getUsedSectors(p, MAX_PART_SIZE_SECTORS, this.allSectors);
+        this.image = Buffer.alloc(getNumSectors(p) * SECTOR_SIZE_BYTES);
+
+        for (const part of this.parts) {
+            this.numSectorsUsed += part.numSectors;
+        }
+    }
+
+    public getNextPart(): diskimage.IPart | undefined {
+        if (this.image === undefined) {
+            return errors.generic(`Flow error`);
+        }
+
+        if (this.partIdx >= this.parts.length) {
+            return undefined;
+        }
+
+        const part = this.parts[this.partIdx];
+
+        this.numSectorsRead += part.numSectors;
+
+        const message = `${String.fromCharCode(13)}Read ${getMessage(part.beginSector, this.numSectorsRead, this.numSectorsUsed)}`;
+
+        return {
+            message,
+            osword: createReadOSWORD(part.beginSector, part.numSectors),
+        };
+    }
+
+    public setLastOSWORDResult(data: Buffer): void {
+        if (this.image === undefined) {
+            return errors.generic(`Flow error `);
+        }
+
+        const part = this.parts[this.partIdx];
+
+        let srcOffset = 0;
+
+        for (let i = 0; i < part.numSectors; ++i) {
+            const destOffset = getSectorOffset(this.image, part.beginSector + i);
+            for (let j = 0; j < SECTOR_SIZE_BYTES; ++j) {
+                this.image[destOffset + j] = data[srcOffset++];
+            }
+        }
+
+        ++this.partIdx;
+    }
+
+    public async finish(): Promise<diskimage.IFinishFlow> {
+        if (this.image === undefined) {
+            return errors.generic(`Flow error`);
+        }
+
+        await beebfs.FS.writeFile(this.file, this.image);
+
+        return {
+            fs: 0,
+            fsStarCommand: ``,
+            starCommand: ``,
+        };
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////

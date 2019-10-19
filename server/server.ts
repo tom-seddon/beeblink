@@ -1054,7 +1054,7 @@ export default class Server {
             buffer.writeUInt8(buffer.length + diskimage.getDiskOSWORDErrorOffset(part.osword), 3);
             buffer.writeUInt16LE(this.diskImageFlow.getOSHWM() + buffer.length + part.osword.block.length, 4);
 
-            part.osword.block.writeUInt32LE(payloadAddr, 1);
+            part.osword.block.writeUInt32LE(getIOAddress(payloadAddr), 1);
 
             const buffers: Buffer[] = [buffer, part.osword.block, messageBuffer];
             if (part.osword.data === undefined) {
@@ -1609,6 +1609,19 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_SPECIAL, p);
     }
 
+    private checkDiskImageDSDDrive(details: IDiskImageDetails): void {
+        if (details.drive !== 0 && details.drive !== 1) {
+            return errors.badDrive();
+        }
+    }
+
+    private checkDiskImageADFSDrive(details: IDiskImageDetails): void {
+        // there's only a 3-bit field for ADFS drives.
+        if (details.drive < 0 || details.drive > 7) {
+            return errors.badDrive();
+        }
+    }
+
     private async readCommand(commandLine: CommandLine): Promise<Response> {
         const details = this.getDiskImageDetails(commandLine);
 
@@ -1616,16 +1629,14 @@ export default class Server {
 
         switch (details.type) {
             case DiskImageType.ADFS:
-                return errors.generic("ADFS = TODO");
+                this.checkDiskImageADFSDrive(details);
+                return this.startDiskImageFlow(new adfsimage.ReadFlow(details.drive, details.allSectors, file, this.log));
 
             case DiskImageType.SSD:
                 return this.startDiskImageFlow(new dfsimage.ReadFlow(details.drive, false, details.allSectors, file, this.log));
 
             case DiskImageType.DSD: {
-                if (details.drive !== 0 && details.drive !== 1) {
-                    return errors.badDrive();
-                }
-
+                this.checkDiskImageDSDDrive(details);
                 return this.startDiskImageFlow(new dfsimage.ReadFlow(details.drive, true, details.allSectors, file, this.log));
             }
         }
@@ -1638,32 +1649,14 @@ export default class Server {
 
         switch (details.type) {
             case DiskImageType.ADFS:
-                return errors.generic('ADFS = TODO');
-            //     // there's only a 3-bit field for ADFS drives.
-            //     if (details.drive < 0 || details.drive > 7) {
-            //         return errors.badDrive();
-            //     }
-
-            //     const image = adfsimage.getADFSImage(data, details.drive, details.allSectors, this.log);
-
-            //     this.setImageParts(image.parts);
-
-            //     const p = Buffer.alloc(5);
-            //     p[0] = beeblink.RESPONSE_SPECIAL_WRITE_ADFS_IMAGE;
-            //     utils.setUInt24LE(p, 1, image.totalNumSectors);
-            //     p[4] = details.drive;
-
-            //     return newResponse(beeblink.RESPONSE_SPECIAL, p);
-            // }
+                this.checkDiskImageADFSDrive(details);
+                return this.startDiskImageFlow(new adfsimage.WriteFlow(details.drive, details.allSectors, data, this.log));
 
             case DiskImageType.SSD:
                 return this.startDiskImageFlow(new dfsimage.WriteFlow(details.drive, false, details.allSectors, data, this.log));
 
             case DiskImageType.DSD:
-                if (details.drive !== 0 && details.drive !== 1) {
-                    return errors.badDrive();
-                }
-
+                this.checkDiskImageDSDDrive(details);
                 return this.startDiskImageFlow(new dfsimage.WriteFlow(details.drive, true, details.allSectors, data, this.log));
         }
     }
