@@ -71,7 +71,7 @@ function checkChecksum(sector: Buffer, index: number): void {
 }
 
 function getNumSectors(image: Buffer): number {
-    return utils.getUInt24LE(image, 0xfc);
+    return utils.readUInt24LE(image, 0xfc);
 }
 
 function getSectorOffset(image: Buffer, logicalSector: number): number {
@@ -119,8 +119,8 @@ function getUsedSectors(image: Buffer, maxNumSectors: number, allSectors: boolea
 
     if (!allSectors) {
         for (let i = 0; i < image[0x1fe]; i += 3) {
-            const startSector = utils.getUInt24LE(image, 0 * SECTOR_SIZE_BYTES + i);
-            const numSectors = utils.getUInt24LE(image, 1 * SECTOR_SIZE_BYTES + i);
+            const startSector = utils.readUInt24LE(image, 0 * SECTOR_SIZE_BYTES + i);
+            const numSectors = utils.readUInt24LE(image, 1 * SECTOR_SIZE_BYTES + i);
 
             for (let j = 0; j < numSectors; ++j) {
                 const sector = startSector + j;

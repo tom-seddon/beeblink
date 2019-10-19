@@ -738,17 +738,14 @@ export function getResponseTypeName(c: number): string {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// should be readUInt24LE, to match the equivalent Buffer method.
-export function getUInt24LE(b: Buffer, i: number): number {
-    return b[i] << 0 | b[i + 1] << 8 | b[i + 2] << 16;
+export function readUInt24LE(buffer: Buffer, index: number): number {
+    return buffer[index] << 0 | buffer[index + 1] << 8 | buffer[index + 2] << 16;
 }
 
-// should be writeUInt24LE, to match the equivalent Buffer method, with
-// corresponding change to the parameter order.
-export function setUInt24LE(b: Buffer, i: number, x: number): void {
-    b[i + 0] = (x >> 0) & 0xff;
-    b[i + 1] = (x >> 8) & 0xff;
-    b[i + 2] = (x >> 16) & 0xff;
+export function writeUInt24LE(buffer: Buffer, value: number, index: number): void {
+    buffer[index + 0] = (value >> 0) & 0xff;
+    buffer[index + 1] = (value >> 8) & 0xff;
+    buffer[index + 2] = (value >> 16) & 0xff;
 }
 
 export function readUInt24BE(buffer: Buffer, index: number): number {
