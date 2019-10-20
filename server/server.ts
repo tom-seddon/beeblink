@@ -37,6 +37,7 @@ import Response from './Response';
 import * as errors from './errors';
 import CommandLine from './CommandLine';
 import * as diskimage from './diskimage';
+import * as ddosimage from './ddosimage';
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -119,16 +120,20 @@ enum DefaultsCommandMode {
 /////////////////////////////////////////////////////////////////////////
 
 enum DiskImageType {
-    ADFS,
-    SSD,
-    DSD,
+    ADFS_UsedSectors,
+    ADFS_AllSectors,
+    SSD_UsedSectors,
+    SSD_AllSectors,
+    DSD_UsedSectors,
+    DSD_AllSectors,
+    SDD_DDOS_AllSectors,
+    DDD_DDOS_AllSectors,
 }
 
 interface IDiskImageDetails {
     fileName: string;
     drive: number;
     type: DiskImageType;
-    allSectors: boolean;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -1562,41 +1567,49 @@ export default class Server {
         }
 
         let type: DiskImageType;
-        switch (typeStr.charAt(0)) {
+        switch (typeStr.toLowerCase()) {
             case 'a':
-                type = DiskImageType.ADFS;
+                type = DiskImageType.ADFS_UsedSectors;
+                break;
+
+            case 'a*':
+                type = DiskImageType.ADFS_AllSectors;
                 break;
 
             case 's':
-                type = DiskImageType.SSD;
+                type = DiskImageType.SSD_UsedSectors;
+                break;
+
+            case 's*':
+                type = DiskImageType.SSD_AllSectors;
                 break;
 
             case 'd':
-                type = DiskImageType.DSD;
+                type = DiskImageType.DSD_UsedSectors;
+                break;
+
+            case 'd*':
+                type = DiskImageType.DSD_AllSectors;
+                break;
+
+            case 'do':
+            case 'do*':
+                type = DiskImageType.DDD_DDOS_AllSectors;
+                break;
+
+            case 'so':
+            case 'so*':
+                type = DiskImageType.SDD_DDOS_AllSectors;
                 break;
 
             default:
                 return errors.syntax();
         }
 
-        let allSectors = false;
-        if (typeStr.length >= 2) {
-            if (typeStr.length > 2) {
-                return errors.syntax();
-            }
-
-            if (typeStr.charAt(1) === '*') {
-                allSectors = true;
-            } else {
-                return errors.syntax();
-            }
-        }
-
         return {
             fileName: commandLine.parts[1],
             drive: +driveStr,
             type,
-            allSectors,
         };
     }
 
@@ -1628,17 +1641,28 @@ export default class Server {
         const file = await this.bfs.getBeebFileForWrite(await this.bfs.parseFQN(details.fileName));
 
         switch (details.type) {
-            case DiskImageType.ADFS:
+            case DiskImageType.ADFS_AllSectors:
+            case DiskImageType.ADFS_UsedSectors:
                 this.checkDiskImageADFSDrive(details);
-                return this.startDiskImageFlow(new adfsimage.ReadFlow(details.drive, details.allSectors, file, this.log));
+                return this.startDiskImageFlow(new adfsimage.ReadFlow(details.drive, details.type === DiskImageType.ADFS_AllSectors, file, this.log));
 
-            case DiskImageType.SSD:
-                return this.startDiskImageFlow(new dfsimage.ReadFlow(details.drive, false, details.allSectors, file, this.log));
+            case DiskImageType.SSD_AllSectors:
+            case DiskImageType.SSD_UsedSectors:
+                return this.startDiskImageFlow(new dfsimage.ReadFlow(details.drive, false, details.type === DiskImageType.SSD_AllSectors, file, this.log));
 
-            case DiskImageType.DSD: {
+            case DiskImageType.DSD_AllSectors:
+            case DiskImageType.DSD_UsedSectors:
                 this.checkDiskImageDSDDrive(details);
-                return this.startDiskImageFlow(new dfsimage.ReadFlow(details.drive, true, details.allSectors, file, this.log));
-            }
+                return this.startDiskImageFlow(new dfsimage.ReadFlow(details.drive, true, details.type === DiskImageType.DSD_AllSectors, file, this.log));
+
+            case DiskImageType.SDD_DDOS_AllSectors:
+                return this.startDiskImageFlow(new ddosimage.ReadFlow(details.drive, false, file, this.log));
+
+            case DiskImageType.DDD_DDOS_AllSectors:
+                return this.startDiskImageFlow(new ddosimage.ReadFlow(details.drive, true, file, this.log));
+
+            default:
+                return errors.generic(`Unsupported type`);
         }
     }
 
@@ -1648,16 +1672,22 @@ export default class Server {
         const data = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(details.fileName)));
 
         switch (details.type) {
-            case DiskImageType.ADFS:
+            case DiskImageType.ADFS_AllSectors:
+            case DiskImageType.ADFS_UsedSectors:
                 this.checkDiskImageADFSDrive(details);
-                return this.startDiskImageFlow(new adfsimage.WriteFlow(details.drive, details.allSectors, data, this.log));
+                return this.startDiskImageFlow(new adfsimage.WriteFlow(details.drive, details.type === DiskImageType.ADFS_AllSectors, data, this.log));
 
-            case DiskImageType.SSD:
-                return this.startDiskImageFlow(new dfsimage.WriteFlow(details.drive, false, details.allSectors, data, this.log));
+            case DiskImageType.SSD_AllSectors:
+            case DiskImageType.SSD_UsedSectors:
+                return this.startDiskImageFlow(new dfsimage.WriteFlow(details.drive, false, details.type === DiskImageType.SSD_AllSectors, data, this.log));
 
-            case DiskImageType.DSD:
+            case DiskImageType.DSD_AllSectors:
+            case DiskImageType.DSD_UsedSectors:
                 this.checkDiskImageDSDDrive(details);
-                return this.startDiskImageFlow(new dfsimage.WriteFlow(details.drive, true, details.allSectors, data, this.log));
+                return this.startDiskImageFlow(new dfsimage.WriteFlow(details.drive, true, details.type === DiskImageType.DSD_AllSectors, data, this.log));
+
+            default:
+                return errors.generic(`Unsupported type`);
         }
     }
 

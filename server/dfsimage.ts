@@ -35,7 +35,7 @@ const TRACK_SIZE_SECTORS = 10;
 const SECTOR_SIZE_BYTES = 256;
 const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
 
-const DFS_FS = 4;
+export const DFS_FS = 4;
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -118,14 +118,14 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-function getAddrString(side: number, track: number): string {
+export function getAddrString(side: number, track: number): string {
     return `T${track.toString().padStart(2, '0')}`;
 }
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-function createReadOSWORD(drive: number, track: number, sector: number, numSectors: number): diskimage.IDiskOSWORD {
+export function createReadOSWORD(drive: number, track: number, sector: number, numSectors: number): diskimage.IDiskOSWORD {
     const block = Buffer.alloc(11);
 
     block.writeUInt8(drive, 0);
@@ -144,7 +144,7 @@ function createReadOSWORD(drive: number, track: number, sector: number, numSecto
 }
 
 // always write whole tracks.
-function createWriteOSWORD(drive: number, track: number, data: Buffer): diskimage.IDiskOSWORD {
+export function createWriteOSWORD(drive: number, track: number, data: Buffer): diskimage.IDiskOSWORD {
     const block = Buffer.alloc(11);
 
     block.writeUInt8(drive, 0);
@@ -165,7 +165,7 @@ function createWriteOSWORD(drive: number, track: number, data: Buffer): diskimag
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-interface ITrackAddress {
+export interface ITrackAddress {
     side: number;
     track: number;
 }
@@ -173,7 +173,7 @@ interface ITrackAddress {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-function sortTrackAddresses(tracks: ITrackAddress[]): void {
+export function sortTrackAddresses(tracks: ITrackAddress[]): void {
     tracks.sort((a: ITrackAddress, b: ITrackAddress) => {
         if (a.track < b.track) {
             return -1;

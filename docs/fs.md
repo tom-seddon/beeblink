@@ -305,14 +305,19 @@ BBC file, so it needs a BBC-style name.)
 
 `<type>` is the type of image to create:
 
-* `S`: .ssd
-* `D`: .dsd
-* `A`: ADFS S/M/L
-  
-By default, `*READ` will only read used areas of the disk, so that the
-operation is quicker. (It can create truncated .ssd/.dsd files this
-way.) Add a `*` to the type to have it read the entire disk instead,
-creating a full-size image.
+* `S`/`S*`: .ssd
+* `D`/`D*`: .dsd
+* `A`/`A*`: ADFS S/M/L 
+* `SO`/`SO*`: .sdd (single-sided Opus DDOS/Challenger double density)
+* `DO`/`DO*`: .ddd (double-sided Opus DDOS/Challenger double density)
+
+The `*` suffix means to read the entire disk, without skipping areas
+unused by any files. (Not all formats support skipping unused areas,
+but I'll get round to adding it eventually...)
+
+If using Opus DDOS/Challenger, it's a good idea to `*CAT` the disk
+first so that the correct density is autodetected. You may get
+spurious disc fault errors otherwise.
 
 ### `RENAME <old fsp> <new fsp>`
 
@@ -406,16 +411,11 @@ Write a DFS/ADFS disk image to a formatted disk.
 
 `<drive>` is the drive to write to.
 
-`<type>` is the type of image:
+`<type>` is the type of image, as per `*READ`. `.ssd` and `.dsd` files
+may be truncated; all other types of disk image must be their full
+size. Double sided formats must be in track order.
 
-* `S`: .ssd (may be truncated)
-* `D`: .dsd, track order (may be truncated)
-* `A`: ADFS S/M/L (ADFS L images must be track order) (image size must
-  match the disk to be written to)
-  
-By default, `*WRITE` will only write used areas of the image, so that
-the writing is quicker. Add a `*` to the type to have it write the
-entire image instead.
+See `*READ` for notes about use with Opus DDOS/Challenger.
 
 # `BLCONFIG` options
 

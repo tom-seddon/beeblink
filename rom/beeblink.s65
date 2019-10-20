@@ -5135,12 +5135,12 @@ parts_loop:
                 jsr osnewl
                 .endif
 
-                bit $ff
-                bmi canceled
-
                 ; do OSWORD
                 ldy #0
                 jsr do_osword
+
+                bit $ff
+                bmi canceled
 
                 ; -----------
                 ; blfs hackily selected
@@ -5290,15 +5290,24 @@ set_nmi_flag_hack:
                 rts
                 
 do_osword:
+                ; don't do anything about Escape here - the main loop
+                ; will pick it up.
+                bit $ff
+                bpl +
+                rts
++
+
                 tya
-                pha
+                pha             ;OSWORD info offset #1
+                pha             ;OSWORD info offset #2
                 
                 jsr fetch_byte  ;OSWORD type
 
                 cmp #0
                 bne +
                 
-                pla
+                pla             ;OSWORD info offset #2
+                pla             ;OSWORD info offset #1
                 rts
 +
                 pha             ;OSWORD type
@@ -5311,7 +5320,7 @@ do_osword:
                 
                 jsr osword
 
-                pla             ;offset
+                pla             ;OSWORD info offset #2
                 tay
                 iny
                 iny
@@ -5323,7 +5332,25 @@ do_osword:
                 .print ["OSWORD result: &",DP_A,"\r\n"]
                 .endif
                 cmp #0
-                bne disk_io_error
+                beq osword_done
+
+                ; Retry...
+
+                jsr pcprint
+                .text "\r\nDisc fault: &",255
+
+                jsr print_hex_byte
+
+                jsr pcprint
+                .text " - retrying...\r\n",255
+
+                pla             ;OSWORD info offset #1
+                tay
+
+                jmp do_osword
+                
+osword_done:
+                pla             ;OSWORD info offset #1
                 rts
 
 disk_io_error:
