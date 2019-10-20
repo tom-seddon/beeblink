@@ -32,7 +32,6 @@ import * as dfsimage from './dfsimage';
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-
 const TRACK_SIZE_SECTORS = 18;
 const SECTOR_SIZE_BYTES = 256;
 const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
@@ -40,11 +39,15 @@ const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-function getUsedTracks(image: Buffer, trackSizeBytes: number, log: utils.Log | undefined): number[] {
+function getNumTracks(image: Buffer, track0Offset: number): number {
     // DDOS manual says "Number of tracks on the disc - 1", but this doesn't
     // actually appear to be the case...
-    const numTracks = image.readUInt8(16 * SECTOR_SIZE_BYTES + 4);
+    return image.readUInt8(track0Offset + 16 * SECTOR_SIZE_BYTES + 4);
+}
 
+// Maybe one day I'll fill this in properly... 
+function getUsedTracks(image: Buffer, track0Offset: number, log: utils.Log | undefined): number[] {
+    const numTracks = getNumTracks(image, track0Offset);
     // if (log !== undefined) {
     //     log.pn(`${numTracks} tracks`);
     // }
@@ -55,6 +58,18 @@ function getUsedTracks(image: Buffer, trackSizeBytes: number, log: utils.Log | u
     }
 
     return usedTracks;
+}
+
+function getMessage(addr: dfsimage.ITrackAddress, partIdx: number, numParts: number): string {
+    return `S${addr.side.toString()} ${dfsimage.getAddrString(addr.side, addr.track)} (${((partIdx + 1) / numParts * 100.0).toFixed(1)}%)`;
+}
+
+function getOffset(addr: dfsimage.ITrackAddress, doubleSided: boolean): number {
+    if (doubleSided) {
+        return (addr.track * 2 + addr.side) * TRACK_SIZE_BYTES;
+    } else {
+        return addr.track * TRACK_SIZE_BYTES;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -132,7 +147,7 @@ export class ReadFlow extends diskimage.Flow {
         const addr = this.tracks[this.partIdx];
 
         return {
-            message: `${String.fromCharCode(13)}Reading: S${addr.side.toString()} ${dfsimage.getAddrString(addr.side, addr.track)} (${((this.partIdx + 1) / this.tracks.length * 100.0).toFixed(1)}%)`,
+            message: `${String.fromCharCode(13)}Read ${getMessage(addr, this.partIdx, this.tracks.length)}`,
             osword: dfsimage.createReadOSWORD(this.drive + addr.side * 2, addr.track, 0, TRACK_SIZE_SECTORS),
         };
     }
@@ -143,19 +158,12 @@ export class ReadFlow extends diskimage.Flow {
         }
 
         if (data.length !== TRACK_SIZE_BYTES) {
-            return errors.generic(`Invalid track data (bad size)`);
+            return errors.generic(`Invalid track data(bad size)`);
         }
 
         const addr = this.tracks[this.partIdx];
 
-        let offset: number;
-        if (this.doubleSided) {
-            offset = addr.track * 2 * TRACK_SIZE_BYTES + addr.side * TRACK_SIZE_BYTES;
-        } else {
-            offset = addr.track * TRACK_SIZE_BYTES;
-        }
-
-        data.copy(this.image, offset);
+        data.copy(this.image, getOffset(addr, this.doubleSided));
 
         ++this.partIdx;
     }
@@ -178,3 +186,95 @@ export class ReadFlow extends diskimage.Flow {
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
+
+export class WriteFlow extends diskimage.Flow {
+    private drive: number;
+    private doubleSided: boolean;
+    private log: utils.Log | undefined;
+    private image: Buffer;
+    private tracks: dfsimage.ITrackAddress[];
+    private partIdx: number;
+
+    public constructor(drive: number, doubleSided: boolean, image: Buffer, log: utils.Log | undefined) {
+        super();
+
+        this.drive = drive;
+        this.doubleSided = doubleSided;
+        this.log = log;
+        this.image = image;
+
+        this.tracks = [];
+        for (const track of getUsedTracks(this.image, 0, this.log)) {
+            this.tracks.push({ side: 0, track });
+        }
+
+        if (this.doubleSided) {
+            for (const track of getUsedTracks(this.image, TRACK_SIZE_BYTES, this.log)) {
+                this.tracks.push({ side: 1, track });
+            }
+        }
+
+        dfsimage.sortTrackAddresses(this.tracks);
+
+        this.partIdx = 0;
+    }
+
+    public start(oshwm: number, himem: number): diskimage.IStartFlow {
+        this.init(oshwm, himem, 256 + 2 * TRACK_SIZE_BYTES);
+
+        const osword1 = dfsimage.createReadOSWORD(this.drive, 0, 0, TRACK_SIZE_SECTORS);
+
+        let osword2: diskimage.IDiskOSWORD | undefined;
+        if (this.doubleSided) {
+            osword2 = dfsimage.createReadOSWORD(this.drive | 2, 0, 0, TRACK_SIZE_SECTORS);
+        }
+
+        return { fs: dfsimage.DFS_FS, fsStarCommand: ``, starCommand: ``, osword1, osword2, };
+    }
+
+    public setCat(p: Buffer): void {
+        const numDiskTracks0 = getNumTracks(p, 0);
+        const numImageTracks0 = getNumTracks(this.image, 0);
+        if (numDiskTracks0 !== numImageTracks0) {
+            return errors.generic(`Disk / image format mismatch`);
+        }
+
+        if (this.doubleSided) {
+            const numDiskTracks1 = getNumTracks(p, TRACK_SIZE_BYTES);
+            const numImageTracks1 = getNumTracks(this.image, TRACK_SIZE_BYTES);
+            if (numDiskTracks1 !== numImageTracks1) {
+                return errors.generic(`Disk / image format mismatch`);
+            }
+        }
+    }
+
+    public getNextPart(): diskimage.IPart | undefined {
+        if (this.partIdx >= this.tracks.length) {
+            return undefined;
+        }
+
+        const addr = this.tracks[this.partIdx];
+
+        const data = Buffer.alloc(TRACK_SIZE_BYTES);
+
+        const offset = getOffset(addr, this.doubleSided);
+        this.image.copy(data, 0, offset, offset + TRACK_SIZE_BYTES);
+
+        return {
+            message: `${String.fromCharCode(13)}Write ${getMessage(addr, this.partIdx, this.tracks.length)}`,
+            osword: dfsimage.createWriteOSWORD(this.drive + addr.side * 2, addr.track, data),
+        };
+    }
+
+    public setLastOSWORDResult(data: Buffer): void {
+        ++this.partIdx;
+    }
+
+    public async finish(): Promise<diskimage.IFinishFlow> {
+        return {
+            fs: dfsimage.DFS_FS,
+            fsStarCommand: ``,
+            starCommand: ``,
+        };
+    }
+}

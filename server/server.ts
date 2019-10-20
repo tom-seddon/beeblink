@@ -1686,6 +1686,12 @@ export default class Server {
                 this.checkDiskImageDSDDrive(details);
                 return this.startDiskImageFlow(new dfsimage.WriteFlow(details.drive, true, details.type === DiskImageType.DSD_AllSectors, data, this.log));
 
+            case DiskImageType.SDD_DDOS_AllSectors:
+                return this.startDiskImageFlow(new ddosimage.WriteFlow(details.drive, false, data, this.log));
+
+            case DiskImageType.DDD_DDOS_AllSectors:
+                return this.startDiskImageFlow(new ddosimage.WriteFlow(details.drive, true, data, this.log));
+
             default:
                 return errors.generic(`Unsupported type`);
         }

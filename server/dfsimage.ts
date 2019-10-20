@@ -143,8 +143,9 @@ export function createReadOSWORD(drive: number, track: number, sector: number, n
     };
 }
 
-// always write whole tracks.
+// always starts writing at sector 0.
 export function createWriteOSWORD(drive: number, track: number, data: Buffer): diskimage.IDiskOSWORD {
+    const numSectors = Math.floor(data.length / SECTOR_SIZE_BYTES);
     const block = Buffer.alloc(11);
 
     block.writeUInt8(drive, 0);
@@ -153,7 +154,7 @@ export function createWriteOSWORD(drive: number, track: number, data: Buffer): d
     block.writeUInt8(0x4b, 6);
     block.writeUInt8(track, 7);
     block.writeUInt8(0, 8);
-    block.writeUInt8(1 << 5 | TRACK_SIZE_SECTORS, 9);
+    block.writeUInt8(1 << 5 | numSectors, 9);
 
     return {
         reason: 0x7f,

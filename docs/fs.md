@@ -296,7 +296,7 @@ Create a new volume.
 
 **Overwrites I/O processor memory from OSHWM onwards**
 
-Create a DFS/ADFS disk image.
+Create a DFS/ADFS/DDOS/Challenger disk image.
 
 `<fsp>` is the file to write to. (The file is created as an ordinary
 BBC file, so it needs a BBC-style name.)
@@ -316,8 +316,8 @@ unused by any files. (Not all formats support skipping unused areas,
 but I'll get round to adding it eventually...)
 
 If using Opus DDOS/Challenger, it's a good idea to `*CAT` the disk
-first so that the correct density is autodetected. You may get
-spurious disc fault errors otherwise.
+first so that it can detect the correct density. You may get spurious
+disc fault errors otherwise.
 
 ### `RENAME <old fsp> <new fsp>`
 
@@ -407,7 +407,9 @@ Produce wide hex dump of file, for use in 80 column modes.
 **Overwrites I/O processor memory from OSHWM onwards, and writes to
 the disk in the specified drive, no questions asked!**
 
-Write a DFS/ADFS disk image to a formatted disk.
+Write a DFS/ADFS/DDOS/Challenger disk image to a disk. `*WRITE`
+doesn't do any formatting for you: the disk must be of the same type
+as the disk image, and formatted to the same capacity.
 
 `<drive>` is the drive to write to.
 
