@@ -294,30 +294,7 @@ Create a new volume.
 
 ### `READ <fsp> <drive> <type>` ###
 
-**Overwrites I/O processor memory from OSHWM onwards**
-
-Create a DFS/ADFS/DDOS/Challenger disk image.
-
-`<fsp>` is the file to write to. (The file is created as an ordinary
-BBC file, so it needs a BBC-style name.)
-
-`<drive>` is the drive to read from.
-
-`<type>` is the type of image to create:
-
-* `S`/`S*`: .ssd
-* `D`/`D*`: .dsd
-* `A`/`A*`: ADFS S/M/L 
-* `SO`/`SO*`: .sdd (single-sided Opus DDOS/Challenger double density)
-* `DO`/`DO*`: .ddd (double-sided Opus DDOS/Challenger double density)
-
-The `*` suffix means to read the entire disk, without skipping areas
-unused by any files. (Not all formats support skipping unused areas,
-but I'll get round to adding it eventually...)
-
-If using Opus DDOS/Challenger, it's a good idea to `*CAT` the disk
-first so that it can detect the correct density. You may get spurious
-disc fault errors otherwise.
+See the disk image section.
 
 ### `RENAME <old fsp> <new fsp>`
 
@@ -404,20 +381,61 @@ Produce wide hex dump of file, for use in 80 column modes.
 
 ### `WRITE <fsp> <drive> <type>` ###
 
-**Overwrites I/O processor memory from OSHWM onwards, and writes to
-the disk in the specified drive, no questions asked!**
+See the Disk images section.
 
-Write a DFS/ADFS/DDOS/Challenger disk image to a disk. `*WRITE`
-doesn't do any formatting for you: the disk must be of the same type
-as the disk image, and formatted to the same capacity.
+# Disk images
 
-`<drive>` is the drive to write to.
+Use `*READ` to create a disk image from a disk, and `*WRITE` to write
+a disk image to a disk. The syntax for both is similar: specify file,
+drive (the 'other' drive will be deduced automatically when
+necessary), and disk image type.
 
-`<type>` is the type of image, as per `*READ`. `.ssd` and `.dsd` files
-may be truncated; all other types of disk image must be their full
-size. Double sided formats must be in track order.
+**Both operations use I/O processor memory from OSHWM onwards!**
 
-See `*READ` for notes about use with Opus DDOS/Challenger.
+The following single-density types are supported, including truncated
+files. This two options cover the vast majority of BBC disk images
+available.
+
+* `S`/`S*`: .ssd, single-sided DFS
+* `D`/`D*`: .dsd, double-sided DFS
+
+Use `S`/`D` to read/write only the areas occupied by files (much
+quicker when the disk isn't full!), or `S*`/`D*` to read/write the
+whole disk.
+
+The following double-density types are supported, if the filing
+systems are available:
+
+* `A`/`A*`: ADFS S (160 KB)/M (320 KB)/L (640 KB)
+* `SO`/`SO*`: single-sided Opus DDOS/Challenger, 40T (180 KB)/80 T (360 KB)
+* `DO`/`DO*`: double-sided Opus DDOS/Challenger, 40T (360 KB)/80 T (720 KB)
+
+Again, `*` means to read/write the whole disk - otherwise, only
+occupied areas are transferred.
+
+Truncated double-density images are not supported!
+
+Notes:
+
+- protected disks are not supported
+
+- for `*WRITE`, the target disk must be formatted and of the
+  appropriate capacity. There are some checks, but they aren't super
+  thorough
+
+- `*READ` will retry indefinitely in the event of a disk error. If
+  this means it just ends up getting stuck, hit ESCAPE to cancel
+
+- when using Opus DDOS/Challenger, do a `*CAT` of the disk before
+  embarking on a `*READ`/`*WRITE`, so that the Opus FS can auto-detect
+  the density. You may get spurious disk fault errors otherwise
+  
+- the `*` suffix is actually currently meaningless with the Opus
+  DDOS/Challenger disk image types, and the whole disk is always read
+  or written
+  
+- when using `*READ`, you're creating a BBC file, so it will have a
+  BBC-style file name and may well end up needing renaming
 
 # `BLCONFIG` options
 
