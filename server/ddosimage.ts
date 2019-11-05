@@ -158,7 +158,7 @@ export class ReadFlow extends diskimage.Flow {
         }
 
         if (data.length !== TRACK_SIZE_BYTES) {
-            return errors.generic(`Invalid track data(bad size)`);
+            return errors.generic(`Invalid track data (bad size)`);
         }
 
         const addr = this.tracks[this.partIdx];
