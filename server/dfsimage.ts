@@ -41,10 +41,6 @@ export const DFS_FS = 4;
 //////////////////////////////////////////////////////////////////////////
 
 function checkSize(data: Buffer, minSize: number): void {
-    if (data.length % SECTOR_SIZE_BYTES !== 0) {
-        return errors.generic('Bad image size (not sector aligned)');
-    }
-
     if (data.length < minSize) {
         return errors.generic(`Bad image size (must be >=${minSize})`);
     }
@@ -202,6 +198,8 @@ export class WriteFlow extends diskimage.Flow {
     private partIdx: number;
     private log: utils.Log | undefined;
     private image: Buffer;
+    private padSize: number;
+    private shownPadMessage: boolean;
 
     public constructor(drive: number, doubleSided: boolean, allSectors: boolean, image: Buffer, log: utils.Log | undefined) {
         super();
@@ -232,6 +230,14 @@ export class WriteFlow extends diskimage.Flow {
                 this.tracks.push({ side: 0, track });
             }
         }
+
+        if (this.image.length % SECTOR_SIZE_BYTES === 0) {
+            this.padSize = 0;
+        } else {
+            this.padSize = SECTOR_SIZE_BYTES - this.image.length % SECTOR_SIZE_BYTES;
+            this.image = Buffer.concat([this.image, Buffer.alloc(this.padSize)]);
+        }
+        this.shownPadMessage = false;
 
         sortTrackAddresses(this.tracks);
     }
@@ -271,8 +277,16 @@ export class WriteFlow extends diskimage.Flow {
             data.writeUInt8(this.image.readUInt8(imageOffset + i), i);
         }
 
+        let message = `${String.fromCharCode(13)}Writing: S${addr.side.toString()} ${getAddrString(addr.side, addr.track)} (${((this.partIdx + 1) / this.tracks.length * 100.0).toFixed(1)}%)`;
+        if (this.padSize > 0) {
+            if (!this.shownPadMessage) {
+                message = `(Padded image with ${this.padSize} byte(s))${utils.BNL}`;
+                this.shownPadMessage = true;
+            }
+        }
+
         return {
-            message: `${String.fromCharCode(13)}Writing: S${addr.side.toString()} ${getAddrString(addr.side, addr.track)} (${((this.partIdx + 1) / this.tracks.length * 100.0).toFixed(1)}%)`,
+            message,
             osword: createWriteOSWORD(this.drive + addr.side * 2, addr.track, data),
         };
     }
