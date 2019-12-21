@@ -55,12 +55,6 @@ const ioctl = getIOCTL();
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// pain to do this properly with argparse.
-const BEEBLINK_USB_VID = 0x1209;
-const BEEBLINK_USB_PID = 0xbeeb;
-
-const DEVICE_RETRY_DELAY_MS = 1000;
-
 const DEFAULT_BEEBLINK_AVR_ROM = './beeblink_avr_fe60.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_ROM = './beeblink_tube_serial.rom';
 const DEFAULT_BEEBLINK_UPURS_ROM = './beeblink_upurs_fe60.rom';
@@ -130,14 +124,10 @@ interface ICommandLineOptions {
     fs_verbose: boolean;
     server_verbose: boolean;
     default_volume: string | null;
-    no_retry_device: boolean;
     fatal_verbose: boolean;
     folders: string[];
-    avr_verbose: boolean;
     load_config: string | null;
     save_config: string | null;
-    usb_verbose: boolean;
-    set_serial: number | null;
     git: boolean;
     git_verbose: boolean;
     http: boolean;
@@ -148,7 +138,6 @@ interface ICommandLineOptions {
     serial_sync_verbose: string[] | null;
     serial_data_verbose: string[] | null;
     list_serial_devices: boolean;
-    list_usb_devices: boolean;
     serial_exclude: string[] | null;
     pcFolders: string[];
     serial_test_pc_to_bbc: boolean;
@@ -181,102 +170,8 @@ function UInt32(b0: number, b1: number, b2: number, b3: number): number {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-class InEndpointReader {
-    private endpoint: usb.InEndpoint;
-    private buffers: Buffer[];
-    private bufferPos: number;//always points into this.buffers[0]
-
-    public constructor(endpoint: usb.InEndpoint) {
-        this.endpoint = endpoint;
-        this.buffers = [];
-        this.bufferPos = 0;
-    }
-
-    public async readUInt8(): Promise<number> {
-        if (this.buffers.length === 0) {
-            this.buffers.push(await new Promise<Buffer>((resolve, reject) => {
-                this.endpoint.transfer(this.endpoint.descriptor.wMaxPacketSize, (error, data) => {
-                    //tslint:disable-next-line strict-type-predicates
-                    if (error !== undefined) {
-                        reject(error);
-                    } else {
-                        resolve(data);
-                    }
-                });
-            }));
-
-            assert.strictEqual(this.bufferPos, 0);
-        }
-
-        const value = this.buffers[0][this.bufferPos++];
-        if (this.bufferPos >= this.buffers[0].length) {
-            this.buffers.splice(0, 1);
-            this.bufferPos = 0;
-        }
-
-        return value;
-    }
-
-    public async readUInt32LE(): Promise<number> {
-        const b0 = await this.readUInt8();
-        const b1 = await this.readUInt8();
-        const b2 = await this.readUInt8();
-        const b3 = await this.readUInt8();
-
-        return UInt32(b0, b1, b2, b3);
-    }
-
-    public async readBytes(size: number): Promise<Buffer> {
-        // There's probably not much point trying to be any cleverer than
-        // this...
-        const data = Buffer.alloc(size);
-
-        for (let i = 0; i < size; ++i) {
-            data[i] = await this.readUInt8();
-        }
-
-        return data;
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-function isBeebLinkDevice(device: usb.Device): boolean {
-    return device.deviceDescriptor.idVendor === BEEBLINK_USB_VID && device.deviceDescriptor.idProduct === BEEBLINK_USB_PID;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-function getUSBDeviceDescription(device: usb.Device, serial?: string): string {
-    let description = 'Bus ' + device.busNumber.toString().padStart(3, '0') + ' Device ' + device.deviceAddress.toString().padStart(3, '0');
-
-    if (serial !== undefined) {
-        description += ' Serial ' + serial;
-    }
-
-    return description;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 async function delayMS(ms: number) {
     await new Promise((resolve, reject) => setTimeout(() => resolve(), ms));
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-function findSingleEndpoint(interf: usb.Interface, direction: string): usb.Endpoint | undefined {
-    const endpoints = interf.endpoints.filter((endpoint) => endpoint.direction === direction);
-    if (endpoints.length !== 1) {
-        return undefined;
-        //throw new Error('failed to find exactly 1 ' + direction + ' endpoint');
-    }
-
-    return endpoints[0];
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -423,43 +318,6 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function setDeviceSerialNumber(serial: number): Promise<void> {
-    // This is a 16-bit number, i.e., 4 hex digits. This is entirely because
-    // LUFA makes it a bit of a faff to have variable-length strings... the USB
-    // serial number is just a string, and you can put anything in it.
-    if (serial < 0 || serial >= 65536) {
-        throw new Error('serial number must be between 0 and 65535 inclusive');
-    }
-
-    const devices = usb.getDeviceList().filter(isBeebLinkDevice);
-
-    if (devices.length === 0) {
-        throw new Error('no BeebLink devices found');
-    } else if (devices.length > 1) {
-        throw new Error('multiple BeebLink devices found - serial number can only be set when a single device is plugged in');
-    }
-
-    const usbDevice = devices[0];
-
-    usbDevice.open(false);
-
-    await new Promise((resolve, reject) => usbDevice.setConfiguration(1, (error) => error !== undefined ? reject(error) : resolve()));
-
-    usbDevice.interface(0).claim();
-
-    await deviceControlTransfer(usbDevice,
-        usb.LIBUSB_REQUEST_TYPE_CLASS | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_OUT,
-        beeblink.CR_SET_SERIAL,
-        serial,
-        0,
-        undefined);
-
-    process.stderr.write('Serial number set. Please remove and reinsert the device.');
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 async function isGit(folderPath: string): Promise<boolean> {
     for (; ;) {
         const gitPath = path.join(folderPath, '.git');
@@ -486,156 +344,6 @@ async function isGit(folderPath: string): Promise<boolean> {
     }
 
     return false;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-class BeebLinkDevice {
-    public static async create(device: usb.Device, avrVerbose: boolean, log: utils.Log): Promise<BeebLinkDevice | undefined> {
-        assert.ok(isBeebLinkDevice(device));
-
-        let d = getUSBDeviceDescription(device);
-
-        try {
-            device.open(false);
-        } catch (error) {
-            process.stderr.write(d + ': failed to open device: ' + error + '\n');
-            return undefined;
-        }
-
-        async function closeDevice(error: Error | undefined, what: string): Promise<undefined> {
-            process.stderr.write(d + ': ' + what);
-
-            if (error !== undefined) {
-                process.stderr.write(': ' + error);
-            }
-
-            process.stderr.write('\n');
-
-            device.close();
-
-            return undefined;
-        }
-
-        const usbSerial = await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iSerialNumber);
-        if (usbSerial === undefined) {
-            return await closeDevice(undefined, 'failed to get serial number');
-        }
-
-        d = getUSBDeviceDescription(device, usbSerial);
-
-        log.pn(d + ': setting configuration...');
-        await new Promise((resolve, reject) => device.setConfiguration(1, (error) => error !== undefined ? reject(error) : resolve()));
-
-        log.pn(d + ': claiming interface...');
-
-        let interf;
-        try {
-            interf = device.interface(0);
-            interf.claim();
-        } catch (error) {
-            return await closeDevice(error, 'failed to claim interface');
-        }
-
-        log.pn(d + ': finding endpoints...');
-        const inEndpoint = findSingleEndpoint(interf, 'in') as usb.InEndpoint | undefined;
-        const outEndpoint = findSingleEndpoint(interf, 'out') as usb.OutEndpoint | undefined;
-        if (inEndpoint === undefined || outEndpoint === undefined) {
-            return await closeDevice(undefined, 'failed to find 1 input endpoint and 1 output endpoint');
-        }
-
-        // log.pn(d + ': clearing endpoint stalls...');
-        // await clearEndpointHalt(inEndpoint);
-        // await clearEndpointHalt(outEndpoint);
-
-        log.pn(d + ': checking protocol version...');
-        try {
-            const buffer = await deviceControlTransfer(device,
-                usb.LIBUSB_REQUEST_TYPE_CLASS | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_IN,
-                beeblink.CR_GET_PROTOCOL_VERSION,
-                0,
-                0,
-                1);
-
-            log.pn(d + ': AVR version: ' + buffer![0]);
-            if (buffer![0] !== beeblink.AVR_PROTOCOL_VERSION) {
-                return await closeDevice(undefined, ': wrong protocol version: ' + utils.hex2(buffer![0]) + ' (want: ' + utils.hex2(beeblink.AVR_PROTOCOL_VERSION));
-            }
-        } catch (error) {
-            return await closeDevice(error, 'failed to get protocol version');
-        }
-
-        log.pn(d + ': setting AVR verbose: ' + (avrVerbose ? 'yes' : 'no'));
-
-        try {
-            await deviceControlTransfer(device,
-                usb.LIBUSB_REQUEST_TYPE_CLASS | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_OUT,
-                beeblink.CR_SET_VERBOSE,
-                avrVerbose ? 1 : 0,
-                0,
-                undefined);
-        } catch (error) {
-            return await closeDevice(error, 'failed to set AVR verbose');
-        }
-
-        return new BeebLinkDevice(device, usbSerial, inEndpoint, outEndpoint, log.enabled);
-    }
-
-    public readonly usbDevice: usb.Device;
-    public readonly usbSerial: string;
-    public readonly usbInEndpoint: usb.InEndpoint;
-    public readonly usbOutEndpoint: usb.OutEndpoint;
-    public readonly description: string;
-    public readonly log: utils.Log;
-
-    private constructor(
-        usbDevice: usb.Device,
-        usbSerial: string,
-        usbInEndpoint: usb.InEndpoint,
-        usbOutEndpoint: usb.OutEndpoint,
-        logEnabled: boolean) {
-        this.usbDevice = usbDevice;
-        this.usbSerial = usbSerial;
-        this.usbInEndpoint = usbInEndpoint;
-        this.usbOutEndpoint = usbOutEndpoint;
-
-        this.description = getUSBDeviceDescription(this.usbDevice, this.usbSerial);
-
-        this.log = new utils.Log('USB: ' + this.description, process.stdout, logEnabled);
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-async function handleStallError(blDevice: BeebLinkDevice, endpoint: usb.Endpoint): Promise<boolean> {
-    assert.ok(endpoint === blDevice.usbInEndpoint || endpoint === blDevice.usbOutEndpoint);
-
-    const dir = endpoint === blDevice.usbInEndpoint ? 'in' : 'out';
-
-    blDevice.log.pn('device ' + dir + ' endpoint stalled - attempting to clear...');
-    try {
-        await new Promise((resolve, reject) => {
-            (endpoint as any).clearHalt((error: any) => {
-                if (error !== undefined && error !== null) {
-                    reject(error);
-                } else {
-                    resolve();
-                }
-            });
-        });
-
-        process.stderr.write(blDevice.description + ': stall cleared.\n');
-
-        // treat this as a reset.
-        return true;
-    } catch (error) {
-        blDevice.log.pn('failed to clear stall: ' + error);
-
-        // device is borked... have to close.
-        return false;
-    }
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -992,18 +700,8 @@ async function serialTestBBCToPC(options: ICommandLineOptions): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 
 async function handleCommandLineOptions(options: ICommandLineOptions, log: utils.Log): Promise<boolean> {
-    if (options.set_serial !== null) {
-        await setDeviceSerialNumber(options.set_serial);
-        return false;
-    }
-
     if (options.list_serial_devices) {
         await listSerialDevices(options);
-        return false;
-    }
-
-    if (options.list_usb_devices) {
-        await listUSBDevices();
         return false;
     }
 
@@ -1285,195 +983,6 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 
     httpServer.listen(HTTP_LISTEN_PORT, listenHost);
     process.stderr.write('HTTP server listening on ' + (listenHost === undefined ? 'all interfaces' : listenHost) + ', port ' + HTTP_LISTEN_PORT + '\n');
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-async function handleUSB(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
-    const usbLog = new utils.Log('USB', process.stdout, options.usb_verbose);
-
-    const blUSBDevices: usb.Device[] = [];
-    const serversByUSBSerial = new Map<string, Server>();
-
-    async function handleDevice(usbDevice: usb.Device): Promise<void> {
-        const blDevice = await BeebLinkDevice.create(usbDevice, options.avr_verbose, usbLog);
-        if (blDevice === undefined) {
-            return;
-        }
-
-        process.stderr.write(blDevice.description + ': serving.\n');
-
-        for (; ;) {
-            blDevice.log.pn('Waiting for request from BBC...');
-            const reader = new InEndpointReader(blDevice.usbInEndpoint);
-
-            // read incoming request.
-            let request: Request;
-            try {
-                let c = await reader.readUInt8();
-                blDevice.log.pn('Got request: V=' + ((c & 0x80) !== 0 ? '1' : '0') + ', C=' + utils.getRequestTypeName(c & 0x7f));
-
-                let pSize: number;
-                if ((c & 0x80) === 0) {
-                    pSize = 1;
-                } else {
-                    c &= 0x7f;
-                    pSize = await reader.readUInt32LE();
-                }
-
-                blDevice.log.pn('Waiting for payload of ' + pSize + ' byte(s)...');
-
-                const p = Buffer.alloc(pSize);
-                for (let i = 0; i < p.length; ++i) {
-                    p[i] = await reader.readUInt8();
-                }
-
-                request = new Request(c, p);
-            } catch (error) {
-                process.stderr.write(blDevice.description + ': receive error: ' + error + '\n');
-                if (error.message === 'LIBUSB_TRANSFER_STALL') {
-                    if (await handleStallError(blDevice, blDevice.usbInEndpoint)) {
-                        continue;
-                    } else {
-                        break;
-                    }
-                } else if (error.message === 'LIBUSB_ERROR_PIPE') {
-                    blDevice.log.pn('device lost...');
-
-                    // have to close.
-                    break;
-                } else {
-                    // pass it on.
-                    throw error;
-                }
-            }
-
-            blDevice.log.pn('Got request: ' + request);
-
-            // try to find the server. Make a new one, if none found.
-            let server = serversByUSBSerial.get(blDevice.usbSerial);
-            if (server === undefined) {
-                server = await createServer('USB', getRomPathsForAVR(options));
-                serversByUSBSerial.set(blDevice.usbSerial, server);
-            }
-
-            // field incoming request.
-            const response = await server.handleRequest(request);
-
-            blDevice.log.pn('Got response: ' + response);
-
-            let responseData: Buffer;
-
-            if (response.p.length === 1) {
-                responseData = Buffer.alloc(2);
-
-                responseData[0] = response.c & 0x7f;
-                responseData[1] = response.p[0];
-            } else {
-                responseData = Buffer.alloc(1 + 4 + response.p.length);
-
-                let i = 0;
-
-                responseData[i++] = response.c | 0x80;
-
-                responseData.writeUInt32LE(response.p.length, i);
-                i += 4;
-
-                for (const byte of response.p) {
-                    responseData[i++] = byte;
-                }
-            }
-
-            try {
-                await new Promise((resolve, reject) => {
-                    blDevice.usbOutEndpoint.transfer(responseData, (error) => {
-                        //tslint:disable-next-line strict-type-predicates
-                        if (error !== undefined && error !== null) {
-                            reject(error);
-                        } else {
-                            resolve();
-                        }
-                    });
-                });
-            } catch (error) {
-                process.stderr.write(blDevice.description + ': send error: ' + error + '\n');
-                if (error.message === 'LIBUSB_TRANSFER_STALL') {
-                    if (await handleStallError(blDevice, blDevice.usbOutEndpoint)) {
-                        continue;
-                    } else {
-                        break;
-                    }
-                } else if (error.message === 'LIBUSB_ERROR_PIPE') {
-                    blDevice.log.pn('device lost...');
-
-                    // have to close.
-                    break;
-                } else {
-                    // pass it on.
-                    throw error;
-                }
-            }
-        }
-
-        process.stderr.write(blDevice.description + ': closing device...\n');
-
-        let closed = false;
-        while (!closed) {
-            try {
-                blDevice.usbDevice.close();
-                closed = true;
-            } catch (error) {
-                blDevice.log.pn('failed to close (but will retry): ' + error);
-                await delayMS(1000);
-            }
-        }
-
-        process.stderr.write(blDevice.description + ': device closed.\n');
-    }
-
-    usbLog.pn('initialisation done.');
-
-    for (; ;) {
-        // Add new devices as they appear.
-        //
-        // Any devices that become invalid will (hopefully...) be caught by
-        // exceptions in the handleDevice function.
-        const newBLUSBDevices: usb.Device[] = [];
-
-        for (const usbDevice of usb.getDeviceList()) {
-            if (isBeebLinkDevice(usbDevice)) {
-                let found = false;
-
-                for (const blUSBDevice of blUSBDevices) {
-                    if (blUSBDevice.busNumber === usbDevice.busNumber && blUSBDevice.deviceAddress === usbDevice.deviceAddress) {
-                        found = true;
-                        break;
-                    }
-                }
-
-                if (!found) {
-                    newBLUSBDevices.push(usbDevice);
-                }
-            }
-        }
-
-        for (const newBLUSBDevice of newBLUSBDevices) {
-            // indicate that this one is being handled.
-            blUSBDevices.push(newBLUSBDevice);
-
-            handleDevice(newBLUSBDevice).then(() => {
-                // indicate this one is no longer being handled.
-                const blUSBDeviceIdx = blUSBDevices.indexOf(newBLUSBDevice);
-                assert.ok(blUSBDeviceIdx !== -1);
-                blUSBDevices.splice(blUSBDeviceIdx, 1);
-            }).catch((error) => {
-                throw error;
-            });
-        }
-
-        await delayMS(1000);
-    }
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -2075,8 +1584,6 @@ async function main(options: ICommandLineOptions) {
 
     handleHTTP(options, createServer);
 
-    void handleUSB(options, createServer);
-
     void handleSerial(options, createServer);
 }
 
@@ -2106,7 +1613,7 @@ function integer(s: string): number {
     });
 
     // ROM paths
-    parser.addArgument(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink AVR ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM });
+    parser.addArgument(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink AVR ROM (for use with b2) from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM });
     parser.addArgument(['--tube-serial-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink Tube Serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ROM });
     parser.addArgument(['--upurs-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink UPURS ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_UPURS_ROM });
 
@@ -2121,13 +1628,6 @@ function integer(s: string): number {
     // Git
     parser.addArgument(['--git'], { action: 'storeTrue', help: 'enable git-related functionality' });
     parser.addArgument(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output' });
-
-    // BeebLink AVR devices
-    parser.addArgument(['--no-retry-device'], { action: 'storeTrue', help: 'don\'t try to rediscover BeebLink AVR device if it goes away' });
-    parser.addArgument(['--set-serial'], { metavar: 'SERIAL', type: integer, help: 'set BeebLink AVR device\'s USB serial number to %(metavar)s and exit' });
-    parser.addArgument(['--list-usb-devices'], { action: 'storeTrue', help: 'list available AVR BeebLink devices, then exit' });
-    parser.addArgument(['--avr-verbose'], { action: 'storeTrue', help: 'enable serial output from BeebLink AVR device' });
-    parser.addArgument(['--usb-verbose'], { action: 'storeTrue', help: 'extra USB-related output' });
 
     // Serial devices
     parser.addArgument(['--serial-include'], { action: 'append', metavar: 'DEVICE', help: 'listen on serial port DEVICE' });

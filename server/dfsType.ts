@@ -24,10 +24,10 @@
 
 import * as os from 'os';
 import * as path from 'path';
-import * as utils from './utils';
 import * as beebfs from './beebfs';
 import * as errors from './errors';
 import * as inf from './inf';
+import * as utils from './utils';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
