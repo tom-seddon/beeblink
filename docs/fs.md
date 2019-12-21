@@ -5,7 +5,7 @@
 Unzip the server zip file somewhere on your PC.
 
 If using the Tube serial device, run it just like this from the
-command line; if using the experimental UPURS support, see
+command line; if using a UPURS cable, see
 [the UPURS notes](./upurs.md) for advice about additional command line
 parameters you may need to supply.
 

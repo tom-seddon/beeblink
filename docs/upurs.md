@@ -33,11 +33,3 @@ knows about:
 For each device, it shows the path (this is what you should pass to
 `--serial-include`), info about the USB device it corresponds to, and
 a note about whether the device will be used or not and why.
-
-# UPURS support is experimental
-
-Please
-[file a GitHub issue](https://github.com/tom-seddon/beeblink/issues)
-or
-[post in the StarDot BeebLink thread](https://stardot.org.uk/forums/viewtopic.php?f=53&t=15605)
-if you have any problems!

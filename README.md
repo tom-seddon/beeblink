@@ -29,8 +29,8 @@ module or battery-backed write-protectable sideways RAM - it's no fun
 having to reload the ROM each time you power on, or have it zapped by
 careless programs!
 
-You can connect BBC and PC using a Tube USB serial adapter
-(recommended - it's much faster) or a UPURS cable.
+You can connect BBC and PC using a Tube USB serial adapter or a UPURS
+cable.
 
 ## Tube USB serial adapter
 
@@ -48,9 +48,7 @@ If you've got some way of getting files to your BBC already, copy
 otherwise, use the [bootstrap process](./docs/bootstrap.md), and get
 the file that way.
 
-## UPURS cable _(experimental)_
-
-**UPURS support is experimental**
+## UPURS cable
 
 See https://www.retro-kit.co.uk/UPURS/. Unless your PC is rather old,
 you'll also probably need a USB serial port adapter.
@@ -62,8 +60,6 @@ There's no bootstrap process for the UPURS cable - use the UPURS tools
 to get `beeblink_upurs_fe60.rom` copied onto your BBC.
 
 [There are some notes about using BeebLink with the UPURS cable](./docs/upurs.md).
-
-**UPURS support is experimental**
 
 # Use
 
