@@ -1413,7 +1413,16 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                     dataOutLog.dumpBuffer(responseData);
                 });
 
-                const maxChunkSize = 512;//arbitrary.
+                let maxChunkSize = 512;
+                let delay = 0;
+
+                const opt100Value = server.getOPT100Value();
+                if (opt100Value !== 0) {
+                    // 1 byte/ms = ~1 KB/sec, 2 bytes/ms = ~2 KB/sec, etc.
+                    delay = 1;
+                    maxChunkSize = opt100Value;
+                }
+
                 let srcIdx = 0;
                 while (srcIdx < responseData.length) {
                     const chunk = responseData.slice(srcIdx, srcIdx + maxChunkSize);
@@ -1436,6 +1445,10 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                             callResolveResult(false);
                         },
                     };
+
+                    if (delay > 0) {
+                        await delayMS(delay);
+                    }
 
                     const ok = await new Promise<boolean>((resolve, reject) => {
                         resolveResult = resolve;

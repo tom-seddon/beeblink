@@ -171,12 +171,14 @@ export default class Server {
     private speedTest: speedtest.SpeedTest | undefined;
     private dumpPackets: boolean;
     private diskImageFlow: diskimage.Flow | undefined;
+    private opt100Value: number;
 
     public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
         this.romPathByLinkSubtype = romPathByLinkSubtype;
         this.linkSubtype = undefined;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
+        this.opt100Value = 0;
 
         this.commands = [
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
@@ -240,6 +242,10 @@ export default class Server {
         this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stderr, logPrefix !== undefined);
         this.log.colours = colours;
         this.dumpPackets = dumpPackets;
+    }
+
+    public getOPT100Value(): number {
+        return this.opt100Value;
     }
 
     public async handleRequest(request: Request): Promise<Response> {
@@ -765,7 +771,15 @@ export default class Server {
 
         this.log.pn('*OPT ' + x + ',' + y);
 
-        await this.bfs.OPT(x, y);
+        switch (x) {
+            case 100:
+                this.opt100Value = y;
+                break;
+
+            default:
+                await this.bfs.OPT(x, y);
+                break;
+        }
 
         return newResponse(beeblink.RESPONSE_YES, 0);
     }

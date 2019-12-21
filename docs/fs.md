@@ -383,6 +383,32 @@ Produce wide hex dump of file, for use in 80 column modes.
 
 See the Disk images section.
 
+# `*OPT` options
+
+## `*OPT 4,y`
+
+Select autoboot action to take on Shift+BREAK for this drive. `y`
+should be one of the standard values:
+
+- `0`: no action
+- `1`: `*LOAD !BOOT`
+- `2`: `*RUN !BOOT`
+- `3`: `*EXEC !BOOT`
+
+## `*OPT 100,y`
+
+Limit maximum PC->BBC throughput, for debugging purposes.
+
+When `y` is 0, the default, there is no limiting, and the connection
+runs as fast as possible.
+
+Other values of `y` set the connection's speed limit. There's no
+particular relationship between the value and the resulting
+throughput, but lower values mean a slower connection.
+
+The limit can end up above the connection's maximum speed - in which
+case you'll just get the maximum speed possible.
+
 # Disk images
 
 Use `*READ` to create a disk image from a disk, and `*WRITE` to write
