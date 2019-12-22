@@ -146,6 +146,10 @@ sf_link_started_up=$08
 ; if set, BeebLink owns NMI resources.
 sf_got_nmi=$04
 
+; if set, slow reads.
+sf_slow_reads=$02
+slow_reads_char='S'
+                
 sf_power_on_defaults=0
                 
 ;-------------------------------------------------------------------------
@@ -372,7 +376,7 @@ p1_syntax:
 pn_syntax:
                 .text "<T> <start> <end>",255
 blconfig_syntax:
-                .text "([",von_char,act_as_dfs_char,trap_disc_char,ignore_disc_char,"][+-]...)",255
+                .text "([",von_char,act_as_dfs_char,trap_disc_char,ignore_disc_char,slow_reads_char,"][+-]...)",255
 build_syntax:
                 .text "<fsp>",255
 
@@ -714,7 +718,7 @@ boot_fs:
                 .text " <SWR>",255
 +
 
-                lda #sf_von|sf_act_as_dfs|sf_trap_disc|sf_ignore_disc
+                lda #sf_von|sf_act_as_dfs|sf_trap_disc|sf_ignore_disc|sf_slow_reads
                 jsr get_rom_status_flag
                 bcc show_avr_status
                 
@@ -735,6 +739,10 @@ boot_fs:
 
                 lda #sf_ignore_disc
                 ldy #ignore_disc_char
+                jsr print_rom_status_flag
+
+                lda #sf_slow_reads
+                ldy #slow_reads_char
                 jsr print_rom_status_flag
 
                 jsr pcprint
@@ -2069,6 +2077,9 @@ loop:
                 cmp #ignore_disc_char
                 beq ignore_disc
 
+                cmp #slow_reads_char
+                beq slow_reads
+
                 jmp syntax_brk
 
 ignore_disc:
@@ -2085,6 +2096,11 @@ von:
 
 act_as_dfs:
                 lda #sf_act_as_dfs
+                jmp parse_setting
+
+slow_reads:
+                lda #sf_slow_reads
+                jmp parse_setting
 
 parse_setting:
                 pha
@@ -2139,6 +2155,11 @@ done:
                 lda #sf_ignore_disc
                 jsr print_flag_status
 
+                ldx #<slow_reads_text
+                ldy #>slow_reads_text
+                lda #sf_slow_reads
+                jsr print_flag_status
+
                 ldx $f4                
                 lda $a8
                 eor roms_table,x
@@ -2167,6 +2188,8 @@ act_as_dfs_text:
                 .text act_as_dfs_char," - act as DFS: ",255
 ignore_disc_text:
                 .text ignore_disc_char," - ignore *DISC/*DISK: ",255
+slow_reads_text:
+                .text slow_reads_char," - slow file reads: ",255
                 
                 .pend
 
@@ -3563,6 +3586,16 @@ release_tube: .proc
 ;
 ; Produce a delay that's some multiple of 12 cycles.
 ;
+delay_1536_cycles:
+                jsr delay_768_cycles
+delay_768_cycles:
+                jsr delay_384_cycles
+delay_384_cycles:
+                jsr delay_192_cycles
+delay_192_cycles:
+                jsr delay_96_cycles
+delay_96_cycles:
+                jsr delay_48_cycles
 delay_48_cycles:
                 jsr delay_12_cycles
 delay_36_cycles:
@@ -3651,6 +3684,10 @@ recv_file_data: .proc
                 bne +
                 rts
 +
+                lda #sf_slow_reads
+                jsr get_rom_status_flag
+                bcs slow_read
+                
                 ldx #payload_addr
                 jsr is_parasite_address
                 bcc +
@@ -3661,13 +3698,33 @@ recv_file_data: .proc
 done:
                 jsr link_unprepare
                 rts
-                .pend
 
+slow_read:
+                ; Slow reads always use the bytewise routine.
+                ldx #payload_addr
+                jsr is_parasite_address
+                bcc +
+                jsr recv_file_data_parasite_bytewise_slow
+                jmp done
++
+                jsr recv_file_data_host_bytewise_slow
+                jmp done
+                .pend
+                
 ;-------------------------------------------------------------------------
 
-recv_file_data_host_bytewise: .proc
+slow_transfer_delay: .macro delay
+                .if \delay
+                ; 2000000/1536=1302
+                jsr delay_1536_cycles
+                .endif
+                .endm
+                
+recv_file_data_host_bytewise_routine: .macro delay
                 ldy #0
 loop:
+                .slow_transfer_delay \delay
+                
                 jsr recv_payload_byte
                 bcc done
 
@@ -3682,13 +3739,9 @@ done:
                 ldx #payload_addr
                 jsr addyz16
                 rts
-                
-                .pend
+                .endm
 
-;-------------------------------------------------------------------------
-
-recv_file_data_parasite_bytewise: .proc
-
+recv_file_data_parasite_bytewise_routine: .macro delay
                 jsr claim_tube
 
                 ldx #<payload_addr
@@ -3697,6 +3750,8 @@ recv_file_data_parasite_bytewise: .proc
                 jsr $406
 
 loop:
+                .slow_transfer_delay \delay
+                
                 jsr recv_payload_byte
                 bcc done
 
@@ -3706,6 +3761,24 @@ loop:
 done:
                 jsr release_tube
                 rts
+                .endm
+
+;-------------------------------------------------------------------------
+
+recv_file_data_host_bytewise: .proc
+                .recv_file_data_host_bytewise_routine false
+                .pend
+                
+recv_file_data_host_bytewise_slow: .proc
+                .recv_file_data_host_bytewise_routine true
+                .pend
+                
+recv_file_data_parasite_bytewise: .proc
+                .recv_file_data_parasite_bytewise_routine false
+                .pend
+                
+recv_file_data_parasite_bytewise_slow: .proc
+                .recv_file_data_parasite_bytewise_routine true
                 .pend
 
 ;-------------------------------------------------------------------------

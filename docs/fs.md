@@ -491,6 +491,14 @@ On a Master 128 it will also install temporary filing system entries
 for `DISC` and `DISK` (which will just be ignored if the DFS is also
 present).
 
+## `S` - slow transfers
+
+If set, bulk read transfers will be artificially limited to around 1
+KBytes/sec. Ordinary command traffic and bulk writes are unaffected.
+
+This affects `OSFILE` (`*LOAD`, BASIC's `LOAD`, etc.), `OSGBPB`,
+`*RUN`, `*SPEEDTEST`, `*SELFUPDATE` and `*WRITE`.
+
 # Non-standard errors
 
 Most of the errors you'll see when using the BLFS will be the usual
