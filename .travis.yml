@@ -23,7 +23,7 @@ before_install:
   - nvm use 10.13.0
   - nvm ls
   - brew install p7zip
-  - (cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 1905)
+  - (cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 2025)
   - (cd ~/tass64-code && make all && make install)
 
 script:
