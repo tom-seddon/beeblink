@@ -145,7 +145,7 @@ sf_link_started_up=$08
 
 ; if set, BeebLink owns NMI resources.
 sf_got_nmi=$04
-                
+
 sf_power_on_defaults=0
                 
 ;-------------------------------------------------------------------------
@@ -4856,7 +4856,10 @@ buf_size=50
                 tay
 
                 lda #$80        ;open for write (AUG 343)
+
+                .debug_print ['OSFIND: before: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
                 jsr osfind
+                .debug_print ['OSFIND:  after: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
 
                 cmp #0
                 bne +
@@ -4865,6 +4868,8 @@ buf_size=50
 
 +
                 sta build_handle
+
+                .debug_print ['Handle: ',build_handle,'\r\n']
 
                 lda #1
                 sta build_line+0
@@ -4897,6 +4902,8 @@ buf_size=50
                 lda #126
                 sta build_osword0_block+4
 
+                .debug_print ['*BUILD buffer: &01',DP_X,'\r\n']
+
 read_lines_loop:
                 lda build_line+1
                 jsr print_hex_byte
@@ -4917,7 +4924,9 @@ read_lines_loop:
 write_line_loop:
                 ldy build_handle
                 lda $101,x
+                .debug_print ['OSBPUT: before: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
                 jsr osbput
+                .debug_print ['OSBPUT:  after: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
                 cmp #13
                 beq wrote_line
                 inx
@@ -4943,13 +4952,15 @@ done:
                 adc #buf_size
                 tax
                 txs
-                
-                lda #0          ;close file (AUG 342)
-                ldy build_handle
-                jsr osfind
 
                 lda #$7e        ;acknowledge ESCAPE (AUG 149)
                 jsr osbyte
+
+                lda #0          ;close file (AUG 342)
+                ldy build_handle
+                .debug_print ['OSFIND: before: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
+                jsr osfind
+                .debug_print ['OSFIND:  after: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
 
                 jsr osnewl
 
