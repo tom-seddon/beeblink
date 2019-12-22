@@ -20,7 +20,7 @@ before_install:
   - npm version
   - node --version
   - nvm ls
-  - nvm use 10.13.0
+  - nvm use lts/dubnium
   - nvm ls
   - brew install p7zip
   - (cd ~ && svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 2025)
