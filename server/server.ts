@@ -228,14 +228,14 @@ export default class Server {
         this.handlers[beeblink.REQUEST_OSGBPB] = new Handler('OSGBPB', this.handleOSGBPB);
         this.handlers[beeblink.REQUEST_OPT] = new Handler('OPT', this.handleOPT);
         this.handlers[beeblink.REQUEST_BOOT_OPTION] = new Handler('GET_BOOT_OPTION', this.handleGetBootOption);
-        this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('REQUEST_VOLUME_BROWSER', this.handleVolumeBrowser);
-        this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('REQUEST_SPEED_TEST', this.handleSpeedTest);
-        this.handlers[beeblink.REQUEST_SET_FILE_HANDLE_RANGE] = new Handler('REQUEST_SET_FILE_HANDLE_RANGE', this.handleSetFileHandleRange);
-        this.handlers[beeblink.REQUEST_START_DISK_IMAGE_FLOW] = new Handler('REQUEST_START_DISK_IMAGE_FLOW', this.handleStartDiskImageFlow);
-        this.handlers[beeblink.REQUEST_SET_DISK_IMAGE_CAT] = new Handler('REQUEST_SET_DISK_IMAGE_CAT', this.handleSetDiskImageCat);
-        this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('REQUEST_NEXT_DISK_IMAGE_part', this.handleNextDiskImagePart);
-        this.handlers[beeblink.REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT] = new Handler('REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT', this.handleSetLastDiskImageOSWORDResult);
-        this.handlers[beeblink.REQUEST_FINISH_DISK_IMAGE_FLOW] = new Handler('REQUEST_FINISH_DISK_IMAGE_FLOW', this.handleFinishDiskImageFlow);
+        this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('VOLUME_BROWSER', this.handleVolumeBrowser);
+        this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('SPEED_TEST', this.handleSpeedTest);
+        this.handlers[beeblink.REQUEST_SET_FILE_HANDLE_RANGE] = new Handler('SET_FILE_HANDLE_RANGE', this.handleSetFileHandleRange);
+        this.handlers[beeblink.REQUEST_START_DISK_IMAGE_FLOW] = new Handler('START_DISK_IMAGE_FLOW', this.handleStartDiskImageFlow);
+        this.handlers[beeblink.REQUEST_SET_DISK_IMAGE_CAT] = new Handler('SET_DISK_IMAGE_CAT', this.handleSetDiskImageCat);
+        this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('NEXT_DISK_IMAGE_part', this.handleNextDiskImagePart);
+        this.handlers[beeblink.REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT] = new Handler('SET_LAST_DISK_IMAGE_OSWORD_RESULT', this.handleSetLastDiskImageOSWORDResult);
+        this.handlers[beeblink.REQUEST_FINISH_DISK_IMAGE_FLOW] = new Handler('FINISH_DISK_IMAGE_FLOW', this.handleFinishDiskImageFlow);
 
         this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stderr, logPrefix !== undefined);
         this.log.colours = colours;
