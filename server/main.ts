@@ -55,6 +55,8 @@ const ioctl = getIOCTL();
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+const DEVICE_RETRY_DELAY_MS = 1000;
+
 const DEFAULT_BEEBLINK_AVR_ROM = './beeblink_avr_fe60.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_ROM = './beeblink_tube_serial.rom';
 const DEFAULT_BEEBLINK_UPURS_ROM = './beeblink_upurs_fe60.rom';
@@ -1162,15 +1164,12 @@ function isSerialDeviceVerbose(portInfo: SerialPort.PortInfo, verboseOptions: st
     return false;
 }
 
-async function handleSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
+async function handleSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, server: Server): Promise<void> {
     const serialLog = new utils.Log(getSerialPortPath(portInfo), process.stdout, isSerialDeviceVerbose(portInfo, options.serial_verbose));
 
     if (isSerialPortUSBDevice(portInfo, TUBE_SERIAL_DEVICE) || isSerialPortUSBDevice(portInfo, FTDI_USB_SERIAL_DEVICE)) {
         await setFTDILatencyTimer(portInfo, serialLog);
     }
-
-    serialLog.pn('Creating server...');
-    const server = await createServer('SERIAL', getRomPathsForSerial(options));
 
     let port: SerialPort;
     try {
@@ -1208,8 +1207,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
 
     });
 
-    port.on('error', (error: any): void => {
-        serialLog.pn(`error: ${error}`);
+    function rejectReadWaiter(error: any): void {
         if (readWaiter !== undefined) {
             const waiter = readWaiter;
             readWaiter = undefined;
@@ -1218,6 +1216,16 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                 waiter.reject(error);
             }
         }
+    }
+
+    port.on('error', (error: any): void => {
+        serialLog.pn(`error: ${error}`);
+        rejectReadWaiter(error);
+    });
+
+    port.on('close', (error: any): void => {
+        serialLog.pn(`close: ${error}`);
+        rejectReadWaiter(error);
     });
 
     async function readByte(): Promise<number> {
@@ -1304,7 +1312,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
     // where it left off, allowing it to survive a server restart. If not, it
     // will embark on the sync process from its end and enter the sync loop that
     // way.
-
+    server_loop:
     for (; ;) {
         // Request/response loop.
         //
@@ -1531,9 +1539,51 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
     }
 }
 
+interface IPortState {
+    server: Server;
+    active: boolean;
+}
+
 async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
-    for (const portInfo of await getSerialPortList(options)) {
-        void handleSerialDevice(options, portInfo, createServer);
+    const log = new utils.Log('SERIAL-DEVICES', process.stdout, options.serial_verbose !== null);
+
+    const portStateByPortPath = new Map<string, IPortState>();
+
+    for (; ;) {
+        for (const portInfo of await getSerialPortList(options)) {
+            const portPath = getSerialPortPath(portInfo);
+
+            let value = portStateByPortPath.get(portPath);
+            if (value === undefined) {
+                log.pn(`${portPath}: new serial port`);
+                value = {
+                    server: await createServer('SERIAL', getRomPathsForSerial(options)),
+                    active: false,//not quite active just yet!
+                };
+                portStateByPortPath.set(portPath, value);
+            }
+
+            // Some JS nonsense here ? For some reason, the compiler can't tell
+            // that 'value' can no longer be undefined by the time it's used by
+            // the 'then' and 'error' callbacks below, even though it's captured
+            // by them after its active field was set to true, suggesting that
+            // it can tell it wasn't undefined by that point at least. Create a
+            // new variable of the right type here though and it's fine...
+            const portState: IPortState = value;
+
+            if (!portState.active) {
+                portState.active = true;
+                handleSerialDevice(options, portInfo, portState.server).then(() => {
+                    process.stderr.write(`${getSerialPortPath(portInfo)}: connection closed.\n`);
+                    portState.active = false;
+                }).catch((error) => {
+                    process.stderr.write(`${getSerialPortPath(portInfo)}: connection closed due to error: ${error}\n`);
+                    portState.active = false;
+                });
+            }
+        }
+
+        await delayMS(DEVICE_RETRY_DELAY_MS);
     }
 }
 
