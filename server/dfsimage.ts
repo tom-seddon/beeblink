@@ -58,7 +58,7 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
     const cat1 = Buffer.from(data.buffer, track0Offset + SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES);
 
     if (allSectors) {
-        const numSectors = cat1[0x07] | ((cat1[0x08] & 0x03) << 8);
+        const numSectors = cat1[0x07] | ((cat1[0x06] & 0x03) << 8);
 
         if (numSectors % TRACK_SIZE_SECTORS !== 0) {
             return errors.generic('Bad DFS format (sector count)');
