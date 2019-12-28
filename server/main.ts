@@ -988,7 +988,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, serialLog: utils.Log): Promise<void> {
+async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, serialLog: utils.Log): Promise<void> {
     if (process.platform === 'win32') {
         // When trying to open the device with libusb, the device open
         // fails with LIBUSB_ERROR_UNSUPPORTED. See, e.g.,
@@ -1029,7 +1029,7 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, serialLog: uti
             }
 
             try {
-                process.stderr.write(`Setting FTDI latency timer for ${getSerialPortPath(portInfo)} to 1ms.\n`);
+                process.stderr.write(`Setting FTDI latency timer for ${getSerialPortPath(portInfo)} to ${ms}ms.\n`);
 
                 usbDevice.open();
 
@@ -1055,15 +1055,21 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, serialLog: uti
                 const ftdiInterface = 0;
                 const ftdiIndex = 1;
 
-                // 1 = INTERFACE_A.
-                serialLog.pn(`Claiming USB device interface...`);
-                usbDevice.__claimInterface(ftdiInterface);
+                //serialLog.pn(`${usbDevice.interfaces.length} interfaces`);
+
+                try {
+                    // 1 = INTERFACE_A.
+                    serialLog.pn(`Claiming USB device interface...`);
+                    usbDevice.__claimInterface(ftdiInterface);
+                } catch (error) {
+                    serialLog.pn(`Ignoring claimInterface error: ${error}`);
+                }
 
                 serialLog.pn(`Setting latency timer...`);
                 await deviceControlTransfer(usbDevice,
                     FTDI_DEVICE_OUT_REQTYPE,
                     SIO_SET_LATENCY_TIMER_REQUEST,
-                    1,//1 = 1ms
+                    ms,//1 = 1ms
                     ftdiIndex,
                     undefined);
 
@@ -1165,10 +1171,6 @@ function isSerialDeviceVerbose(portInfo: SerialPort.PortInfo, verboseOptions: st
 async function handleSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
     const serialLog = new utils.Log(getSerialPortPath(portInfo), process.stdout, isSerialDeviceVerbose(portInfo, options.serial_verbose));
 
-    if (isSerialPortUSBDevice(portInfo, TUBE_SERIAL_DEVICE) || isSerialPortUSBDevice(portInfo, FTDI_USB_SERIAL_DEVICE)) {
-        await setFTDILatencyTimer(portInfo, serialLog);
-    }
-
     serialLog.pn('Creating server...');
     const server = await createServer('SERIAL', getRomPathsForSerial(options));
 
@@ -1178,6 +1180,10 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
     } catch (error) {
         process.stderr.write(`Error opening serial port ${getSerialPortPath(portInfo)}: ${error}\n`);
         return;
+    }
+
+    if (isSerialPortUSBDevice(portInfo, TUBE_SERIAL_DEVICE) || isSerialPortUSBDevice(portInfo, FTDI_USB_SERIAL_DEVICE)) {
+        await setFTDILatencyTimer(portInfo, 1, serialLog);
     }
 
     let readWaiter: IReadWaiter | undefined;
