@@ -38,8 +38,9 @@ endif
 ##########################################################################
 
 ifneq ($(OS),Windows_NT)
-ifeq ($(shell uname -sn),Darwin tmbp.local)
 ifeq ($(shell whoami),tom)
+MY_PCS:=tmbp.local tmbp15.local
+ifneq ($(filter-out $(MY_PCS),$(shell uname -sn)),$(MY_PCS))
 TOM_LAPTOP:=1
 endif
 endif

@@ -50,11 +50,14 @@ the file that way.
 
 ## UPURS cable
 
-See https://www.retro-kit.co.uk/UPURS/. Unless your PC is rather old,
-you'll also probably need a USB serial port adapter.
+See https://www.retro-kit.co.uk/UPURS/. You'll also need a FTDI FT232
+USB serial adapter. Connect UPURS cable to BBC's user port connector
+and USB serial adapter, connect USB serial adapter to PC.
 
-If using an FTDI USB to serial adapter on Windows, you'll need to
-[tweak one of the device settings](./docs/ftdi_latency_timer.md).
+If using Windows, you'll need to
+[tweak one of the device settings](./docs/ftdi_latency_timer.md). If
+using macOS Catalina, you'll need to install
+[the FTDI virtual COM port driver](https://www.ftdichip.com/Drivers/VCP.htm).
 
 There's no bootstrap process for the UPURS cable - use the UPURS tools
 to get `beeblink_upurs_fe60.rom` copied onto your BBC.
