@@ -137,7 +137,7 @@ start_sync:
                 sta num_sync_zeros_received+1
 
                 .block
-                .debug_print ['Sync step 0...\r']
+                .debug_print ['Sync step 0...\r\n']
                 lda #$80
                 jsr send_byte_with_timeout
                 bcc +
@@ -150,11 +150,11 @@ start_sync:
                 .bend
 
                 .block
-                .debug_print ['Sync step 1...\r']
+                .debug_print ['Sync step 1...\r\n']
                 lda #255
                 jsr reset_startup_counter
 sync_step_1_loop:
-; .print ['&00: sent: &',num_sync_zeros_sent+1,num_sync_zeros_sent+0,'; received: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r']
+; .print ['&00: sent: &',num_sync_zeros_sent+1,num_sync_zeros_sent+0,'; received: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r\n']
                 ldy #status_text.sync_timed_out_1-status_text
                 jsr check_startup_counter
 
@@ -178,6 +178,8 @@ sync_step_1_loop:
                 inc num_sync_zeros_received+1
 +
 
+                .debug_print ['Got step 1 zeroes: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r\n']
+
                 ; Keep going if required number not reached.
                 lda num_sync_zeros_received+0
                 cmp #<NUM_SERIAL_SYNC_ZEROS
@@ -191,7 +193,7 @@ sync_step_1_loop:
                 .block
                 ; Keep reading until the 1 byte is received. Continue
                 ; sending zeros meanwhile.
-                .debug_print ['Sync step 2...\r']
+                .debug_print ['Sync step 2...\r\n']
                 lda #16
                 jsr reset_startup_counter
 sync_step_2_loop:
@@ -212,11 +214,11 @@ sync_step_2_loop:
                 .bend
 
                 ; Send a single non-zero byte.
-                .debug_print ['Sync step 3...\r']
+                .debug_print ['Sync step 3...\r\n']
                 lda #$01
                 jsr send_byte
 ok:
-                .debug_print ['Sync success (probably)\r']
+                .debug_print ['Sync success (probably)\r\n']
                 clc             ;good
                 rts
 
