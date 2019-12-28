@@ -700,11 +700,6 @@ async function serialTestBBCToPC(options: ICommandLineOptions): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 
 async function handleCommandLineOptions(options: ICommandLineOptions, log: utils.Log): Promise<boolean> {
-    if (options.list_serial_devices) {
-        await listSerialDevices(options);
-        return false;
-    }
-
     log.pn('libusb_debug_level: ``' + options.libusb_debug_level + '\'\'');
     if (options.libusb_debug_level !== null) {
         usb.setDebugLevel(options.libusb_debug_level);
@@ -724,6 +719,11 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         await loadConfig(options, DEFAULT_CONFIG_FILE_NAME, false);
     } else {
         await loadConfig(options, options.load_config, true);
+    }
+
+    if (options.list_serial_devices) {
+        await listSerialDevices(options);
+        return false;
     }
 
     //log.pn('load_config: ``' + options.load_config + '\'\'');
