@@ -164,7 +164,7 @@ export async function tryParse(
         if (i < infParts.length) {
             if (infParts[i].startsWith('CRC=')) {
                 // Ignore the CRC entry.
-            } else if (infParts[i] === 'L' || infParts[i] === 'l') {
+            } else if (['l', 'locked'].indexOf(infParts[i].toLowerCase()) >= 0) {
                 attr = beebfs.L_ATTR;
             } else {
                 attr = Number('0x' + infParts[i]);
