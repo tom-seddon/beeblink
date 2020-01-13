@@ -816,7 +816,7 @@ sb:
 T0:
 
                 ; see note about serbuf_overrun_size. 
-                cpy #serbuf_size-serbuf_overrun_size ; (2)  (2)
+                cpy #serbuf_max_size-serbuf_overrun_size ; (2)  (2)
 T1:
                 bcs xcts        ; (2)  (3)
 T2:
