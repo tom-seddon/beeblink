@@ -28,8 +28,8 @@ that you aren't using for BeebLink, use `--serial-exclude` to have
 them excluded. The exclusion is by device name, so watch out for
 changes in COM port assignment.
 
-You can get a full list of the command line options with `npm start --
--h`.
+You can get a list of the basic command line options with `npm start
+-- -h`. A full list is available with `npm start -- -v -h`.
 
 # Using a config file
 
