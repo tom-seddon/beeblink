@@ -34,6 +34,7 @@ import * as diskimage from './diskimage';
 const TRACK_SIZE_SECTORS = 10;
 const SECTOR_SIZE_BYTES = 256;
 const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
+const MAX_NUM_TRACKS = 80;
 
 export const DFS_FS = 4;
 
@@ -213,21 +214,40 @@ export class WriteFlow extends diskimage.Flow {
 
         this.tracks = [];
 
-        if (this.doubleSided) {
-            checkSize(image, TRACK_SIZE_BYTES + 512);
-
-            for (const track of getUsedTracks(this.image, 0, allSectors, this.log)) {
-                this.tracks.push({ side: 0, track });
+        if (allSectors) {
+            // Since the image size is available, no need to examine its
+            // contents. The number of tracks can be inferred from the size.
+            let numSides;
+            if (this.doubleSided) {
+                numSides = 2;
+            } else {
+                numSides = 1;
             }
 
-            for (const track of getUsedTracks(this.image, TRACK_SIZE_BYTES, allSectors, this.log)) {
-                this.tracks.push({ side: 1, track });
+            const trackSizeBytes = numSides * TRACK_SIZE_BYTES;
+            const numTracks = Math.floor((this.image.length + trackSizeBytes - 1) / trackSizeBytes);
+            for (let track = 0; track < numTracks; ++track) {
+                for (let side = 0; side < numSides; ++side) {
+                    this.tracks.push({ side, track });
+                }
             }
         } else {
-            checkSize(image, 512);
+            if (this.doubleSided) {
+                checkSize(image, TRACK_SIZE_BYTES + 512);
 
-            for (const track of getUsedTracks(this.image, 0, allSectors, this.log)) {
-                this.tracks.push({ side: 0, track });
+                for (const track of getUsedTracks(this.image, 0, false, this.log)) {
+                    this.tracks.push({ side: 0, track });
+                }
+
+                for (const track of getUsedTracks(this.image, TRACK_SIZE_BYTES, false, this.log)) {
+                    this.tracks.push({ side: 1, track });
+                }
+            } else {
+                checkSize(image, 512);
+
+                for (const track of getUsedTracks(this.image, 0, false, this.log)) {
+                    this.tracks.push({ side: 0, track });
+                }
             }
         }
 
@@ -243,6 +263,19 @@ export class WriteFlow extends diskimage.Flow {
     }
 
     public start(oshwm: number, himem: number): diskimage.IStartFlow {
+        // It's a bit stupid having this check here, but when calling
+        // errors.generic from the constructor, the TS compiler moans that
+        // fields aren't always being initialized - even though errors.generic
+        // never returns.
+        //
+        // Presumably some JS/TS case that I don't know enough about. Easily
+        // avoided.
+        for (const track of this.tracks) {
+            if (track.track > MAX_NUM_TRACKS) {
+                return errors.generic(`Image has more than ${MAX_NUM_TRACKS} tracks`);
+            }
+        }
+
         this.init(oshwm, himem, 4096);
 
         return {
