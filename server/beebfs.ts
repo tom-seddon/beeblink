@@ -557,7 +557,7 @@ export class FS {
             FS.mustBeWriteableFile(file);
             FS.mustNotBeTooBig(data.length);
 
-            await utils.fsWriteFile(file.hostPath, data);
+            await writeFile(file.hostPath, data);
         } catch (error) {
             return errors.nodeError(error);
         }
