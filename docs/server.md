@@ -103,6 +103,10 @@ The .inf file will be created or updated automatically if any of its
 properties change. This will affect the interpretation of files in the
 `!` directory.
 
+When creating a folder for an alphabetic drive on a case-sensitive
+filing system, use a lower-case letter - the server doesn't promise to
+behave well otherwise.
+
 ## Accessing PC files on the BBC
 
 You can access PC files by copying them to a BBC volume, and giving

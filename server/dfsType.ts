@@ -299,7 +299,7 @@ class DFSState implements beebfs.IFSState {
             return errors.badDrive();
         }
 
-        if (arg.length === 1 && utils.isdigit(arg)) {
+        if (DFSType.isValidDrive(arg)) {
             this.drive = arg;
         } else {
             const fsp = mustBeDFSFSP(this.volume.type.parseFileOrDirString(arg, 0, true));
@@ -395,6 +395,10 @@ class DFSState implements beebfs.IFSState {
 /////////////////////////////////////////////////////////////////////////
 
 class DFSType implements beebfs.IFSType {
+    public static isValidDrive(maybeDrive: string): boolean {
+        return maybeDrive.length === 1 && utils.isalnum(maybeDrive);
+    }
+
     private static isValidFileNameChar(char: string) {
         const c = char.charCodeAt(0);
         return c >= 32 && c < 127;
@@ -446,7 +450,7 @@ class DFSType implements beebfs.IFSType {
         }
 
         if (str[i] === ':' && i + 1 < str.length) {
-            if (!this.isValidDrive(str[i + 1])) {
+            if (!DFSType.isValidDrive(str[i + 1])) {
                 return errors.badDrive();
             }
 
@@ -527,7 +531,7 @@ class DFSType implements beebfs.IFSType {
     public getHostPath(fqn: beebfs.IFSFQN): string {
         const dfsFQN = mustBeDFSFQN(fqn);
 
-        return path.join(dfsFQN.drive, beebfs.getHostChars(dfsFQN.dir) + '.' + beebfs.getHostChars(fqn.name));
+        return path.join(dfsFQN.drive.toUpperCase(), beebfs.getHostChars(dfsFQN.dir) + '.' + beebfs.getHostChars(fqn.name));
     }
 
     public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | beebfs.IFSFSP, log: utils.Log | undefined): Promise<beebfs.File[]> {
@@ -777,19 +781,19 @@ class DFSType implements beebfs.IFSType {
         const drives = [];
 
         for (const name of names) {
-            if (this.isValidDrive(name)) {
+            if (DFSType.isValidDrive(name)) {
                 const option = await this.loadBootOption(volume, name);
                 const title = await this.loadTitle(volume, name);
 
-                drives.push({ name, option, title });
+                drives.push({
+                    name: name.toUpperCase(),
+                    option,
+                    title
+                });
             }
         }
 
         return drives;
-    }
-
-    private isValidDrive(maybeDrive: string): boolean {
-        return maybeDrive.length === 1 && utils.isdigit(maybeDrive);
     }
 }
 

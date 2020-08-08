@@ -85,8 +85,7 @@ Use `*VOL` to load `newvol2`.
 	>
 
 Creating a new folder in the right place like this is enough to create
-a volume. The server will automatically create folders for any
-additional drives on demand.
+a volume. 
 
 Volume names may only contain non-space printable ASCII characters
 (i.e., >=33 and <=126). `*NEWVOL` will produce an error if invalid
@@ -95,6 +94,19 @@ invalid name, it will just be ignored.
 
 (You can have the server find volumes from multiple folders. See the
 list of [server command line options](./server.md).)
+
+## Drives
+
+Like a DFS disk, each volume is divided into drives. Disks have 2
+sides... but there's no such restriction with BLFS, where every volume
+can have up to 36 drives. There are 10 numbered drives, named `0`-`9`
+inclusive, and 26 additional alphabetic drives, named `A`-`Z`
+inclusive.
+
+(Alphabetic drive names are case-insensitive. Drives `A` and `a` are
+equivalent, for example.)
+
+Drives are created on demand as files are saved to them.
 
 ## Naming volumes
 
