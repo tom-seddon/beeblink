@@ -3127,8 +3127,8 @@ close:
                 tya
                 pha             ;save Y, file handle
 
-                beq close_handle ;taken if Y=0, so all files are to be
-                                 ;closed
+                beq close_spool_or_exec_handle ;taken if Y=0, so all
+                                               ;files are to be closed
 
                 sta handle      ;save file handle
 
