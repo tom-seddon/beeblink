@@ -2812,7 +2812,7 @@ old_y: .fill 1
                 beq number
 
                 cmp #1
-                beq command_line_ptr
+                beq get_command_line_ptr
 
                 rts
 
