@@ -173,14 +173,18 @@ export interface ITrackAddress {
 
 export function sortTrackAddresses(tracks: ITrackAddress[]): void {
     tracks.sort((a: ITrackAddress, b: ITrackAddress) => {
-        if (a.track < b.track) {
+        // Write side at a time - this means a re-seek to track 0 partway
+        // through writing a dsd, but it avoids horrid noises with DFS 1.20 due
+        // to some kind of head unload/reload when switching between heads. (Not
+        // an issue on the 1770 DFSs it seems? Might be 8271 specific.) 
+        if (a.side < b.side) {
             return -1;
-        } else if (a.track > b.track) {
+        } else if (a.side > b.side) {
             return 1;
         } else {
-            if (a.side < b.side) {
+            if (a.track < b.track) {
                 return -1;
-            } else if (a.side > b.side) {
+            } else if (a.track > b.track) {
                 return 1;
             }
         }
