@@ -302,6 +302,7 @@ startup: .proc
                 lda #4
                 jsr reset_startup_counter
 wait_for_device_ready_loop:
+                ldy #status_text.not_ready-status_text
                 jsr check_startup_counter
                 
                 jsr startup_read_status
@@ -446,6 +447,8 @@ check_startup_counter:
                 .pend
 
 status_text: .block
+not_ready:
+                .text 'Device not ready',0
 sync_failed:
                 .text 'Sync failed',0
 sync_timed_out_0:
