@@ -107,6 +107,7 @@ txdp: .macro items
 num_sync_zeros_received: .fill 2
 startup_itu: .fill 1
 startup_counter: .fill 2
+startup_sync_counter: .fill 1
                 .send link_startup_workspace
 
 ; ; The link startup workspace is a not-very-generous 8 bytes.
@@ -289,6 +290,14 @@ startup: .proc
 ; process doesn't check the system clock - it just counts number of
 ; iterations of each of the various initialisation loops, and classes
 ; it as a timeout if some maximum number of iterations is exceeded.
+;
+; There's also a limit on how many times the sync process can be
+; attempted overall, in case (as I've seen happen with the device
+; unpowered) the device is falsely detected as present and the startup
+; process ends up oscillating between states.
+
+                lda #50
+                sta startup_sync_counter
 
                 lda #4
                 jsr reset_startup_counter
@@ -302,6 +311,9 @@ wait_for_device_ready_loop:
                 beq wait_for_device_ready_loop
 
 start_sync:
+                dec startup_sync_counter
+                beq failed
+                
                 lda #0
                 sta num_sync_zeros_received+0
                 sta num_sync_zeros_received+1
