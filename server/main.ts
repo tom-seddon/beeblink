@@ -202,9 +202,9 @@ async function getUSBDeviceStringDescriptor(device: usb.Device, iIdentifier: num
         return undefined;
     }
 
-    let stringBuffer;
+    let value: string | undefined;
     try {
-        stringBuffer = await new Promise<Buffer | undefined>((resolve, reject) => {
+        value = await new Promise<string | undefined>((resolve, reject) => {
             device.getStringDescriptor(iIdentifier, (error, buffer) => {
                 //tslint:disable-next-line strict-type-predicates
                 if (error !== undefined && error !== null) {
@@ -218,11 +218,11 @@ async function getUSBDeviceStringDescriptor(device: usb.Device, iIdentifier: num
         return undefined;//`<<usb.Device.getStringDescriptor failed: ${error}>>`;
     }
 
-    if (stringBuffer === undefined) {
+    if (value === undefined) {
         return undefined;//`<<usb.Device.getStringDescriptor retured nothing>>`;
     }
 
-    return stringBuffer.toString(`utf16le`);
+    return value;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -1686,30 +1686,30 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     always(['-h', '--help'], { action: 'storeTrue', help: 'Show this help message, then exit (combine with -v to show more options)' });
 
     // ROM paths
-    fullHelpOnly(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink AVR ROM (for use with b2) from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM});
-    fullHelpOnly(['--tube-serial-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink Tube Serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ROM});
-    fullHelpOnly(['--upurs-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink UPURS ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_UPURS_ROM});
+    fullHelpOnly(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink AVR ROM (for use with b2) from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM });
+    fullHelpOnly(['--tube-serial-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink Tube Serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ROM });
+    fullHelpOnly(['--upurs-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink UPURS ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_UPURS_ROM });
 
     // Verbosity
     always(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });
-    fullHelpOnly(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output'});
-    fullHelpOnly(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output'});
-    fullHelpOnly(['--server-data-verbose'], { action: 'storeTrue', help: 'dump request/response data (requires --server-verbose)'});
-    fullHelpOnly(['--libusb-debug-level'], { type: integer, metavar: 'LEVEL', help: 'if provided, set libusb debug logging level to %(metavar)s'});
-    fullHelpOnly(['--fatal-verbose'], { action: 'storeTrue', help: 'print debugging info on a fatal error'});
+    fullHelpOnly(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
+    fullHelpOnly(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
+    fullHelpOnly(['--server-data-verbose'], { action: 'storeTrue', help: 'dump request/response data (requires --server-verbose)' });
+    fullHelpOnly(['--libusb-debug-level'], { type: integer, metavar: 'LEVEL', help: 'if provided, set libusb debug logging level to %(metavar)s' });
+    fullHelpOnly(['--fatal-verbose'], { action: 'storeTrue', help: 'print debugging info on a fatal error' });
 
     // Git
     always(['--git'], { action: 'storeTrue', help: 'look after .gitattributes for BBC volumes' });
-    fullHelpOnly(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output'});
+    fullHelpOnly(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output' });
 
     // Serial devices
-    fullHelpOnly(['--serial-include'], { action: 'append', metavar: 'DEVICE', help: 'listen on serial port DEVICE'});
-    fullHelpOnly(['--serial-exclude'], { action: 'append', metavar: 'DEVICE', help: 'don\'t listen on serial port DEVICE'});
-    fullHelpOnly(['--serial-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial-related output (specify devices individually to be verbose for just those, or just --serial-verbose on its own for all devices)'});
-    fullHelpOnly(['--serial-sync-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial sync-related output (specify devices same as --serial-verbose)'});
-    fullHelpOnly(['--serial-data-verbose'], { action: 'append', nargs: '?', constant: '', help: 'dump raw serial data sent/received (specify devices same as --serial-verbose)'});
-    fullHelpOnly(['--serial-test-pc-to-bbc'], { action: 'storeTrue', help: 'run PC->BBC test (goes with T.PC-TO-BBC on the BBC)'});
-    fullHelpOnly(['--serial-test-bbc-to-pc'], { action: 'storeTrue', help: 'run BBC->PC test (goes with T.BBC-TO-PC on the BBC)'});
+    fullHelpOnly(['--serial-include'], { action: 'append', metavar: 'DEVICE', help: 'listen on serial port DEVICE' });
+    fullHelpOnly(['--serial-exclude'], { action: 'append', metavar: 'DEVICE', help: 'don\'t listen on serial port DEVICE' });
+    fullHelpOnly(['--serial-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial-related output (specify devices individually to be verbose for just those, or just --serial-verbose on its own for all devices)' });
+    fullHelpOnly(['--serial-sync-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial sync-related output (specify devices same as --serial-verbose)' });
+    fullHelpOnly(['--serial-data-verbose'], { action: 'append', nargs: '?', constant: '', help: 'dump raw serial data sent/received (specify devices same as --serial-verbose)' });
+    fullHelpOnly(['--serial-test-pc-to-bbc'], { action: 'storeTrue', help: 'run PC->BBC test (goes with T.PC-TO-BBC on the BBC)' });
+    fullHelpOnly(['--serial-test-bbc-to-pc'], { action: 'storeTrue', help: 'run BBC->PC test (goes with T.BBC-TO-PC on the BBC)' });
     always(['--list-serial-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
 
     // HTTP server (for b2)

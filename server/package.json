@@ -14,22 +14,22 @@
   "author": "",
   "license": "GPL-3.0-or-later",
   "dependencies": {
-    "argparse": "^1.0.10",
+    "argparse": "^1",
     "chalk": "^2.4.2",
-    "serialport": "^8.0.0",
-    "usb": "^1.6.0"
+    "serialport": "^8.0.8",
+    "usb": "^1.6.3"
   },
   "optionalDependencies": {
     "ioctl": "^2.0.1"
   },
   "devDependencies": {
-    "@types/argparse": "^1.0.36",
+    "@types/argparse": "^1",
     "@types/chalk": "^2.2.0",
-    "@types/node": "^10.14.19",
-    "@types/serialport": "^7.0.4",
-    "@types/usb": "^1.5.1",
-    "pkg": "^4.4.0",
-    "tslint": "^5.20.0",
-    "typescript": "^3.6.3"
+    "@types/node": "^10.17.48",
+    "@types/serialport": "^7.0.6",
+    "@types/usb": "^1.5.2",
+    "pkg": "^4.4.9",
+    "tslint": "^5.20.1",
+    "typescript": "^3.9.7"
   }
 }
