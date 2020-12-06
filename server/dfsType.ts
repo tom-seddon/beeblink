@@ -285,7 +285,7 @@ class DFSState implements beebfs.IFSState {
         let drive: string;
         if (commandLine === undefined) {
             drive = this.drive;
-        } else if (commandLine.length === 1 && utils.isdigit(commandLine)) {
+        } else if (DFSType.isValidDrive(commandLine)) {
             drive = commandLine;
         } else {
             return undefined;
