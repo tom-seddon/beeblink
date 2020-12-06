@@ -95,6 +95,12 @@ export default class CommandLine {
                             ++i;
                         } else {
                             quotes = false;
+
+                            if (this.part === undefined) {
+                                // Handle "".
+                                this.part = '';
+                            }
+
                             this.addPart();
                         }
                     } else {
