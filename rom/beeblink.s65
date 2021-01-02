@@ -163,7 +163,7 @@ command .macro name,value,routine
 
                 .text \name
                 .byte \value|$80
-                .word \routine
+                .word \routine-1
                 
                 .endm
 
@@ -817,6 +817,7 @@ svc_star: .proc
                 pha
 
                 jsr select_utils_commands
+                jsr sev         ;disallow 0-char abbrev
                 jsr find_cmd
                 bcs found
 
@@ -825,6 +826,7 @@ svc_star: .proc
                 bcs done
 
                 jsr select_disc_commands
+                jsr sev         ;disallow 0-char abbrev
                 jsr find_cmd
                 bcs found
 
@@ -860,9 +862,16 @@ print_subjects:
                 jmp done
                 
 check_for_subject:
+                clv             ;allow 0-char abbrev
+                pla             ;restore command line offset
+                pha             ;save command line offset
+                tay
                 jsr find_cmd
                 bcc done
-                jmp cmd_call_pointer
+                jsr cmd_call_pointer
+                ldx #cmd_ptr
+                jsr add3z16     ;skip metadata
+                jmp check_for_subject
 
 utils:
                 jsr print_rom_banner
@@ -876,8 +885,7 @@ utils:
                 jsr select_disc_commands
                 jsr print_cmds
 +
-                
-                jmp done
+                rts
 
 blfs:
                 jsr print_rom_banner
@@ -890,11 +898,13 @@ blfs:
                 jsr send_request_1_recv_response_1_and_maybe_restart
 
                 jsr print_server_string
-                jmp done
+                rts
 
 blfs_help_unavailable:
                 jsr pcprint
                 .text "  Help available when active",10,13,255
+                rts
+                
 done:
                 ldx #9
                 .pend
@@ -933,23 +943,29 @@ select_disc_commands: .proc
 
 ;-------------------------------------------------------------------------
 ;
-; entry: ($f2),y = command line
+; entry: V=0 = allow 0-char abbrev; V=1 = disallow
+;        ($f2),y = command line
 ;        (cmd_ptr) = table
 ; exit:  C clear: not matched
 ;                 preserves ($f2); Y
 ;        C set: matched
 ;               ($f2),y = command line tail
 ;               (cmd_ptr) = cmd metadata
+;
+; (After a successful match, can call add3z16, then try again with the
+; old Y value, to attempt a match against the rest of the table.)
 
 find_cmd: .proc
+                php             ;save V flag
                 tya
-                pha
+                pha             ;save initial command line offset
                 ldx #cmd_ptr
 check_cmd:
-                pla
-                pha
+                pla             ;restore initial command line offset
                 tay
-                bit rom_copyright+2 ;value is 'C' - set V flag
+                plp             ;restore V flag
+                php             ;save V flag
+                pha             ;save initial command line offset
 loop:
                 lda (0,x)
                 bmi maybe_match
@@ -972,13 +988,16 @@ maybe_match:
                 bcs no_match
 match:
                 jsr cmd_metadata
+                ; replace initial command line offset on stack with
+                ; command line tail offset.
                 pla
                 tya
                 pha
                 sec
 done:
-                pla
+                pla             ;restore command line offset
                 tay
+                pla             ;discard saved V flag
                 rts
 
 no_match:
@@ -1014,36 +1033,36 @@ found:
                 .pend
 
 ;-------------------------------------------------------------------------
-; get command's pointer from its metadata
+; assume command's pointer is a routine, and call it as if by a jsr.
+;
+; Y and C are passed as-is to routine.
 ;
 ; entry: (cmd_ptr) = points to command's metadata
-; exit: (cmd_ptr) = value of command's pointer
-; preserves: X; Y; C
+; 
 
-cmd_pointer: .proc
+cmd_call_pointer: .proc
+                pha
+                pha
                 tya
                 pha
+
+                tsx
+
+                ; $101,x=Y
+                ; $102,x=PC LSB
+                ; $103,x=PC MSB
+                
                 ldy #1
-                lda (cmd_ptr),y
-                pha
+                lda (cmd_ptr),y ;routine LSB
+                sta $102,x
+
                 iny
-                lda (cmd_ptr),y
-                sta cmd_ptr+1
-                pla
-                sta cmd_ptr+0
+                lda (cmd_ptr),y ;routine MSB
+                sta $103,x
+
                 pla
                 tay
                 rts
-                .pend
-
-;-------------------------------------------------------------------------
-; assume command's pointer is a routine, and call it as if by a jsr
-;
-; entry: (cmd_ptr) = points to command's metadata
-
-cmd_call_pointer: .proc
-                jsr cmd_pointer
-                jmp (cmd_ptr)
                 .pend
                 
 ;-------------------------------------------------------------------------
@@ -1348,6 +1367,17 @@ loop:
                 jmp loop
 done:       
                 .pop16zx
+                rts
+                .pend
+
+;-------------------------------------------------------------------------
+;
+; Set the V flag.
+;
+; exit: V=1, N=0
+; preserves: A; X; Y
+sev: .proc
+                bit rom_copyright+2 ;value is 'C' - set V flag
                 rts
                 .pend
                 
@@ -2531,6 +2561,7 @@ blfs_oscli_hack: .proc
                 lda #>fs_trap_commands
                 sta cmd_ptr+1
 
+                jsr sev         ;disallow 0-char abbrev
                 jsr find_cmd
                 
                 pop16 cmd_ptr
