@@ -191,7 +191,7 @@ export default class Server {
             new Command('INFO', '<afsp>', this.infoCommand),
             new Command('LIB', '(<dir>)', this.libCommand),
             new Command('LIST', '<fsp>', this.listCommand),
-            new Command('LOCATE', '<afsp>', this.locateCommand),
+            new Command('LOCATE', '<afsp> (<format>)', this.locateCommand),
             new Command('NEWVOL', '<vsp>', this.newvolCommand),
             new Command('READ', '<fsp> <drive> <type>', this.readCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
@@ -1358,15 +1358,123 @@ export default class Server {
             return errors.syntax();
         }
 
-        const foundPaths = await this.bfs.starLocate(commandLine.parts[1]);
+        let format: string;
+        if (commandLine.parts.length >= 3) {
+            format = commandLine.parts[2];
+            if (format === '') {
+                return errors.syntax();
+            }
+        } else {
+            format = 'n';
+        }
+
+        format = format.toLowerCase();
+
+        const foundFiles: beebfs.File[] = await this.bfs.starLocate(commandLine.parts[1]);
 
         let text = '';
-        if (foundPaths.length === 0) {
+        if (foundFiles.length === 0) {
             text += 'No files found.' + utils.BNL;
         } else {
-            for (const foundPath of foundPaths) {
-                text += `${foundPath}${utils.BNL}`;
+            const foundFileFQNStrings = [];
+            let maxFQNLength = 0;
+            if (format.indexOf('n') >= 0) {
+                for (const foundFile of foundFiles) {
+                    const fqnString = foundFile.fqn.toString();
+                    foundFileFQNStrings.push(fqnString);
+                    maxFQNLength = Math.max(maxFQNLength, fqnString.length);
+                }
             }
+
+            const foundFileHashes = [];
+            let foundFileHashWidth = 0;
+            if (format.indexOf('h') >= 0) {
+                for (const foundFile of foundFiles) {
+                    const data = await beebfs.FS.readFile(foundFile);
+                    const hasher = crypto.createHash('sha1');
+                    hasher.update(data);
+                    const hash = hasher.digest('hex');
+                    foundFileHashes.push(hash);
+                }
+
+                // count number of uniques in total.
+                let set = new Set();
+                for (const foundFileHash of foundFileHashes) {
+                    set.add(foundFileHash);
+                }
+
+                const numUniqueHashes = set.size;
+
+                foundFileHashWidth = 1;
+                for (; ;) {
+                    set = new Set();
+                    for (const foundFileHash of foundFileHashes) {
+                        set.add(foundFileHash.substr(0, foundFileHashWidth));
+                    }
+
+                    if (set.size === numUniqueHashes) {
+                        break;
+                    }
+
+                    // and eventually, the max width will be reached
+                    // automatically.
+                    ++foundFileHashWidth;
+                }
+            }
+
+            const lines = [];
+            for (let foundFileIdx = 0; foundFileIdx < foundFiles.length; ++foundFileIdx) {
+                const foundFile = foundFiles[foundFileIdx];
+
+                let line = '';
+
+                for (const c of format) {
+                    switch (c) {
+                        case 'n':
+                            line += ` ${foundFileFQNStrings[foundFileIdx].padEnd(maxFQNLength)}`;
+                            break;
+
+                        case 'a':
+                            break;
+
+                        case 'l':
+                            line += ` ${utils.hex8(foundFile.load).toUpperCase()}`;
+                            break;
+
+                        case 'e':
+                            line += ` ${utils.hex8(foundFile.exec).toUpperCase()}`;
+                            break;
+
+                        case 's':
+                            {
+                                const fileSize = await this.bfs.tryGetFileSize(foundFile);
+                                line += ` ${utils.hex8(fileSize).toUpperCase()}`;
+                            }
+                            break;
+
+                        case 'h':
+                            {
+                                line += ` ${foundFileHashes[foundFileIdx].substr(0, foundFileHashWidth)}`;
+                            }
+                            break;
+
+                        default:
+                            return errors.syntax();
+                    }
+                }
+
+                lines.push(line.trim());
+            }
+
+            lines.sort();
+
+            for (const line of lines) {
+                text += `${line}${utils.BNL}`;
+            }
+
+            // for (const foundFile of foundFiles) {
+            //     text += `${foundPath}${utils.BNL}`;
+            // }
             // for (const foundFile of foundFiles) {
             //     text+=`${foundFile.getFullPath()}${utils.BNL}`;
             //     text += '::' + foundFile.name.volume.name + ':' + foundFile.name.drive + '.' + foundFile.name.dir + '.' + foundFile.name.name + utils.BNL;

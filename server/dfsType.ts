@@ -760,7 +760,7 @@ class DFSType implements beebfs.IFSType {
     public getInfoText(file: beebfs.File, fileSize: number): string {
         const dfsFQN = mustBeDFSFQN(file.fqn.fsFQN);
 
-        const attr = (file.attr & beebfs.L_ATTR) !== 0 ? 'L' : ' ';
+        const attr = this.getAttrString(file);
         const load = utils.hex8(file.load).toUpperCase();
         const exec = utils.hex8(file.exec).toUpperCase();
         const size = utils.hex(fileSize & 0x00ffffff, 6).toUpperCase();
@@ -768,6 +768,14 @@ class DFSType implements beebfs.IFSType {
         // 0123456789012345678901234567890123456789
         // _.__________ L 12345678 12345678 123456
         return `${dfsFQN.dir}.${dfsFQN.name.padEnd(10)} ${attr} ${load} ${exec} ${size}`;
+    }
+
+    public getAttrString(file: beebfs.File): string | undefined {
+        if ((file.attr & beebfs.L_ATTR) !== 0) {
+            return 'L';
+        } else {
+            return ' ';
+        }
     }
 
     public async findDrivesForVolume(volume: beebfs.Volume): Promise<IDFSDrive[]> {

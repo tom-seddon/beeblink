@@ -466,6 +466,12 @@ export interface IFSType {
     // get *INFO/*EX text for the given file. Show name, attributes and
     // metadata. Newline will be added automatically.
     getInfoText(file: File, fileSize: number): string;
+
+    // get *INFO/*EX-style attributes string for the given file.
+    //
+    // A return value of undefined indicates that attributes aren't relevant for
+    // the current FS. (What's the value of distinguishing this from ''? TBC...)
+    getAttrString(file: File): string | undefined;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -1025,10 +1031,10 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async starLocate(arg: string): Promise<string[]> {
+    public async starLocate(arg: string): Promise<File[]> {
         const volumes = await this.findAllVolumesMatching('*');
 
-        const foundPaths: string[] = [];
+        const foundFiles: File[] = [];
 
         for (const volume of volumes) {
             let fsp: IFSFSP;
@@ -1043,11 +1049,27 @@ export class FS {
             const files = await volume.type.findBeebFilesMatching(volume, fsp, undefined);
 
             for (const file of files) {
-                foundPaths.push(file.fqn.toString());
+                foundFiles.push(file);
             }
         }
 
-        return foundPaths;
+        return foundFiles;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    // This is never used anywhere where the error case is particularly
+    // important.
+    //
+    // TODO: should this info be part of the File type?
+    public async tryGetFileSize(file: File): Promise<number> {
+        const hostStat = await utils.tryStat(file.hostPath);
+        if (hostStat === undefined) {
+            return 0;
+        }
+
+        return hostStat.size;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1610,20 +1632,6 @@ export class FS {
 
     private async writeBeebMetadata(hostPath: string, fqn: FQN, load: number, exec: number, attr: number): Promise<void> {
         await fqn.volume.type.writeBeebMetadata(hostPath, fqn.fsFQN, load, exec, attr);
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // This is never used anywhere where the error case is particularly
-    // important.
-    private async tryGetFileSize(file: File): Promise<number> {
-        const hostStat = await utils.tryStat(file.hostPath);
-        if (hostStat === undefined) {
-            return 0;
-        }
-
-        return hostStat.size;
     }
 
     /////////////////////////////////////////////////////////////////////////

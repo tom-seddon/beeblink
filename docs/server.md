@@ -156,7 +156,8 @@ converted to ASCII 13, and an ASCII 13 will be added to the end if
 necessary. This affects data read from `OSBGET`/`OSGBPB`, and the
 value of `EXT#`.
 
-`OSFILE` access is unaffected.
+`OSFILE` access is unaffected, and SHA1 hashes printed by `*LOCATE`
+ignore the file's text status.
 
 Correct results in general are far from guaranteed.
 

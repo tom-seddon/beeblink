@@ -295,10 +295,29 @@ Change library drive and directory on the current volume.
 
 Show contents of text file, with lines numbered.
 
-### `LOCATE <afsp>`
+### `LOCATE <afsp> (<format>)`
 
-Print names of any file(s) in any volumes matching `<afsp>`. (`<afsp>`
+Print info for any file(s) in any volumes matching `<afsp>`. (`<afsp>`
 may not contain volume or drive specifiers.)
+
+`<format>`, if specified, is a list of chars indicating what info to
+print out for each file:
+
+* `N` - file name, fully qualified
+* `A` - attributes
+* `L` - load address
+* `E` - exec address
+* `S` - file size
+* `H` - SHA1 hash
+
+If not specified, the format is `N` - just the name.
+
+SHA1 hashes are a bit wide for the Beeb's screen; only enough digits
+are printed to disambiguate files in the set found.
+
+The lines are sorted textually before being printed, so you can use
+the format to put the attributes of interest first. For example, `HN`
+might be useful if you're looking at potentially duplicated files.
 
 ### `NEWVOL <vsp>`
 

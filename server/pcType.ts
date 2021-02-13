@@ -390,6 +390,10 @@ class PCType implements beebfs.IFSType {
 
         return `${pcFQN.name.padEnd(MAX_NAME_LENGTH)}  ${utils.hex(fileSize, 6)}`;
     }
+
+    public getAttrString(file: beebfs.File): string | undefined {
+        return undefined;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////
