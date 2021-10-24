@@ -1,3 +1,5 @@
+# https://www.appveyor.com/docs/getting-started-with-appveyor-for-linux/#running-windows-and-linux-builds-side-by-side
+
 version: '{build}'
 
 skip_tags: true
@@ -18,13 +20,9 @@ install:
   - npm version
   - node --version
   
-  # why is the case not consistent.
-  - bash -c 'if test "$CI_MACOS" = "true"; then echo macOS; fi'
-  - bash -c 'if test "$CI_WINDOWS" = "True"; then echo Windows; fi'
-  
   # on macOS, select version using nvm.
-  - bash -c 'if test "$CI_MACOS" = "true"; then nvm ls; fi'
-  - bash -c 'if test "$CI_MACOS" = "true"; then nvm use 10; fi'
+  - sh: nvm ls
+  - sh: nvm use 10
 
   # on Windows, select version using PowerShell Install-Product.
   - ps: |
