@@ -15,7 +15,6 @@ install:
   - ps: 'dir env:'
   - npm version
   - node --version
-  - nvm ls
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
         echo 'Windows'
@@ -23,7 +22,7 @@ install:
         Install-Product node 10.13
       } elseif ($env:CI_MACOS -eq $true) {
         echo 'macOS'
-        nvm ls
+        bash -c nvm ls
       }
   - git submodule init
   - git submodule update
