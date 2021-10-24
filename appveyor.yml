@@ -11,6 +11,8 @@ image:
   - macos-mojave
 
 install:
+  - env
+  - uname
   - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
   - ps: 'dir env:'
   - npm version
@@ -25,6 +27,8 @@ install:
         echo 'macOS'
         bash -c nvm ls
       }
+  - npm version
+  - node --version
   - git submodule init
   - git submodule update
   - ps: 
