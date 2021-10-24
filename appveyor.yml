@@ -1,42 +1,59 @@
 version: '{build}'
 
+skip_tags: true
+
 branches:
   only:
     - master
 
-image: Visual Studio 2017
-
-skip_tags: true
+image:
+  - Visual Studio 2017
+  - macos-mojave
 
 install:
+  - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
+  - ps: |
+      if ($env:CI_WINDOWS -eq $true) {
+        echo 'Windows'
+      } elseif ($env:CI_MACOS -eq $true) {
+        echo 'macOS'
+      }
+  - ps: 'dir env:'
   - git submodule init
   - git submodule update
-  - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
-  - ps: $env:RELEASE_NAME = "beeblink-"+$env:SUFFIX
-  - ps: $env:OUTPUT_NAME = "beeblink-"+$env:SUFFIX+"-server-windows.zip"
+  # - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
+  # - ps: $env:RELEASE_NAME = "beeblink-"+$env:SUFFIX
+  # - ps: $env:OUTPUT_NAME = "beeblink-"+$env:SUFFIX+"-server-windows.zip"
 
 build_script:
-  - npm version
-  - node --version
-  - cd .\server
-  - npm install
-  - npm run compile
-  - .\node_modules\.bin\pkg -t win .
-  - 7z a ..\%OUTPUT_NAME% .\beeblink-server.exe .\node_modules\@serialport\bindings\build\Release\bindings.node .\node_modules\usb\build\Release\usb_bindings.node
-  - cd ..
-  - 7z a %OUTPUT_NAME% .\volumes
+  - ps: npm version
+  - ps: node --version
+  - ps: cd ./server
+  - ps: npm install
+  - ps: npm run compile
+  - ps: |
+      if ($env:CI_WINDOWS -eq $true) {
+        ./node_modules/.bin/pkg -t win .
+      } elseif ($env:CI_MACOS -eq $true) {
+        ./node_modules/.bin/pkg -t macos-x64 .
+      }
+      
+  # - ps: .\node_modules\.bin\pkg -t win .
+  # - ps: 7z a ..\%OUTPUT_NAME% .\beeblink-server.exe .\node_modules\@serialport\bindings\build\Release\bindings.node .\node_modules\usb\build\Release\usb_bindings.node
+  # - ps: cd ..
+  # - ps: 7z a %OUTPUT_NAME% .\volumes
 
-artifacts:
-  - path: $(OUTPUT_NAME)
-    name: output
+# artifacts:
+#   - path: $(OUTPUT_NAME)
+#     name: output
 
-deploy:
-  - release: $(RELEASE_NAME)
-    provider: GitHub
-    auth_token:
-      secure: T5CPAJmNl5j/eAVlQln8WoiFKTDkq2ebT9Y/PbWRbMIa4GFyov+t5QdqlU0O2sY9
-    artifact: output
-    draft: false
-    prerelease: false
-    on:
-      branch: master
+# deploy:
+#   - release: $(RELEASE_NAME)
+#     provider: GitHub
+#     auth_token:
+#       secure: T5CPAJmNl5j/eAVlQln8WoiFKTDkq2ebT9Y/PbWRbMIa4GFyov+t5QdqlU0O2sY9
+#     artifact: output
+#     draft: false
+#     prerelease: false
+#     on:
+#       branch: master
