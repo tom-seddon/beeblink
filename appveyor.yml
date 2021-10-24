@@ -21,11 +21,11 @@ install:
   - node --version
   
   # why is the case not consistent.
-  - test $CI_MACOS = true && echo macOS
-  - test $CI_WINDOWS = True && echo Windows
+  - if test $CI_MACOS = true; echo macOS; fi
+  - if test $CI_WINDOWS = True; echo Windows; fi
   
   # on macOS, select version using nvm.
-  - test $CI_MACOS = true && nvm ls
+  - if test $CI_MACOS = true; nvm ls; fi
 
   # on Windows, select version using PowerShell Install-Product.
   - ps: |
