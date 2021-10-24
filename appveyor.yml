@@ -11,27 +11,33 @@ image:
   - macos-mojave
 
 install:
-  - env
-  - uname
   - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
-  - ps: 'dir env:'
+    
+  # the Windows servers use mingw. bash commands are usable on all
+  # platforms.
+  - uname
+  - env
   - npm version
   - node --version
-  - which nvm
+  
+  # why is the case not consistent.
+  - test $CI_MACOS = true && echo macOS
+  - test $CI_WINDOWS = True && echo Windows
+  
+  # on macOS, select version using nvm.
+  - test $CI_MACOS = true && nvm ls
+
+  # on Windows, select version using PowerShell Install-Product.
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
-        echo 'Windows'
         # https://www.appveyor.com/docs/lang/nodejs-iojs/
         Install-Product node 10.13
-      } elseif ($env:CI_MACOS -eq $true) {
-        echo 'macOS'
-        bash -c nvm ls
       }
+      
   - npm version
   - node --version
   - git submodule init
   - git submodule update
-  - ps: 
   # - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
   # - ps: $env:RELEASE_NAME = "beeblink-"+$env:SUFFIX
   # - ps: $env:OUTPUT_NAME = "beeblink-"+$env:SUFFIX+"-server-windows.zip"
