@@ -28,6 +28,7 @@ install:
 build_script:
   - ps: npm version
   - ps: node --version
+  - ps: nvm ls
   - ps: cd ./server
   - ps: npm install
   - ps: npm run compile
