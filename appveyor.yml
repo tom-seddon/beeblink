@@ -31,17 +31,19 @@ install:
         Install-Product node 10.13
       }
 
-  # on macOS, install 64tass.
+  # install and build 64tass.
   - ps: |
+      Push-Location
+      cd ~
+      svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 2025
+      cd tass64-code
+      pwd
       if ($env:CI_MACOS -eq $true) {
-        Push-Location
-        cd ~
-        svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 2025
-        cd ~/tass64-code
         make all
-        make install
-        Pop-Location
-      }      
+      } elseif ($env:CI_WINDOWS -eq $true) {
+        make 64tass.exe
+      }
+      Pop-Location
   - npm version
   - node --version
   - git submodule init
@@ -55,13 +57,11 @@ build_script:
   - npm install
   - npm run compile
   - ps: |
+      pwd
       if ($env:CI_WINDOWS -eq $true) {
         ./node_modules/.bin/pkg -t win .
       } elseif ($env:CI_MACOS -eq $true) {
         ./node_modules/.bin/pkg -t macos-x64 .
-        64tass --version
-        cd ../rom
-        make
       }
 
   # - ps: .\node_modules\.bin\pkg -t win .
