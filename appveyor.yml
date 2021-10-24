@@ -60,8 +60,10 @@ build_script:
       } elseif ($env:CI_MACOS -eq $true) {
         ./node_modules/.bin/pkg -t macos-x64 .
         64tass --version
+        cd ../rom
+        make
       }
-      
+
   # - ps: .\node_modules\.bin\pkg -t win .
   # - ps: 7z a ..\%OUTPUT_NAME% .\beeblink-server.exe .\node_modules\@serialport\bindings\build\Release\bindings.node .\node_modules\usb\build\Release\usb_bindings.node
   # - ps: cd ..
