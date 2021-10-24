@@ -19,12 +19,12 @@ install:
   - node --version
   
   # why is the case not consistent.
-  - bash -c if test "$CI_MACOS" = "true"; then echo macOS; fi
-  - bash -c if test "$CI_WINDOWS" = "True"; then echo Windows; fi
+  - bash -c 'if test "$CI_MACOS" = "true"; then echo macOS; fi'
+  - bash -c 'if test "$CI_WINDOWS" = "True"; then echo Windows; fi'
   
   # on macOS, select version using nvm.
-  - bash -c if test "$CI_MACOS" = "true"; then nvm ls; fi
-  - bash -c if test "$CI_MACOS" = "true"; then nvm use 10; fi
+  - bash -c 'if test "$CI_MACOS" = "true"; then nvm ls; fi'
+  - bash -c 'if test "$CI_MACOS" = "true"; then nvm use 10; fi'
 
   # on Windows, select version using PowerShell Install-Product.
   - ps: |
