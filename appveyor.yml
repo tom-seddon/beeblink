@@ -12,6 +12,9 @@ image:
 
 install:
   - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
+  - ps: 'dir env:'
+  - npm version
+  - node --version
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
         echo 'Windows'
@@ -21,7 +24,6 @@ install:
         echo 'macOS'
         nvm ls
       }
-  - ps: 'dir env:'
   - git submodule init
   - git submodule update
   - ps: 
@@ -30,8 +32,6 @@ install:
   # - ps: $env:OUTPUT_NAME = "beeblink-"+$env:SUFFIX+"-server-windows.zip"
 
 build_script:
-  - ps: npm version
-  - ps: node --version
   - ps: cd ./server
   - npm install
   - npm run compile
