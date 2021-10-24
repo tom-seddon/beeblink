@@ -30,7 +30,13 @@ install:
         # https://www.appveyor.com/docs/lang/nodejs-iojs/
         Install-Product node 10.13
       }
-      
+
+  # on macOS, install 64tass.
+  - ps: |
+      if ($env:CI_MACOS -eq $true) {
+        cd ~ ; svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 2025)
+        cd ~/tass64-code ; make all ; make install
+      }      
   - npm version
   - node --version
   - git submodule init
@@ -48,6 +54,7 @@ build_script:
         ./node_modules/.bin/pkg -t win .
       } elseif ($env:CI_MACOS -eq $true) {
         ./node_modules/.bin/pkg -t macos-x64 .
+        64tass --version
       }
       
   # - ps: .\node_modules\.bin\pkg -t win .
