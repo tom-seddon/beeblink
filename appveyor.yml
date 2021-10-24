@@ -15,6 +15,7 @@ install:
   - ps: 'dir env:'
   - npm version
   - node --version
+  - nvm ls
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
         echo 'Windows'
