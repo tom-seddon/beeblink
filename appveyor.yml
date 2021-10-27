@@ -33,15 +33,14 @@ install:
 
   # install and build 64tass.
   - ps: |
-      Push-Location
-      cd ~
-      svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 2025
-      cd tass64-code
-      pwd
       if ($env:CI_MACOS -eq $true) {
+        Push-Location
+        cd ~
+        svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 2025
+        cd tass64-code
+        pwd
         make all
-      } elseif ($env:CI_WINDOWS -eq $true) {
-        make 64tass.exe
+        make install
       }
       Pop-Location
   - npm version
