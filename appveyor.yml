@@ -63,7 +63,7 @@ build_script:
         Push-AppveyorArtifact $env:RELEASE_NAME-server-windows.zip -DeploymentName output
       } elseif ($env:CI_MACOS -eq $true) {
         ./node_modules/.bin/pkg -t macos-x64 .
-        7z a ../$env:RELEASE_NAME-server-macos.zip beeblink-server ./node_modules/usb/build/Release/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node
+        7z a $env:RELEASE_NAME-server-macos.zip beeblink-server ./node_modules/usb/build/Release/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node
         Push-AppveyorArtifact $env:RELEASE_NAME-server-macos.zip -DeploymentName output
       }
   - ps: Pop-Location
