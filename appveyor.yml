@@ -30,17 +30,17 @@ install:
       }
 
   # install and build 64tass.
-  - ps: |
-      if ($env:CI_MACOS -eq $true) {
-        Push-Location
-        cd ~
-        svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 2625
-        cd tass64-code
-        pwd
-        make all
-        make install
-      }
-      Pop-Location
+  # - ps: |
+  #     if ($env:CI_MACOS -eq $true) {
+  #       Push-Location
+  #       cd ~
+  #       svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 2625
+  #       cd tass64-code
+  #       pwd
+  #       make all
+  #       make install
+  #     }
+  #     Pop-Location
   - npm version
   - node --version
   - git submodule init
@@ -52,10 +52,10 @@ install:
 
 build_script:
   - ps: |
-      if ($env:CI_MACOS -eq $true) {
+      if ($env:CI_WINDOWS -eq $true) {
         Push-Location
         cd ./rom
-        make
+        ../tools/snmake
 
         cd .build
         7z a ../../$env:RELEASE_NAME-roms.zip beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_upurs_fe60.rom
