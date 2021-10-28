@@ -13,18 +13,16 @@ image:
   - macos-mojave
 
 install:
-  - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
-    
   - uname
   - env
   - npm version
   - node --version
   
-  # on macOS, select version using nvm.
+  # on macOS, select Node version using nvm.
   - sh: nvm ls
   - sh: nvm use 10
 
-  # on Windows, select version using PowerShell Install-Product.
+  # on Windows, select Node version using PowerShell Install-Product.
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
         # https://www.appveyor.com/docs/lang/nodejs-iojs/
@@ -47,11 +45,26 @@ install:
   - node --version
   - git submodule init
   - git submodule update
-  # - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
-  # - ps: $env:RELEASE_NAME = "beeblink-"+$env:SUFFIX
-  # - ps: $env:OUTPUT_NAME = "beeblink-"+$env:SUFFIX+"-server-windows.zip"
+
+  - ps: |
+  - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
+  - ps: $env:RELEASE_NAME=beeblink-$SUFFIX
+
+      - (cd ./server && 7z a ../$SERVER_ZIP_NAME beeblink-server ./node_modules/usb/build/Release/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node)
 
 build_script:
+  - ps: |
+      if ($env:CI_MACOS -eq $true) {
+        Push-Location
+        cd ./rom
+        make
+
+        cd .build
+        7z a ../../$RELEASE_NAME-roms.zip beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_upurs_fe60.rom
+      
+        Pop-Location
+      }
+  - ps: Push-Location
   - ps: cd ./server
   - npm install
   - npm run compile
@@ -59,14 +72,12 @@ build_script:
       pwd
       if ($env:CI_WINDOWS -eq $true) {
         ./node_modules/.bin/pkg -t win .
+        7z a ../$RELEASE_NAME-server-windows.zip beeblink-server.exe ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/usb/build/Release/usb_bindings.node
       } elseif ($env:CI_MACOS -eq $true) {
         ./node_modules/.bin/pkg -t macos-x64 .
+        7z a ../$RELEASE_NAME-server-macos.zip beeblink-server ./node_modules/usb/build/Release/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node
       }
-
-  # - ps: .\node_modules\.bin\pkg -t win .
-  # - ps: 7z a ..\%OUTPUT_NAME% .\beeblink-server.exe .\node_modules\@serialport\bindings\build\Release\bindings.node .\node_modules\usb\build\Release\usb_bindings.node
-  # - ps: cd ..
-  # - ps: 7z a %OUTPUT_NAME% .\volumes
+  - ps: Pop-Location
 
 # artifacts:
 #   - path: $(OUTPUT_NAME)
