@@ -34,7 +34,7 @@ install:
       if ($env:CI_MACOS -eq $true) {
         Push-Location
         cd ~
-        svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 2025
+        svn checkout https://svn.code.sf.net/p/tass64/code/trunk tass64-code -r 2625
         cd tass64-code
         pwd
         make all
