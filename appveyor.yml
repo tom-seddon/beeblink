@@ -50,8 +50,6 @@ install:
   - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
   - ps: $env:RELEASE_NAME=beeblink-$SUFFIX
 
-      - (cd ./server && 7z a ../$SERVER_ZIP_NAME beeblink-server ./node_modules/usb/build/Release/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node)
-
 build_script:
   - ps: |
       if ($env:CI_MACOS -eq $true) {
