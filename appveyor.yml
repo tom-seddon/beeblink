@@ -48,7 +48,7 @@ install:
 
   - ps: |
   - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
-  - ps: $env:RELEASE_NAME=beeblink-$env:SUFFIX
+  - ps: $env:RELEASE_NAME="beeblink-$env:SUFFIX"
 
 build_script:
   - ps: |
