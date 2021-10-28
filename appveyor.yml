@@ -48,7 +48,7 @@ install:
 
   - ps: |
   - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
-  - ps: $env:RELEASE_NAME=beeblink-$SUFFIX
+  - ps: $env:RELEASE_NAME=beeblink-$env:SUFFIX
 
 build_script:
   - ps: |
@@ -58,7 +58,7 @@ build_script:
         make
 
         cd .build
-        7z a ../../$RELEASE_NAME-roms.zip beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_upurs_fe60.rom
+        7z a ../../$env:RELEASE_NAME-roms.zip beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_upurs_fe60.rom
       
         Pop-Location
       }
@@ -70,10 +70,10 @@ build_script:
       pwd
       if ($env:CI_WINDOWS -eq $true) {
         ./node_modules/.bin/pkg -t win .
-        7z a ../$RELEASE_NAME-server-windows.zip beeblink-server.exe ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/usb/build/Release/usb_bindings.node
+        7z a ../$env:RELEASE_NAME-server-windows.zip beeblink-server.exe ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/usb/build/Release/usb_bindings.node
       } elseif ($env:CI_MACOS -eq $true) {
         ./node_modules/.bin/pkg -t macos-x64 .
-        7z a ../$RELEASE_NAME-server-macos.zip beeblink-server ./node_modules/usb/build/Release/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node
+        7z a ../$env:RELEASE_NAME-server-macos.zip beeblink-server ./node_modules/usb/build/Release/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node
       }
   - ps: Pop-Location
 
