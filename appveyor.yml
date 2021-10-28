@@ -46,7 +46,8 @@ build_script:
         ../tools/snmake
 
         cd .build
-        7z a ../../$env:RELEASE_NAME-roms.zip beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_upurs_fe60.rom
+        7z a $env:RELEASE_NAME-roms.zip beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_upurs_fe60.rom
+        Push-AppveyorArtifact $env:RELEASE_NAME-roms.zip -DeploymentName output
       
         Pop-Location
       }
@@ -58,10 +59,12 @@ build_script:
       pwd
       if ($env:CI_WINDOWS -eq $true) {
         ./node_modules/.bin/pkg -t win .
-        7z a ../$env:RELEASE_NAME-server-windows.zip beeblink-server.exe ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/usb/build/Release/usb_bindings.node
+        7z a $env:RELEASE_NAME-server-windows.zip beeblink-server.exe ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/usb/build/Release/usb_bindings.node
+        Push-AppveyorArtifact $env:RELEASE_NAME-server-windows.zip -DeploymentName output
       } elseif ($env:CI_MACOS -eq $true) {
         ./node_modules/.bin/pkg -t macos-x64 .
         7z a ../$env:RELEASE_NAME-server-macos.zip beeblink-server ./node_modules/usb/build/Release/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node
+        Push-AppveyorArtifact $env:RELEASE_NAME-server-macos.zip -DeploymentName output
       }
   - ps: Pop-Location
 
@@ -69,13 +72,13 @@ build_script:
 #   - path: $(OUTPUT_NAME)
 #     name: output
 
-# deploy:
-#   - release: $(RELEASE_NAME)
-#     provider: GitHub
-#     auth_token:
-#       secure: T5CPAJmNl5j/eAVlQln8WoiFKTDkq2ebT9Y/PbWRbMIa4GFyov+t5QdqlU0O2sY9
-#     artifact: output
-#     draft: false
-#     prerelease: false
-#     on:
-#       branch: master
+deploy:
+  - release: $(RELEASE_NAME)
+    provider: GitHub
+    auth_token:
+      secure: T5CPAJmNl5j/eAVlQln8WoiFKTDkq2ebT9Y/PbWRbMIa4GFyov+t5QdqlU0O2sY9
+    artifact: output
+    draft: false
+    prerelease: false
+    on:
+      branch: master
