@@ -868,7 +868,9 @@ check_for_subject:
                 tay
                 jsr find_cmd
                 bcc done
+                .push16 cmd_ptr
                 jsr cmd_call_pointer
+                .pop16 cmd_ptr
                 ldx #cmd_ptr
                 jsr add3z16     ;skip metadata
                 jmp check_for_subject
@@ -910,7 +912,6 @@ done:
                 .pend
                 ; fall through...
 svc_help_or_star_done:
-                
                 pla
                 tay
                 .pop16 cmd_ptr
@@ -960,6 +961,13 @@ find_cmd: .proc
                 tya
                 pha             ;save initial command line offset
                 ldx #cmd_ptr
+
+check_end_of_table:
+                ; No match if end of table.
+                clc
+                lda (0,x)
+                bmi done        ;taken with C=0 if end of table
+                
 check_cmd:
                 pla             ;restore initial command line offset
                 tay
@@ -1003,10 +1011,7 @@ done:
 no_match:
                 jsr cmd_metadata
                 jsr add3z16
-                lda (0,x)
-                bpl check_cmd
-                clc
-                bmi done
+                jmp check_end_of_table
                 .pend
 
 ;-------------------------------------------------------------------------
