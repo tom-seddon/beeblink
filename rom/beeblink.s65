@@ -3247,20 +3247,7 @@ ptr: .fill 2
 old_x: .fill 1
                 .send osfsc_workspace
                 
-fsc_routines=[
-                fsc_opt,
-                fsc_eof,
-                fsc_slash,
-                fsc_star,
-                fsc_run,
-                fsc_cat,
-                fsc_shut_down_fs,
-                fsc_get_handle_range,
-                fsc_oscli,
-                fsc_ex,
-                fsc_info,
-                fsc_lib_run
-                ]
+fsc_routines=[fsc_opt,fsc_eof,fsc_slash,fsc_star,fsc_run,fsc_cat,fsc_shut_down_fs,fsc_get_handle_range,fsc_oscli,fsc_ex,fsc_info,fsc_lib_run]
                 
                 cmp #len(fsc_routines)
                 bcc +
