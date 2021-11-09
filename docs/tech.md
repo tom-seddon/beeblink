@@ -1,0 +1,437 @@
+# BeebLink technical documentation
+
+Some random notes about stuff.
+
+# Design goals
+
+Goals for the BeebLink protocol:
+
+0. Simple flow control. The data transfer is either client to server
+   or server to client, and it's easy to say which.
+   
+   (This is to allow the use of a half duplex link.)
+
+1. Straightforwardly snoopable. A device sitting between server and
+   client should be able to monitor the data flow closely enough to
+   ensure that the data is transferred correctly, without needing to
+   know all the possible types of data that could be sent.
+   
+   (This is to avoid a situation where any such device needs upgrading
+   every time a new feature is added.)
+
+2. Low bandwidth demands. The Beeb can transmit and receive data only
+   so quickly. Try not to send more bytes than necessary, and try to
+   minimize overhead.
+   
+   (Current link types haven't really stress-tested this, but I had
+   19200 baud serial port support in mind.)
+
+3. Minimize client processing. It's OK to waste server resources to do
+   this, or have the client assume that data is the right size.
+
+   (The server is running on a PC (or similar) with tons of RAM and
+   lots of MHz.)
+   
+4. Must handle BREAK cleanly and promptly, cancelling any data that's
+   in flight and putting things back in a known state. Any delay
+   should be as short as possible.
+
+   (You can press BREAK at any time. The system should become useable
+   again promptly.)
+   
+5. Ensure nested requests don't happen. Should be able to spool server
+   output to a file, for example.
+   
+   (Not a major issue, but I've previously used systems that would
+   deadlock from this, and it's a bit annoying when it happens.)
+   
+Non-goals:
+
+0. High latency support. Assume server and client are connected via a
+   cable or something, and that the round trip time for a
+   latency-bound request is ~2 ms.
+
+   (This means the system can hopefully get away with minimal
+   buffering, something for which there's not much room in 32 KB.)
+   
+1. Server->client requests. The client is strictly a client, and can
+   only accept data in response to a request it's made of the server.
+   
+   (For some link types this is just too difficult to arrange.)
+   
+2. Gracefully handling server disconnection.
+
+# Layering
+
+This could probably be mapped to the OSI 7-layer model, in that
+there's sort of separate link/protocol/application layers, but the
+link and protocol layers are not separated very cleanly. 
+
+# Basic flow
+
+The flow is very simple:
+
+0. Client sends entire request message to server
+
+1. Server sends entire response message to client
+
+There is no support for the server sending anything to the client
+other than in response to a request. 
+
+No response is sent until the entire request is received, and any
+response is prepared ahead of time so it can be sent completely. The
+server is not allowed to send partial responses.
+
+# Message format
+
+The format is deliberately simple: each message consists of a 7-bit
+message type, and an N-byte payload, where N is a 32 bit value.
+
+Messages type 0 is reserved for link-specific uses.
+
+# Message types
+
+Mostly out of scope for this doc... the best "documentation" is the
+.ts file that is the authoritative list of numbers and payload
+formats, along with a few notes: [beeblink.ts](../server/beeblink.ts)
+
+This file is used as-is by the TypeScript code, and
+[preprocessed](../tools/make_constants.py) to create an include file
+useable by the 6502 ROM code.
+
+Two notes:
+
+- text produced by the server is retrieved in parts, one
+  request/response per part. Each part is buffered on the stack, then
+  printed out, so that there's never a request/response in flight when
+  `OSWRCH` is called. This ensures you can spool server output
+
+- any request can always return ERROR. The request/response routine in
+  the ROM looks after this by automatically issuing an appropriate BRK
+  
+# Link types
+
+There are two supported link types: HTTP, and serial (which covers
+both UPURS and Tube Serial).
+
+There's also a 3rd, unsupported type, AVR, which lives on because
+that's what's emulated in
+[b2, my BBC Micro emulator](https://github.com/tom-seddon/b2) -
+something I haven't got round to updating yet.
+
+## HTTP
+
+The protocol maps fairly cleanly to HTTP, aside from the latency.
+
+All requests are in the form of an HTTP `POST` to the `/request`
+endpoint.
+
+HTTP being stateless, the header must include a `beeblink-sender-id`
+value, an arbitrary string that identifies the client making the
+request. (This should be different for every Beeb connecting.)
+
+The request body must be `application/binary`, a sequence of bytes:
+the 1-byte message type (bit 7 ignored), and the N-byte payload. The
+payload size is currently deduced from the HTTP content size, and
+isn't included in the data; the current assumption is that whatever is
+sitting between the BBC and the server will convert between this
+format and the logical message format.
+
+To handle BREAK, forcibly close the open TCP connection, if there is
+one.
+
+(The HTTP protocol is currently used only by b2. The emulated BBC
+appears to have an AVR attached, and the emulator handles the
+communication with the HTTP server.)
+
+New endpoint name(s) will be added when this mechanism needs extending
+or improving.
+
+## Serial
+
+These serial link types are quite different from the Beeb side (see
+the driver code: [tube_serial.s65](../rom/tube_serial.s65),
+[upurs.s65](../rom/upurs.s65)), but they're treated the same on the
+server as they present themselves as USB COM ports.
+
+The physical message format is broadly the same as the logical message
+format.
+
+The only fiddly part about supporting the serial link is handling
+resets. There's no out-of-band mechanism for closing the connection,
+and the link could be buffering some unknown amount of data.
+
+The way BeebLink handles this is to add additional so-called status
+bytes during transfers. These have 2 purposes:
+
+0. indicate that the ongoing transfer is still valid, and hasn't been
+   cancelled
+
+1. ensure that certain sequences of bytes will never occur during
+   ordinary transmission. Such sequences can be used to reset the link
+
+### Status bytes
+
+Non-empty request payloads include status bytes at particular points,
+based on the LSB of the byte's negative offset, i.e.,
+`-((payload_size)-1-(offset of byte))`. (The first byte's negative
+offset is `-((payload_size)-1)`, and the last byte's is `0`.)
+
+When the LSB of the byte's negative offset is `0x00`, the byte sent
+should be followed by a status byte.
+
+(This makes a lot more sense in 6502 than it does in text! When
+transferring data, the LSB of the byte's negative offset can be found
+in `scratch_payload_size+0`.)
+
+For client->server payloads, the status bytes indicate whether there's
+more data to come, or that the request has been cancelled. To indicate
+a cancelled request, send `0x01`; to indicate cancellation, send
+`0x00` or `0x80`.
+
+For server->client payloads, the status bytes are always `0x01`, as
+the server isn't allowed to cancel responses. These bytes are still
+sent, as they fulfil purpose 1 above.
+
+### Sync mode
+
+Sync mode allows both sides to flush all buffers (serial device
+buffer, server OS buffers...) and get themselves in a known state.
+
+The client initiates sync mode simply by doing it. If the server
+receives data while sending, it switches to sync mode; otherwise, the
+sync bytes are status bytes that indicate the current transfer is
+being cancelled, and message type bytes that indicate the server
+should embark on sync mode. So the server will end up in sync mode,
+whatever type of data it might be expecting.
+
+From the client side:
+
+0. emit 1 `0x80` byte
+
+1. emit continuous `0x00` bytes while reading from the server. Count
+   runs of `0x00` received, and discard everything else. Repeat until
+   `NUM_SERIAL_SYNC_ZEROS` consecutive `0x00` bytes have been received
+   
+2. continuie emitting `0x00` bytes while reading from the server. A
+   `0x01` from the server indicates sync complete; `0x00` bytes can be
+   ignored; any other value is an error
+   
+3. emit a single `0x01` byte to indicate that sync is complete
+
+The server enters sync mode after a request is cancelled, or when it
+receives a byte indicating a message type of 0 (i.e., `0x00` or
+`0x80`), or when it receives data while sending a response.
+
+From its side:
+
+0. flush serial port buffers, to hopefully minimize the amount of data
+   the client has to discard
+
+1. read client data, counting runs of `0x00`, and discarding
+   everything else, until `NUM_SERIAL_SYNC_ZEROS` consective `0x00`
+   bytes have been received
+   
+2. emit `NUM_SERIAL_SYNC_ZEROS` x `0x00` bytes, followed by a single
+   `0x01` byte. (This can be done as one lump, at the start of the
+   process; the data will be buffered up and will appear at the client
+   end in due course)
+
+3. read client data: a `0x01` indicates sync complete, and it's done;
+   `0x00` bytes should be ignored; any other value is an error, so go
+   back to step 0
+
+(Client sync step 0 exists to get the server out of server sync step
+3, if it's stuck there.)
+
+`NUM_SERIAL_SYNC_ZEROS` is currently 300 - something like 0.05 seconds
+at the UPURS transfer rate. (This is slightly generous. The worst case
+run of `0x00` bytes is 258, I think: a message with a 255 byte
+payload that's entirely `0x00`.)
+
+### 1-byte payloads
+
+There is a special shorter encoding for requests and responses with
+1-byte payloads. This isn't essential, but it doesn't hurt (it's not
+much code, and there are a lot of 1-byte payloads), and it makes
+BeebLink's terrible OSBGET performance a bit less terrible.
+
+Messages with arbitrary-sized payloads have the following format:
+
+```
+      7   6   5   4   3   2   1   0
+   +---+---+---+---+---+---+---+---+
++0 | 1 | type                      |
+   +---+---+---+---+---+---+---+---+
++1 | payload size bits 0-7         |
+   +---+---+---+---+---+---+---+---+
++2 | payload size bits 8-15        |
+   +---+---+---+---+---+---+---+---+
++3 | payload size bits 16-23       |
+   +---+---+---+---+---+---+---+---+
++4 | payload size bits 24-31       |
+   +---+---+---+---+---+---+---+---+
++5 | payload first byte            |
+   +...                            +
++N | payload last byte             |
+   +---+---+---+---+---+---+---+---+
+```
+
+Messages with 1-byte payloads have the following format:
+
+```
+      7   6   5   4   3   2   1   0
+   +---+---+---+---+---+---+---+---+
++0 | 0 | type                      |
+   +---+---+---+---+---+---+---+---+
++1 | payload, 1 byte               |
+   +---+---+---+---+---+---+---+---+
+```
+
+Notes:
+
+- a 0-byte payload has to be encoded using the N-byte format, even
+  though that's more bytes than an optimal 1-byte payload
+
+- a 1-byte payload may use either the 1-byte or N-byte format. Both
+  are equally valid
+  
+- OSBPUT needs a 2-byte packet :( - but you should be using OSGBPB
+  anyway
+
+## AVR
+
+Early versions of BeebLink handled BBC to PC communication with an AVR
+microcontroller that connected to the PC's USB port and the BBC's user
+port.
+
+Last BeebLink commit that supported this:
+https://github.com/tom-seddon/beeblink/commit/1344cafc18a47b80e00018c13f05e15395ab7c80
+(5 May 2019)
+
+Some indication of how it worked can also be gleaned from the b2
+source:
+[BeebLink.cpp](https://github.com/tom-seddon/b2/blob/a0b8957cda511dbedc36703e09421d4787864a67/src/beeb/src/BeebLink.cpp)
+
+The AVR version also uses the shorter message format for 1-byte
+payloads.
+
+The user port is half duplex. The device firmware watches the messages
+so it knows whether transmission will be client->server or
+server->client.
+
+The device uses the user port write handshaking to manage transmission
+of bytes to the BBC. BREAK is handled by disabling the write
+handshaking, something the firmware can detect and report to the
+server via a USB stall.
+
+# Adding new link types
+
+## 6502 side
+
+See `beeblink.s65`. Follow the existing examples to include the driver
+code for the new type.
+
+Define the following symbols in the link type file. The existing
+driver code should serve as an example.
+
+### `link_name` ###
+
+Name of the link, a string, as included in the ROM name.
+
+### `link_subtype` ###
+
+Link subtype, a byte. Used to distinguish links that aren't otherwise
+distinguishable from the PC end, e.g., UPURS vs Tube Serial.
+
+### `link_begin_send_with_restart`, `link_begin_send_without_restart`
+
+Prepare to send a request. A is the request type, and
+`payload_counter` holds the payload size. Send appropriate header and
+prepare for sending the given number of payload bytes.
+
+If it's possible to check the link status reasonably quickly
+(milliseconds...), `link_begin_send_with_restart` should do that,
+and re-initialise the link if anything has gone wrong. If the
+reinitialise fails, call `link_status_brk`.
+
+The FS uses the `_with_restart` entry point for pretty much every
+request, except for a few where throughput is important or the risk of
+programs having trampled on the relevant hardware is low:
+
+- `OSBPUT`/`OSBGET`/`EOF#` (performance in a loop is bad enough as it
+  stands, no point making it worse...),
+
+- BLFS init (which immediately follows a `link_startup` - no point
+  redoing it)
+
+- some of the `*` command stuff (if it's happening, it was because the
+  server responded to a `REQUEST_STAR_COMMAND`, so the link is good)
+
+- `print_server_string` (same justification as the `*` commands, and
+  it helps a bit with throughput)
+
+It's fine for both routines to be the same.
+
+Preserve X/Y. Preserve `payload_counter`.
+
+### `link_send_payload_byte' ###
+
+Send 1 byte over the link as part of the payload. `payload_counter`
+holds the byte's negated offset.
+
+Preserve X/Y.
+
+### `link_begin_recv` ###
+
+Prepare to receive a response. Return the response header in A.
+Initialize `payload_counter` to the response payload size.
+
+### `link_recv_payload_byte' ###
+
+Receive 1 byte over the link as part of the payload. `payload_counter`
+holds the byte's negated offset.
+
+Preserve X/Y.
+
+### `link_unprepare' ###
+
+Unrepare link after a request/response sequence. Do whatever's
+necessary.
+
+### `link_startup', `link_status_text' ###
+
+Initialise link and determine status.
+
+On exit, if link OK, carry clear.
+
+If link not OK, carry set, and `X` holds offset into
+`link_status_text` of 0-terminated string describing status.
+               
+### `link_send_file_data_parasite', `link_send_file_data_host', `link_recv_file_data_parasite', `link_recv_file_data_host' ###
+
+Send/receive file data from/to host/parasite memory.
+
+File data is whatever's left in the current message according to
+`payload_counter`, a non-zero negated number of bytes left. The data
+is read/written starting at `payload_addr` (a 32-bit address that's
+already known to point into host/parasite memory as appropriate for
+the routine called).
+
+May modify `payload_counter`.
+
+These are weak symbols. If not defined, link-agnostic code will be
+used, that simply calls `link_(send|recv)_payload_byte` repeatedly.
+This works, but you probably won't get max throughput...
+
+### `link_num_speedtest_iterations' ###
+
+Number of iterations to perform when doing `*SPEEDTEST`. Each
+iteration sends or receives from `PAGE` to `HIMEM`, and it's just a
+question of how long you fancy waiting, given the speed of the link.
+
+Must be an even number.
+
+## Server side
+
+TBD...
