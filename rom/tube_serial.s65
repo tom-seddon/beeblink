@@ -77,6 +77,10 @@
                 .section code
 
                 .cerror NUM_SERIAL_SYNC_ZEROS<0||NUM_SERIAL_SYNC_ZEROS>65535,'NUM_SERIAL_SYNC_ZEROS must be a 16-bit uint'
+
+                ; makes a bit of a difference in FSTEST. 1.3x as many
+                ; BGETs per second.
+send_1_byte_messages=true
                 
 ;-------------------------------------------------------------------------
                 
@@ -320,7 +324,7 @@ start_sync:
                 sta num_sync_zeros_received+1
 
                 .block
-                .debug_print ['Sync step 0...\r']
+                .debug_print ['Sync step 0...\r\n']
                 lda #1
                 jsr reset_startup_counter
 sync_step_0_loop:
@@ -334,11 +338,11 @@ sync_step_0_loop:
                 .bend
 
                 .block
-                .debug_print ['Sync step 1...\r']
+                .debug_print ['Sync step 1...\r\n']
                 lda #255
                 jsr reset_startup_counter
 sync_step_1_loop:
-; .print ['&00: sent: &',num_sync_zeros_sent+1,num_sync_zeros_sent+0,'; received: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r']
+; .print ['&00: sent: &',num_sync_zeros_sent+1,num_sync_zeros_sent+0,'; received: &',num_sync_zeros_received+1,num_sync_zeros_received+0,'\r\n']
                 ldy #status_text.sync_timed_out_1-status_text
                 jsr check_startup_counter
 
@@ -373,7 +377,7 @@ sync_step_1_loop:
                 .block
                 ; Keep reading until the 1 byte is received. Continue
                 ; sending zeros meanwhile.
-                .debug_print ['Sync step 2...\r']
+                .debug_print ['Sync step 2...\r\n']
                 lda #16
                 jsr reset_startup_counter
 sync_step_2_loop:
@@ -397,7 +401,7 @@ sync_step_2_loop:
 
                 .block
                 ; Send a single non-zero byte.
-                .debug_print ['Sync step 3...\r']
+                .debug_print ['Sync step 3...\r\n']
                 lda #16
                 jsr reset_startup_counter
 sync_step_3_loop:
@@ -409,7 +413,7 @@ sync_step_3_loop:
                 bcc sync_step_3_loop
                 .bend
 ok:
-                .debug_print ['Sync success (probably)\r']
+                .debug_print ['Sync success (probably)\r\n']
                 clc             ;good
                 rts
 
@@ -463,21 +467,83 @@ sync_timed_out_3:
                 
 ;-------------------------------------------------------------------------
 ;
-; Prepare link.
-;
-; Set Master 128 ITU flag... and anything else???
-prepare: .proc
-                ; bit link_itu
-                ; bvs +
-                pha
+; Begin send.
+; 
+begin_send: .proc
+                pha             ;save packet type
+
+                ; sort out ITU flag
                 jsr is_itu
                 sta link_itu
-                pla
-; +
-;                 .txdp ['link_prepare: &',link_itu,'\r']
-                rts
+
+                .if send_1_byte_messages
+                
+                ; payload size 1?
+                lda payload_counter+0
+                cmp #1
+                bne n_bytes     ;taken if payload size isn't $xxxxxx01
+
+                lda payload_counter+1
+                ora payload_counter+2
+                ora payload_counter+3
+                bne n_bytes     ;taken if payload size isn't $00000001
+
+                pla             ;restore packet type
+                and #$7f        ;clear the N-byte bit
+                jmp send_header_byte ;send header type
+
+                .endif
+
+n_bytes:
+                pla             ;restore packet type
+                ora #$80        ;set the N-byte bit
+                jsr send_header_byte ;send header type
+                
+                lda payload_counter+0
+                jsr send_header_byte
+
+                lda payload_counter+1
+                jsr send_header_byte
+                
+                lda payload_counter+2
+                jsr send_header_byte
+
+                lda payload_counter+3
+                jmp send_header_byte
                 .pend
 
+;-------------------------------------------------------------------------
+;
+; Begin recv.
+
+begin_recv: .proc
+                jsr recv_header_byte ;receive packet type
+
+                cmp #$80        ;C=1 if N-byte
+                and #$7f
+                bcs n_bytes
+                jmp set_payload_counter_1
+
+n_bytes:
+                pha
+                jsr recv_header_byte
+                sta payload_counter+0
+
+                jsr recv_header_byte
+                sta payload_counter+1
+
+                jsr recv_header_byte
+                sta payload_counter+2
+
+                jsr recv_header_byte
+                sta payload_counter+3
+
+                pla
+                
+                rts
+                
+                .pend
+                
 ;-------------------------------------------------------------------------
 ;
 ; Unprepare link.
@@ -581,7 +647,7 @@ send_byte: .macro
                 bit status
                 beq -
                 sty fifo
-                .txdp ['\r']
+                .txdp ['\r\n']
                 .endm
 
 ;-------------------------------------------------------------------------
@@ -599,7 +665,7 @@ recv_byte: .macro
                 bit status
                 beq -
                 lda fifo
-                .txdp [DP_A,'\r']
+                .txdp [DP_A,'\r\n']
                 .endm
                 
 ;-------------------------------------------------------------------------
@@ -632,7 +698,7 @@ itu_send_byte: .macro
                 lda #acccon.itu
                 tsb acccon
                 plp
-                .txdp ['\r']
+                .txdp ['\r\n']
                 .cpu 'default'
                 .endm
 
@@ -666,9 +732,9 @@ itu_recv_byte: .macro dest
                 tsb acccon
                 plp
                 .if \dest>=0
-                .txdp ['&',\dest,'\r']
+                .txdp ['&',\dest,'\r\n']
                 .else
-                .txdp ['??\r']
+                .txdp ['??\r\n']
                 .endif
                 .endm
 
@@ -826,7 +892,7 @@ transfer_file_data_driver_routine: .macro tube_dir,bytes_routine,page_routine,na
 
                 jsr negate_payload_counter
                 
-                .txdp [\name,': &',payload_counter+0,' bytes, &',payload_counter+3,payload_counter+2,payload_counter+1,' pages\r']
+                .txdp [\name,': &',payload_counter+0,' bytes, &',payload_counter+3,payload_counter+2,payload_counter+1,' pages\r\n']
 
                 ; need to copy any bytes?
                 lda payload_counter+0
@@ -1546,16 +1612,21 @@ itu:
 link_name='Tube Serial'
 link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL
                 
-link_prepare=tube_serial.prepare
-link_prepare_and_maybe_restart=link_prepare
+; link_prepare=tube_serial.prepare
+; link_prepare_and_maybe_restart=link_prepare
                 
 link_unprepare=tube_serial.unprepare
 
-link_begin_recv=tube_serial.nop
+link_begin_send_without_restart=tube_serial.begin_send
+link_begin_send_with_restart=tube_serial.begin_send
 
-link_send_header_byte=tube_serial.send_header_byte
+link_begin_recv=tube_serial.begin_recv
+                
+;link_begin_recv=tube_serial.nop
+
+; link_send_header_byte=tube_serial.send_header_byte
 link_send_payload_byte=tube_serial.send_payload_byte
-link_recv_header_byte=tube_serial.recv_header_byte
+; link_recv_header_byte=tube_serial.recv_header_byte
 link_recv_payload_byte=tube_serial.recv_payload_byte
                 
 link_startup=tube_serial.startup

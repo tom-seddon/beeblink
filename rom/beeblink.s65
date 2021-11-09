@@ -790,7 +790,7 @@ print_rom_status_flag:
 ;
 boot: .proc
                 lda #REQUEST_BOOT_OPTION
-                jsr send_request_1_recv_response_1
+                jsr send_request_1_recv_response_1_without_restart
 
                 cmp #0
                 beq done
@@ -897,7 +897,7 @@ blfs:
 
                 lda #REQUEST_HELP_BLFS
                 ldx #0
-                jsr send_request_1_recv_response_1_and_maybe_restart
+                jsr send_request_1_recv_response_1_with_restart
 
                 jsr print_server_string
                 rts
@@ -1447,6 +1447,14 @@ set_payload_counter: .proc
                 rts
                 .pend
 
+set_payload_counter_1: .proc
+                pha
+                lda #1
+                jsr set_payload_counter
+                pla
+                rts
+                .pend
+                
 ;-------------------------------------------------------------------------
 ;
 ; Add Y to the payload size.
@@ -1488,7 +1496,7 @@ test_payload_counter: .proc
 ; Negate the payload size.
 ;
 ; exit: Z set as per new value
-; preserves: A; Y
+; preserves: X; Y; C
 ;
 negate_payload_counter: .proc
                 lda payload_counter+0
@@ -1716,48 +1724,38 @@ reg:
 ;
 ; 4. Call recv_response
 ;
-; entry: A = packet T (bit 7 must be clear)
+; entry: A = packet T (bit 7 clear)
 ; exit: Request payload size negated
 ; preserves: X
 ;
 
-send_request_n_and_maybe_restart: .proc
-                jsr link_prepare_and_maybe_restart
-                jmp send_request_n.without_prepare
-                .pend
+send_request_n_with_restart:
+                jsr link_begin_send_with_restart
+                jmp negate_payload_counter
+
+send_request_n_without_restart:
+                jsr link_begin_send_without_restart
+                jmp negate_payload_counter
+
+;-------------------------------------------------------------------------
+;
+; Send a request with a 1-byte payload.
+;
+; entry: A = request type
+;        X = request payload
+
+send_request_1_with_restart:
+                jsr set_payload_counter_1
+                jsr send_request_n_with_restart
+                txa
+                jmp send_payload_byte
+
+send_request_1_without_restart:
+                jsr set_payload_counter_1
+                jsr send_request_n_without_restart
+                txa
+                ; fall through to send_payload_byte
                 
-send_request_n: .proc
-                jsr link_prepare
-                
-without_prepare:
-                .debug_print ["send_request_n: Request: T=&",DP_A," payload_size=&",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,"\r\n"]
-
-                ; If payload size is 1, it could just do a 2-byte
-                ; send. But it's so annoying to check for.
-                ora #$80
-
-                jsr link_send_header_byte
-
-                lda payload_counter+0
-                jsr link_send_header_byte
-
-                lda payload_counter+1
-                jsr link_send_header_byte
-                
-                lda payload_counter+2
-                jsr link_send_header_byte
-
-                lda payload_counter+3
-                jsr link_send_header_byte
-
-                jsr negate_payload_counter
-                bne done
-
-done:
-                rts
-
-                .pend
-
 ;-------------------------------------------------------------------------
 ;
 ; Send payload byte.
@@ -1766,7 +1764,7 @@ done:
 ;       C = 0: payload overflow
 ; preserves: X
 ;
-send_payload_byte: .proc
+send_payload_byte: .block
                 pha
                 jsr test_payload_counter
                 bne more
@@ -1781,133 +1779,34 @@ more:
                 jsr link_send_payload_byte
                 sec
                 rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
-; Send a request with a 1-byte payload.
-;
-; 1. Call send_request_1
-; 2. Call recv_response
-;
-; entry: A = packet T (bit 7 must be clear);
-;        X = packet P
-;
-send_request_1_and_maybe_restart: .proc
-                jsr link_prepare_and_maybe_restart
-                jmp send_request_1.without_prepare
-                .pend
-                
-send_request_1: .proc
-                jsr link_prepare
-                
-without_prepare:
-                .debug_print ["send_request_1: T=&",DP_A," P=&",DP_X,"\r\n"]
-
-                jsr link_send_header_byte
-
-                ; known LSB of byte's negative offset
-                lda #0
-                sta payload_counter+0
-
-                txa
-                jsr link_send_payload_byte
-                
-                rts
-                .pend
+                .bend
 
 ;-------------------------------------------------------------------------
 ;
 ; Send a request with a 1-byte payload, receive the first byte of the
 ; response, and discard the rest.
 ;
-; There is a fast path if the response is a 1-byte packet, and a
-; not-so-fast path if it isn't.
-;
-; entry: A = request C (bit 7 clear)
-;        X = request P
-; exit: A = response P (*not* C!) (0 if response payload was 0 bytes)
-;       X = response C (*not* P!)
+; entry: A = request type (bit 7 clear)
+;        X = request payload
+; exit: A = response payload (*not* type!) (0 if response payload was 0 bytes)
+;       X = response type (*not* payload!)
 
-send_request_1_recv_response_1_and_maybe_restart: .proc
-                jsr link_prepare_and_maybe_restart
-                jmp send_request_1_recv_response_1.without_prepare
-                .pend
+send_request_1_recv_response_1_with_restart:
+                jsr send_request_1_with_restart
+                jmp recv_response_1
                 
-send_request_1_recv_response_1: .block
-                jsr link_prepare
-
-without_prepare:
-                jsr link_send_header_byte
-send_payload:
-                ; known LSB of byte's negative offset
-                lda #0
-                sta payload_counter+0
-                
-                txa
-                jsr link_send_payload_byte
-
+send_request_1_recv_response_1_without_restart:
+                jsr send_request_1_without_restart
                 ; fall through to recv_response_1
-                .bend
 
-recv_response_1: .block
-                jsr link_begin_recv
-
-without_prepare:
-                jsr link_recv_header_byte
-                cmp #$80
-                bcs got_n
-
-                tax             ;save response C
-                
-                ; known LSB of byte's negative offset
-                lda #0
-                sta payload_counter+0
-                
-                jsr link_recv_payload_byte
-
-                rts
-
-got_n:
-                .push32 payload_counter
-                jsr recv_response.got_n
-                pha             ;response C
-                jsr recv_payload_byte
-                pha             ;response P
-                jsr discard_remaining_payload
-                pla
-                tay             ;response P
-                pla
-                tax             ;response C
-                .pop32 payload_counter
-                tya             ;response P
-                rts
-                .bend
-
-;-------------------------------------------------------------------------
-;
-; Receive response and discard the payload. For use when the response
-; is either an error (which will be handled by recv_response) or not
-; (and it doesn't really matter what exactly).
-;
-; exit: X = response type
-;
-recv_response_and_discard_payload: .proc
-                .push32 payload_counter
-
-                jsr link_begin_recv
-
+recv_response_1:
                 jsr recv_response
+                tax             ;X = response type
 
-                jsr discard_remaining_payload
+                jsr recv_payload_byte ;A = response payload
 
-                tax
-                
-                .pop32 payload_counter
-                
-                rts
-                .pend
-                
+                jmp discard_remaining_payload
+
 ;-------------------------------------------------------------------------
 ; 
 ; Receive response.
@@ -1916,52 +1815,21 @@ recv_response_and_discard_payload: .proc
 ; doing the usual BRK thing. Otherwise, things will be set up so that
 ; calling recv_payload_byte will receive the payload bytes in turn.
 ;
-; exit: A = response C (bit 7 clear)
-;       C = 1: payload is 1 byte
-;       C = 0: payload might not be 1 byte
+; exit: A = response type (bit 7 clear)
 ; preserves: X; Y
                 
 recv_response: .proc
                 jsr link_begin_recv
-
-                jsr link_recv_header_byte
-                cmp #$80
-                bcs got_n
-got_1:
-                pha
-                lda #$ff
-                sta payload_counter+0
-                sta payload_counter+1
-                sta payload_counter+2
-                sta payload_counter+3
-                pla
-                .debug_print ["recv_response: T=&",DP_A," p_size=1\r\n"]
-                cmp #RESPONSE_ERROR
-                beq got_error
-                sec
-                jmp done
-
-got_n:
-                pha
-                jsr link_recv_header_byte
-                sta payload_counter+0
-                jsr link_recv_header_byte
-                sta payload_counter+1
-                jsr link_recv_header_byte
-                sta payload_counter+2
-                jsr link_recv_header_byte
-                sta payload_counter+3
+                pha             ;save response type
+                .debug_print ['r_r: response &',DP_A,' + &',payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,' byte(s)\r\n']
                 jsr negate_payload_counter
-                pla
-                and #$7f
-                .debug_print ["recv_response: T=&",DP_A," payload_size=&",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,"\r\n"]
+                .debug_print ['r_r: (negated: &',payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,'\r\n']
+                pla             ;restore response type
+                
                 cmp #RESPONSE_ERROR
                 beq got_error
-                clc
-
-done:
                 rts
-
+                
 got_error:
                 .debug_print ["recv_response: handling error.\r\n"]
                 
@@ -2022,6 +1890,19 @@ more:
                 sec
                 rts
                 .pend
+
+;-------------------------------------------------------------------------
+; 
+; Receive response and discard the payload. For use when the response
+; is either an error (which will be handled by recv_response) or not
+; (and it doesn't really matter what exactly).
+;
+; exit: X = response type
+;
+recv_response_and_discard_payload:
+                jsr recv_response
+                tax
+                ; fall through to discard_remaining_payload
                 
 ;-------------------------------------------------------------------------
 ;
@@ -2029,7 +1910,7 @@ more:
 ; 
 ; preserves: A; X; Y
 
-discard_remaining_payload: .proc
+discard_remaining_payload: .block
                 pha
 loop:
                 jsr recv_payload_byte
@@ -2037,7 +1918,7 @@ loop:
                 
                 pla
                 rts
-                .pend
+                .bend
 
 ;-------------------------------------------------------------------------
 ;
@@ -2367,7 +2248,7 @@ link_ok:
                 jsr set_payload_counter
                 
                 lda #REQUEST_RESET
-                jsr send_request_n
+                jsr send_request_n_without_restart
 
                 ; reset type
                 txa
@@ -2386,7 +2267,7 @@ link_ok:
                 jsr set_payload_counter
 
                 lda #REQUEST_SET_FILE_HANDLE_RANGE
-                jsr send_request_n
+                jsr send_request_n_without_restart
 
                 lda #blfs_first_handle
                 jsr send_payload_byte
@@ -2753,7 +2634,7 @@ not_save:
 
                 ; Send the request.
                 lda #REQUEST_OSFILE
-                jsr send_request_n_and_maybe_restart
+                jsr send_request_n_with_restart
 
                 lda reason
                 jsr send_payload_byte
@@ -2896,7 +2777,7 @@ handle:
                 jsr set_payload_counter
 
                 lda #REQUEST_OSARGS
-                jsr send_request_n_and_maybe_restart
+                jsr send_request_n_with_restart
 
                 lda old_a
                 jsr send_payload_byte
@@ -2967,7 +2848,7 @@ blfs_osbget: .proc
 
                 tax             ;X = file handle
                 lda #REQUEST_OSBGET
-                jsr send_request_1_recv_response_1
+                jsr send_request_1_recv_response_1_without_restart
 
                 .cerror RESPONSE_OSBGET_EOF<RESPONSE_OSBGET,'oops'
                 cpx #RESPONSE_OSBGET_EOF ;C=1 if EOF
@@ -3010,7 +2891,7 @@ blfs_osbput: .proc
                 jsr set_payload_counter
 
                 lda #REQUEST_OSBPUT
-                jsr send_request_n
+                jsr send_request_n_without_restart
 
                 tsx
                 
@@ -3082,7 +2963,7 @@ write:
 read_or_write:
                 
                 lda #REQUEST_OSGBPB
-                jsr send_request_n_and_maybe_restart
+                jsr send_request_n_with_restart
 
                 ; Send reason code.
                 lda reason
@@ -3190,7 +3071,7 @@ close_handle:
                 pha
                 tax
                 lda #REQUEST_OSFIND_CLOSE
-                jsr send_request_1_and_maybe_restart
+                jsr send_request_1_with_restart
                 
                 jsr recv_response_and_discard_payload
 
@@ -3217,7 +3098,7 @@ open:
                 jsr add_y_to_payload_counter
 
                 lda #REQUEST_OSFIND_OPEN
-                jsr send_request_n_and_maybe_restart
+                jsr send_request_n_with_restart
 
                 pla             ;open mode
                 jsr send_payload_byte
@@ -3293,7 +3174,7 @@ fsc_opt: .proc
                 jsr set_payload_counter
 
                 lda #REQUEST_OPT
-                jsr send_request_n_and_maybe_restart
+                jsr send_request_n_with_restart
 
                 pla
                 jsr send_payload_byte ;x
@@ -3312,7 +3193,7 @@ fsc_opt: .proc
 ;
 fsc_eof: .proc
                 lda #REQUEST_EOF
-                jsr send_request_1
+                jsr send_request_1_without_restart
 
                 jsr recv_response
 
@@ -3462,7 +3343,7 @@ exec: .fill 4
                 sty payload_counter+0
 
                 pla
-                jsr send_request_n_and_maybe_restart
+                jsr send_request_n_with_restart
 
                 ldy #0
 send_loop:
@@ -3930,7 +3811,7 @@ loop:
                 lda #REQUEST_READ_STRING_VERBOSE
 +
                 ldx #server_string_buffer_size
-                jsr send_request_1
+                jsr send_request_1_without_restart
 
                 jsr recv_response
 
@@ -4113,7 +3994,7 @@ relocator=$7f00            ;where to put the relocating code
 
                 lda #REQUEST_GET_ROM
                 ldx #0
-                jsr send_request_1_and_maybe_restart
+                jsr send_request_1_with_restart
 
                 jsr recv_response
 
@@ -4269,7 +4150,7 @@ old_escape_mode: .fill 1
                 jsr set_payload_counter
 
                 lda #REQUEST_VOLUME_BROWSER
-                jsr send_request_n_and_maybe_restart
+                jsr send_request_n_with_restart
 
                 lda #REQUEST_VOLUME_BROWSER_RESET
                 jsr send_payload_byte
@@ -4342,7 +4223,7 @@ getch:
                 jsr set_payload_counter
 
                 lda #REQUEST_VOLUME_BROWSER
-                jsr send_request_n
+                jsr send_request_n_without_restart
 
                 lda #REQUEST_VOLUME_BROWSER_KEYPRESS
                 jsr send_payload_byte
@@ -4507,7 +4388,7 @@ parasite_oshwm_page=$08              ;you just have to assume...
 sure:
                 lda #REQUEST_SPEED_TEST
                 ldx #REQUEST_SPEED_TEST_RESET
-                jsr send_request_1_recv_response_1
+                jsr send_request_1_recv_response_1_without_restart
 
                 jsr pcprint
                 .text "Host",255
@@ -4528,7 +4409,7 @@ test_done:
 
                 lda #REQUEST_SPEED_TEST
                 ldx #REQUEST_SPEED_TEST_DONE
-                jsr send_request_1_recv_response_1
+                jsr send_request_1_recv_response_1_without_restart
 
                 jsr print_server_string
 
@@ -4590,7 +4471,7 @@ loop:
 
                 ; Initiate request.
                 lda #REQUEST_SPEED_TEST
-                jsr send_request_n
+                jsr send_request_n_without_restart
 
                 ; Send sub-type.
                 lda #REQUEST_SPEED_TEST_TEST
@@ -4636,7 +4517,7 @@ loop:
 
                 ; Tell the server what happened.
                 lda #REQUEST_SPEED_TEST
-                jsr send_request_n
+                jsr send_request_n_without_restart
 
                 lda #REQUEST_SPEED_TEST_STATS
                 jsr send_payload_byte
@@ -5123,7 +5004,7 @@ temp_ptr=$a8                    ;ugh.
                 jsr set_payload_counter
 
                 lda #REQUEST_START_DISK_IMAGE_FLOW
-                jsr send_request_n
+                jsr send_request_n_without_restart
                 
                 ; send OSHWM
                 lda #131
@@ -5164,7 +5045,7 @@ temp_ptr=$a8                    ;ugh.
                 jsr fetch_dword
 
                 lda #REQUEST_SET_DISK_IMAGE_CAT
-                jsr send_request_n
+                jsr send_request_n_without_restart
 
                 jsr send_file_data
 
@@ -5195,7 +5076,7 @@ parts_loop:
                 ; request more OSWORD stuff
                 lda #REQUEST_NEXT_DISK_IMAGE_PART
                 ldx #0          ;unused
-                jsr send_request_1
+                jsr send_request_1_without_restart
 
                 jsr recv_response
                 pha
@@ -5270,7 +5151,7 @@ parts_loop:
                 jsr fetch_dword
 
                 lda #REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT
-                jsr send_request_n
+                jsr send_request_n_without_restart
 
                 jsr send_file_data
 
@@ -5310,7 +5191,7 @@ parts_done:
 
                 lda #REQUEST_FINISH_DISK_IMAGE_FLOW
                 ldx #0
-                jsr send_request_1
+                jsr send_request_1_without_restart
 
                 jsr recv_response
                 jsr recv_file_data_to_oshwm

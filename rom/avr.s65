@@ -50,35 +50,10 @@ via=link_avr_via
                 
 ;-------------------------------------------------------------------------
 ;
-; Configure a prepared VIA for the receive operation. Must have
-; previously called via_prepare!
+; prepare VIA for sending.
 ;
 ; preserves: X; Y; C
-;
-via_begin_recv: .proc
-                lda #0
-                sta via+2
-                rts
-                .pend
-                
-;-------------------------------------------------------------------------
-;
-; Configure a prepared VIA for a send operation. Must have previously
-; called via_prepare!
-;
-; preserves: X; Y; C
-;
-via_begin_send: .proc
-                lda #255
-                sta via+2
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-; Prepare VIA for use, setting it up for the initial send operation.
 via_prepare: .proc
-                pha
-
                 lda via+11
                 sta scratch_old_acr
                 and #%01100001  ;TxxSSSLx - T = disable PB7 toggle, S
@@ -94,8 +69,6 @@ via_prepare: .proc
                 ora #2          ;enable port B input latching
                 sta via+11
 
-                jsr via_begin_send
-
                 lda via+12
                 and #$0f
                 ora #$e0        ;CB2=1, CB1 -ve edge
@@ -106,11 +79,80 @@ via_prepare: .proc
                 ora #$80        ;CB2=1, handshake mode, CB1 -ve edge
                 sta via+12
 
-                pla
+                lda #255
+                sta via+2
 
                 rts
                 .pend
+;-------------------------------------------------------------------------
 
+begin_send: .proc
+                pha             ;save packet type
+                
+                jsr via_prepare
+                
+                lda payload_counter+0
+                cmp #1
+                bne n_bytes
+
+                lda payload_counter+1
+                ora payload_counter+2
+                ora payload_counter+3
+                bne n_bytes
+
+                pla             ;restore packet type
+                and #$7f
+                jmp send_byte
+
+n_bytes:
+                pla
+                ora #$80
+                jsr send_byte
+
+                lda payload_counter+0
+                jsr send_byte
+
+                lda payload_counter+1
+                jsr send_byte
+                
+                lda payload_counter+2
+                jsr send_byte
+
+                lda payload_counter+3
+                jmp send_byte
+
+                .pend
+
+;-------------------------------------------------------------------------
+
+begin_recv: .proc
+                lda #0
+                sta via+2
+
+                jsr recv_byte
+
+                bpl set_payload_counter_1
+
+                and #$7f
+                pha
+
+                jsr recv_byte
+                sta payload_counter+0
+
+                jsr recv_byte
+                sta payload_counter+1
+
+                jsr recv_byte
+                sta payload_counter+2
+
+                jsr recv_byte
+                sta payload_counter+3
+
+                pla
+                rts
+                
+                .pend
+                
 ;-------------------------------------------------------------------------
 ;
 ; The opposite of via_prepare, setting it up again for non-use.
@@ -219,7 +261,7 @@ link_startup: .proc
 check_avr_ready:
                 lda #REQUEST_AVR
                 ldx #REQUEST_AVR_READY
-                jsr send_request_1
+                jsr send_request_1_without_restart
 
                 jsr recv_response
 
@@ -663,106 +705,18 @@ nop:
 
 ; Link interface.
 
-; Name of the link, as included in the ROM name.
 link_name="AVR "..format("%04x",avr.via)
-
-; Link subtype, for links that aren't otherwise distinguishable from
-; the PC end.
 link_subtype=AVR_SUBTYPE_AVR
-
-; Prepare link. Get everything ready and put it in send mode.
-;
-; Preserve A/X/Y.
-link_prepare=avr.via_prepare
-
-; Prepare link. As link_prepare, but: if it's possible to check the
-; link status reasonably quickly (milliseconds...), do that, and
-; re-initialise the link if anything has gone wrong. If the
-; reinitialise fails, call link_status_brk.
-;
-; This should be considered the default, and link_prepare the special
-; case, as the FS uses this entry point for pretty much every request
-; except for a few where throughput is important or the risk of
-; programs having trampled on the relevant hardware is low:
-; 
-; . OSBPUT/OSBGET/EOF (performance in a loop is bad enough as it
-; stands, no point making it worse...),
-;
-; . BLFS init (which immediately follows a link_startup - no point
-; redoing it)
-;
-; . some of the * command stuff (if it's happening, it was because the
-; server responded to a REQUEST_STAR_COMMAND, so the link is good)
-;
-; . print_server_string (same justification as the * commands, and it
-; helps a bit with throughput)
-;
-; Preserve A/X/Y.
-;
-; It's fine for link_prepare_and_maybe_restart to just point to the
-; link_prepare routine.
-link_prepare_and_maybe_restart=link_prepare
-
-; Unrepare link. Do whatever's necessary.
-link_unprepare=avr.via_unprepare
-
-; Put prepared link in receive mode.
-link_begin_recv=avr.via_begin_recv
-
-; Send 1 byte over the link as part of the header: the type byte, or
-; one of the size bytes.
-;
-; Preserve X/Y.
-link_send_header_byte=avr.send_byte
-
-; Send 1 byte over the link as part of the payload. 
-; payload_counter is the byte's negated offset.
-;
-; Preserve X/Y.
+link_begin_send_without_restart=avr.begin_send
+link_begin_send_with_restart=avr.begin_send
 link_send_payload_byte=avr.send_byte
-
-; Receive 1 byte over the link as part of the header: the type byte,
-; or one of the size bytes.
-;
-; Preserve X/Y.
-link_recv_header_byte=avr.recv_byte
-
-; Receive 1 byte over the link as part of the payload.
-; payload_counter is the byte's negated offset.
-;
-; Preserve X/Y.
+link_begin_recv=avr.begin_recv
 link_recv_payload_byte=avr.recv_byte
-
-; Initialise link and determine status.
-;
-; exit: C=0 if link OK
-;       C=1 if link not OK
-;           X = offset into link_status_text of text describing status,
-;               terminated by 0 (this is indeed not consistent)
+link_unprepare=avr.via_unprepare
 link_startup=avr.link_startup
 link_status_text=avr.status_text
-                
-; Send/receive file data from/to host/parasite memory.
-;
-; File data is whatever's left in the current packet according to
-; payload_counter, the non-zero negated number of bytes left. The data
-; is read/written starting at payload_addr (a 32-bit address that's
-; already known to point into host/parasite memory as appropriate).
-;
-; May modify payload_counter.
-;
-; If not set, link-agnostic code will be used, that uses
-; link_(send|recv)_byte* for everything. (This will probably be a lot
-; less efficient! For the AVR, for example, the throughput is <25%
-; that of the link-specific versions.)
 link_send_file_data_parasite=avr.send_file_data_parasite_pagewise
 link_send_file_data_host=avr.send_file_data_host_pagewise
 link_recv_file_data_parasite=avr.recv_file_data_parasite_pagewise
 link_recv_file_data_host=avr.recv_file_data_host_pagewise
-
-; Number of iterations to perform when doing *SPEEDTEST. Each
-; iteration sends or receives from PAGE to HIMEM, and it's just a
-; question of how long you fancy waiting.
-;
-; Must be an even number.
 link_num_speedtest_iterations=10

@@ -199,7 +199,7 @@ Shows BeebLink ROM version, Git commit and build date/time.
 The BeebLink ROM version has a `*` suffix if the ROM was built with a
 modified working copy rather than the exact contents of that commit.
 
-### `BUILD <fsp>`
+### `BUILD <fsp>` (*B/B+*)
 
 Create a text file line by line. Designed for creating `!BOOT`, but
 not much else...
@@ -272,7 +272,7 @@ Change drive on the current volume.
 
 ### `DRIVES`
 
-Shows the list of drives in the current volume.
+Show the list of drives in the current volume.
 
 ### `DUMP <fsp>` (*B/B+*)
 
@@ -459,7 +459,8 @@ Notes:
 
 - when using Opus DDOS/Challenger, do a `*CAT` of the disk before
   embarking on a `*READ`/`*WRITE`, so that the Opus FS can auto-detect
-  the density. You may get spurious disk fault errors otherwise
+  the density. You may get spurious disk fault errors otherwise (this
+  is a BeebLink bug: https://github.com/tom-seddon/beeblink/issues/42)
   
 - the `*` suffix is actually currently meaningless with the Opus
   DDOS/Challenger disk image types, and the whole disk is always read

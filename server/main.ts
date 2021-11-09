@@ -144,6 +144,7 @@ interface ICommandLineOptions {
     pcFolders: string[];
     serial_test_pc_to_bbc: boolean;
     serial_test_bbc_to_pc: boolean;
+    serial_full_size_messages: boolean;
     serial_include: string[] | null;
 }
 
@@ -1392,7 +1393,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
 
             let destIdx = 0;
 
-            if (response.p.length === 1) {
+            if (response.p.length === 1 && !options.serial_full_size_messages) {
                 responseData = Buffer.alloc(3);
 
                 responseData[destIdx++] = response.c & 0x7f;
@@ -1710,6 +1711,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     fullHelpOnly(['--serial-data-verbose'], { action: 'append', nargs: '?', constant: '', help: 'dump raw serial data sent/received (specify devices same as --serial-verbose)' });
     fullHelpOnly(['--serial-test-pc-to-bbc'], { action: 'storeTrue', help: 'run PC->BBC test (goes with T.PC-TO-BBC on the BBC)' });
     fullHelpOnly(['--serial-test-bbc-to-pc'], { action: 'storeTrue', help: 'run BBC->PC test (goes with T.BBC-TO-PC on the BBC)' });
+    fullHelpOnly(['--serial-full-size-messages'], { action: 'storeTrue', help: 'always send full-size messages, and never use any shortened syntax (affects all devices) (may reveal bug(s) in pre-Nov 2021 ROM versions...)' });
     always(['--list-serial-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
 
     // HTTP server (for b2)

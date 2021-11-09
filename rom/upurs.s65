@@ -103,7 +103,7 @@ serbuf:
 ;
 
 startup: .proc
-                jsr prepare
+                jsr prepare_without_restart
 
                 ; lda #%11111111
                 ; sta via.ddrb
@@ -277,10 +277,10 @@ sync_timed_out_2:
 ;
 ; Preserve A/X/Y.
 ;
-prepare_and_maybe_restart: .proc
+prepare_with_restart: .proc
 random_number=$98               ;chosen at random
                 
-                jsr prepare
+                jsr prepare_without_restart
 
                 pha
                 txa
@@ -352,7 +352,7 @@ recv_byte_with_timeout:
 ;
 ; Preserve A/X/Y.
 ; 
-prepare: .proc
+prepare_without_restart: .proc
                 pha
                 txa
                 pha
@@ -388,6 +388,102 @@ prepare: .proc
                 pla
                 rts
                 .pend
+
+;-------------------------------------------------------------------------
+;
+; Begin send.
+;
+
+begin_send_with_restart:
+                jsr prepare_with_restart
+                jmp begin_send
+
+begin_send_without_restart:
+                jsr prepare_without_restart
+                ; fall through to begin_send
+
+begin_send: .block
+                pha             ;save packet type
+
+                stx old_x
+
+                lda payload_counter+0
+                cmp #1
+                bne n_bytes
+
+                lda payload_counter+1
+                ora payload_counter+2
+                ora payload_counter+3
+                bne n_bytes
+
+                pla             ;restore packet type
+                and #$7f        ;clear the N-byte bit
+                bpl finish      ;JMP, in effect
+
+n_bytes:
+                pla             ;restore packet type
+                ora #$80        ;set the N-byte bit
+                jsr send_byte
+
+                lda payload_counter+0
+                jsr send_byte
+
+                lda payload_counter+1
+                jsr send_byte
+                
+                lda payload_counter+2
+                jsr send_byte
+
+                lda payload_counter+3                
+finish:
+                jsr send_byte
+                ldx old_x
+                rts
+                .bend                
+
+;-------------------------------------------------------------------------
+;
+; Begin recv.
+;
+
+begin_recv: .proc
+                stx old_x
+
+                jsr recv        ;receive packet type
+
+                cmp #$80        ;C=1 if N-byte
+                and #$7f
+                bcs n_bytes
+
+                ldx old_x
+                jmp set_payload_counter_1
+
+n_bytes:
+                pha
+
+                jsr recv
+                sta payload_counter+0
+
+                jsr recv
+                sta payload_counter+1
+
+                jsr recv
+                sta payload_counter+2
+
+                jsr recv
+                sta payload_counter+3
+
+                pla
+
+                ldx old_x
+                rts
+
+recv:
+                jsr recv_byte
+                bcc recv
+                rts
+                
+                .pend
                 
 ;-------------------------------------------------------------------------
 ;
@@ -414,27 +510,27 @@ unprepare: .proc
                 .pend
 
 
-;-------------------------------------------------------------------------
-;
-; Put prepared link in receive mode.
-; 
-begin_recv: .proc
-                rts
-                .pend
+; ;-------------------------------------------------------------------------
+; ;
+; ; Put prepared link in receive mode.
+; ; 
+; begin_recv: .proc
+;                 rts
+;                 .pend
 
-;-------------------------------------------------------------------------
-;
-; Send 1 byte over the link as part of the header: the type byte, or
-; one of the size bytes.
-;
-; Preserve X/Y.
-; 
-send_header_byte: .proc
-                stx old_x
-                jsr send_byte
-                ldx old_x
-                rts
-                .pend
+; ;-------------------------------------------------------------------------
+; ;
+; ; Send 1 byte over the link as part of the header: the type byte, or
+; ; one of the size bytes.
+; ;
+; ; Preserve X/Y.
+; ; 
+; send_header_byte: .proc
+;                 stx old_x
+;                 jsr send_byte
+;                 ldx old_x
+;                 rts
+;                 .pend
                 
 ;-------------------------------------------------------------------------
 ; 
@@ -457,24 +553,6 @@ send_payload_byte: .proc
                 jsr send_byte
 
 +
-                ldx old_x
-                rts
-                .pend
-                
-;-------------------------------------------------------------------------
-; 
-; Receive 1 byte over the link as part of the header: the type byte,
-; or one of the size bytes.
-;
-; Preserve X/Y.
-; 
-recv_header_byte: .proc
-                stx old_x
-                
--
-                jsr recv_byte
-                bcc -
-                
                 ldx old_x
                 rts
                 .pend
@@ -1168,16 +1246,21 @@ sent_pages:
 link_name='UPURS '..format("%04x",upurs.via)
 link_subtype=SERIAL_SUBTYPE_UPURS
 
-link_prepare=upurs.prepare
-link_prepare_and_maybe_restart=upurs.prepare_and_maybe_restart
-link_unprepare=upurs.unprepare
+;link_prepare=upurs.prepare
+;link_prepare_and_maybe_restart=upurs.prepare_and_maybe_restart
+; link_prepare_and_maybe_restart_unprepare=upurs.unprepare
+
+link_begin_send_with_restart=upurs.begin_send_with_restart
+link_begin_send_without_restart=upurs.begin_send_without_restart
 
 link_begin_recv=upurs.begin_recv
 
-link_send_header_byte=upurs.send_header_byte
+;link_send_header_byte=upurs.send_header_byte
 link_send_payload_byte=upurs.send_payload_byte
-link_recv_header_byte=upurs.recv_header_byte
+;link_recv_header_byte=upurs.recv_header_byte
 link_recv_payload_byte=upurs.recv_payload_byte
+
+link_unprepare=upurs.unprepare
                 
 link_startup=upurs.startup
 link_status_text=upurs.status_text
