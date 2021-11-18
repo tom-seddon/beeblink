@@ -328,8 +328,29 @@ server via a USB stall.
 See `beeblink.s65`. Follow the existing examples to include the driver
 code for the new type.
 
-Define the following symbols in the link type file. The existing
-driver code should serve as an example.
+There are a bunch of symbols to define in the driver code, and some
+64tass sections for reserving space in zero page.
+
+The existing driver code should serve as an example.
+
+### Zero page ###
+
+To reserve temporary zero page space for the link startup code, create
+a `.section` called `link_startup_workspace`. This consumes space
+somewhere in the $a8...$af area.
+
+To reserve persistent zero page space for the link, create a
+`.section` called `link_workspace`. This goes somewhere in $c0...$cf -
+fitted around whatever the rest of the code needs - so it will be
+preserved as long as the BLFS is active.
+
+If using the NMI region, the `nmi_workspace` section reserves space in
+the NMI zero page area ($a0...$a7) and the `nmi_area` section reserves
+space in the NMI area starting at $d00. Call `claim_nmi` and
+`release_nmi` to claim and release the NMI area. (The UPURS driver
+would serve as an example of this.)
+
+There'll be an assembly error if any of these sections are too large.
 
 ### `link_name` ###
 
