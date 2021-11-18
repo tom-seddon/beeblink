@@ -131,11 +131,7 @@ value, an arbitrary string that identifies the client making the
 request. (This should be different for every Beeb connecting.)
 
 The request body must be `application/binary`, a sequence of bytes:
-the 1-byte message type (bit 7 ignored), and the N-byte payload. The
-payload size is currently deduced from the HTTP content size, and
-isn't included in the data; the current assumption is that whatever is
-sitting between the BBC and the server will convert between this
-format and the logical message format.
+the 1-byte message type (bit 7 ignored), and the N-byte payload.
 
 To handle BREAK, forcibly close the open TCP connection, if there is
 one.
@@ -375,7 +371,7 @@ It's fine for both routines to be the same.
 
 Preserve X/Y. Preserve `payload_counter`.
 
-### `link_send_payload_byte' ###
+### `link_send_payload_byte` ###
 
 Send 1 byte over the link as part of the payload. `payload_counter`
 holds the byte's negated offset.
@@ -387,19 +383,19 @@ Preserve X/Y.
 Prepare to receive a response. Return the response header in A.
 Initialize `payload_counter` to the response payload size.
 
-### `link_recv_payload_byte' ###
+### `link_recv_payload_byte` ###
 
 Receive 1 byte over the link as part of the payload. `payload_counter`
 holds the byte's negated offset.
 
 Preserve X/Y.
 
-### `link_unprepare' ###
+### `link_unprepare` ###
 
 Unrepare link after a request/response sequence. Do whatever's
 necessary.
 
-### `link_startup', `link_status_text' ###
+### `link_startup`, `link_status_text` ###
 
 Initialise link and determine status.
 
@@ -408,7 +404,7 @@ On exit, if link OK, carry clear.
 If link not OK, carry set, and `X` holds offset into
 `link_status_text` of 0-terminated string describing status.
                
-### `link_send_file_data_parasite', `link_send_file_data_host', `link_recv_file_data_parasite', `link_recv_file_data_host' ###
+### `link_send_file_data_parasite`, `link_send_file_data_host`, `link_recv_file_data_parasite`, `link_recv_file_data_host` ###
 
 Send/receive file data from/to host/parasite memory.
 
@@ -424,7 +420,7 @@ These are weak symbols. If not defined, link-agnostic code will be
 used, that simply calls `link_(send|recv)_payload_byte` repeatedly.
 This works, but you probably won't get max throughput...
 
-### `link_num_speedtest_iterations' ###
+### `link_num_speedtest_iterations` ###
 
 Number of iterations to perform when doing `*SPEEDTEST`. Each
 iteration sends or receives from `PAGE` to `HIMEM`, and it's just a
