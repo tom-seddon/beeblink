@@ -368,9 +368,9 @@ Prepare to send a request. A is the request type, and
 prepare for sending the given number of payload bytes.
 
 If it's possible to check the link status reasonably quickly
-(milliseconds...), `link_begin_send_with_restart` should do that,
-and re-initialise the link if anything has gone wrong. If the
-reinitialise fails, call `link_status_brk`.
+(milliseconds...), `link_begin_send_with_restart` should do that, and
+re-initialise the link if anything has gone wrong. If the reinitialise
+fails, return with carry set as per `link_startup`.
 
 The FS uses the `_with_restart` entry point for pretty much every
 request, except for a few where throughput is important or the risk of
@@ -388,7 +388,8 @@ programs having trampled on the relevant hardware is low:
 - `print_server_string` (same justification as the `*` commands, and
   it helps a bit with throughput)
 
-It's fine for both routines to be the same.
+It's fine for both routines to be the same, but make sure then that
+`link_begin_send_with_restart` returns with carry clear...
 
 Preserve X/Y. Preserve `payload_counter`.
 
@@ -415,6 +416,8 @@ Preserve X/Y.
 
 Unrepare link after a request/response sequence. Do whatever's
 necessary.
+
+Preserve X/Y.
 
 ### `link_startup`, `link_status_text` ###
 
@@ -452,3 +455,65 @@ Must be an even number.
 ## Server side
 
 TBD...
+
+# New OSWORD call
+
+OSWORD $99 - perform BeebLink call
+
+Parameter block `B` on entry:
+
+| Value | Description |
+|--
+| `B?0` | Length of input parameter block - must be 20 |
+| `B?1` | Length of output parameter block - must be 20 |
+| `B?2` | 7-bit request code |
+| `B?3` | should be $00 |
+| `B!4` | Address of request payload |
+| `B!8` | Size of request payload |
+| `B!12` | Address for response payload |
+| `B!16` | Max size of response payload |
+
+Addresses are the standard Acorn 32-bit addresses - so when running
+over the Tube, $FFFFxxxx is the I/O processor and other addresses are
+the parasite.
+
+Paramater block `B` on exit:
+
+| Value | Description |
+|--
+| `B?0` | 20 |
+| `B?1` | 20 |
+| `B?2` | 7-bit request code |
+| `B?3` | 7-bit response code |
+| `B!4` | Address of request payload |
+| `B!8` | Size of request payload |
+| `B!12` | Address for response payload |
+| `B!16` | Total size of response payload |
+
+The response code will be >=$80 if something went wrong - good idea to
+set this value to 0 on entry, as that'll cover the case where there's
+no BeebLink ROM. You don't (currently?) get any information about why
+the call failed.
+
+The total size of response payload on exit is the amount the server
+tried to send. If it is greater than the max requested, the data was
+truncated.
+
+Notes:
+
+- it's OK for request and response payload to overlap. The request is
+  sent in its entirety before the response is stored
+
+- don't call this from an interrupt or event handler!
+
+- if the BeebLink FS is inactive at the time of the call, it will
+  sneak in, temporarily initialize itself behind the active filing
+  system's back, do the thing, then try to put things back the way
+  they were afterwards. (It does things this way to prevent the DFS
+  re-seeking the disk to track 0 on next use, something that's a real
+  pain if trying to read or write disk images.) This seems to be
+  reliable, but... YMMV
+  
+- the ROM checks `B?0` and `B?1`, and the call will fail if they're
+  wrong. Current intention is to use these values for API versioning
+  

@@ -237,6 +237,7 @@ export default class Server {
         this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('NEXT_DISK_IMAGE_part', this.handleNextDiskImagePart);
         this.handlers[beeblink.REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT] = new Handler('SET_LAST_DISK_IMAGE_OSWORD_RESULT', this.handleSetLastDiskImageOSWORDResult);
         this.handlers[beeblink.REQUEST_FINISH_DISK_IMAGE_FLOW] = new Handler('FINISH_DISK_IMAGE_FLOW', this.handleFinishDiskImageFlow);
+        this.handlers[beeblink.REQUEST_WRAPPED] = new Handler('REQUEST_WRAPPED', this.handleWrapped);
 
         this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stderr, logPrefix !== undefined);
         this.log.colours = colours;
@@ -271,6 +272,7 @@ export default class Server {
                 if (desc !== undefined) {
                     this.log.p(` (${desc})`);
                 }
+                this.log.p(` (${packet.p.length} (0x${utils.hex8(packet.p.length)}) byte(s)`);
                 this.log.pn('');
 
                 this.log.dumpBuffer(packet.p, 10);
@@ -1112,6 +1114,24 @@ export default class Server {
         this.diskImageFlow = undefined;
 
         return newResponse(beeblink.RESPONSE_DATA, Buffer.concat(buffers));
+    }
+
+    private async handleWrapped(handler: Handler, p: Buffer): Promise<Response> {
+        this.payloadMustBeAtLeast(handler, p, 5);
+
+        const maxResponsePayloadSize = p.readUInt32LE(1);
+
+        const request = new Request(p[0], p.slice(5));
+
+        const response = await this.handleRequest(request);
+
+        const wrappedSize = Math.min(response.p.length, maxResponsePayloadSize);
+        const wrappedResponsePayload = Buffer.alloc(5 + wrappedSize);
+        wrappedResponsePayload.writeUInt8(response.c, 0);
+        wrappedResponsePayload.writeUInt32LE(response.p.length, 1);
+        response.p.copy(wrappedResponsePayload, 5);
+
+        return new Response(beeblink.RESPONSE_DATA, wrappedResponsePayload);
     }
 
     private internalError(text: string): never {

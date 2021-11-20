@@ -107,16 +107,24 @@ pop32zx: .macro
 ; The macro's single argument is a list of items to print. Each item
 ; can be:
 ;
-; string - string is printed as-is using osasci
+; string - string is printed as-is using oswrch
 ;
-; 16-bit integer - hex value of byte at that address is printed
+; 16-bit integer - print byte at that address, 2 hex digits
 ;
-; DP_A, DP_X, DP_Y - print hex value of that register
+; DP_A, DP_X, DP_Y - print register, 2 hex digits
 ;
-; print - always prints using osasci
-; preserves: A; X; Y: p
+; DP_P - print P, 8 chars
 ;
-; debug_print - prints using osasci if the debug verbosity flag is set
+; DP_WORD(A) - print LE word at address A, 4 hex digits
+;
+; DP_DWORD(A) - print LE dword at address A, 8 hex digits
+;
+; DP_IND(A,D) - ldy #D:lda (A),y - print byte, 2 hex digits
+;
+; print - always prints using oswrch
+; preserves: A; X; Y: P
+;
+; debug_print - prints using oswrch if the debug verbosity flag is set
 ; preserves: A; X; Y; P
 
 DP_A=-1
@@ -124,59 +132,105 @@ DP_X=-2
 DP_Y=-3
 DP_P=-4
 
+DP_IND_TYPE=-1
+DP_WORD_TYPE=-2
+DP_DWORD_TYPE=-3
+                
+DP_IND: .sfunction _address,offset,(DP_IND_TYPE,_address,offset)
+DP_WORD: .sfunction _address,(DP_WORD_TYPE,_address)
+DP_DWORD: .sfunction _address,(DP_DWORD_TYPE,_address)
+
 print: .macro items
-                php             ;103=p
-                pha             ;102=a
+                php             ;104=p
+                pha             ;103=a
                 txa
-                pha             ;101=x
+                pha             ;102=x
+                tya
+                pha             ;101=y
                 tsx
-                .for print__item_index=0,print__item_index<len(\items),print__item_index+=1
+                .for _i=0,_i<len(\items),_i+=1
 
-                .if type(\items[print__item_index])==str
+                .if type(\items[_i])==str
 
-                .if len(\items[print__item_index])==1
-                lda #\items[print__item_index][0]
+                .if len(\items[_i])==1
+                lda #\items[_i][0]
                 jsr oswrch
+                .elsif \items[_i]=='\r\n'
+                jsr osnewl
                 .else
                 jsr pcprint
-                .text \items[print__item_index],255
+                .text \items[_i],255
                 .endif
                 
-                .elsif type(\items[print__item_index])==int||type(\items[print__item_index])==bits||type(\items[print__item_index])==code
+                .elsif type(\items[_i])==int||type(\items[_i])==bits||type(\items[_i])==code
                 
-                .if \items[print__item_index]>=0&&\items[print__item_index]<=65535
-                lda \items[print__item_index]
+                .if \items[_i]>=0&&\items[_i]<=65535
+                lda \items[_i]
                 jsr print_hex_byte
-                .elsif \items[print__item_index]==DP_A
+                .elsif \items[_i]==DP_A
+                lda $103,x
+                jsr print_hex_byte
+                .elsif \items[_i]==DP_X
                 lda $102,x
                 jsr print_hex_byte
-                .elsif \items[print__item_index]==DP_X
+                .elsif \items[_i]==DP_Y
                 lda $101,x
                 jsr print_hex_byte
-                .elsif \items[print__item_index]==DP_Y
-                tya
-                jsr print_hex_byte
-                .elsif \items[print__item_index]==DP_P
-                lda $103,x
+                .elsif \items[_i]==DP_P
+                lda $104,x
                 jsr print_p
                 .else
                 .cerror true,"bad debug_print integer"
                 .endif
 
+                .elsif type(\items[_i])==tuple
+                
+                .if \items[_i][0]==DP_IND_TYPE
+                ldy #\items[_i][2]
+                lda (\items[_i][1]),y
+                jsr print_hex_byte
+                .elsif \items[_i][0]==DP_WORD_TYPE
+                ldx #\items[_i][1]
+                jsr debug_print_hex.word
+                .elsif \items[_i][0]==DP_DWORD_TYPE
+                ldx #\items[_i][1]
+                jsr debug_print_hex.dword
+                .else
+                .error "bad debug_print tuple"
+                .endif
+                
                 .else
 
-                .cerror true,"bad debug_print item: ",\items[print__item_index]," ",type(\items[print__item_index])
+                .cerror true,"bad debug_print item: ",\items[_i]," ",type(\items[_i])
 
                 .endif
                 
                 .next
-                
+
+                pla
+                tay
                 pla
                 tax
                 pla
                 plp
                 .endm
 
+                .section macro_helpers
+debug_print_hex: .proc
+dword:
+                lda 3,x
+                jsr print_hex_byte
+                lda 2,x
+                jsr print_hex_byte
+word:
+                lda 1,x
+                jsr print_hex_byte
+                lda 0,x
+                tsx
+                jmp print_hex_byte
+                .pend
+                .endsection macro_helpers
+                
 ;-------------------------------------------------------------------------
 ;
 ;
@@ -220,4 +274,51 @@ brk_error .macro code,text
                 jsr dobrk
                 .text \code,\text,0
                 .endm
+                
+;-------------------------------------------------------------------------
+
+branch_same_page .macro target
+                .cerror ((*+2)&$ff00)!=(\target&$ff00),"branch crosses page"
+                .endm
+                
+beq_same_page .macro target
+                .branch_same_page \target
+                beq \target
+                .endm
+
+bne_same_page .macro target
+                .branch_same_page \target
+                bne \target
+                .endm
+
+bmi_same_page .macro target
+                .branch_same_page \target
+                bmi \target
+                .endm
+
+bpl_same_page .macro target
+                .branch_same_page \target
+                bpl \target
+                .endm
+
+bcc_same_page .macro target
+                .branch_same_page \target
+                bcc \target
+                .endm
+
+bcs_same_page .macro target
+                .branch_same_page \target
+                bcs \target
+                .endm
+
+bvc_same_page .macro target
+                .branch_same_page \target
+                bvc \target
+                .endm
+
+bvs_same_page .macro target
+                .branch_same_page \target
+                bvs \target
+                .endm
+
                 

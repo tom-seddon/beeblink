@@ -326,13 +326,14 @@ prepared:
                 pla
                 tax
                 pla
+                clc
                 rts
 
 ; Restart.
 restart:
                 jsr startup.startup2
                 bcc prepared
-                jmp link_status_brk
+                rts
 
 recv_byte_with_timeout:
                 ldy #0
@@ -396,7 +397,8 @@ prepare_without_restart: .proc
 
 begin_send_with_restart:
                 jsr prepare_with_restart
-                jmp begin_send
+                bcc begin_send
+                rts
 
 begin_send_without_restart:
                 jsr prepare_without_restart

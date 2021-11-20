@@ -490,7 +490,10 @@ begin_send: .proc
 
                 pla             ;restore packet type
                 and #$7f        ;clear the N-byte bit
-                jmp send_header_byte ;send header type
+                jsr send_header_byte ;send header type
+
+                clc
+                rts
 
                 .endif
 
@@ -509,7 +512,10 @@ n_bytes:
                 jsr send_header_byte
 
                 lda payload_counter+3
-                jmp send_header_byte
+                jsr send_header_byte
+
+                clc
+                rts
                 .pend
 
 ;-------------------------------------------------------------------------

@@ -85,6 +85,18 @@ blfs_fs_number=93
 ; Handle range
 blfs_first_handle=DEFAULT_FIRST_FILE_HANDLE
 blfs_num_handles=DEFAULT_NUM_FILE_HANDLES
+
+; If true, enable *VOLBROWSER.
+enable_volbrowser=true
+
+; If true, enable *READ and *WRITE.
+enable_disk_image_commands=true
+
+; If true, enable *SPEEDTEST.
+enable_speed_test=true
+
+; If true, enable *SELFUPDATE.
+enable_selfupdate=true
                 .endweak
 
 ;-------------------------------------------------------------------------
@@ -206,6 +218,7 @@ fs_scratch_workspace_start:
                 .struct_section osfind_workspace
                 .struct_section init_workspace
                 .struct_section osfsc_workspace
+                .struct_section osword99_workspace
                 .endu
 
                 ; Workspace for specific * commands.
@@ -288,6 +301,8 @@ server_string_buffer_offset: .fill 1
 *=$8000
                 .dsection header
                 .dsection code
+                .dsection macro_helpers
+                
                 .cerror *>$c000,"ROM overflow"
                 
                 .section header
@@ -416,6 +431,8 @@ svc: .proc
                 beq svc_boot
                 cmp #$04
                 beq svc_star
+                cmp #$08
+                beq svc_osword
                 cmp #$09
                 beq svc_help
                 ; cmp #$0b
@@ -435,6 +452,26 @@ done:
                 rts
                 .pend
 
+;-------------------------------------------------------------------------
+;
+; $08 - Offer unknown OSWORD
+;
+; "An OSWORD call has occurred which is not handled by the MOS. A
+; sideways ROM may claim this call and take whatever action is
+; appropriate. If the call is not claimed then the OSWORD call will be
+; ignored. A filing system which is not currently selected should
+; either ignore any OSWORDs from this source or select itself before
+; executing them."
+;
+svc_osword: .proc
+                ldx $ef
+                cpx #$99
+                bne svc.done
+                jsr osword99
+                lda #0
+                jmp svc.done
+                .pend
+                
 ; ;-------------------------------------------------------------------------
 ; ;
 ; ; $0b - Release NMI
@@ -1496,9 +1533,11 @@ test_payload_counter: .proc
 ; Negate the payload size.
 ;
 ; exit: Z set as per new value
-; preserves: X; Y; C
+; preserves: A; X; Y; C
 ;
 negate_payload_counter: .proc
+                pha
+                
                 lda payload_counter+0
                 eor #$ff
                 sta payload_counter+0
@@ -1514,6 +1553,8 @@ negate_payload_counter: .proc
                 lda payload_counter+3
                 eor #$ff
                 sta payload_counter+3
+
+                pla
 
                 ; fall through to inc_payload_counter
                 .cerror *!=inc_payload_counter,"oops"
@@ -1731,6 +1772,7 @@ reg:
 
 send_request_n_with_restart:
                 jsr link_begin_send_with_restart
+                bcs link_status_brk
                 jmp negate_payload_counter
 
 send_request_n_without_restart:
@@ -1820,11 +1862,9 @@ recv_response_1:
                 
 recv_response: .proc
                 jsr link_begin_recv
-                pha             ;save response type
-                .debug_print ['r_r: response &',DP_A,' + &',payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,' byte(s)\r\n']
+                .debug_print ['r_r: response &',DP_A,' + &',DP_DWORD(payload_counter),' byte(s)\r\n']
                 jsr negate_payload_counter
-                .debug_print ['r_r: (negated: &',payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,'\r\n']
-                pla             ;restore response type
+                .debug_print ['r_r: (negated: &',DP_DWORD(payload_counter),')\r\n']
                 
                 cmp #RESPONSE_ERROR
                 beq got_error
@@ -1873,6 +1913,7 @@ dummy_error_end:
 ;
 ; exit: C = 0: no more bytes in payload, A=0, Z=1
 ;       C = 1: A = byte read from payload
+; preserves: X; Y
 ; 
 recv_payload_byte: .proc
                 jsr test_payload_counter
@@ -2695,7 +2736,7 @@ recv_block_loop:
 
                 .if enable_debug_print
                 jsr negate_payload_counter
-                .debug_print ["Receive &",payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0," @ &",payload_addr+3,payload_addr+2,payload_addr+1,payload_addr+0,"\r\n"]
+                .debug_print ["Receive &",DP_DWORD(payload_counter)," @ &",DP_DWORD(payload_addr),"\r\n"]
                 jsr negate_payload_counter
                 .endif
 
@@ -3444,23 +3485,30 @@ special:
                 jsr recv_payload_byte
                 bcc bad_response_brk
 
+                .if enable_volbrowser
                 cmp #RESPONSE_SPECIAL_VOLUME_BROWSER
                 beq volumes_browser_special
+                .endif
 
+                .if enable_speed_test
                 cmp #RESPONSE_SPECIAL_SPEED_TEST
                 beq speed_test_special
-
                 cmp #RESPONSE_SPECIAL_SPEED_TEST_SURE
                 beq speed_test_special.sure
+                .endif
 
+                .if enable_selfupdate
                 cmp #RESPONSE_SPECIAL_SELFUPDATE
                 beq selfupdate_special
-
+                .endif
+                
                 cmp #RESPONSE_SPECIAL_SRLOAD
                 beq srload_special
 
+                .if enable_disk_image_commands
                 cmp #RESPONSE_SPECIAL_DISK_IMAGE_FLOW
                 beq disk_image_flow_special
+                .endif
 
                 .brk_error 255,"Not supported",0
                 
@@ -5533,5 +5581,230 @@ routine_end:
                 .pend
                 
 ;-------------------------------------------------------------------------
+; 
+; Handle BeebLink OSWORD.
+;
 
+osword99_block: .struct
+input_size: .byte 0
+output_size: .byte 0
+request: .byte 0
+response: .byte 0
+request_addr: .dword 0
+request_size: .dword 0
+response_addr: .dword 0
+response_size: .dword 0                
+                .endstruct
+
+osword99: .proc
+
+                .section osword99_workspace
+block_ptr: .fill 2
+                .send osword99_workspace
+                
+                ;.debug_print ['OSWORD $99: block=&',$f1,$f0,'\r\n']
+                ;.debug_print ['input_size=&',DP_IND($f0,osword99_block.input_size),'\r\n']
+                ;.debug_print ['output_size=&',DP_IND($f0,osword99_block.output_size),'\r\n']
+                ;.debug_print ['request=&',DP_IND($f0,osword99_block.request),'\r\n']
+                ;.debug_print ['request addr=&',DP_IND($f0,osword99_block.request_addr+3),DP_IND($f0,osword99_block.request_addr+2),DP_IND($f0,osword99_block.request_addr+1),DP_IND($f0,osword99_block.request_addr+0),'\r\n']
+                ;.debug_print ['request size=&',DP_IND($f0,osword99_block.request_size+3),DP_IND($f0,osword99_block.request_size+2),DP_IND($f0,osword99_block.request_size+1),DP_IND($f0,osword99_block.request_size+0),'\r\n']
+                ;.debug_print ['response addr=&',DP_IND($f0,osword99_block.response_addr+3),DP_IND($f0,osword99_block.response_addr+2),DP_IND($f0,osword99_block.response_addr+1),DP_IND($f0,osword99_block.response_addr+0),'\r\n']
+                ;.debug_print ['response max size=&',DP_IND($f0,osword99_block.response_size+3),DP_IND($f0,osword99_block.response_size+2),DP_IND($f0,osword99_block.response_size+1),DP_IND($f0,osword99_block.response_size+0),'\r\n']
+                
+                ; Default failure.
+                ldy #osword99_block.response
+                lda #$ff
+                sta ($f0),y
+
+                ; Fail if block is wrong size. 
+                ldy #osword99_block.input_size
+                lda ($f0),y
+                cmp #size(osword99_block)
+                bne done
+                
+                ldy #osword99_block.output_size
+                lda ($f0),y
+                cmp #size(osword99_block)
+                bne done
+
+                ; save $f0 - it'll get overwritten!
+                .push16 $f0
+                
+                jsr is_blfs_active
+                bcc hacky_select ;taken if BLFS inactive
+
+                ;.debug_print ['BLFS is active\r\n']
+
+                
+                ; BLFS is active, so just use the normal calls to set
+                ; things going.
+                .pop16 block_ptr
+                jsr prepare_request
+                jsr send_request_n_with_restart
+
+do_request:
+                ldy #osword99_block.request
+                lda (block_ptr),y
+                ;.debug_print ['wrapped request: &',DP_A,'\r\n']
+                jsr send_payload_byte
+
+                ldy #osword99_block.response_size
+                ldx #4
+-
+                lda (block_ptr),y
+                jsr send_payload_byte
+                iny
+                dex
+                bne -
+
+                ldy #osword99_block.request_addr
+                ldx #payload_addr
+                jsr copy_block_dword
+
+                ;.debug_print ['request addr: &',DP_DWORD(payload_addr),'\r\n']
+
+                jsr send_file_data
+
+                ; a wrapped request always returns DATA, and never
+                ; ERROR. So recv_response will never do a BRK.
+                jsr recv_response
+
+                ; receive actual response type.
+                jsr recv_payload_byte
+                ldy #osword99_block.response
+                sta (block_ptr),y
+
+                ; receive actual response size.
+                ldx #4
+                ldy #osword99_block.response_size
+-
+                jsr recv_payload_byte
+                sta (block_ptr),y
+                iny
+                dex
+                bne -
+
+;                 ldy #0
+; -
+;                 lda (block_ptr),y
+;                 .debug_print [DP_A]
+;                 iny
+;                 cpy #size(osword99_block)
+;                 bne -
+;                 jsr osnewl
+
+                ldy #osword99_block.response_addr
+                ldx #payload_addr
+                jsr copy_block_dword
+
+                ;.debug_print ['recv_file_data: addr=&',DP_DWORD(payload_addr),'\r\n']
+
+                jsr recv_file_data
+
+                ;.debug_print ['recv_file_data done.\r\n']
+
+                rts
+
+hacky_select:
+                ; BLFS is inactive, so hackily select it, then put
+                ; things back the way they were.
+
+                ;.debug_print ['Hacky reselect\r\n']
+
+                ; Pre-claim the NMI area ahead of time, in case the
+                ; link wants it. Don't let the claim take place while
+                ; the FS workspace is in a weird state.
+                ;.debug_print ['Claim NMI\r\n']
+                ;.debug_print ['OSWORD: block=&',$f1,$f0,'\r\n']
+                jsr claim_nmi
+                ;.debug_print ['OSWORD: block=&',$f1,$f0,'\r\n']
+
+                .pop16 $f0
+
+                ; Save off FS workspace.
+                ldx #31
+-
+                lda $b0,x
+                pha
+                dex
+                bpl -
+
+                lda $f0
+                sta block_ptr+0
+                lda $f1
+                sta block_ptr+1
+
+                ; If the link is already started up, skip the link
+                ; startup step.
+                lda #sf_link_started_up
+                jsr get_rom_status_flag
+                bcs +
+                ;.debug_print ['Do link startup\r\n']
+                ;.debug_print ['Before link_startup: OSWORD: block=&',block_ptr+1,block_ptr+0,'\r\n']
+                jsr link_startup
+                ;.debug_print ['After link_startup: OSWORD: block=&',block_ptr+1,block_ptr+0,'\r\n']
+                ;.debug_print ['Link startup result: ',DP_P,'\r\n']
+                bcs hacky_unselect
++
+                
+                ; Don't call send_request_n_with_restart - it'll do a
+                ; BRK if the link restart fails.
+                jsr prepare_request
+                jsr link_begin_send_with_restart
+                bcs hacky_unselect
+                jsr negate_payload_counter
+
+                jsr do_request
+                clc
+                
+hacky_unselect:
+                ; C=1 to call link_status_brk, C=0 to do an RTS.
+
+                ; Restore FS workspace.
+                ldx #-32
+-
+                pla
+                sta $b0+32,x
+                inx
+                bne -
+
+                php
+                jsr release_nmi
+                plp
+                
+                bcs link_status_brk
+done:
+                rts
+                
+copy_block_dword: .proc
+                jsr copy_word
+copy_word:
+                jsr copy_byte
+copy_byte:
+                lda (block_ptr),y
+                sta 0,x
+                iny
+                inx
+                rts
+                .pend
+
+prepare_request:
+                ; Form request payload size - requested size, +5 for
+                ; the request code and payload limit.
+                ldy #osword99_block.request_size
+                ldx #payload_counter
+                jsr copy_block_dword
+
+                ldy #5
+                jsr add_y_to_payload_counter
+
+                ;.debug_print ['total request payload size: &',DP_DWORD(payload_counter),'\r\n']
+
+                lda #REQUEST_WRAPPED
+                rts
+
+                .pend
+
+;-------------------------------------------------------------------------
+                
                 .send code

@@ -102,7 +102,10 @@ begin_send: .proc
 
                 pla             ;restore packet type
                 and #$7f
-                jmp send_byte
+                jsr send_byte
+
+                clc
+                rts
 
 n_bytes:
                 pla
@@ -119,7 +122,10 @@ n_bytes:
                 jsr send_byte
 
                 lda payload_counter+3
-                jmp send_byte
+                jsr send_byte
+
+                clc
+                rts
 
                 .pend
 

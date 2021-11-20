@@ -365,6 +365,18 @@ export const REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT = 0x1e;
 
 export const REQUEST_FINISH_DISK_IMAGE_FLOW = 0x1f;
 
+// Perform a request, but limit the response size from the server.
+//
+// P = 1 byte, request code; 4 bytes, max response payload size; N bytes,
+// request payload
+//
+// Response is DATA:
+//
+// +0 byte - response code
+// +1 dword - actual size of payload, even if greater than max
+// +5 byte[] - payload bytes, up to max requested
+export const REQUEST_WRAPPED = 0x20;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
