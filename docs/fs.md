@@ -356,10 +356,6 @@ The server must be able to find the ROM file - see
 
 This is mainly for my benefit when working on the ROM code.
 
-### `SPEEDTEST`
-
-Performs a benchmark.
-
 ### `TITLE <title>`
 
 Set current drive's title.
@@ -529,7 +525,7 @@ If set, bulk read transfers will be artificially limited to around 1
 KBytes/sec. Ordinary command traffic and bulk writes are unaffected.
 
 This affects `OSFILE` (`*LOAD`, BASIC's `LOAD`, etc.), `OSGBPB`,
-`*RUN`, `*SPEEDTEST`, `*SELFUPDATE` and `*WRITE`.
+`*RUN`, `*SELFUPDATE` and `*WRITE`.
 
 # Non-standard errors
 

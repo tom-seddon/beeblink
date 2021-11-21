@@ -555,9 +555,9 @@ export const RESPONSE_VOLUME_BROWSER = 0x10;
 // Do the volume browser.
 export const RESPONSE_SPECIAL_VOLUME_BROWSER = 0;
 
-// Do the speed test.
-export const RESPONSE_SPECIAL_SPEED_TEST = 1;//check if sure
-export const RESPONSE_SPECIAL_SPEED_TEST_SURE = 2;//don't check if sure
+// No longer used.
+export const RESPONSE_SPECIAL_01 = 1;
+export const RESPONSE_SPECIAL_02 = 2;
 
 export const RESPONSE_SPECIAL_03 = 3;
 export const RESPONSE_SPECIAL_04 = 4;

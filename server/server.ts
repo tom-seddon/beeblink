@@ -197,7 +197,6 @@ export default class Server {
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
             new Command('SELFUPDATE', undefined, this.selfupdateCommand),
             new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand),
-            new Command('SPEEDTEST', undefined, this.speedtestCommand),
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
             new Command('VOLBROWSER', undefined, this.volbrowserCommand),
@@ -1616,17 +1615,6 @@ export default class Server {
 
     private async selfupdateCommand(commandLine: CommandLine): Promise<Response> {
         return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_SELFUPDATE);
-    }
-
-    private async speedtestCommand(commandLine: CommandLine): Promise<Response> {
-        let payload = beeblink.RESPONSE_SPECIAL_SPEED_TEST;
-        if (commandLine.parts.length > 1) {
-            if (commandLine.parts[1].toLowerCase() === 'y') {
-                payload = beeblink.RESPONSE_SPECIAL_SPEED_TEST_SURE;
-            }
-        }
-
-        return newResponse(beeblink.RESPONSE_SPECIAL, payload);
     }
 
     private async titleCommand(commandLine: CommandLine): Promise<Response> {

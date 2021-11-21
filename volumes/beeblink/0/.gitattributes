@@ -9,3 +9,6 @@ B.AVR2 diff=bbcbasic
 B.TUBE diff=bbcbasic
 T.PC-TO-BBC diff=bbcbasic
 T.BBC-TO-PC diff=bbcbasic
+$.SPEEDTEST diff=bbcbasic
+$.SPEEDTEST2 diff=bbcbasic
+$.SPEEDTEST3 diff=bbcbasic
