@@ -42,7 +42,7 @@ build_script:
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
         Push-Location
-        cd ./rom
+        cd ./beeb
         ../tools/snmake
 
         cd .build
