@@ -6,6 +6,14 @@ TASS?=64tass
 PYTHON?=python
 endif
 
+##########################################################################
+##########################################################################
+
+# https://stackoverflow.com/a/665045/1618406
+
+lcase = $(subst A,a,$(subst B,b,$(subst C,c,$(subst D,d,$(subst E,e,$(subst F,f,$(subst G,g,$(subst H,h,$(subst I,i,$(subst J,j,$(subst K,k,$(subst L,l,$(subst M,m,$(subst N,n,$(subst O,o,$(subst P,p,$(subst Q,q,$(subst R,r,$(subst S,s,$(subst T,t,$(subst U,u,$(subst V,v,$(subst W,w,$(subst X,x,$(subst Y,y,$(subst Z,z,$1))))))))))))))))))))))))))
+
+ucase = $(subst a,A,$(subst b,B,$(subst c,C,$(subst d,D,$(subst e,E,$(subst f,F,$(subst g,G,$(subst h,H,$(subst i,I,$(subst j,J,$(subst k,K,$(subst l,L,$(subst m,M,$(subst n,N,$(subst o,O,$(subst p,P,$(subst q,Q,$(subst r,R,$(subst s,S,$(subst t,T,$(subst u,U,$(subst v,V,$(subst w,W,$(subst x,X,$(subst y,Y,$(subst z,Z,$1))))))))))))))))))))))))))
 
 ##########################################################################
 ##########################################################################
@@ -15,6 +23,7 @@ TASSCMD:=$(TASS) --m65xx -Wall -Wno-implied-reg -C --line-numbers --long-branch
 GIT_VER:=$(shell git log -1 '--format=%cd-%h' '--date=format:%Y%m%d-%H%M%S')
 SHELLCMD:=$(PYTHON) ../submodules/shellcmd.py/shellcmd.py
 SMLOAD_JOIN:=$(PYTHON) ../submodules/beeb/bin/smload_join.py
+PRG2BBC:=$(PYTHON) ../submodules/beeb/bin/prg2bbc.py
 COMMIT:=$(shell git log -1 '--format=%H')
 
 # The ROMs are also copied to drive 1 on the example beeblink volume.
@@ -80,8 +89,8 @@ $(DEST)/beeblink_constants.s65 : ../server/beeblink.ts ../tools/make_constants.p
 ##########################################################################
 
 .PHONY : _update_program
-_update_program : _dest
-	$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=update
+_update_program : _dest $(DEST)/beeblink_constants.s65
+	$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=update IO=1
 
 ##########################################################################
 ##########################################################################
@@ -105,7 +114,8 @@ _upurs_rom : _dest $(DEST)/beeblink_constants.s65
 
 .PHONY : _program
 _program :
-	echo TODO... # $(TASSCMD) --cbm-prg $(STEM).s65 -L$(DEST)/$(STEM).lst -o$(DEST)/$(STEM).prg
+	$(TASSCMD) --cbm-prg $(STEM).s65 -L$(DEST)/$(STEM).lst -o$(DEST)/$(STEM).prg
+	$(PRG2BBC) $(if $(IO),--io) $(DEST)/$(STEM).prg ../volumes/beeblink/0/$$.$(call ucase,$(STEM))
 
 ##########################################################################
 ##########################################################################
