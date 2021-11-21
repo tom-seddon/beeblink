@@ -27,7 +27,7 @@
                 .include "common.s65"
                 .include ".build/beeblink_constants.s65"
                 .include "../submodules/beeb/include/beeb.s65"
-                .include "macros.s65"
+                .include "lib.s65"
 
 ;-------------------------------------------------------------------------
 
@@ -39,7 +39,7 @@
 
 *=$3000
                 .dsection code
-                .dsection macro_helpers
+                .dsection lib_code
                 .cerror *>$3c00,"Code overflow"
 
 ;-------------------------------------------------------------------------

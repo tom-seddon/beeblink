@@ -215,22 +215,6 @@ print: .macro items
                 plp
                 .endm
 
-                .section macro_helpers
-debug_print_hex: .proc
-dword:
-                lda 3,x
-                jsr print_hex_byte
-                lda 2,x
-                jsr print_hex_byte
-word:
-                lda 1,x
-                jsr print_hex_byte
-                lda 0,x
-                tsx
-                jmp print_hex_byte
-                .pend
-                .endsection macro_helpers
-                
 ;-------------------------------------------------------------------------
 ;
 ;
@@ -320,5 +304,25 @@ bvs_same_page .macro target
                 .branch_same_page \target
                 bvs \target
                 .endm
+
+;-------------------------------------------------------------------------
+
+                .section lib_code
+debug_print_hex: .proc
+dword:
+                lda 3,x
+                jsr print_hex_byte
+                lda 2,x
+                jsr print_hex_byte
+word:
+                lda 1,x
+                jsr print_hex_byte
+                lda 0,x
+                tsx
+                jmp print_hex_byte
+                .pend
+                .endsection lib_code
+
+;-------------------------------------------------------------------------
 
                 

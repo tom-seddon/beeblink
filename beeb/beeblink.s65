@@ -43,7 +43,7 @@
                 .include "common.s65"
                 .include ".build/beeblink_constants.s65"
                 .include "../submodules/beeb/include/beeb.s65"
-                .include "macros.s65"
+                .include "lib.s65"
                 
 ;-------------------------------------------------------------------------
 
@@ -293,7 +293,7 @@ server_string_buffer_offset: .fill 1
 *=$8000
                 .dsection header
                 .dsection code
-                .dsection macro_helpers
+                .dsection lib_code
                 
                 .cerror *>$c000,"ROM overflow"
                 
