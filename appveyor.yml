@@ -43,7 +43,7 @@ build_script:
       if ($env:CI_WINDOWS -eq $true) {
         Push-Location
         cd ./beeb
-        ../tools/snmake
+        ../tools/snmake roms
 
         cd .build
         7z a $env:RELEASE_NAME-roms.zip beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_upurs_fe60.rom

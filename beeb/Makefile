@@ -11,7 +11,7 @@ endif
 ##########################################################################
 
 DEST:=.build
-TASSCMD:=$(TASS) --m65xx --nostart -Wall -Wno-implied-reg -C --line-numbers --long-branch
+TASSCMD:=$(TASS) --m65xx -Wall -Wno-implied-reg -C --line-numbers --long-branch
 GIT_VER:=$(shell git log -1 '--format=%cd-%h' '--date=format:%Y%m%d-%H%M%S')
 SHELLCMD:=$(PYTHON) ../submodules/shellcmd.py/shellcmd.py
 SMLOAD_JOIN:=$(PYTHON) ../submodules/beeb/bin/smload_join.py
@@ -50,22 +50,62 @@ endif
 ##########################################################################
 ##########################################################################
 
-.PHONY:build
-build: BUILD_TIME:=$(shell $(SHELLCMD) strftime -d _ '_Y-_m-_d _H:_M:_S')
-build:
-	$(SHELLCMD) mkdir $(DEST)
-	$(PYTHON) ../tools/make_constants.py -o $(DEST)/beeblink_constants.s65 ../server/beeblink.ts 6502
+BUILD_TIME:=$(shell $(SHELLCMD) strftime -d _ '_Y-_m-_d _H:_M:_S')
 
+.PHONY : all
+all : programs roms
+
+.PHONY : programs
+programs: _update_program
+
+.PHONY : roms
+roms : _avr_rom _tube_serial_rom _upurs_rom
+	@echo ---
+	@$(PYTHON) ../tools/sha1sum.py -x '$(VER)' -x '$(BUILD_TIME)' -x '$(COMMIT)' .build/beeblink_tube_serial.rom .build/beeblink_avr_fe60.rom .build/beeblink_upurs_fe60.rom
+
+##########################################################################
+##########################################################################
+
+.PHONY : _dest
+_dest:
+	$(SHELLCMD) mkdir $(DEST)
+
+##########################################################################
+##########################################################################
+
+$(DEST)/beeblink_constants.s65 : ../server/beeblink.ts ../tools/make_constants.py
+	$(PYTHON) ../tools/make_constants.py -o "$@" "$<" 6502
+
+##########################################################################
+##########################################################################
+
+.PHONY : _update_program
+_update_program : _dest
+	$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=update
+
+##########################################################################
+##########################################################################
+
+.PHONY : avr_rom
+_avr_rom : _dest $(DEST)/beeblink_constants.s65
 # 65120 = $fe60 - can't figure out how to get the $ through without
 # making a mess...	
 	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=avr_fe60 ROM_BEEB_NAME=AVRFE60 LINK=avr CMD_PREFIX=AVR "EXTRA_ARGS=-Dlink_avr_via=65120"
 
+.PHONY : tube_serial_rom
+_tube_serial_rom : _dest $(DEST)/beeblink_constants.s65
 	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=tube_serial ROM_BEEB_NAME=TS LINK=tube_serial CMD_PREFIX=TS
 
+.PHONY : upurs_rom
+_upurs_rom : _dest $(DEST)/beeblink_constants.s65
 	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=upurs_fe60 ROM_BEEB_NAME=UPUFE60 LINK=upurs CMD_PREFIX=U "EXTRA_ARGS=-Dlink_upurs_via=65120"
 
-	@echo ---
-	@$(PYTHON) ../tools/sha1sum.py -x '$(VER)' -x '$(BUILD_TIME)' -x '$(COMMIT)' .build/beeblink_tube_serial.rom .build/beeblink_avr_fe60.rom .build/beeblink_upurs_fe60.rom
+##########################################################################
+##########################################################################
+
+.PHONY : _program
+_program :
+	echo TODO... # $(TASSCMD) --cbm-prg $(STEM).s65 -L$(DEST)/$(STEM).lst -o$(DEST)/$(STEM).prg
 
 ##########################################################################
 ##########################################################################
@@ -91,13 +131,13 @@ build:
 # saving on an option. But then, it probably doesn't hurt to be
 # explicit.)
 # 
-.PHONY:_rom
-_rom: _EXTRA_ARGS:="-DVERSION=\"$(VER)\"" "-DBUILD_TIME=\"$(BUILD_TIME)\"" "-DCOMMIT=\"$(COMMIT)\"" -Dlink_$(LINK)=true $(EXTRA_ARGS)
-_rom: STEM:=$(DEST)/beeblink_$(ROM_SUFFIX)
-_rom:
-	$(TASSCMD) beeblink.s65 -L$(STEM).lst -o$(STEM).rom $(_EXTRA_ARGS)
+.PHONY : _rom
+_rom : _EXTRA_ARGS:="-DVERSION=\"$(VER)\"" "-DBUILD_TIME=\"$(BUILD_TIME)\"" "-DCOMMIT=\"$(COMMIT)\"" -Dlink_$(LINK)=true $(EXTRA_ARGS)
+_rom : STEM:=$(DEST)/beeblink_$(ROM_SUFFIX)
+_rom :
+	$(TASSCMD) --nostart beeblink.s65 -L$(STEM).lst -o$(STEM).rom $(_EXTRA_ARGS)
 
-	$(TASSCMD) beeblink.s65 -L$(STEM)-test.lst -o$(STEM)-test.rom $(_EXTRA_ARGS) -Dblfs_fs_number=94 -Dblfs_first_handle=160 -Dblfs_prefix=\"$(CMD_PREFIX)\"
+	$(TASSCMD) --nostart beeblink.s65 -L$(STEM)-test.lst -o$(STEM)-test.rom $(_EXTRA_ARGS) -Dblfs_fs_number=94 -Dblfs_first_handle=160 -Dblfs_prefix=\"$(CMD_PREFIX)\"
 
 	$(SHELLCMD) mkdir $(BEEB_DEST)
 	$(SHELLCMD) copy-file $(STEM).rom $(BEEB_DEST)/R.$(ROM_BEEB_NAME)
@@ -118,8 +158,8 @@ endif
 ##########################################################################
 ##########################################################################
 
-.PHONY:clean
-clean:
+.PHONY : clean
+clean :
 	$(SHELLCMD) rm-tree $(DEST)
 
 ##########################################################################
@@ -130,5 +170,5 @@ clean:
 # in it.
 # 
 
-.PHONY:tom
-tom:
+.PHONY : tom
+tom :
