@@ -466,16 +466,12 @@ Parameter block `B` on entry:
 |--
 | `B?0` | Length of input parameter block - must be 20 |
 | `B?1` | Length of output parameter block - must be 20 |
-| `B?2` | 7-bit request code |
-| `B?3` | should be $00 |
+| `B?2` | Request code |
+| `B?3` | Space for response code - set to $00 |
 | `B!4` | Address of request payload |
 | `B!8` | Size of request payload |
 | `B!12` | Address for response payload |
 | `B!16` | Max size of response payload |
-
-Addresses are the standard Acorn 32-bit addresses - so when running
-over the Tube, $FFFFxxxx is the I/O processor and other addresses are
-the parasite.
 
 Paramater block `B` on exit:
 
@@ -483,23 +479,43 @@ Paramater block `B` on exit:
 |--
 | `B?0` | 20 |
 | `B?1` | 20 |
-| `B?2` | 7-bit request code |
-| `B?3` | 7-bit response code |
+| `B?2` | Request code |
+| `B?3` | Response code |
 | `B!4` | Address of request payload |
 | `B!8` | Size of request payload |
 | `B!12` | Address for response payload |
 | `B!16` | Total size of response payload |
 
-The response code will be >=$80 if something went wrong - good idea to
-set this value to 0 on entry, as that'll cover the case where there's
-no BeebLink ROM. You don't (currently?) get any information about why
-the call failed.
+Addresses are the standard Acorn 32-bit addresses - so when running
+over the Tube, $FFFFxxxx is the I/O processor and other addresses are
+the parasite.
 
 The total size of response payload on exit is the amount the server
 tried to send. If it is greater than the max requested, the data was
 truncated.
 
-Notes:
+## Request codes
+
+| Code | Description
+|--
+| $00 | ROM presence check
+| $01...$7f | Server request
+| $80...$ff | Reserved 
+
+To check for the BeebLink ROM, set `B?3` to 0 before making request
+$00, then check `B?3` on exit - it will be non-zero if the ROM is
+present.
+
+## Response codes
+
+| Code | Description
+|--
+| $00 | Reserved
+| $01...$7f | Server response
+| $80 | Error
+| $81...$ff | Reserved
+
+## Notes
 
 - it's OK for request and response payload to overlap. The request is
   sent in its entirety before the response is stored
@@ -516,4 +532,3 @@ Notes:
   
 - the ROM checks `B?0` and `B?1`, and the call will fail if they're
   wrong. Current intention is to use these values for API versioning
-  

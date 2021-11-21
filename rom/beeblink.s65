@@ -5263,15 +5263,21 @@ block_ptr: .fill 2
                 sta ($f0),y
 
                 ; Fail if block is wrong size. 
-                ldy #osword99_block.input_size
+                dey             ;output size
                 lda ($f0),y
                 cmp #size(osword99_block)
                 bne done
                 
-                ldy #osword99_block.output_size
+                dey             ;input size
                 lda ($f0),y
                 cmp #size(osword99_block)
                 bne done
+
+                ; Catch invalid requests.
+                ldy #osword99_block.request
+                lda ($f0),y
+                beq done        ;taken if ROM presence check
+                bmi done        ;taken if >=$80
 
                 ; save $f0 - it'll get overwritten!
                 .push16 $f0
