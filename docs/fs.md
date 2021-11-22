@@ -31,8 +31,8 @@ a BeebLink banner.
 	
 	>
 
-The suggested command line for the server will make some files
-accessible. Do a `*.` to see them.
+The suggested command line for the server will make the BeebLink tools
+accessible. Do a `*.` to get a catalagoue. (Exact output may differ.)
 
     >*.
     Volume: beeblink
@@ -44,9 +44,9 @@ accessible. Do a `*.` to see them.
 	
     >
 
-Try Shift+BREAK, or `CH."ROMS"`.
+Or press SHIFT+BREAK to launch them. (The tools are discussed below.)
 
-It's supposed to feel fairly familiar.
+It's supposed to feel a lot like using the ordinary DFS.
 
 ## Creating and changing volumes
 
@@ -518,6 +518,41 @@ system 4 (DFS) when called upon to identify itself via
 On a Master 128 it will also install temporary filing system entries
 for `DISC` and `DISK` (which will just be ignored if the DFS is also
 present).
+
+# BeebLink tools
+
+The BeebLink tools can be found in the `beeblink` volume. Press
+SHIFT+BREAK to load the menu, and select the tool of interest.
+
+## Speed Test
+
+Measure bandwidth between server and client. If running over the Tube,
+parasite bandwidth is measured as well.
+
+Don't take the results too seriously. You may not see these figures in
+actual use.
+
+(I use this when modifying the transfer code, to check whether my
+changes have made a meaningful improvement or not.)
+
+## ROM Update
+
+Update BLFS ROM contents. For use when upgrading to a new version of
+BeebLink (or for me when updating the ROM code).
+
+Unzip the updated ROMs zip to the directory you run the server from.
+The ROM Update program will get the server to transfer the appropriate
+ROM (according to link type) to the Beeb.
+
+If the BLFS ROM is non-writeable, the update process will leave the
+updated version in RAM. Note the `*SAVE` command line printed; use
+this to save a copy of the ROM somewhere, which you can use with your
+usual EPROM/EEPROM/etc. tools.
+
+If the BLFS ROM is writeable, it will be overwritten. Press CTRL+BREAK
+as prompted to reset the Beeb. (Note the `*SAVE` command line... if
+anything goes wrong after reset, you can potentially use this to save
+a copy of the previous ROM somewhere.)
 
 # Non-standard errors
 

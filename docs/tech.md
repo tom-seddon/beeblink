@@ -512,8 +512,8 @@ present.
 |--
 | $00 | Reserved
 | $01...$7f | Server response
-| $80 | Error
-| $81...$ff | Reserved
+| $80...$fe | Reserved
+| $ff | Error
 
 ## Notes
 

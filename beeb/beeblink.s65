@@ -1219,19 +1219,6 @@ store:
                 
 ;-------------------------------------------------------------------------
 ;
-;
-toupper: .proc
-                cmp #'a'
-                bcc done
-                cmp #'z'+1
-                bcs done
-                and #$df
-done:
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
 ; Print some spaces.
 ;
 ; preserves: X; Y
@@ -1242,73 +1229,6 @@ print_1_space:
                 lda #' '
                 jmp oswrch
                 
-;-------------------------------------------------------------------------
-;
-; Print string pointed to by Y/X.
-;
-; entry: YX = points to string
-;
-printyx: .proc
-                .push16 print_ptr
-                stx print_ptr+0
-                sty print_ptr+1
-                jsr print_print_ptr
-                .pop16 print_ptr
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-
-print_print_ptr: .proc
-                ldx #print_ptr
-loop:
-                lda (0,x)
-                cmp #255
-                beq done
-                tay
-                .push16zx
-                tya
-                jsr oswrch
-                .pop16zx
-                jsr add1z16
-                jmp loop
-done:
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-
-pcprint: .proc
-                php
-                pha
-                txa
-                pha
-                tya
-                pha
-                .push16 print_ptr
-                tsx
-                lda $107,x
-                sta print_ptr+0
-                lda $108,x
-                sta print_ptr+1
-                ldx #print_ptr
-                jsr add1z16
-                jsr print_print_ptr
-                tsx
-                lda print_ptr+0
-                sta $107,x
-                lda print_ptr+1
-                sta $108,x
-                .pop16 print_ptr
-                pla
-                tay
-                pla
-                tax
-                pla
-                plp
-                rts
-                .pend
-
 ;-------------------------------------------------------------------------
 
 print_bool_c: .proc
@@ -1369,19 +1289,6 @@ no_newline:
 
 ;-------------------------------------------------------------------------
 ;
-; Calls OSBYTE with X=0 and Y=255
-;
-; entry: A = OSBYTE to call
-; exit: as per whichever OSBYTE it was
-; 
-osbyte_x00_yff: .proc
-                ldx #0
-                ldy #$ff
-                jmp osbyte
-                .pend
-
-;-------------------------------------------------------------------------
-;
 ; Get length of CR-terminated string.
 ;
 ; entry: X = ZP address of pointer to string
@@ -1416,51 +1323,6 @@ sev: .proc
                 rts
                 .pend
                 
-;-------------------------------------------------------------------------
-;
-; Add a small constant value to a 16-bit value in zero page.
-;
-; entry: X = zero page address of 16-bit value
-; exit: Z set if value became zero
-; preserves: A; X; Y; C
-;
-add3z16: .proc
-                jsr add1z16
-                jsr add1z16
-                .pend
-add1z16: .block
-                inc 0,x
-                bne done
-                inc 1,x
-done:
-                rts
-                .bend
-
-;-------------------------------------------------------------------------
-;
-; Add Y to a 16-bit value in zero page.
-;
-; entry: X = zero page address of 16-bit value
-;        Y = value to add
-; preserves: A; X; Y; P
-;
-; TODO - does this really need to preserve anything any more?
-;
-addyz16: .proc
-                php
-                pha
-                clc
-                tya
-                adc 0,x
-                sta 0,x
-                bcc addyz16_done
-                inc 1,x
-addyz16_done:
-                pla
-                plp
-                rts
-                .pend
-
 ;-------------------------------------------------------------------------
 ;
 ; Set payload size.
@@ -1572,79 +1434,6 @@ done:
                 rts
                 .bend
                 
-;-------------------------------------------------------------------------
-
-p_bit: .macro set,reset
-                asl a
-                pha
-                .if \set==\reset
-                lda #\set
-                .else
-                lda #\reset
-                bcs +
-                lda #\set
-+
-                .endif
-                jsr oswrch
-                pla
-                .endm                
-                
-print_p: .proc
-                p_bit "N","n"
-                p_bit "V","v"
-                p_bit "-","-"
-                p_bit "B","b",
-                p_bit "D","d"
-                p_bit "I","i"
-                p_bit "Z","z"
-                p_bit "C","c",
-                rts
-                
-                .pend
-                
-;-------------------------------------------------------------------------
-
-print_hex_z32: .proc
-                lda 3,x
-                jsr print_hex_byte
-                lda 2,x
-                jsr print_hex_byte
-                lda 1,x
-                jsr print_hex_byte
-                lda 0,x
-                ; fall through
-                .pend
-                
-;-------------------------------------------------------------------------
-
-print_hex_byte: .proc
-                pha
-                jsr get_ascii_hi_nybble
-                jsr oswrch
-                pla
-                pha
-                jsr get_ascii_lo_nybble
-                jsr oswrch
-                pla
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-
-get_ascii_hi_nybble:
-                lsr a
-                lsr a
-                lsr a
-                lsr a
-get_ascii_lo_nybble:
-                and #$0f
-                sed
-                clc
-                adc #$90
-                adc #$40
-                cld
-                rts
-
 ;-------------------------------------------------------------------------
 
 dobrk: .proc
@@ -5269,13 +5058,13 @@ block_ptr: .fill 2
                 lda #$ff
                 sta ($f0),y
 
-                ; Fail if block is wrong size. 
-                dey             ;output size
+                ; Fail if block is wrong size.
+                ldy #osword99_block.input_size
                 lda ($f0),y
                 cmp #size(osword99_block)
                 bne done
                 
-                dey             ;input size
+                iny             ;output size
                 lda ($f0),y
                 cmp #size(osword99_block)
                 bne done

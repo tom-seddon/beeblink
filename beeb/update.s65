@@ -37,23 +37,442 @@
 
 ;-------------------------------------------------------------------------
 
-*=$3000
+*=$7000
                 .dsection code
                 .dsection lib_code
-                .cerror *>$3c00,"Code overflow"
+                .cerror *>$7c00,"Code overflow"
 
 ;-------------------------------------------------------------------------
 
-                .section zp
+recv_addr:=$3000
                 
+;-------------------------------------------------------------------------
+
+                .section zp
+roms_table: .fill 2
+print_ptr: .fill 2
+header_ptr: .fill 2
+addr0: .fill 2
+addr1: .fill 2
                 .endsection zp
 
 ;-------------------------------------------------------------------------
 
+is_beeblink=$80
+is_writeable=$40
+                
+;-------------------------------------------------------------------------
 
                 .section code
 
-                lda #65
-                jmp oswrch
+start:
+                jsr header
+                
+                lda #$aa
+                ldx #$00
+                ldy #$ff
+                jsr osbyte
+
+                stx roms_table+0
+                sty roms_table+1
+
+                lda $f4
+                sta old_rom
+
+                lda #15
+                sta rom
+roms_loop:
+                ldy rom
+                lda #0
+                sta beeblink_roms,y ;assume not BeebLink
+                
+                lda (roms_table),y
+                beq next_rom    ;taken if no ROM in this slot
+
+                sty $f4
+                sty $fe30
+
+                ldx #beeblink_name.length-1
+check_name_loop:
+                lda $8009,x
+                cmp beeblink_name,x
+                bne next_rom
+                dex
+                bpl check_name_loop
+
+                ; this is a BeebLink ROM of some kind.
+                lda rom
+                jsr get_ascii_lo_nybble
+                jsr oswrch
+
+                ldx rom
+                lda beeblink_roms,x
+                ora #is_beeblink
+                sta beeblink_roms,x
+
+                jsr pcprint
+                .text ': ',255
+                
+                lda #$00
+                sta header_ptr+0
+                lda #$80
+                sta header_ptr+1
+
+                jsr print_header_info
+
+                ; is it writeable?
+                php
+                sei
+                lda $8008       ;ROM version number
+                tax             ;X = original value
+                eor #$ff        ;A = inverted value
+
+                sta $8008
+
+                ; Loop until stable value read - work around EEPROMs
+                ; that return junk after an attempted write.
+-
+                ldy $8008
+                cpy $8008
+                bne -
+
+                cmp $8008       ;Z=0 if ROM, Z=1 if RAM
+                php
+                pla
+                and #2          ;A>=0 if RAM
+                stx $8008       ;restore original version
+                plp
+
+                cmp #0
+                beq is_rom
+
+is_ram:
+                ldx rom
+                lda beeblink_roms,x
+                ora #is_writeable
+                sta beeblink_roms,x
+                jmp check_osword_99
+
+is_rom:
+                jsr pcprint
+                .text ' (NOT WRITEABLE)',255
+                
+check_osword_99:
+                
+                ; this is a BeebLink ROM. But does it support OSWORD
+                ; $99? Do a fake OSWORD service call, directly, to
+                ; find out.
+                lda #0
+                sta presence_check.response
+                sta presence_check.request
+                
+                ldx #<presence_check
+                ldy #>presence_check
+                jsr call_osword_99
+
+                lda presence_check.response
+                bne printed_details
+
+                ldx rom
+                lda #0
+                sta beeblink_roms,x
+                
+                jsr pcprint
+                .text ' (TOO OLD)',255
+
+printed_details:
+                jsr osnewl
+
+next_rom:
+                dec rom
+                bpl roms_loop
+
+                jsr pcprint
+                .text '\r\nWhich ROM (0-9, A-F, SPACE=refresh)? ',255
+
+get_xdigit_loop:
+                jsr osrdch
+                bcs finish
+                cmp #' '
+                beq start
+                jsr toupper
+                tay             ;save actual char pressed
+                cmp #'0'
+                bcc get_xdigit_loop
+                cmp #'9'+1
+                bcs maybe_alpha
+                sec
+                sbc #'0'
+                jmp got_xdigit
+maybe_alpha:
+                cmp #'A'
+                bcc get_xdigit_loop
+                cmp #'F'+1
+                bcs get_xdigit_loop
+                sec
+                sbc #'A'-10
+got_xdigit:
+                sta rom
+                tax
+                lda beeblink_roms,x
+                and #is_beeblink
+                beq get_xdigit_loop
+
+                tya
+                jsr oswrch      ;show actual char pressed
+                jsr osnewl
+
+                ; clear receive buffer
+                lda #<recv_addr
+                sta addr0+0
+                lda #>recv_addr
+                sta addr0+1
+                ldx #$40        ;16 KB
+                lda #0
+                tay
+-
+                sta (addr0),y
+                iny
+                bne -
+                inc addr0+1
+                dex
+                bne -
+
+                lda rom
+                sta $f4
+                sta $fe30
+
+                ; receive new ROM
+                ldx #<get_rom
+                ldy #>get_rom
+                jsr call_osword_99
+
+                lda get_rom+3
+                cmp #RESPONSE_DATA
+                beq got_rom
+
+                .print ['Unexpected response: &',get_rom+3,'\r\n']
+                jmp finish
+
+got_rom:
+                jsr header
+
+                jsr pcprint
+                .text 'Update ROM: ',255
+
+                lda rom
+                jsr get_ascii_lo_nybble
+                jsr oswrch
+
+                jsr pcprint
+                .text '\r\n\r\nOld: ',255
+
+                lda #$00
+                sta header_ptr+0
+                lda #$80
+                sta header_ptr+1
+                jsr print_header_info
+
+                jsr pcprint
+                .text '\r\n\r\nNew: ',255
+
+                lda #<recv_addr
+                sta header_ptr+0
+                lda #>recv_addr
+                sta header_ptr+1
+                jsr print_header_info
+
+                .print ['\r\n\r\nTo save ROM:\r\n*SAVE ROM ',DP_DWORD(get_rom+12),' + ',DP_DWORD(get_rom+16),'\r\n']
+
+                ldx rom
+                lda beeblink_roms,x
+                and #is_writeable
+                beq finish
+
+                jsr pcprint
+                .text '\r\nUpdate (Y/N)?',255
+
+get_yn_loop:
+                jsr osrdch
+                bcs finish
+                jsr toupper
+
+                cmp #'N'
+                bne maybe_y
+
+                jsr oswrch
+                jsr osnewl
+                jmp finish
+
+maybe_y:
+                cmp #'Y'
+                bne get_yn_loop
+
+                jsr oswrch
+                jsr osnewl
+
+                ; swap recv buffer and ROM
+                php
+                sei
+                lda #<recv_addr
+                sta addr0+0
+                lda #>recv_addr
+                sta addr0+1
+
+                lda #$00
+                sta addr1+0
+                lda #$80
+                sta addr1+1
+
+                ldx #$40        ;16 KB
+                ldy #0
+-
+                lda (addr0),y
+                pha
+                lda (addr1),y
+                sta (addr0),y
+                pla
+                sta (addr1),y
+                iny
+                bne -
+                inc addr0+1
+                inc addr1+1
+                dex
+                bne -
+                plp
+
+                ; just in case there's still a *FX200,3 in effect, for
+                ; whatever reason...
+                lda #200
+                ldx #0
+                ldy #0
+                jsr osbyte
+
+                ;           0123456789012345678901234567890123456789
+                .print ['\r\nOld ROM is still in memory. To save:\r\n*SAVE ROM ',DP_DWORD(recv_addr),'+4000\r\n\r\nNow press CTRL+BREAK']
+
+                sei
+-
+                jmp -
+                
+finish:
+                lda old_rom
+                sta $f4
+                sta $fe30
+                rts
+
+;-------------------------------------------------------------------------
+
+header: .proc
+                jsr pcprint
+                .text 22,7
+                .text 'BeebLink ROM Update\r\n\r\n',255
+                rts
+                .pend
+                
+;-------------------------------------------------------------------------
+;
+; do a fake OSWORD $99 call directly via the service entry of the
+; current ROM (which of course should be a BeebLink ROM).
+; 
+call_osword_99: .proc
+                lda #$99
+                sta $ef         ;OSWORD A
+                stx $f0         ;OSWORD X
+                sty $f1         ;OSWORD Y
+                
+                lda #$08        ;unrecognised OSWORD - AUG p322
+                ldx $f4         ;ROM number
+                ldy #0          ;don't think it matters
+                jmp $8003
+                .pend
+                
+;-------------------------------------------------------------------------
+
+print_header_info: .proc
+                ; print name
+                ldy #9
+                jsr printz
+                
+                iny ; skip 0
+
+                jsr pcprint
+                .text 135,"- ",255
+
+                ; print version
+                jsr printz
+
+                ; print build time?
+                ldy #7
+                lda (header_ptr),y ;copyright offset
+                tay
+
+                ; (header_ptr),y = 0
+                iny
+
+                ; (header_ptr),y = '('
+                iny
+                
+                ; (header_ptr),y = 'C'
+                iny
+                
+                ; (header_ptr),y = ')'
+                iny
+                
+                ; (header_ptr),y = ' ' if there's a build time string
+                lda (header_ptr),y
+                jsr print_hex_byte
+                cmp #32
+                bne done
+
+                jsr pcprint
+                .text " -",255
+
+                ; fall through
+printz:
+                lda (header_ptr),y
+                beq done
+                jsr oswrch
+                iny
+                jmp printz
+done:
+                rts
+                
+                .pend
+
+;-------------------------------------------------------------------------
+
+
+                
+;-------------------------------------------------------------------------
+
+beeblink_name: .block
+                .text "BeebLink ("
+length=*-beeblink_name
+                .bend
+
+beeblink_roms: .fill 16
+old_rom: .fill 1
+rom: .fill 1
+
+presence_check: .block
+                .byte $14
+                .byte $14
+request:
+                .byte $00       ;presence check request
+response:
+                .byte $00       ;response
+                .dword 0,0,0,0
+                .bend
+
+get_rom: .block
+                .byte $14
+                .byte $14
+                .byte REQUEST_GET_ROM
+                .byte 0
+                .dword 0,0
+                .dword $ffff0000|recv_addr,$4000
+                .bend
                 
                 .endsection code
+                
