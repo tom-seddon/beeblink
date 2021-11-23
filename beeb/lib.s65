@@ -554,3 +554,20 @@ print_p: .proc
 ;-------------------------------------------------------------------------
 
                 .endsection lib_code
+
+;-------------------------------------------------------------------------
+
+osword_99_block: .struct request,request_addr,request_size,response_addr,response_size
+input_size: .byte 22;\block_size
+output_size: .byte 22;\block_size
+request: .byte \request
+response: .fill 1
+flags: .fill 1
+fs_id: .fill 1                
+request_addr: .dword \request_addr
+request_size: .dword \request_size
+response_addr: .dword \response_addr
+response_size: .dword \response_size
+                .endstruct
+                
+;-------------------------------------------------------------------------

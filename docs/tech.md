@@ -463,28 +463,32 @@ OSWORD $99 - perform BeebLink call
 Parameter block `B` on entry:
 
 | Value | Description |
-|--
-| `B?0` | Length of input parameter block - must be 20 |
-| `B?1` | Length of output parameter block - must be 20 |
+| ---
+| `B?0` | Length of input parameter block - must be 22 |
+| `B?1` | Length of output parameter block - must be 22 |
 | `B?2` | Request code |
 | `B?3` | Space for response code - set to $00 |
-| `B!4` | Address of request payload |
-| `B!8` | Size of request payload |
-| `B!12` | Address for response payload |
-| `B!16` | Max size of response payload |
+| `B?4` | Reserved - must be $00 |
+| `B?5` | Reserved - set to $00 |
+| `B!6` | Address of request payload |
+| `B!10` | Size of request payload |
+| `B!14` | Address for response payload |
+| `B!18` | Max size of response payload |
 
 Paramater block `B` on exit:
 
 | Value | Description |
-|--
-| `B?0` | 20 |
-| `B?1` | 20 |
+| ---
+| `B?0` | 22 |
+| `B?1` | 22 |
 | `B?2` | Request code |
 | `B?3` | Response code |
-| `B!4` | Address of request payload |
-| `B!8` | Size of request payload |
-| `B!12` | Address for response payload |
-| `B!16` | Total size of response payload |
+| `B?4` | Reserved |
+| `B?5` | FS ID of BeebLink ROM that handled the request |
+| `B!6` | Address of request payload |
+| `B!10` | Size of request payload |
+| `B!14` | Address for response payload |
+| `B!18` | Total size of response payload |
 
 Addresses are the standard Acorn 32-bit addresses - so when running
 over the Tube, $FFFFxxxx is the I/O processor and other addresses are
@@ -497,7 +501,7 @@ truncated.
 ## Request codes
 
 | Code | Description
-|--
+| ---
 | $00 | ROM presence check
 | $01...$7f | Server request
 | $80...$ff | Reserved 
@@ -509,7 +513,7 @@ present.
 ## Response codes
 
 | Code | Description
-|--
+| ---
 | $00 | Reserved
 | $01...$7f | Server response
 | $80...$fe | Reserved

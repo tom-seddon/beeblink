@@ -163,14 +163,14 @@ check_osword_99:
                 ; $99? Do a fake OSWORD service call, directly, to
                 ; find out.
                 lda #0
-                sta presence_check.response
-                sta presence_check.request
+                sta presence_check+osword_99_block.response
+                sta presence_check+osword_99_block.request
                 
                 ldx #<presence_check
                 ldy #>presence_check
                 jsr call_osword_99
 
-                lda presence_check.response
+                lda presence_check+osword_99_block.response
                 bne printed_details
 
                 ldx rom
@@ -455,24 +455,28 @@ beeblink_roms: .fill 16
 old_rom: .fill 1
 rom: .fill 1
 
-presence_check: .block
-                .byte $14
-                .byte $14
-request:
-                .byte $00       ;presence check request
-response:
-                .byte $00       ;response
-                .dword 0,0,0,0
-                .bend
+presence_check: .dstruct osword_99_block,0,0,0,0,0
 
-get_rom: .block
-                .byte $14
-                .byte $14
-                .byte REQUEST_GET_ROM
-                .byte 0
-                .dword 0,0
-                .dword $ffff0000|recv_addr,$4000
-                .bend
+get_rom: .dstruct osword_99_block,REQUEST_GET_ROM,0,0,$ffff0000|recv_addr,$4000
+
+; presence_check: .block
+;                 .byte $14
+;                 .byte $14
+; request:
+;                 .byte $00       ;presence check request
+; response:
+;                 .byte $00       ;response
+;                 .dword 0,0,0,0
+;                 .bend
+
+; get_rom: .block
+;                 .byte $14
+;                 .byte $14
+;                 .byte REQUEST_GET_ROM
+;                 .byte 0
+;                 .dword 0,0
+;                 .dword $ffff0000|recv_addr,$4000
+;                 .bend
                 
                 .endsection code
                 
