@@ -1935,7 +1935,7 @@ init_blfs: .proc
 ; entry: X = offset into link_status_text
 ; 
 link_status_brk: .proc
-                .debug_print ['init_blfs failed: X=&',DP_X,'\r\n']
+                .debug_print ['bad link status: X=&',DP_X,'\r\n']
                 lda #0
                 sta brkthunk+0
 
