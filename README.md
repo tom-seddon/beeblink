@@ -39,9 +39,12 @@ need the full kit with the PLD.
 
 Connect the Tube serial board to the BBC's Tube connector, connect any
 second processor to the Tube serial board, use the jumper to select
-Comms mode, and connect the device to your PC. If using Windows,
-you'll need to
+Comms mode, and connect the device to your PC.
+
+If using Windows, you'll need to
 [tweak one of the device settings](./docs/ftdi_latency_timer.md).
+
+If using macOS, you're good to go straight away!
 
 If you've got some way of getting files to your BBC already, copy
 `beeblink_tube_serial.rom` from the ROMs zip and load it on your BBC;
@@ -55,11 +58,14 @@ USB serial adapter. Connect UPURS cable to BBC's user port connector
 and USB serial adapter, connect USB serial adapter to PC.
 
 If using Windows, you'll need to
-[tweak one of the device settings](./docs/ftdi_latency_timer.md). If
-using macOS Catalina, you'll need to install
-[the FTDI virtual COM port driver](https://www.ftdichip.com/Drivers/VCP.htm).
+[tweak one of the device settings](./docs/ftdi_latency_timer.md).
 
-There's no bootstrap process for the UPURS cable - use the UPURS tools
+If using macOS 10.15 Catalina, you'll need to install
+[the FTDI virtual COM port driver](https://www.ftdichip.com/Drivers/VCP.htm).
+[**UPURS BeebLink does not currently work on macOS 11 Big Sur**](https://github.com/tom-seddon/beeblink/issues/79) -
+apologies.
+
+There's no bootstrap process for the UPURS cable. Use the UPURS tools
 to get `beeblink_upurs_fe60.rom` copied onto your BBC.
 
 [There are some notes about using BeebLink with the UPURS cable](./docs/upurs.md).
