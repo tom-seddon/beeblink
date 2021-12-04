@@ -173,8 +173,8 @@ function UInt32(b0: number, b1: number, b2: number, b3: number): number {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function delayMS(ms: number) {
-    await new Promise((resolve, reject) => setTimeout(() => resolve(), ms));
+async function delayMS(ms: number): Promise<void> {
+    await new Promise<void>((resolve, reject) => setTimeout(() => resolve(), ms));
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -234,7 +234,7 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
     try {
         data = await utils.fsReadFile(filePath);
     } catch (error) {
-        if (error.code === 'ENOENT') {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
             if (!mustExist) {
                 return;
             }
@@ -352,70 +352,12 @@ async function isGit(folderPath: string): Promise<boolean> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-interface IShouldOpenSerialDeviceResult {
-    shouldOpen: boolean;
-    reason: string;
-}
-
-// SerialPort ver 8 changed a field name, from `comName' to 'path', in such a
-// way that there's a deprecation warning each time `comName' is used.
-//
-// I still have no idea how to update TypeScript typings, so... this.
-function getSerialPortPath(portInfo: SerialPort.PortInfo): string {
-    return (portInfo as any).path;
-}
-
-function shouldOpenSerialDevice(portInfo: SerialPort.PortInfo, options: ICommandLineOptions): IShouldOpenSerialDeviceResult {
-    function isSerialPortPathInList(paths: string[] | null): boolean {
-        if (paths !== null) {
-            for (const p of paths) {
-                if (utils.getSeparatorAndCaseNormalizedPath(getSerialPortPath(portInfo)) === utils.getSeparatorAndCaseNormalizedPath(p)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    if (isSerialPortPathInList(options.serial_exclude)) {
-        return {
-            shouldOpen: false,
-            reason: 'device explicitly excluded',
-        };
-    }
-
-    if (isSerialPortPathInList(options.serial_include)) {
-        return {
-            shouldOpen: true,
-            reason: 'device explicitly included',
-        };
-    }
-
-    for (const supportedDevice of SUPPORTED_USB_SERIAL_DEVICES) {
-        if (isSerialPortUSBDevice(portInfo, supportedDevice)) {
-            return {
-                shouldOpen: true,
-                reason: `auto-detected device as: ${supportedDevice.description}`,
-            };
-        }
-    }
-
-    return {
-        shouldOpen: false,
-        reason: `unknown device`,
-    };
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 async function listSerialDevices(options: ICommandLineOptions): Promise<void> {
-    const portInfos = await SerialPort.list();
-    process.stdout.write(portInfos.length + ' serial devices:\n');
+    const devices = await getSerialDeviceList(options);
+    process.stdout.write(devices.length + ' serial devices:\n');
 
-    for (let portInfoIdx = 0; portInfoIdx < portInfos.length; ++portInfoIdx) {
-        const p = portInfos[portInfoIdx];
+    for (let deviceIdx = 0; deviceIdx < devices.length; ++deviceIdx) {
+        const device = devices[deviceIdx];
 
         const attrs: string[] = [];
 
@@ -425,27 +367,26 @@ async function listSerialDevices(options: ICommandLineOptions): Promise<void> {
             }
         }
 
-        attr(p.manufacturer, `Manufacturer`);
-        attr(p.serialNumber, `Serial number`);
-        attr(p.vendorId, `Vendor ID`);
-        attr(p.productId, `Product ID`);
-        attr(p.locationId, `Location ID`);
-        attr(p.pnpId, `PNP ID`);
+        attr(device.portInfo.manufacturer, `Manufacturer`);
+        attr(device.portInfo.serialNumber, `Serial number`);
+        attr(device.portInfo.vendorId, `Vendor ID`);
+        attr(device.portInfo.productId, `Product ID`);
+        attr(device.portInfo.locationId, `Location ID`);
+        attr(device.portInfo.pnpId, `PNP ID`);
 
-        const prefix = `${portInfoIdx}. `;
+        const prefix = `${deviceIdx}. `;
 
         const indent = ` `.repeat(prefix.length);
 
-        process.stdout.write(`${prefix}Path: ${getSerialPortPath(p)}\n`);
+        process.stdout.write(`${prefix}Path: ${getSerialPortPath(device.portInfo)}\n`);
         if (attrs.length > 0) {
             process.stdout.write(`${indent}(${attrs.join('; ')})\n`);
         }
 
-        const shouldOpen = shouldOpenSerialDevice(p, options);
-        if (shouldOpen.shouldOpen) {
-            process.stdout.write(`${indent}Will use device: ${shouldOpen.reason}\n`);
+        if (device.shouldOpen) {
+            process.stdout.write(`${indent}Will use device: ${device.shouldOpenReason}\n`);
         } else {
-            process.stdout.write(`${indent}Will not use device: ${shouldOpen.reason}\n`);
+            process.stdout.write(`${indent}Will not use device: ${device.shouldOpenReason}\n`);
         }
     }
 }
@@ -530,16 +471,110 @@ async function listUSBDevices(): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function getSerialPortList(options: ICommandLineOptions): Promise<SerialPort.PortInfo[]> {
-    const portInfos: SerialPort.PortInfo[] = [];
+interface ISerialDevice {
+    portInfo: SerialPort.PortInfo;
+    shouldOpen: boolean;
+    shouldOpenReason: string;
+}
 
-    for (const portInfo of await SerialPort.list()) {
-        if (shouldOpenSerialDevice(portInfo, options).shouldOpen) {
-            portInfos.push(portInfo);
+// SerialPort ver 8 changed a field name, from `comName' to 'path', in such a
+// way that there's a deprecation warning each time `comName' is used.
+//
+// I still have no idea how to update TypeScript typings, so... this.
+function getSerialPortPath(portInfo: SerialPort.PortInfo): string {
+    return (portInfo as any).path;
+}
+
+function isSameDevice(a: SerialPort.PortInfo, b: SerialPort.PortInfo): boolean {
+    if (a.locationId !== undefined && b.locationId !== undefined) {
+        if (a.locationId === b.locationId) {
+            return true;
+        }
+
+        // Any more conditions?
+    }
+
+    return false;
+}
+
+function isSerialPortPathInList(portInfo: SerialPort.PortInfo, paths: string[] | null): boolean {
+    if (paths !== null) {
+        for (const p of paths) {
+            if (utils.getSeparatorAndCaseNormalizedPath(getSerialPortPath(portInfo)) === utils.getSeparatorAndCaseNormalizedPath(p)) {
+                return true;
+            }
         }
     }
 
-    return portInfos;
+    return false;
+}
+
+async function getSerialDeviceList(options: ICommandLineOptions): Promise<ISerialDevice[]> {
+    const portInfos = await SerialPort.list();
+    const ports: ISerialDevice[] = [];
+
+    for (const portInfo of portInfos) {
+        let shouldOpen: boolean | undefined;
+        let reason = '';
+
+        // Explicit include/exclude takes priority over anything else.
+        if (isSerialPortPathInList(portInfo, options.serial_exclude)) {
+            shouldOpen = false;
+            reason = 'explicitly excluded';
+        } else if (isSerialPortPathInList(portInfo, options.serial_include)) {
+            shouldOpen = true;
+            reason = 'explicitly included';
+        }
+
+        // By default, exclude devices that appear multiple times in the list.
+        if (shouldOpen === undefined) {
+            for (const otherPort of ports) {
+                if (isSameDevice(portInfo, otherPort.portInfo)) {
+                    // never open duplicate devices by default.
+                    //
+                    // if the other device should be opened: this one shouldn't,
+                    // because it's the same. can't open the same device twice.
+                    //
+                    // if the other device shouldn't be opened: this one
+                    // shouldn't either. presumably there's a reason the user
+                    // doesn't want the device opened, that applies to all
+                    // copies.
+                    //
+                    // (to override this, there's always the explicit
+                    // include/exclude options.)
+                    shouldOpen = false;
+                    reason = `apparently same device as: ${getSerialPortPath(otherPort.portInfo)}`;
+                    if (otherPort.shouldOpen) {
+                        reason += ` (not going to open same device twice)`;
+                    } else {
+                        reason += ` (${otherPort.shouldOpenReason})`;
+                    }
+                    break;
+                }
+            }
+        }
+
+        // By default, include supported devices.
+        if (shouldOpen === undefined) {
+            for (const supportedDevice of SUPPORTED_USB_SERIAL_DEVICES) {
+                if (isSerialPortUSBDevice(portInfo, supportedDevice)) {
+                    shouldOpen = true;
+                    reason = `auto-detected device as: ${supportedDevice.description}`;
+                }
+            }
+        }
+
+        // By default, don't open anything that wasn't recognised or explicitly
+        // included.
+        if (shouldOpen === undefined) {
+            shouldOpen = false;
+            reason = 'unknown device';
+        }
+
+        ports.push({ portInfo, shouldOpen, shouldOpenReason: reason });
+    }
+
+    return ports;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -579,8 +614,12 @@ async function openSerialPort(portInfo: SerialPort.PortInfo): Promise<SerialPort
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function serialTestPCToBBC2(portInfo: SerialPort.PortInfo): Promise<void> {
-    process.stderr.write(`${getSerialPortPath(portInfo)}: sending bytes...\n`);
+async function serialTestPCToBBC2(device: ISerialDevice): Promise<void> {
+    if (!device.shouldOpen) {
+        return;
+    }
+
+    process.stderr.write(`${getSerialPortPath(device.portInfo)}: sending bytes...\n`);
 
     let numBytesSent = 0;
 
@@ -590,7 +629,7 @@ async function serialTestPCToBBC2(portInfo: SerialPort.PortInfo): Promise<void> 
         for (; ;) {
             await delayMS(1000);
             if (oldNumBytesSent !== numBytesSent) {
-                process.stderr.write(`${getSerialPortPath(portInfo)}: sent ${numBytesSent} bytes\n`);
+                process.stderr.write(`${getSerialPortPath(device.portInfo)}: sent ${numBytesSent} bytes\n`);
                 oldNumBytesSent = numBytesSent;
             }
         }
@@ -598,7 +637,7 @@ async function serialTestPCToBBC2(portInfo: SerialPort.PortInfo): Promise<void> 
 
     void printBytesSent();
 
-    const port = await openSerialPort(portInfo);
+    const port = await openSerialPort(device.portInfo);
 
     for (; ;) {
         for (let i = 0; i < 256; ++i) {
@@ -607,7 +646,7 @@ async function serialTestPCToBBC2(portInfo: SerialPort.PortInfo): Promise<void> 
 
             //process.stderr.write(`${ getSerialPortPath(portInfo) }: ${ i }\n`);
 
-            await new Promise((resolve, reject): void => {
+            await new Promise<void>((resolve, reject): void => {
                 // Despite what the TypeScript definitions appear to say,
                 // the JS code actually only seems to call the callback with
                 // a single argument: an error, or undefined.
@@ -626,16 +665,20 @@ async function serialTestPCToBBC2(portInfo: SerialPort.PortInfo): Promise<void> 
 }
 
 async function serialTestPCToBBC(options: ICommandLineOptions): Promise<void> {
-    for (const portInfo of await getSerialPortList(options)) {
-        void serialTestPCToBBC2(portInfo);
+    for (const device of await getSerialDeviceList(options)) {
+        void serialTestPCToBBC2(device);
     }
 }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function serialTestBBCToPC2(portInfo: SerialPort.PortInfo): Promise<void> {
-    const port = await openSerialPort(portInfo);
+async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
+    if (!device.shouldOpen) {
+        return;
+    }
+
+    const port = await openSerialPort(device.portInfo);
 
     await new Promise<void>((resolve, reject) => {
         port.flush((error: any) => {
@@ -647,7 +690,7 @@ async function serialTestBBCToPC2(portInfo: SerialPort.PortInfo): Promise<void> 
         });
     });
 
-    process.stderr.write(`${getSerialPortPath(portInfo)}: press any key on the BBC now.\n`);
+    process.stderr.write(`${getSerialPortPath(device.portInfo)}: press any key on the BBC now.\n`);
 
     let numBytesReceived = 0;
 
@@ -655,7 +698,7 @@ async function serialTestBBCToPC2(portInfo: SerialPort.PortInfo): Promise<void> 
         for (const got of data) {
             const expected = numBytesReceived & 0xff;
             if (got !== expected) {
-                throw new Error(`${getSerialPortPath(portInfo)}: +${numBytesReceived}: expected ${expected}, got ${got}\n`);
+                throw new Error(`${getSerialPortPath(device.portInfo)}: +${numBytesReceived}: expected ${expected}, got ${got}\n`);
             }
 
             ++numBytesReceived;
@@ -679,7 +722,7 @@ async function serialTestBBCToPC2(portInfo: SerialPort.PortInfo): Promise<void> 
     });
 
     port.on('error', (error: any): void => {
-        throw new Error(`${getSerialPortPath(portInfo)}: error: ${error}`);
+        throw new Error(`${getSerialPortPath(device.portInfo)}: error: ${error}`);
     });
 
     let oldNumBytesReceived = -1;
@@ -687,15 +730,15 @@ async function serialTestBBCToPC2(portInfo: SerialPort.PortInfo): Promise<void> 
         await delayMS(1000);
 
         if (oldNumBytesReceived !== numBytesReceived) {
-            process.stderr.write(`${getSerialPortPath(portInfo)}: received ${numBytesReceived} bytes\n`);
+            process.stderr.write(`${getSerialPortPath(device.portInfo)}: received ${numBytesReceived} bytes\n`);
             oldNumBytesReceived = numBytesReceived;
         }
     }
 }
 
 async function serialTestBBCToPC(options: ICommandLineOptions): Promise<void> {
-    for (const portInfo of await getSerialPortList(options)) {
-        void serialTestBBCToPC2(portInfo);
+    for (const device of await getSerialDeviceList(options)) {
+        void serialTestBBCToPC2(device);
     }
 }
 
@@ -880,7 +923,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 
     const httpServer = http.createServer(async (httpRequest, httpResponse): Promise<void> => {
         async function endResponse(): Promise<void> {
-            await new Promise((resolve, reject) => {
+            await new Promise<void>((resolve, reject) => {
                 httpResponse.end(() => resolve());
             });
         }
@@ -1270,9 +1313,9 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
 
     async function writeSyncData(): Promise<void> {
         const syncData = Buffer.alloc(beeblink.NUM_SERIAL_SYNC_ZEROS + 1);
-        syncData[beeblink.NUM_SERIAL_SYNC_ZEROS] = 1;
+        syncData[syncData.length - 1] = 1;
 
-        await new Promise((resolve, reject): void => {
+        await new Promise<void>((resolve, reject): void => {
             function writeSyncZeros(): boolean {
 
                 // Despite what the TypeScript definitions appear to say,
@@ -1478,7 +1521,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                 }
             }
 
-            await new Promise((resolve, reject) => {
+            await new Promise<void>((resolve, reject) => {
                 port.drain((error: any) => {
                     if (error !== null && error !== undefined) {
                         reject(error);
@@ -1498,7 +1541,11 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
 
         do {
             serialLog.pn(`Sync: flushing buffers...`);
+
+            // https://stackoverflow.com/questions/13013387/clearing-the-serial-ports-buffer
+            //await delayMS(500);
             await flush();
+            //await delayMS(500);
 
             serialLog.pn(`Sync: Waiting for ${beeblink.NUM_SERIAL_SYNC_ZEROS} sync 0x00 bytes...`);
 
@@ -1557,36 +1604,38 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
     const portStateByPortPath = new Map<string, IPortState>();
 
     for (; ;) {
-        for (const portInfo of await getSerialPortList(options)) {
-            const portPath = getSerialPortPath(portInfo);
+        for (const device of await getSerialDeviceList(options)) {
+            if (device.shouldOpen) {
+                const portPath = getSerialPortPath(device.portInfo);
 
-            let value = portStateByPortPath.get(portPath);
-            if (value === undefined) {
-                log.pn(`${portPath}: new serial port`);
-                value = {
-                    server: await createServer('SERIAL', getRomPathsForSerial(options)),
-                    active: false,//not quite active just yet!
-                };
-                portStateByPortPath.set(portPath, value);
-            }
+                let value = portStateByPortPath.get(portPath);
+                if (value === undefined) {
+                    log.pn(`${portPath}: new serial port`);
+                    value = {
+                        server: await createServer('SERIAL', getRomPathsForSerial(options)),
+                        active: false,//not quite active just yet!
+                    };
+                    portStateByPortPath.set(portPath, value);
+                }
 
-            // Some JS nonsense here ? For some reason, the compiler can't tell
-            // that 'value' can no longer be undefined by the time it's used by
-            // the 'then' and 'error' callbacks below, even though it's captured
-            // by them after its active field was set to true, suggesting that
-            // it can tell it wasn't undefined by that point at least. Create a
-            // new variable of the right type here though and it's fine...
-            const portState: IPortState = value;
+                // Some JS nonsense here ? For some reason, the compiler can't tell
+                // that 'value' can no longer be undefined by the time it's used by
+                // the 'then' and 'error' callbacks below, even though it's captured
+                // by them after its active field was set to true, suggesting that
+                // it can tell it wasn't undefined by that point at least. Create a
+                // new variable of the right type here though and it's fine...
+                const portState: IPortState = value;
 
-            if (!portState.active) {
-                portState.active = true;
-                handleSerialDevice(options, portInfo, portState.server).then(() => {
-                    process.stderr.write(`${getSerialPortPath(portInfo)}: connection closed.\n`);
-                    portState.active = false;
-                }).catch((error) => {
-                    process.stderr.write(`${getSerialPortPath(portInfo)}: connection closed due to error: ${error}\n`);
-                    portState.active = false;
-                });
+                if (!portState.active) {
+                    portState.active = true;
+                    handleSerialDevice(options, device.portInfo, portState.server).then(() => {
+                        process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed.\n`);
+                        portState.active = false;
+                    }).catch((error) => {
+                        process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed due to error: ${error}\n`);
+                        portState.active = false;
+                    });
+                }
             }
         }
 
