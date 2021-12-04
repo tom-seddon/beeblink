@@ -582,7 +582,7 @@ export async function saveJSON(filePath: string, obj: any): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export function splitTextFileLines(b: Buffer, encoding: string): string[] {
+export function splitTextFileLines(b: Buffer, encoding: BufferEncoding): string[] {
     const lines = [];
     let i = 0;
     let j = 0;

@@ -16,7 +16,7 @@
   "dependencies": {
     "argparse": "^1",
     "chalk": "^2.4.2",
-    "serialport": "^8.0.8",
+    "serialport": "^9",
     "usb": "^1.6.3"
   },
   "optionalDependencies": {
@@ -24,12 +24,14 @@
   },
   "devDependencies": {
     "@types/argparse": "^1",
-    "@types/chalk": "^2.2.0",
-    "@types/node": "^10.17.48",
-    "@types/serialport": "^7.0.6",
+    "@types/node": "^16",
+    "@types/serialport": "^8",
     "@types/usb": "^1.5.2",
-    "pkg": "^4.4.9",
+    "pkg": "^5",
     "tslint": "^5.20.1",
     "typescript": "^3.9.7"
+  },
+  "engines": {
+    "node": ">=16"
   }
 }
