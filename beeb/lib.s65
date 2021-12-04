@@ -115,6 +115,9 @@ pop32zx: .macro
 ;
 ; DP_P - print P, 8 chars
 ;
+; DP_BYTE(A) - print byte at address A, 2 hex digits (same as
+; providing A as a 16-bit integer)
+;
 ; DP_WORD(A) - print LE word at address A, 4 hex digits
 ;
 ; DP_DWORD(A) - print LE dword at address A, 8 hex digits
@@ -135,7 +138,9 @@ DP_P=-4
 DP_IND_TYPE=-1
 DP_WORD_TYPE=-2
 DP_DWORD_TYPE=-3
-                
+DP_BYTE_TYPE=-4
+
+DP_BYTE: .sfunction _address,(DP_BYTE_TYPE,_address)
 DP_IND: .sfunction _address,offset,(DP_IND_TYPE,_address,offset)
 DP_WORD: .sfunction _address,(DP_WORD_TYPE,_address)
 DP_DWORD: .sfunction _address,(DP_DWORD_TYPE,_address)
@@ -150,7 +155,7 @@ print: .macro items
                 tsx
                 .for _i=0,_i<len(\items),_i+=1
 
-                .if type(\items[_i])==str
+                .if type(\items[_i])==str||type(\items[_i])==bytes
 
                 .if len(\items[_i])==1
                 lda #\items[_i][0]
@@ -189,6 +194,9 @@ print: .macro items
                 ldy #\items[_i][2]
                 lda (\items[_i][1]),y
                 jsr print_hex_byte
+                .elsif \items[_i][0]==DP_BYTE_TYPE
+                lda \items[_i][1]
+                jsr print_hex_byte
                 .elsif \items[_i][0]==DP_WORD_TYPE
                 .if \items[_i][1]>=0 && \items[_i][1]<=254
                 ldx #\items[_i][1]
@@ -206,7 +214,7 @@ print: .macro items
                 .else
                 ldx #3
 -
-                lda \items[_i][1],x
+                lda @w \items[_i][1],x
                 jsr print_hex_byte
                 dex
                 bpl -
@@ -269,13 +277,6 @@ h:
                 .byte >addresses
                 .endm
 
-;-------------------------------------------------------------------------
-
-brk_error .macro code,text
-                jsr dobrk
-                .text \code,\text,0
-                .endm
-                
 ;-------------------------------------------------------------------------
 
 branch_same_page .macro target

@@ -1435,6 +1435,11 @@ done:
                 
 ;-------------------------------------------------------------------------
 
+brk_error .macro code,text
+                jsr dobrk
+                .text \code,\text,0
+                .endm
+
 dobrk: .proc
                 pla
                 sta $a8

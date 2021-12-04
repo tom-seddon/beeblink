@@ -1,0 +1,412 @@
+;-------------------------------------------------------------------------
+;
+; BeebLink - BBC Micro file storage system
+;
+; Copyright (C) 2018, 2019, 2020, 2021 Tom Seddon
+; 
+; This program is free software: you can redistribute it and/or
+; modify it under the terms of the GNU General Public License as
+; published by the Free Software Foundation, either version 3 of the
+; License, or (at your option) any later version.
+; 
+; This program is distributed in the hope that it will be useful, but
+; WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+; General Public License for more details.
+; 
+; You should have received a copy of the GNU General Public License
+; along with this program. If not, see
+; <https://www.gnu.org/licenses/>.
+;
+;-------------------------------------------------------------------------
+;
+; BeebLink UPURS test program
+;
+; Investigate some issues with newer UPURS drivers on macOS/Windows...
+;
+;-------------------------------------------------------------------------
+
+                .include "common.s65"
+                .include ".build/beeblink_constants.s65"
+                .include "../submodules/beeb/include/beeb.s65"
+                .include "lib.s65"
+
+;-------------------------------------------------------------------------
+
+                .virtual $fe60
+via: .dstruct VIA
+                .endv
+
+;-------------------------------------------------------------------------
+
+*=$70
+                .dsection zp
+                .cerror *>$90,"ZP overflow"
+
+;-------------------------------------------------------------------------
+
+*=$1900
+                .dsection code
+                .dsection lib_code
+                .dsection data
+received_data:
+                .cerror *>$3000,"Code overflow"
+
+;-------------------------------------------------------------------------
+
+                .section zp
+print_ptr: .fill 2
+dest: .fill 2
+                .endsection zp
+
+;-------------------------------------------------------------------------
+
+                .section data
+serbuf_max_size=70
+serbuf_overrun_size=8
+serbuf_index: .fill 1
+serbuf_size: .fill 1
+serbuf: .fill serbuf_max_size
+                .endsection data
+
+;-------------------------------------------------------------------------
+
+                .section code
+
+main: .block
+                .print [byte(22)..byte(7)..'Waiting for data...\r\n']
+
+                lda #$80        ;output only
+                ldx #<file_name
+                ldy #>file_name
+                jsr osfind
+                cmp #0
+                bne file_opened
+
+                brk
+                .text 255,"Couldn't open output file",0
+
+file_opened:
+                sta write_data_pblock.handle
+                
+                jsr prepare_via
+
+                jsr reset_dest
+                
+wait_loop:
+                bit $ff
+                bpl +
+
+                lda #$7e        ;acknowledge ESCAPE (AUG p149)
+                jsr osbyte
+                jsr save_buffer
+                jsr close_file
+                rts
+                
++
+                jsr recv_byte
+
+                bcc wait_loop
+
+                ldx #dest
+                sta (0,x)
+
+                jsr add1z16
+
+                lda dest+1
+                cmp #$7c
+                bne +
+                jsr save_buffer
++
+                jmp wait_loop
+
+reset_dest:
+                lda #<received_data
+                sta dest+0
+                sta write_data_pblock.addr+0
+                
+                lda #>received_data
+                sta dest+1
+                sta write_data_pblock.addr+1
+
+                lda #$ff
+                sta write_data_pblock.addr+2
+                sta write_data_pblock.addr+3
+                
+                rts
+
+save_buffer: .proc
+                sec
+
+                lda dest+0
+                sbc #<received_data
+                sta write_data_pblock.count+0
+
+                lda dest+1
+                sbc #>received_data
+                sta write_data_pblock.count+1
+
+                .print ['Begin: &'..format('%04X',received_data),'\r\nEnd: &',DP_WORD(dest),'\r\nCount: &',DP_WORD(write_data_pblock.count),'\r\n']
+                
+                lda write_data_pblock.count+0
+                ora write_data_pblock.count+1
+                beq done        ;taken if nothing to do
+
+                lda #2          ;put bytes, use existing pointer
+                ldx #<write_data_pblock
+                ldy #>write_data_pblock
+                jsr osgbpb
+                bcc done
+
+                jsr close_file
+
+                brk
+                .text 255,"Write failed",0
+                
+done:
+                jsr reset_dest
+                rts
+                .endproc
+                
+close_file:
+                lda #0          ;close file
+                ldy write_data_pblock.handle
+                jmp osfind
+
+write_data_pblock: .block
+handle:
+                .byte 0
+addr:
+                .dword 0
+count:
+                .dword 0
+                .dword 0        ;pointer
+                .endblock
+
+file_name:
+                .text 'D.RECV',13
+                
+                .endblock
+
+;-------------------------------------------------------------------------
+
+prepare_via: .proc
+                lda #0
+                sta serbuf_index
+                sta serbuf_size
+
+                ; lda via.acr
+                ; sta old_acr
+
+                ; No port B latching. Disable PB7 output.
+                lda #$00
+                sta via.acr
+
+                ; lda #%11111111
+                ; sta via.ddrb
+                ; sta via.orb
+
+                lda #%01111101
+                sta via.ddrb
+                lda #%01111100
+                sta via.orb
+
+                rts
+                .endproc
+                
+;-------------------------------------------------------------------------
+                
+recv_byte: .proc
+                lda serbuf_size
+                beq refill
+got_bytes:
+                ldx serbuf_index
+                lda serbuf,x
+                inx
+                cpx serbuf_size
+                bcs exhausted
+
+                stx serbuf_index
+                sec
+                rts
+
+exhausted:
+                ldx #0
+                stx serbuf_size
+                stx serbuf_index
+                sec
+                rts
+
+refill:
+                tya
+                pha
+                jsr fill_serbuf
+                pla
+                tay
+                
+                lda #0
+                sta serbuf_index
+                
+                lda serbuf_size
+                beq no_bytes
+
+                ; .print ['Filled &',DP_BYTE(serbuf_size),'/&'..format('%02X',serbuf_max_size),' byte(s)\r\n']
+                jmp got_bytes
+
+no_bytes:
+                clc
+                rts
+                .endproc
+
+;-------------------------------------------------------------------------
+
+                .align 256
+                
+fill_serbuf: .proc
+                php
+                sei             ; disable interrupts (critical!)
+                ldy #0          ; reset buffer pointer
+                lda #$40        ; assert CTS
+                sta via.irb 
+idle:
+                lda via.irb     ; wait for Tx line idle (low)
+                bmi idle
+
+sb:
+                .rept 12        ;
+                lda via.irb     ; and wait for start bit
+                bmi T0		; via detection delay list 
+                .next
+
+                ; If no start bit detected drop CTS but continue
+                ; looking for start bit
+                ; 
+                ; Using ASL is the faster way to drop CTS while
+                ; continuing to sample
+                ; 
+                ; The alternative, using LDA then STA, would take 2
+                ; extra cycles
+                ; 
+                ; branching to T1/T2 compensates for additional cycles
+                ; already consumed interleaving the ASL/BCS and
+                ; LDA/BMI reduces the worst case sampling interval
+                ; from 6us to 5us. (i.e. 4,6,4,4 becomes 4,5,5,4)
+                asl via.irb     ; (3 + 7)
+                lda via.irb     ; (3 + 3)
+                bcs T3		; (2) or (3)
+                bmi T2		; (2) or (3)
+                lda via.irb     ; (3 + 3)
+                bmi T1		; (2) or (3)
+                .rept 10
+                lda via.irb     ; (3 + 3)
+                bmi T0		; (2) or (3)
+                .next
+                sty serbuf_size
+                plp
+                rts             ; and return 
+
+                ; To implement n byte buffer, CTS is turned off after
+                ; buf top is reached
+                ; 
+                ; This section is exactly 15 cycles, like the original
+                ; code, but only ever drops CTS.
+
+T0:
+
+                ; see note about serbuf_overrun_size. 
+                cpy #serbuf_max_size-serbuf_overrun_size ; (2)  (2)
+T1:
+                bcs xcts        ; (2)  (3)
+T2:
+                nop             ; (2)
+                nop             ; (2)
+                nop             ; (2)
+T3:
+                lda #0		; (2)
+                beq xskip       ; (3)
+xcts:
+                nop             ;      (2)
+                lda #0		;      (2)
+                sta via.irb     ;      (4 + 2)
+xskip:				; (15) (15)
+                
+; sequential bit reads
+
+                ;bit 0 +12
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                nop
+                nop
+
+                ; bit 1 +12
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                nop
+                nop
+                
+                ;bit 2 +10
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                nop
+                
+                ;bit 3 +12
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                nop
+                nop
+                
+                ;bit 4 +10
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                nop
+                
+                ;bit 5 +12
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                nop
+                nop
+                
+                ;bit 6 +10
+                ldx via.irb
+                cpx #$80
+                ror a
+                nop
+                nop
+                iny             ;bump buffer pointer
+
+                ; bit 7 +...
+                ldx via.irb
+                cpx #$80
+                ror a
+                eor #$ff
+
+                ; Note that buffer index is pre-incremented. But fold
+                ; the -1 into the address here. Don't start X at $ff,
+                ; because of the bcs above.
+                
+                sta serbuf-1,y	; save byte in buffer
+                jmp sb		; and loop for next byte start bit
+                .endproc
+
+;-------------------------------------------------------------------------
+
+                .endsection code
+                
