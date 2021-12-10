@@ -1,52 +1,58 @@
 # Tube serial bootstrap process
 
 If you've got no other way of getting files from your PC to your BBC,
-you can copy `beeblink_tube_serial.rom` to the same place you run the
-server from, and run a program on the BBC to get a copy of the ROM
-transferred over.
+you can run a short BBC BASIC program on your BBC and use terminal
+software on your PC to send a copy of the ROM to the BBC.
 
-This assumes you've got a disc drive, so it just saves the ROM (max
-16K) to a file for use with your usual ROM tools.
+If you use a second processor, switch it off. Then type in the
+following program.
 
-    10REM>B.TUBE
-    20MODE1:VDU28,0,5,39,0:DEST%=&3F00
-    30P%=&80:[STA&FEFE:RTS:]
-    40DEFPROCPSEND(A%):IF(?&FEFF AND2)<>0:CALL&80:ENDPROC
-    50DEFPROCSEND(A%):REPEAT:UNTIL?(&FEFF AND2)<>0:CALL&80:ENDPROC
-    60DEFFNPRECV:IF(?&FEFF AND1)<>0:=?&FEFE:ELSE:=-1
-    70DEFFNRECV:REPEAT:UNTIL(?&FEFF AND1)<>0:=?&FEFE
-    80PRINT"WAITING FOR DEVICE"
-    90REPEAT:UNTIL(?&FEFF AND8)<>0
-    100PRINT"SYNC 1"
-    110PROCSEND(&80)
-    120N%=0:R%=300
-    130REPEAT
-    140PROCPSEND(0)
-    150V%=FNPRECV:IFV%>=0:IFV%=0:N%=N%+1:ELSE:N%=0
-    160UNTILN%=R%
-    170PRINT"SYNC 2"
-    180REPEAT
-    190PROCPSEND(0)
-    200V%=FNPRECV
-    210UNTILV%<>0
-    220IFV%<>1:PRINT"SYNC FAILED - RESTARTING":GOTO100
-    230PRINT"SYNC 3"
-    240PROCSEND(1)
-    250:
-    260PRINT"REQUEST ROM"
-    270PROCSEND(&02)
-    280PROCSEND(&00)
-    290PROCSEND(&01)
-    300:
-    310PRINT"AWAIT RESPONSE"
-    320C%=FNRECV:IFC%<>&83:PRINT"UNEXPECTED RESPONSE: &";~C%:STOP
-    330FORI%=0TO3:I%?&70=FNRECV:NEXT:N%=!&70:PRINT"RECEIVING ";N%" BYTES"
-    340N%!DEST%=-1
-    350O%=-(N%-1)
-    360FORI%=0TON%-1
-    370IF((-(N%-1-I%))AND255)=0:X%=FNRECV
-    380I%?DEST%=FNRECV
-    390NEXT
-    400O$="SAVE R.TS "+STR$~DEST%+"+"+STR$~N%+" 0 0"
-    410PRINTO$
-    420OSCLIO$
+    10S%=&FEFF:D%=&FEFE:M%=1:Z%=0
+    20IF(?S%AND8)=Z%:STOP
+    30MODE&87:A%=HIMEM-&4000:MODE1:COLOUR129:CLS:VDU28,0,3,39,0:COLOUR128:CLS
+    40PRINT"FLUSHING...":REPEATUNTIL(?S%ANDM%)=Z%
+    50CLS:PRINT"ADDR: &";~A%;
+    60REPEATREPEATUNTIL(?S%ANDM%)<>Z%:?A%=?D%:A%=A%+1:UNTILFALSE
+
+Run it with `RUN`. If you get a `STOP at line 20`, the Tube Serial
+device wasn't detected - make sure everything is connected!
+
+Wait until the display reads `ADDR: &3C00` or similar. (There may be a
+`FLUSHING...` step to wait for first.) Then send the file from your PC
+or Mac. (See below for the details.)
+
+As the file transfers, the screen should fill with junk. When it
+stops, the transfer is complete. Press ESCAPE to get back to BASIC.
+
+If you've got a disk drive, note the address printed - probably &4000
+or &3C00 - and use `*SAVE` to save 16 KB from that address. For
+example, `*SAVE BLFS 3C00+4000`. Then use your usual tools to get this
+loaded into ROM.
+
+If you use [RTOOL](http://www.boobip.com/software/rom-tool), the ROM
+is hopefully already at the right address for use with its `P`
+command.
+
+# Sending the file from your Windows PC
+
+Download Hercules from
+http://www.hw-group.com/products/hercules/index_en.html
+
+Select the appropriate port, set `Handshake` to `RTS/CTS`, then click
+Open.
+
+Right click the window, and select `Send File` > `Send File...`. Find
+the Tube Serial ROM and click OK.
+
+# Sending the file from your Mac
+
+Download CoolTerm from https://freeware.the-meiers.org/.
+
+Run it and click `Options` on the tool bar. Select the appropriate
+port from the list, set `Flow Control` is set to `CTS`, and click
+`OK`.
+
+Click `Connect` on the tool bar.
+
+Click `Connection` > `Send Text/Binary File...`, select the Tube
+Serial ROM, and click `OK`.
