@@ -69,12 +69,26 @@ serbuf_size: .fill 1
 serbuf: .fill serbuf_max_size
                 .endsection data
 
+upurs: .block
+CTS=$40
+TXD=$80
+RTS=$02
+RXD=$01
+                .endblock
+                
 ;-------------------------------------------------------------------------
 
                 .section code
 
 main: .block
-                .print [byte(22)..byte(7)..'Waiting for data...\r\n']
+                .print [byte(22)..byte(7)]
+                
+                jsr prepare_via
+
+                .print ['Press any key...\r\n']
+                jsr osrdch
+
+                .print ['Waiting for data...\r\n']
 
                 lda #$80        ;output only
                 ldx #<file_name
@@ -89,8 +103,6 @@ main: .block
 file_opened:
                 sta write_data_pblock.handle
                 
-                jsr prepare_via
-
                 jsr reset_dest
                 
 wait_loop:
@@ -208,7 +220,8 @@ prepare_via: .proc
 
                 lda #%01111101
                 sta via.ddrb
-                lda #%01111100
+
+                lda #0
                 sta via.orb
 
                 rts

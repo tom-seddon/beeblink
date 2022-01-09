@@ -90,11 +90,11 @@ $(DEST)/beeblink_constants.s65 : ../server/beeblink.ts ../tools/make_constants.p
 
 .PHONY : _update_program
 _update_program : _dest $(DEST)/beeblink_constants.s65
-	$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=update IO=1
+	$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=update IO=1 DRIVE=0
 
 .PHONY : _uputest_program
 _uputest_program: _dest
-	$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=uputest IO=1
+	$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=uputest IO=1 DRIVE=1
 
 ##########################################################################
 ##########################################################################
@@ -119,7 +119,7 @@ _upurs_rom : _dest $(DEST)/beeblink_constants.s65
 .PHONY : _program
 _program :
 	$(TASSCMD) --cbm-prg $(STEM).s65 -L$(DEST)/$(STEM).lst -o$(DEST)/$(STEM).prg
-	$(PRG2BBC) $(if $(IO),--io) $(DEST)/$(STEM).prg ../volumes/beeblink/0/$$.$(call ucase,$(STEM))
+	$(PRG2BBC) $(if $(IO),--io) $(DEST)/$(STEM).prg ../volumes/beeblink/$(DRIVE)/$$.$(call ucase,$(STEM))
 
 ##########################################################################
 ##########################################################################
