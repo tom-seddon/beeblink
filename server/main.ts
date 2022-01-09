@@ -146,6 +146,7 @@ interface ICommandLineOptions {
     serial_test_bbc_to_pc: boolean;
     serial_full_size_messages: boolean;
     serial_include: string[] | null;
+    serial_test_send_file: string | null;
 }
 
 //const gLog = new utils.Log('', process.stderr);
@@ -353,7 +354,7 @@ async function isGit(folderPath: string): Promise<boolean> {
 /////////////////////////////////////////////////////////////////////////
 
 async function listSerialDevices(options: ICommandLineOptions): Promise<void> {
-    const devices = await getSerialDeviceList(options);
+    const devices = await getAllSerialDevices(options);
     process.stdout.write(devices.length + ' serial devices:\n');
 
     for (let deviceIdx = 0; deviceIdx < devices.length; ++deviceIdx) {
@@ -509,7 +510,7 @@ function isSerialPortPathInList(portInfo: SerialPort.PortInfo, paths: string[] |
     return false;
 }
 
-async function getSerialDeviceList(options: ICommandLineOptions): Promise<ISerialDevice[]> {
+async function getAllSerialDevices(options: ICommandLineOptions): Promise<ISerialDevice[]> {
     const portInfos = await SerialPort.list();
     const ports: ISerialDevice[] = [];
 
@@ -577,6 +578,12 @@ async function getSerialDeviceList(options: ICommandLineOptions): Promise<ISeria
     return ports;
 }
 
+async function getOpenableSerialDevices(options: ICommandLineOptions): Promise<ISerialDevice[]> {
+    const devices = await getAllSerialDevices(options);
+
+    return devices.filter((device) => device.shouldOpen);
+}
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -615,10 +622,6 @@ async function openSerialPort(portInfo: SerialPort.PortInfo): Promise<SerialPort
 /////////////////////////////////////////////////////////////////////////
 
 async function serialTestPCToBBC2(device: ISerialDevice): Promise<void> {
-    if (!device.shouldOpen) {
-        return;
-    }
-
     process.stderr.write(`${getSerialPortPath(device.portInfo)}: sending bytes...\n`);
 
     let numBytesSent = 0;
@@ -665,7 +668,7 @@ async function serialTestPCToBBC2(device: ISerialDevice): Promise<void> {
 }
 
 async function serialTestPCToBBC(options: ICommandLineOptions): Promise<void> {
-    for (const device of await getSerialDeviceList(options)) {
+    for (const device of await getOpenableSerialDevices(options)) {
         void serialTestPCToBBC2(device);
     }
 }
@@ -674,10 +677,6 @@ async function serialTestPCToBBC(options: ICommandLineOptions): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 
 async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
-    if (!device.shouldOpen) {
-        return;
-    }
-
     const port = await openSerialPort(device.portInfo);
 
     await new Promise<void>((resolve, reject) => {
@@ -737,8 +736,58 @@ async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
 }
 
 async function serialTestBBCToPC(options: ICommandLineOptions): Promise<void> {
-    for (const device of await getSerialDeviceList(options)) {
+    for (const device of await getOpenableSerialDevices(options)) {
         void serialTestBBCToPC2(device);
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+async function sendFile(device: ISerialDevice, filePath: string): Promise<void> {
+    const port = await openSerialPort(device.portInfo);
+
+    const fileData = await utils.fsReadFile(filePath);
+
+    const portPath = getSerialPortPath(device.portInfo);
+
+    process.stderr.write(`${portPath}: flush\n`);
+
+    await flushPort(port);
+
+    process.stderr.write(`${portPath}: sending: ${filePath} (${fileData.length} byte(s))\n`);
+
+    const maxChunkSize = 1024;
+
+    for (let chunkBegin = 0; chunkBegin < fileData.length; chunkBegin += maxChunkSize) {
+        const chunkEnd = Math.min(chunkBegin + maxChunkSize, fileData.length);
+
+        const chunk = fileData.slice(chunkBegin, chunkEnd);
+
+        process.stderr.write(`${portPath}: [${chunkBegin},${chunkEnd})\n`);
+
+        await new Promise<void>((resolve, reject): void => {
+            // Despite what the TypeScript definitions appear to say,
+            // the JS code actually only seems to call the callback with
+            // a single argument: an error, or undefined.
+            port.write(chunk, (error: any): void => {
+                if (error !== undefined && error !== null) {
+                    reject(error);
+                } else {
+                    resolve();
+                }
+            });
+        });
+
+        await drainPort(port);
+    }
+
+    process.stderr.write(`${portPath}: sent.\n`);
+}
+
+async function serialTestSendFile(options: ICommandLineOptions, filePath: string): Promise<void> {
+    for (const device of await getOpenableSerialDevices(options)) {
+        void sendFile(device, filePath);
     }
 }
 
@@ -758,6 +807,9 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         return false;
     } else if (options.serial_test_bbc_to_pc) {
         void serialTestBBCToPC(options);
+        return false;
+    } else if (options.serial_test_send_file !== null) {
+        void serialTestSendFile(options, options.serial_test_send_file);
         return false;
     }
 
@@ -1214,6 +1266,30 @@ function isSerialDeviceVerbose(portInfo: SerialPort.PortInfo, verboseOptions: st
     return false;
 }
 
+async function flushPort(port: SerialPort): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+        port.flush((error: any) => {
+            if (error !== undefined && error !== null) {
+                reject(error);
+            } else {
+                resolve();
+            }
+        });
+    });
+}
+
+async function drainPort(port: SerialPort): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+        port.drain((error: any) => {
+            if (error !== null && error !== undefined) {
+                reject(error);
+            } else {
+                resolve();
+            }
+        });
+    });
+}
+
 async function handleSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, server: Server): Promise<void> {
     const serialLog = new utils.Log(getSerialPortPath(portInfo), process.stdout, isSerialDeviceVerbose(portInfo, options.serial_verbose));
 
@@ -1343,19 +1419,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
         return (-(payload.length - 1 - index)) & 0xff;
     }
 
-    async function flush(): Promise<void> {
-        await new Promise<void>((resolve, reject) => {
-            port.flush((error: any) => {
-                if (error !== undefined && error !== null) {
-                    reject(error);
-                } else {
-                    resolve();
-                }
-            });
-        });
-    }
-
-    await flush();
+    await flushPort(port);
 
     // Start with the request/response loop, not the sync loop. If the BBC was
     // already synced after a previous run of the server, it can carry on from
@@ -1521,15 +1585,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                 }
             }
 
-            await new Promise<void>((resolve, reject) => {
-                port.drain((error: any) => {
-                    if (error !== null && error !== undefined) {
-                        reject(error);
-                    } else {
-                        resolve();
-                    }
-                });
-            });
+            await drainPort(port);
 
             serialLog.pn(`Done one request/response.`);
         }
@@ -1544,7 +1600,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
 
             // https://stackoverflow.com/questions/13013387/clearing-the-serial-ports-buffer
             //await delayMS(500);
-            await flush();
+            await flushPort(port);
             //await delayMS(500);
 
             serialLog.pn(`Sync: Waiting for ${beeblink.NUM_SERIAL_SYNC_ZEROS} sync 0x00 bytes...`);
@@ -1604,38 +1660,36 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
     const portStateByPortPath = new Map<string, IPortState>();
 
     for (; ;) {
-        for (const device of await getSerialDeviceList(options)) {
-            if (device.shouldOpen) {
-                const portPath = getSerialPortPath(device.portInfo);
+        for (const device of await getOpenableSerialDevices(options)) {
+            const portPath = getSerialPortPath(device.portInfo);
 
-                let value = portStateByPortPath.get(portPath);
-                if (value === undefined) {
-                    log.pn(`${portPath}: new serial port`);
-                    value = {
-                        server: await createServer('SERIAL', getRomPathsForSerial(options)),
-                        active: false,//not quite active just yet!
-                    };
-                    portStateByPortPath.set(portPath, value);
-                }
+            let value = portStateByPortPath.get(portPath);
+            if (value === undefined) {
+                log.pn(`${portPath}: new serial port`);
+                value = {
+                    server: await createServer('SERIAL', getRomPathsForSerial(options)),
+                    active: false,//not quite active just yet!
+                };
+                portStateByPortPath.set(portPath, value);
+            }
 
-                // Some JS nonsense here ? For some reason, the compiler can't tell
-                // that 'value' can no longer be undefined by the time it's used by
-                // the 'then' and 'error' callbacks below, even though it's captured
-                // by them after its active field was set to true, suggesting that
-                // it can tell it wasn't undefined by that point at least. Create a
-                // new variable of the right type here though and it's fine...
-                const portState: IPortState = value;
+            // Some JS nonsense here ? For some reason, the compiler can't tell
+            // that 'value' can no longer be undefined by the time it's used by
+            // the 'then' and 'error' callbacks below, even though it's captured
+            // by them after its active field was set to true, suggesting that
+            // it can tell it wasn't undefined by that point at least. Create a
+            // new variable of the right type here though and it's fine...
+            const portState: IPortState = value;
 
-                if (!portState.active) {
-                    portState.active = true;
-                    handleSerialDevice(options, device.portInfo, portState.server).then(() => {
-                        process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed.\n`);
-                        portState.active = false;
-                    }).catch((error) => {
-                        process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed due to error: ${error}\n`);
-                        portState.active = false;
-                    });
-                }
+            if (!portState.active) {
+                portState.active = true;
+                handleSerialDevice(options, device.portInfo, portState.server).then(() => {
+                    process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed.\n`);
+                    portState.active = false;
+                }).catch((error) => {
+                    process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed due to error: ${error}\n`);
+                    portState.active = false;
+                });
             }
         }
 
@@ -1760,6 +1814,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     fullHelpOnly(['--serial-data-verbose'], { action: 'append', nargs: '?', constant: '', help: 'dump raw serial data sent/received (specify devices same as --serial-verbose)' });
     fullHelpOnly(['--serial-test-pc-to-bbc'], { action: 'storeTrue', help: 'run PC->BBC test (goes with T.PC-TO-BBC on the BBC)' });
     fullHelpOnly(['--serial-test-bbc-to-pc'], { action: 'storeTrue', help: 'run BBC->PC test (goes with T.BBC-TO-PC on the BBC)' });
+    fullHelpOnly(['--serial-test-send-file'], { metavar: 'FILE', defaultValue: null, help: 'send file, PC->BBC' });
     fullHelpOnly(['--serial-full-size-messages'], { action: 'storeTrue', help: 'always send full-size messages, and never use any shortened syntax (affects all devices) (may reveal bug(s) in pre-Nov 2021 ROM versions...)' });
     always(['--list-serial-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
 
