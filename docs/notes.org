@@ -489,3 +489,175 @@ https://stardot.org.uk/forums/viewtopic.php?f=12&t=3114&start=120#p32725 - notes
 
 https://stardot.org.uk/forums/viewtopic.php?t=19172
 
+* Master Compact Ideas
+
+** Joystick port
+
+Joystick/mouse port is I/O - you get some of the user port pins. Looks
+like UPURS might be feasible.
+
+Objections:
+
+- No PB7, so can't check status with BMI
+- Might be a bit flaky, as surely games will fiddle around with this
+  all the time?
+- If you don't play games, it's a bit rude to steal the mouse port
+
+*** Joystick port pinout
+
+#+begin_example
++-------------+
+ \ 1 2 3 4 5 /
+  \ 6 7 8 9 /
+   +-------+
+#+end_example
+
+| Pin | VIA | What      |
+|-----+-----+-----------|
+|   1 | PB3 | Not Up    |
+|   2 | PB2 | Not Down  |
+|   3 | PB1 | Not Left  |
+|   4 | PB4 | Not Right |
+|   5 | CB1 |           |
+|   6 | PB0 | Fire      |
+|   7 | +5V |           |
+|   8 | 0V  |           |
+|   9 | CB2 |           |
+
+*** UPURS pinout
+
+| User Port Pin | VIA | PS232 Pin | What |
+|---------------+-----+-----------+------|
+|             5 |     |         5 | GND  |
+|            18 | PB6 |         8 | CTS  |
+|            20 | PB7 |         3 | TXD  |
+|             8 | PB1 |         7 | RTS  |
+|             6 | PB0 |         2 | RXD  |
+
+User port connector. Looking straight at it.
+
+#+begin_example
+                      +-----+ 
++----+----+----+----+-+--+--+-+----+----+----+----+
+|  1 |  3 |  5 |  7 |  9 | 11 | 13 | 15 | 17 | 19 |
++----+----+----+----+----+----+----+----+----+----+
+|  2 |  4 |  6 |  8 | 10 | 12 | 14 | 16 | 18 | 20 |
++----+----+----+----+----+----+----+----+----+----+
+#+end_example
+
+** Edge connector
+
+Connect the Tube Serial widget straight to it?
+
+Tube signals:
+
+| Pin | What  |
+|-----+-------|
+|     | A6    |
+|     | A5    |
+|     | A4    |
+|     | A3    |
+|     | A2    |
+|     | A1    |
+|     | A0    |
+|     | D7    |
+|     | D6    |
+|     | D5    |
+|     | D4    |
+|     | D3    |
+|     | D2    |
+|     | D1    |
+|     | D0    |
+|     | NRST  |
+|     | NTUBE |
+|     | NIRQ  |
+|     | 2MHZE |
+|     | R/NW  |
+|     | 0V    |
+
+Edge connector signals:
+
+| Pin | Side A (solder side)  | Side B (component side) |
+|-----+-----------------------+-------------------------|
+|   1 | SCREEN (0V)           | SCREEN (0V)             |
+|   2 | +5V                   | +5V                     |
+|   3 | AT13                  | A10                     |
+|   4 | NOT RST               | CD3                     |
+|   5 | AA15                  | A11                     |
+|   6 | A8                    | A9                      |
+|   7 | A13                   | CD7                     |
+|   8 | A12                   | CD6                     |
+|   9 | phi 2 OUT             | CD5                     |
+|  10 | not connected         | CD4                     |
+|  11 | not connected         | LPTSTP                  |
+|  12 | B READ/NOT WRITE      | BA7                     |
+|  13 | NOT NMI               | BA6                     |
+|  14 | NOT IRQ               | BA5                     |
+|  15 | NOT INFC              | BA4                     |
+|  16 | NOT INFD              | BA3                     |
+|  17 | AA14                  | BA2                     |
+|  18 | NOT 8MHz              | BA1                     |
+|  19 | 0V                    | BA0                     |
+|  20 | PB7 (user port)       | CD0                     |
+|  21 | PB6 (user port)       | CD2                     |
+|  22 | PB5 (user port)       | CD1                     |
+|  23 | - POLARIZATION SLOT - | - POLARIZATION SLOT -   |
+|  24 | 0V                    | 0V                      |
+|  25 | SCREEN (0V)           | SCREEN (0V)             |
+
+CDx appears to be the data bus? - comes from IC26 (CF30049).
+
+** Tube Serial widget
+
+| Pin | What  |
+|-----+-------|
+|   1 | 0V    |
+|   3 | 0V    |
+|   5 | 0V    |
+|   7 | 0V    |
+|   9 | 0V    |
+|  11 | 0V    |
+|  13 | 0V    |
+|  15 | 0V    |
+|  17 | 0V    |
+|  19 | 0V    |
+|  21 | 0V    |
+|  23 | 0V    |
+|  25 | 0V    |
+|  27 | 0V    |
+|  29 | 0V    |
+|  31 | +5V   |
+|  33 | +5V   |
+|  35 | +5V   |
+|  37 | +5V   |
+|  39 | +5V   |
+|   2 | RnW   |
+|   4 | 2MHzE |
+|   6 | NIRQ  |
+|   8 | NTUBE |
+|  10 | NRS   |
+|  12 | D0    |
+|  14 | D1    |
+|  16 | D2    |
+|  18 | D3    |
+|  20 | D4    |
+|  22 | D5    |
+|  24 | D6    |
+|  26 | D7    |
+|  28 | A0    |
+|  30 | A1    |
+|  32 | A2    |
+|  34 | A3    |
+|  36 | A4    |
+|  38 | NC    |
+|  40 | NC    |
+
+
+
+* Serial port
+
+** bits
+
+- 5 pin domino DIN plug :: https://cpc.farnell.com/deltron-enclosures/611-0520/5-pin-domino-black-din-plug/dp/CN00054
+- DB9 socket :: https://cpc.farnell.com/multicomp/mc-dppk9-s-sdr-k/d-sub-connector-rcpt-9pos-solder/dp/CN21799
+- 
