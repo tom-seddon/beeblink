@@ -1086,6 +1086,21 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+function findUSBDeviceForSerialPort(portInfo: SerialPort.PortInfo): usb.Device | undefined {
+    const idProduct = Number.parseInt(portInfo.productId!, 16);//why not a number?
+    const idVendor = Number.parseInt(portInfo.vendorId!, 16);//why not a number?
+    const usbDevices = usb.getDeviceList();
+    for (const usbDevice of usbDevices) {
+        if (usbDevice.deviceDescriptor.idProduct === idProduct && usbDevice.deviceDescriptor.idVendor === idVendor) {
+            if (getOSXLocationId(usbDevice).toLowerCase() === portInfo.locationId!.toLowerCase()) {
+                return usbDevice;
+            }
+        }
+    }
+
+    return undefined;
+}
+
 async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, serialLog: utils.Log): Promise<void> {
     if (process.platform === 'win32') {
         // When trying to open the device with libusb, the device open
@@ -1096,7 +1111,11 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
         // manually, and the setting is persistent.
     } else if (process.platform === 'darwin') {
         if (portInfo.locationId === undefined) {
-            serialLog.pn(`Not setting latency timer for ${getSerialPortPath(portInfo)} - no locationId.\n`);
+            process.stderr.write(`Not setting FTDI latency timer for ${getSerialPortPath(portInfo)} - no locationId.\n`);
+        } else if(portInfo.productId===undefined) {
+            process.stderr.write(`Not setting FTDI latency timer for ${getSerialPortPath(portInfo)} - no productId.\n`);
+        } else if(portInfo.vendorId===undefined) {
+            process.stderr.write(`Not setting FTDI latency timer for ${getSerialPortPath(portInfo)} - no vendorId.\n`);
         } else {
             // Send USB control request to set the latency timer.
 
@@ -1106,23 +1125,18 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
             // unique, so search by OS X location id rather than serial number.
 
             let usbDevice: usb.Device | undefined;
-            {
-                const idProduct = Number.parseInt(portInfo.productId!, 16);//why not a number?
-                const idVendor = Number.parseInt(portInfo.vendorId!, 16);//why not a number?
-                const usbDevices = usb.getDeviceList();
-                for (const d of usbDevices) {
-                    if (d.deviceDescriptor.idProduct === idProduct && d.deviceDescriptor.idVendor === idVendor) {
-                        if (getOSXLocationId(d).toLowerCase() === portInfo.locationId.toLowerCase()) {
-                            serialLog.pn(`Found corresponding USB device.\n`);
-                            usbDevice = d;
-                            break;
-                        }
-                    }
+            let numAttempts = 0;
+            while (numAttempts++ < 5) {
+                usbDevice = findUSBDeviceForSerialPort(portInfo);
+                if (usbDevice !== undefined) {
+                    break;
                 }
+
+                await delayMS(500);
             }
 
             if (usbDevice === undefined) {
-                serialLog.pn(`Didn't find corresponding USB device.`);
+                process.stderr.write(`Not setting FTDI latency timer for ${getSerialPortPath(portInfo)} - didn't find corresponding USB device after ${numAttempts} attempt(s)\n`);
                 return;
             }
 
