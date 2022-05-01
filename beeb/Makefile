@@ -19,7 +19,7 @@ ucase = $(subst a,A,$(subst b,B,$(subst c,C,$(subst d,D,$(subst e,E,$(subst f,F,
 ##########################################################################
 
 DEST:=.build
-TASSCMD:=$(TASS) --m65xx -Wall -Wno-implied-reg -C --line-numbers --long-branch
+TASSCMD:=$(TASS) --m65xx -Wall -Wno-implied-reg -Wno-portable -C --line-numbers --long-branch
 GIT_VER:=$(shell git log -1 '--format=%cd-%h' '--date=format:%Y%m%d-%H%M%S')
 SHELLCMD:=$(PYTHON) ../submodules/shellcmd.py/shellcmd.py
 SMLOAD_JOIN:=$(PYTHON) ../submodules/beeb/bin/smload_join.py
