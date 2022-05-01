@@ -9,8 +9,8 @@ branches:
     - master
 
 image:
-  - Visual Studio 2017
-  - macos-mojave
+  - Visual Studio 2019
+  - macos-bigsur
 
 install:
   - uname
@@ -20,13 +20,13 @@ install:
   
   # on macOS, select Node version using nvm.
   - sh: nvm ls
-  - sh: nvm use 10
+  - sh: nvm use 16
 
   # on Windows, select Node version using PowerShell Install-Product.
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
         # https://www.appveyor.com/docs/lang/nodejs-iojs/
-        Install-Product node 10.13
+        Install-Product node 16.8.0
       }
 
   - npm version
