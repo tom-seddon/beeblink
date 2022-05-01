@@ -12,17 +12,36 @@ files.
 
 ["Action" screen grabs](./docs/screens.md)
 
-# Setting up
+# Installing the server
+
+## Windows
 
 Pre-built files are available from
 [the BeebLink releases page](https://github.com/tom-seddon/beeblink/releases).
-GitHub should highlight the latest release that has files attached -
-use that one!
+Download the latest Windows zip and unzip it somewhere.
 
-You'll need a PC running Windows, OS X or Linux. If using Windows or
-OS X, download the ROMs zip and the appropriate server zip; if using
-Linux, download the ROMs zip, and follow
-[the building instructions](./docs/build-server.md).
+## macOS
+
+Pre-built files are available from
+[the BeebLink releases page](https://github.com/tom-seddon/beeblink/releases).
+Download the latest macOS zip and unzip it somewhere.
+
+The macOS version is not notarized. To bypass any Gatekeeper dialogs:
+open Terminal, change to the folder to which you unzipped the server,
+and run the following command:
+
+    xattr -dr com.apple.quarantine beeblink-server bindings.node prebuilds/darwin-x64+arm64/node.napi.node
+
+## Linux
+
+Follow [the server build instructions](./docs/build-server.md) to
+build the server.
+
+Follow [the ROM build instructions](./docs/build-rom.md) to build the
+ROMs - or alternatively download the Windows or macOS zip and get them
+from there.
+
+# Setting up the Beeb
 
 You'll need a BBC B/B+/Master 128, ideally with some kind of EEPROM
 module or battery-backed write-protectable sideways RAM - it's no fun
