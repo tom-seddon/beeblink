@@ -39,18 +39,24 @@ install:
   - ps: $env:RELEASE_NAME="beeblink-$env:SUFFIX"
 
 build_script:
+  - ps: pwd
+  - ps: Push-Location
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
-        Push-Location
-        cd ./beeb
-        ../tools/snmake roms
-
-        cd .build
-        7z a $env:RELEASE_NAME-roms.zip beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_upurs_fe60.rom
-        Push-AppveyorArtifact $env:RELEASE_NAME-roms.zip -DeploymentName output
-      
-        Pop-Location
+        $env:ZIP=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$env:RELEASE_NAME-windows.zip")
+      } elseif ($env:CI_MACOS -eq $true) {
+        $env:ZIP=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$env:RELEASE_NAME-macos.zip")
       }
+  - ps: cd ./beeb
+  - ps: |
+      if ($env:CI_WINDOWS -eq $true) {
+        ../tools/snmake roms
+      } elseif ($env:CI_MACOS -eq $true) {
+        make roms TASS=../tools/64tass
+      }
+  - ps: cd .build
+  - ps: 7z a $env:ZIP beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_upurs_fe60.rom
+  - ps: Pop-Location
   - ps: Push-Location
   - ps: cd ./server
   - npm install
@@ -59,13 +65,27 @@ build_script:
       pwd
       if ($env:CI_WINDOWS -eq $true) {
         ./node_modules/.bin/pkg -t win .
-        7z a $env:RELEASE_NAME-server-windows.zip beeblink-server.exe ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/usb/build/Release/usb_bindings.node
-        Push-AppveyorArtifact $env:RELEASE_NAME-server-windows.zip -DeploymentName output
+        7z a $env:ZIP beeblink-server.exe
+        
+        Push-Location
+        cd node_modules/usb
+        7z a $env:ZIP prebuilds\win32-x64\node.napi.node
+        Pop-Location
       } elseif ($env:CI_MACOS -eq $true) {
         ./node_modules/.bin/pkg -t macos-x64 .
-        7z a $env:RELEASE_NAME-server-macos.zip beeblink-server ./node_modules/usb/build/Release/usb_bindings.node ./node_modules/@serialport/bindings/build/Release/bindings.node ./node_modules/ioctl/build/Release/ioctl.node
-        Push-AppveyorArtifact $env:RELEASE_NAME-server-macos.zip -DeploymentName output
+        7z a $env:ZIP beeblink-server
+
+        Push-Location
+        cd ./node_modules/@serialport/bindings/build/Release
+        7z a $env:ZIP bindings.node
+        Pop-Location
+
+        Push-Location
+        cd ./node_modules/usb
+        7z a $env:ZIP prebuilds/darwin-x64+arm64/node.napi.node
+        Pop-Location
       }
+      Push-AppveyorArtifact $env:ZIP -DeploymentName output
   - ps: Pop-Location
 
 # artifacts:
