@@ -26,8 +26,8 @@ SMLOAD_JOIN:=$(PYTHON) ../submodules/beeb/bin/smload_join.py
 PRG2BBC:=$(PYTHON) ../submodules/beeb/bin/prg2bbc.py
 COMMIT:=$(shell git log -1 '--format=%H')
 
-# The ROMs are also copied to drive 1 on the example beeblink volume.
-BEEB_DEST:=../volumes/beeblink/1
+# The ROMs are also copied to drive z on the example beeblink volume.
+BEEB_DEST:=../volumes/beeblink/z
 
 # Mashup of git log -1 and git describe --dirty, which git doesn't
 # seem to be able to do on its own :(
@@ -94,7 +94,7 @@ _update_program : _dest $(DEST)/beeblink_constants.s65
 
 .PHONY : _uputest_program
 _uputest_program: _dest
-	$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=uputest IO=1 DRIVE=1
+	$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=uputest IO=1 DRIVE=z
 
 ##########################################################################
 ##########################################################################
