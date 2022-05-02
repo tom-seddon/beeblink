@@ -86,7 +86,10 @@ build_script:
       7z a $env:ZIP bindings.node
       Pop-Location
 
+      Push-Location
+      cd ..
       7z a $env:ZIP volumes
+      Pop-Location
 
       Push-AppveyorArtifact $env:ZIP -DeploymentName output
   - ps: Pop-Location
