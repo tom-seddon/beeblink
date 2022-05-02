@@ -47,6 +47,7 @@ build_script:
       } elseif ($env:CI_MACOS -eq $true) {
         $env:ZIP=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$env:RELEASE_NAME-macos.zip")
       }
+  - ps: 7z a $env:ZIP volumes
   - ps: cd ./beeb
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
@@ -84,11 +85,6 @@ build_script:
       Push-Location
       cd ./node_modules/@serialport/bindings/build/Release
       7z a $env:ZIP bindings.node
-      Pop-Location
-
-      Push-Location
-      cd ..
-      7z a $env:ZIP volumes
       Pop-Location
 
       Push-AppveyorArtifact $env:ZIP -DeploymentName output
