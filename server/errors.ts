@@ -83,6 +83,14 @@ export function generic(message: string): never {
     throw new BeebError(199, message);
 }
 
+export function notOpenForUpdate(handle: number): never {
+    throw new BeebError(193, `Not open for update on channel ${handle}`);
+}
+
+export function outsideFile(handle: number): never {
+    throw new BeebError(183, `Outside file on channel ${handle}`);
+}
+
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 

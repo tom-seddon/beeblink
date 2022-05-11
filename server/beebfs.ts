@@ -195,6 +195,7 @@ export class File {
 /////////////////////////////////////////////////////////////////////////
 
 class OpenFile {
+    public readonly handle: number;
     public readonly hostPath: string;
     public readonly fqn: FQN;
     public readonly read: boolean;
@@ -207,7 +208,8 @@ class OpenFile {
     // massively simplifies the error handling.
     public readonly contents: number[];
 
-    public constructor(hostPath: string, fqn: FQN, read: boolean, write: boolean, contents: number[]) {
+    public constructor(handle: number, hostPath: string, fqn: FQN, read: boolean, write: boolean, contents: number[]) {
+        this.handle = handle;
         this.hostPath = hostPath;
         this.fqn = fqn;
         this.read = read;
@@ -1252,12 +1254,12 @@ export class FS {
         if (file !== undefined) {
             // Files can be opened once for write, or multiple times for read.
             {
-                for (let othIndex = 0; othIndex < this.openFiles.length; ++othIndex) {
-                    const openFile = this.openFiles[othIndex];
-                    if (openFile !== undefined) {
-                        if (openFile.hostPath === file.hostPath) {
-                            if (openFile.write || write) {
-                                this.log.pn(`        already open: handle=0x${this.firstFileHandle + othIndex}`);
+                for (let otherIndex = 0; otherIndex < this.openFiles.length; ++otherIndex) {
+                    const otherOpenFile = this.openFiles[otherIndex];
+                    if (otherOpenFile !== undefined) {
+                        if (otherOpenFile.hostPath === file.hostPath) {
+                            if (otherOpenFile.write || write) {
+                                this.log.pn(`        already open: handle=0x${this.firstFileHandle + otherIndex}`);
                                 return errors.open();
                             }
                         }
@@ -1319,10 +1321,10 @@ export class FS {
             }
         }
 
-        this.openFiles[index] = new OpenFile(hostPath, fqn, read, write, contents);
-        const handle = this.firstFileHandle + index;
-        this.log.pn(`        handle=0x${handle}`);
-        return handle;
+        const openFile = new OpenFile(this.firstFileHandle + index, hostPath, fqn, read, write, contents);
+        this.openFiles[index] = openFile;
+        this.log.pn(`        handle=0x${openFile.handle}`);
+        return openFile.handle;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1741,10 +1743,10 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    // Causes a 'Read only' error if the given file isn't open for write.
+    // Causes a 'Not open for update' error if the given file isn't open for write.
     private mustBeOpenForWrite(openFile: OpenFile): void {
         if (!openFile.write) {
-            return errors.readOnly();
+            return errors.notOpenForUpdate(openFile.handle);
         }
     }
 
@@ -1826,6 +1828,27 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    private setOpenFilePtr(openFile: OpenFile, ptr: number): void {
+        if (ptr > openFile.contents.length) {
+            if (!openFile.write) {
+                errors.outsideFile(openFile.handle);
+            }
+
+            FS.mustNotBeTooBig(ptr);
+
+            while (openFile.contents.length < ptr) {
+                openFile.contents.push(0);
+                openFile.dirty = true;
+            }
+        }
+
+        openFile.ptr = ptr;
+        openFile.eofError = false;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     private OSARGSGetPtr(handle: number): number {
         const openFile = this.mustBeOpen(this.getOpenFileByHandle(handle));
 
@@ -1838,16 +1861,7 @@ export class FS {
     private OSARGSSetPtr(handle: number, ptr: number) {
         const openFile = this.mustBeOpen(this.getOpenFileByHandle(handle));
 
-        if (ptr > openFile.contents.length) {
-            this.mustBeOpenForWrite(openFile);
-
-            while (openFile.contents.length < ptr) {
-                openFile.contents.push(0);
-            }
-        }
-
-        openFile.ptr = ptr;
-        openFile.eofError = false;
+        this.setOpenFilePtr(openFile, ptr);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1866,12 +1880,15 @@ export class FS {
         const openFile = this.mustBeOpen(this.getOpenFileByHandle(handle));
 
         this.mustBeOpenForWrite(openFile);
+        FS.mustNotBeTooBig(size);
 
         if (size < openFile.contents.length) {
             openFile.contents.splice(size);
+            openFile.dirty = true;
         } else {
             while (openFile.contents.length < size) {
                 openFile.contents.push(0);
+                openFile.dirty = true;
             }
         }
     }
@@ -1908,7 +1925,7 @@ export class FS {
         this.mustBeOpenForWrite(openFile);
 
         if (useNewPtr) {
-            openFile.ptr = newPtr;
+            this.setOpenFilePtr(openFile, newPtr);
         }
 
         let i = 0;
@@ -1928,22 +1945,24 @@ export class FS {
     private OSGBPBRead(useNewPtr: boolean, handle: number, numBytes: number, newPtr: number): OSGBPBResult {
         const openFile = this.mustBeOpen(this.getOpenFileByHandle(handle));
 
-        const ptr = useNewPtr ? newPtr : openFile.ptr;
+        if (useNewPtr) {
+            this.setOpenFilePtr(openFile, newPtr);
+        }
 
         let numBytesLeft = 0;
         let eof = false;
-        if (ptr + numBytes > openFile.contents.length) {
+        if (openFile.ptr + numBytes > openFile.contents.length) {
             eof = true;
-            numBytesLeft = ptr + numBytes - openFile.contents.length;
-            numBytes = openFile.contents.length - ptr;
+            numBytesLeft = openFile.ptr + numBytes - openFile.contents.length;
+            numBytes = openFile.contents.length - openFile.ptr;
         }
 
         const data = Buffer.alloc(numBytes);
         for (let i = 0; i < data.length; ++i) {
-            data[i] = openFile.contents[ptr + i];
+            data[i] = openFile.contents[openFile.ptr + i];
         }
 
-        openFile.ptr = ptr + numBytes;
+        openFile.ptr = openFile.ptr + numBytes;
 
         return new OSGBPBResult(eof, numBytesLeft, openFile.ptr, data);
     }
@@ -2016,9 +2035,7 @@ export class FS {
 
     private bputInternal(openFile: OpenFile, byte: number): void {
         if (openFile.ptr >= openFile.contents.length) {
-            if (openFile.contents.length >= MAX_FILE_SIZE) {
-                return errors.tooBig();
-            }
+            FS.mustNotBeTooBig(openFile.contents.length + 1);
 
             openFile.contents.push(byte);
         } else {
