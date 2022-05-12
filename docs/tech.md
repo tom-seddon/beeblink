@@ -463,7 +463,7 @@ OSWORD $99 - perform BeebLink call
 Parameter block `B` on entry:
 
 | Value | Description |
-| ---
+| --- | --- |
 | `B?0` | Length of input parameter block - must be 22 |
 | `B?1` | Length of output parameter block - must be 22 |
 | `B?2` | Request code |
@@ -478,7 +478,7 @@ Parameter block `B` on entry:
 Paramater block `B` on exit:
 
 | Value | Description |
-| ---
+| --- | --- |
 | `B?0` | 22 |
 | `B?1` | 22 |
 | `B?2` | Request code |
@@ -500,11 +500,11 @@ truncated.
 
 ## Request codes
 
-| Code | Description
-| ---
-| $00 | ROM presence check
-| $01...$7f | Server request
-| $80...$ff | Reserved 
+| Code | Description |
+| --- | --- |
+| $00 | ROM presence check |
+| $01...$7f | Server request |
+| $80...$ff | Reserved |
 
 To check for the BeebLink ROM, set `B?3` to 0 before making request
 $00, then check `B?3` on exit - it will be non-zero if the ROM is
@@ -512,12 +512,12 @@ present.
 
 ## Response codes
 
-| Code | Description
-| ---
-| $00 | Reserved
-| $01...$7f | Server response
-| $80...$fe | Reserved
-| $ff | Error
+| Code | Description |
+| --- | --- |
+| $00 | Reserved |
+| $01...$7f | Server response |
+| $80...$fe | Reserved |
+| $ff | Error |
 
 ## Notes
 
