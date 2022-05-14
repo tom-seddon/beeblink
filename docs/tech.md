@@ -475,7 +475,7 @@ Parameter block `B` on entry:
 | `B!14` | Address for response payload |
 | `B!18` | Max size of response payload |
 
-Paramater block `B` on exit:
+Parameter block `B` on exit:
 
 | Value | Description |
 | --- | --- |
