@@ -147,7 +147,7 @@ export class ReadFlow extends diskimage.Flow {
         const addr = this.tracks[this.partIdx];
 
         return {
-            message: `${String.fromCharCode(13)}Read ${getMessage(addr, this.partIdx, this.tracks.length)}`,
+            message: `Read ${getMessage(addr, this.partIdx, this.tracks.length)}`,
             osword: dfsimage.createReadOSWORD(this.drive + addr.side * 2, addr.track, 0, TRACK_SIZE_SECTORS),
         };
     }
@@ -261,7 +261,7 @@ export class WriteFlow extends diskimage.Flow {
         this.image.copy(data, 0, offset, offset + TRACK_SIZE_BYTES);
 
         return {
-            message: `${String.fromCharCode(13)}Write ${getMessage(addr, this.partIdx, this.tracks.length)}`,
+            message: `Write ${getMessage(addr, this.partIdx, this.tracks.length)}`,
             osword: dfsimage.createWriteOSWORD(this.drive + addr.side * 2, addr.track, data),
         };
     }

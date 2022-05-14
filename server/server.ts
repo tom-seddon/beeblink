@@ -1057,30 +1057,39 @@ export default class Server {
         if (part === undefined) {
             return newResponse(beeblink.RESPONSE_NO);
         } else {
-            const messageBuffer = Buffer.from(`${part.message}${String.fromCharCode(255)}`, 'binary');
+            const builder = new utils.BufferBuilder(this.diskImageFlow.getBufferAddress());
 
-            const buffer = Buffer.alloc(14);
+            builder.writeUInt8(part.osword.reason);
+            const oswordBlockAddressOffset = builder.writeUInt32LE(0);
+            const oswordBlockErrorAddressOffset = builder.writeUInt32LE(0);
+            const messageAddressOffset = builder.writeUInt32LE(0);
+            const resultPayloadAddressOffset = builder.writeUInt32LE(0);
+            const resultPayloadSizeOffset = builder.writeUInt32LE(0);
 
-            const payloadAddr = this.diskImageFlow.getBufferAddress() + buffer.length + part.osword.block.length + messageBuffer.length;
+            // Add CR-terminated message.
+            builder.setUInt32LE(builder.getNextAddress(), messageAddressOffset);
+            builder.writeString(part.message);
+            builder.writeUInt8(13);
 
-            buffer.writeUInt8(part.osword.reason, 0);
-            buffer.writeUInt16LE(this.diskImageFlow.getBufferAddress() + buffer.length, 1);
-            buffer.writeUInt8(buffer.length + diskimage.getDiskOSWORDErrorOffset(part.osword), 3);
-            buffer.writeUInt16LE(this.diskImageFlow.getBufferAddress() + buffer.length + part.osword.block.length, 4);
+            // Add OSWORD parameter block.
+            const oswordBlockOffset = builder.getLength();
+            builder.setUInt32LE(builder.getNextAddress(), oswordBlockAddressOffset);
+            builder.setUInt32LE(builder.getNextAddress() + diskimage.getDiskOSWORDErrorOffset(part.osword), oswordBlockErrorAddressOffset);
+            builder.writeBuffer(part.osword.block);
 
-            part.osword.block.writeUInt32LE(payloadAddr, 1);
-
-            const buffers: Buffer[] = [buffer, part.osword.block, messageBuffer];
+            // Add buffer.
+            builder.setUInt32LE(builder.getNextAddress(), oswordBlockOffset + diskimage.getDiskOSWORDAddressOffset(part.osword));
             if (part.osword.data === undefined) {
-                // read - set up payload.
-                buffer.writeUInt32LE(payloadAddr, 6);
-                buffer.writeUInt32LE(diskimage.getDiskOSWORDTransferSizeBytes(part.osword), 10);
+                // Read operation. Set up payload.
+                builder.setUInt32LE(resultPayloadAddressOffset, builder.getNextAddress());
+                builder.setUInt32LE(diskimage.getDiskOSWORDTransferSizeBytes(part.osword), resultPayloadSizeOffset);
             } else {
-                // write - add data to read. Leave payload at 0 bytes.
-                buffers.push(part.osword.data);
+                // Write operation. Add data to read, and leave the result
+                // payload as-was.
+                builder.writeBuffer(part.osword.data);
             }
 
-            return newResponse(beeblink.RESPONSE_DATA, Buffer.concat(buffers));
+            return newResponse(beeblink.RESPONSE_DATA, builder.createBuffer());
         }
     }
 
@@ -1101,25 +1110,21 @@ export default class Server {
 
         const finish = await this.diskImageFlow.finish();
 
-        const buffer = Buffer.alloc(5);
-        let nextAddr = this.diskImageFlow.getBufferAddress() + buffer.length;
+        const builder = new utils.BufferBuilder(this.diskImageFlow.getBufferAddress());
 
-        const fsStarCommandBuffer = encodeForOSCLI(finish.fsStarCommand);
-        const starCommandBuffer = encodeForOSCLI(finish.starCommand);
+        builder.writeUInt8(finish.fs);
+        const selectCommandOffset = builder.writeUInt32LE(0);
+        const postSelectCommandOffset = builder.writeUInt32LE(0);
 
-        buffer.writeUInt8(finish.fs, 0);
+        builder.setUInt32LE(builder.getNextAddress(), selectCommandOffset);
+        builder.writeBuffer(encodeForOSCLI(finish.fsStarCommand));
 
-        buffer.writeUInt16LE(nextAddr, 1);
-        nextAddr += fsStarCommandBuffer.length;
-
-        buffer.writeUInt16LE(nextAddr, 3);
-        nextAddr += starCommandBuffer.length;
-
-        const buffers: Buffer[] = [buffer, fsStarCommandBuffer, starCommandBuffer];
+        builder.setUInt32LE(builder.getNextAddress(), postSelectCommandOffset);
+        builder.writeBuffer(encodeForOSCLI(finish.starCommand));
 
         this.diskImageFlow = undefined;
 
-        return newResponse(beeblink.RESPONSE_DATA, Buffer.concat(buffers));
+        return newResponse(beeblink.RESPONSE_DATA, builder.createBuffer());
     }
 
     private async handleWrapped(handler: Handler, p: Buffer): Promise<Response> {

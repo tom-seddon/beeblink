@@ -268,7 +268,7 @@ export class WriteFlow extends diskimage.Flow {
 
         this.numSectorsWritten += part.numSectors;
 
-        const message = `${String.fromCharCode(13)}Write ${getMessage(part.beginSector, this.numSectorsWritten, this.numSectorsUsed)}`;
+        const message = `Write ${getMessage(part.beginSector, this.numSectorsWritten, this.numSectorsUsed)}`;
 
         const data = Buffer.alloc(part.numSectors * SECTOR_SIZE_BYTES);
 
@@ -364,7 +364,7 @@ export class ReadFlow extends diskimage.Flow {
 
         this.numSectorsRead += part.numSectors;
 
-        const message = `${String.fromCharCode(13)}Read ${getMessage(part.beginSector, this.numSectorsRead, this.numSectorsUsed)}`;
+        const message = `Read ${getMessage(part.beginSector, this.numSectorsRead, this.numSectorsUsed)}`;
 
         return {
             message,

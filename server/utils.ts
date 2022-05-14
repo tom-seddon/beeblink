@@ -89,6 +89,19 @@ export async function forceFsUnlink(filePath: string) {
 // The Buffer API is rather annoying.
 export class BufferBuilder {
     private bytes: number[] = [];
+    private address: number | undefined;
+
+    public constructor(address?: number) {
+        this.address = address;
+    }
+
+    public getNextAddress() {
+        if (this.address === undefined) {
+            throw new Error('no address set');
+        }
+
+        return this.address + this.getLength();
+    }
 
     public getLength() {
         return this.bytes.length;

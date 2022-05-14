@@ -316,7 +316,7 @@ export class WriteFlow extends diskimage.Flow {
             data.writeUInt8(this.image.readUInt8(imageOffset + i), i);
         }
 
-        let message = `${String.fromCharCode(13)}Writing: S${addr.side.toString()} ${getAddrString(addr.side, addr.track)} (${((this.partIdx + 1) / this.tracks.length * 100.0).toFixed(1)}%)`;
+        let message = `Write S${addr.side.toString()} ${getAddrString(addr.side, addr.track)} (${((this.partIdx + 1) / this.tracks.length * 100.0).toFixed(1)}%)`;
         if (this.padSize > 0) {
             if (!this.shownPadMessage) {
                 message = `(Padded image with ${this.padSize} byte(s))${utils.BNL}`;
@@ -442,7 +442,7 @@ export class ReadFlow extends diskimage.Flow {
         const addr = this.tracks[this.partIdx];
 
         return {
-            message: `${String.fromCharCode(13)}Reading: S${addr.side.toString()} ${getAddrString(addr.side, addr.track)} (${((this.partIdx + 1) / this.tracks.length * 100.0).toFixed(1)}%)`,
+            message: `Read S${addr.side.toString()} ${getAddrString(addr.side, addr.track)} (${((this.partIdx + 1) / this.tracks.length * 100.0).toFixed(1)}%)`,
             osword: createReadOSWORD(this.drive + addr.side * 2, addr.track, 0, TRACK_SIZE_SECTORS),
         };
     }

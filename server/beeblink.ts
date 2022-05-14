@@ -310,12 +310,12 @@ export const REQUEST_SET_DISK_IMAGE_CAT = 0x1c;
 //
 // Response is DATA if there is another part. Store at OSHWM:
 
-// +0  byte  - code for OSWORD block
-// +1  word  - address of OSWORD block
-// +3  byte  - offset from OSHWM of error result for OSWORD
-// +4  word  - address of message to print
-// +6  dword - payload addr for the REQUEST_LAST_DISK_IMAGE_OSWORD_RESULT
-// +10 dword - payload size for the REQUEST_LAST_DISK_IMAGE_OSWORD_RESULT (may be 0 bytes)
+// +0  byte  - A code for OSWORD
+// +1  dword - address of OSWORD block
+// +5  dword - address of error result for OSWORD
+// +9  dword  - address of CR-terminated message to print
+// +13  dword - payload addr for the REQUEST_LAST_DISK_IMAGE_OSWORD_RESULT
+// +17 dword - payload size for the REQUEST_LAST_DISK_IMAGE_OSWORD_RESULT (may be 0 bytes)
 // +14
 
 // Use REQUEST_LAST_DISK_IMAGE_OSWORD_RESULT to tell the server about the
@@ -332,9 +332,8 @@ export const REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT = 0x1e;
 // Response is DATA: max 2 command lines to execute.
 
 // +0  byte  - FS to select with ROM service call $12, or 0 if not selecting FS this way
-// +1  word - address of * command to execute to select FS
-// +3  word - address of * command to execute after selecting FS
-
+// +1  dword - address of * command to execute to select FS
+// +5  dword - address of * command to execute after selecting FS
 export const REQUEST_FINISH_DISK_IMAGE_FLOW = 0x1f;
 
 // Perform a request, but limit the response size from the server.

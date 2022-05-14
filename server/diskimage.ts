@@ -68,8 +68,7 @@ export function getDiskOSWORDTransferSizeBytes(o: IDiskOSWORD): number {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-// Get error offset for disk OSWORD. This is the index in the buffer where the
-// transfer result code is stored. Annoyingly, this isn't the same on both FSs.
+// Get parameter block error byte offset for disk OSWORD.
 export function getDiskOSWORDErrorOffset(o: IDiskOSWORD): number {
     switch (o.reason) {
         case 0x72:
@@ -78,6 +77,14 @@ export function getDiskOSWORDErrorOffset(o: IDiskOSWORD): number {
         case 0x7f:
             return 10;
     }
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+// Get parameter block address dword offset for disk OSWORD.
+export function getDiskOSWORDAddressOffset(o: IDiskOSWORD): number {
+    return 1;
 }
 
 //////////////////////////////////////////////////////////////////////////
