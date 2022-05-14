@@ -206,7 +206,6 @@ export default class Server {
             new Command('LIST', '<fsp>', this.listCommand),
             new Command('LOCATE', '<afsp> (<format>)', this.locateCommand),
             new Command('NEWVOL', '<vsp>', this.newvolCommand),
-            new Command('READ', '<fsp> <drive> <type>', this.readCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
             new Command('SELFUPDATE', undefined, this.selfupdateCommand),
             new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand),
@@ -216,7 +215,6 @@ export default class Server {
             new Command('VOL', '(<avsp>) (R)', this.volCommand),
             new Command('VOLS', '(<avsp>)', this.volsCommand),
             new Command('WDUMP', '<fsp>', this.wdumpCommand),
-            new Command('WRITE', '<fsp> <drive> <type>', this.writeCommand),
         ];
 
         this.handlers = [];
@@ -244,7 +242,6 @@ export default class Server {
         this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('VOLUME_BROWSER', this.handleVolumeBrowser);
         this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('SPEED_TEST', this.handleSpeedTest);
         this.handlers[beeblink.REQUEST_SET_FILE_HANDLE_RANGE] = new Handler('SET_FILE_HANDLE_RANGE', this.handleSetFileHandleRange);
-        this.handlers[beeblink.REQUEST_START_DISK_IMAGE_FLOW] = new Handler('START_DISK_IMAGE_FLOW', this.handleStartDiskImageFlow);
         this.handlers[beeblink.REQUEST_SET_DISK_IMAGE_CAT] = new Handler('SET_DISK_IMAGE_CAT', this.handleSetDiskImageCat).withFullRequestDump();
         this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('NEXT_DISK_IMAGE_part', this.handleNextDiskImagePart);
         this.handlers[beeblink.REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT] = new Handler('SET_LAST_DISK_IMAGE_OSWORD_RESULT', this.handleSetLastDiskImageOSWORDResult);
@@ -960,20 +957,9 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_YES);
     }
 
-    private async handleStartDiskImageFlow(handler: Handler, p: Buffer): Promise<Response> {
-        this.payloadMustBeAtLeast(handler, p, 4);
-
-        const oshwm = p.readUInt16LE(0);
-        const himem = p.readUInt16LE(2);
-
-        return await this.startDiskImageFlow2(oshwm, himem - oshwm);
-    }
-
     // TODO: Awful naming, that'll get tidied up (promise...)
-    private async startDiskImageFlow2(bufferAddress: number, bufferSize: number): Promise<Response> {
-        if (this.diskImageFlow === undefined) {
-            return errors.generic(`No disk image flow`);
-        }
+    private async startDiskImageFlow(diskImageFlow: diskimage.Flow, bufferAddress: number, bufferSize: number): Promise<Response> {
+        this.diskImageFlow = diskImageFlow;
 
         const start = this.diskImageFlow.start(bufferAddress, bufferSize);
 
@@ -1158,16 +1144,16 @@ export default class Server {
         const details = this.getDiskImageFlowDetailsFromRequestPayload(p);
 
         const flow = await this.createDiskImageReadFlow(details);
-        this.startDiskImageFlow(flow);
-        return await this.startDiskImageFlow2(details.bufferAddress, details.bufferSize);
+
+        return await this.startDiskImageFlow(flow, details.bufferAddress, details.bufferSize);
     }
 
     private async handleWriteDiskImage(handler: Handler, p: Buffer): Promise<Response> {
         const details = this.getDiskImageFlowDetailsFromRequestPayload(p);
 
         const flow = await this.createDiskImageWriteFlow(details);
-        this.startDiskImageFlow(flow);
-        return await this.startDiskImageFlow2(details.bufferAddress, details.bufferSize);
+
+        return await this.startDiskImageFlow(flow, details.bufferAddress, details.bufferSize);
     }
 
     private internalError(text: string): never {
@@ -1826,15 +1812,6 @@ export default class Server {
         };
     }
 
-    private startDiskImageFlow(diskImageFlow: diskimage.Flow): Response {
-        this.diskImageFlow = diskImageFlow;
-
-        const p = Buffer.alloc(1);
-        p[0] = beeblink.RESPONSE_SPECIAL_DISK_IMAGE_FLOW;
-
-        return newResponse(beeblink.RESPONSE_SPECIAL, p);
-    }
-
     private checkDiskImageDSDDrive(details: IDiskImageFlowDetails): void {
         if (details.drive !== 0 && details.drive !== 1) {
             return errors.badDrive();
@@ -1898,22 +1875,6 @@ export default class Server {
             default:
                 return errors.generic(`Unsupported type`);
         }
-    }
-
-    private async readCommand(commandLine: CommandLine): Promise<Response> {
-        const details = this.getDiskImageFlowDetailsFromCommandLine(commandLine);
-
-        const flow = await this.createDiskImageReadFlow(details);
-
-        return this.startDiskImageFlow(flow);
-    }
-
-    private async writeCommand(commandLine: CommandLine): Promise<Response> {
-        const details = this.getDiskImageFlowDetailsFromCommandLine(commandLine);
-
-        const flow = await this.createDiskImageWriteFlow(details);
-
-        return this.startDiskImageFlow(flow);
     }
 
     private async defaultsCommand(commandLine: CommandLine): Promise<Response> {

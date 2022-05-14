@@ -77,22 +77,7 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
     } else {
         const usedTracksSet = new Set<number>();
 
-        if (log !== undefined) {
-            log.withIndent('data: ', () => {
-                log.dumpBuffer(data);
-            });
-
-            log.withIndent('cat0: ', () => {
-                log.dumpBuffer(cat0);
-            });
-
-            log.withIndent('cat1: ', () => {
-                log.dumpBuffer(cat1);
-            });
-        }
-
         for (let offset = 8; offset <= cat1[0x05]; offset += 8) {
-
             let size = 0;
             size |= cat1[offset + 4] << 0;
             size |= cat1[offset + 5] << 8;

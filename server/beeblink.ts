@@ -296,36 +296,8 @@ export const REQUEST_19 = 0x19;
 // P = first file handle; num file handles
 export const REQUEST_SET_FILE_HANDLE_RANGE = 0x1a;
 
-// Start a disk image command, *READ or *WRITE. The server knows which it is,
-// and will produce appropriate data. The same flow handles both reading and
-// writing.
-//
-// P = 2 bytes, OSHWM; 2 bytes, HIMEM
-//
-// Response is data to be stored at OSHWM:
-
-// +0  byte  - FS to select with ROM service call $12, or 0 if not selecting FS this way
-// +1  word  - address of * command to execute to select FS
-// +3  word  - address of * command to execute after selecting FS
-// +5  byte  - code for first OSWORD block, or 0 if none
-// +6  word  - address of first OSWORD block
-// +8  byte  - offset from OSHWM of error result for first OSWORD call
-// +9  byte  - code for second OSWORD block, or 0 if none
-// +10  word  - address of second OSWORD block
-// +12  byte  - offset from OSHWM of error result for second OSWORD call
-// +13  dword - payload addr for the SET_DISK_IMAGE_CAT
-// +17 dword - payload size for the SET_DISK_IMAGE_CAT (may be 0)
-// +21
-
-// Select other filing system, do the OSWORDs as appropriate, then do a
-// SET_DISK_IMAGE CAT to set things going.
-//
-// (Select by FS code is to accommodate selecting DFS, which is safe to select
-// this way, and avoids any problems with the BLFS ROM catching *DISC. Select by
-// * command is for ADFS, which needs to be selected with *FADFS.)
-//
-// If the SET_DISK_IMAGE_CAT payload is 0 bytes, send it anyway.
-export const REQUEST_START_DISK_IMAGE_FLOW = 0x1b;
+// No longer used.
+export const REQUEST_1B = 0x1b;
 
 // Set catalogue read from disk.
 //
@@ -383,7 +355,32 @@ export const REQUEST_WRAPPED = 0x20;
 // CR-terminated disk type; CR-terminated drive string; 1 byte all flag;
 // CR-terminated file name
 //
-// Response as per REQUEST_START_DISK_IMAGE_FLOW.
+// Response is data to be stored in buffer:
+
+// +0  byte  - FS to select with ROM service call $12, or 0 if not selecting FS this way
+// +1  word  - address of * command to execute to select FS
+// +3  word  - address of * command to execute after selecting FS
+// +5  byte  - code for first OSWORD block, or 0 if none
+// +6  word  - address of first OSWORD block
+// +8  byte  - offset from OSHWM of error result for first OSWORD call
+// +9  byte  - code for second OSWORD block, or 0 if none
+// +10  word  - address of second OSWORD block
+// +12  byte  - offset from OSHWM of error result for second OSWORD call
+// +13  dword - payload addr for the SET_DISK_IMAGE_CAT
+// +17 dword - payload size for the SET_DISK_IMAGE_CAT (may be 0)
+// +21
+
+// Select other filing system, do the OSWORDs as appropriate, then do a
+// SET_DISK_IMAGE CAT to set things going.
+//
+// (Select by FS code is to accommodate selecting DFS, which is safe to select
+// this way, and avoids any problems with the BLFS ROM catching *DISC. Select by
+// * command is for ADFS, which needs to be selected with *FADFS.)
+//
+// If the SET_DISK_IMAGE_CAT payload is 0 bytes, send it anyway.
+//
+// The same buffer must be reused for all subsequent requests related to this
+// disk image.
 export const REQUEST_READ_DISK_IMAGE = 0x21;
 
 // Write a disk image to a disk. The operation formerly known as *WRITE.
@@ -392,7 +389,7 @@ export const REQUEST_READ_DISK_IMAGE = 0x21;
 // CR-terminated disk type; CR-terminated drive string; 1 byte all flag;
 // CR-terminated file name
 //
-// Response as per REQUEST_READ_DISK_IMAGE.
+// Response (and restrictions) as per REQUEST_READ_DISK_IMAGE.
 export const REQUEST_WRITE_DISK_IMAGE = 0x22;
 
 /////////////////////////////////////////////////////////////////////////
@@ -588,10 +585,8 @@ export const RESPONSE_SPECIAL_SELFUPDATE = 5;
 // P = 1 byte, bank; 2 bytes, 16-bit address to load to; rest, data to load.
 export const RESPONSE_SPECIAL_SRLOAD = 6;
 
-// Start disk image flow.
-//
-// P = none
-export const RESPONSE_SPECIAL_DISK_IMAGE_FLOW = 7;
+// No longer used.
+export const RESPONSE_SPECIAL_07 = 7;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////

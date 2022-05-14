@@ -323,10 +323,6 @@ might be useful if you're looking at potentially duplicated files.
 
 Create a new volume.
 
-### `READ <fsp> <drive> <type>` ###
-
-See the disk image section.
-
 ### `RENAME <old fsp> <new fsp>`
 
 Rename file.
@@ -405,65 +401,6 @@ The volume browser isn't recommended in 20-column modes.
 ### `WDUMP <fsp>`
 
 Produce wide hex dump of file, for use in 80 column modes.
-
-### `WRITE <fsp> <drive> <type>` ###
-
-See the Disk images section.
-
-# Disk images
-
-Use `*READ` to create a disk image from a disk, and `*WRITE` to write
-a disk image to a disk. The syntax for both is similar: specify file,
-drive (the 'other' drive will be deduced automatically when
-necessary), and disk image type.
-
-**Both operations use I/O processor memory from OSHWM onwards!**
-
-The following single-density types are supported, including truncated
-files. This two options cover the vast majority of BBC disk images
-available.
-
-* `S`/`S*`: .ssd, single-sided DFS
-* `D`/`D*`: .dsd, double-sided DFS
-
-Use `S`/`D` to read/write only the areas occupied by files (much
-quicker when the disk isn't full!), or `S*`/`D*` to read/write the
-whole disk.
-
-The following double-density types are supported, if the filing
-systems are available:
-
-* `A`/`A*`: ADFS S (160 KB)/M (320 KB)/L (640 KB)
-* `SO`/`SO*`: single-sided Opus DDOS/Challenger, 40T (180 KB)/80 T (360 KB)
-* `DO`/`DO*`: double-sided Opus DDOS/Challenger, 40T (360 KB)/80 T (720 KB)
-
-Again, `*` means to read/write the whole disk - otherwise, only
-occupied areas are transferred.
-
-Truncated double-density images are not supported!
-
-Notes:
-
-- protected disks are not supported
-
-- for `*WRITE`, the target disk must be formatted and of the
-  appropriate capacity. There are some checks, but they aren't super
-  thorough
-
-- `*READ` will retry indefinitely in the event of a disk error. If
-  this means it just ends up getting stuck, hit ESCAPE to cancel
-
-- when using Opus DDOS/Challenger, do a `*CAT` of the disk before
-  embarking on a `*READ`/`*WRITE`, so that the Opus FS can auto-detect
-  the density. You may get spurious disk fault errors otherwise (this
-  is a BeebLink bug: https://github.com/tom-seddon/beeblink/issues/42)
-  
-- the `*` suffix is actually currently meaningless with the Opus
-  DDOS/Challenger disk image types, and the whole disk is always read
-  or written
-  
-- when using `*READ`, you're creating a BBC file, so it will have a
-  BBC-style file name and may well end up needing renaming
 
 # `BLCONFIG` options
 

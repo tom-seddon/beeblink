@@ -160,7 +160,10 @@ export abstract class Flow {
 
     protected init(bufferAddress: number, bufferSize: number, minRequired: number): void {
         if (minRequired > bufferSize) {
-            return errors.generic(`No room`);
+            // The 40 char limit makes fitting both numbers in a bit tricky, but
+            // the actual buffer size is presumably easy enough to determine at
+            // the Beeb end.
+            return errors.generic(`Buffer too small (need ${minRequired})`);
         }
 
         this.bufferAddress = bufferAddress;
