@@ -5061,7 +5061,7 @@ block_ptr: .fill 2
                 ; Ignore if wrong FS ID.
                 ldy #osword_99_block.fs_id
                 lda ($f0),y
-                beq +       ;0 means pick highest priority ROM
+                beq handle      ;0 means pick highest priority ROM
                 cmp #blfs_fs_number
                 beq handle
 ignore:
@@ -5181,11 +5181,11 @@ hacky_select:
 
                 ; Save off FS workspace.
                 ldx #31
--
+save_fs_workspace_loop:
                 lda $b0,x
                 pha
                 dex
-                bpl -
+                bpl save_fs_workspace_loop
 
                 lda $f0
                 sta block_ptr+0
@@ -5196,14 +5196,14 @@ hacky_select:
                 ; startup step.
                 lda #sf_link_started_up
                 jsr get_rom_status_flag
-                bcs +
+                bcs link_started
                 ;.debug_print ['Do link startup\r\n']
                 ;.debug_print ['Before link_startup: OSWORD: block=&',block_ptr+1,block_ptr+0,'\r\n']
                 jsr link_startup
                 ;.debug_print ['After link_startup: OSWORD: block=&',block_ptr+1,block_ptr+0,'\r\n']
                 ;.debug_print ['Link startup result: ',DP_P,'\r\n']
                 bcs hacky_unselect
-+
+link_started:
                 
                 ; Don't call send_request_n_with_restart - it'll do a
                 ; BRK if the link restart fails.
@@ -5220,11 +5220,11 @@ hacky_unselect:
 
                 ; Restore FS workspace.
                 ldx #-32
--
+restore_fs_workspace_loop:
                 pla
                 sta $b0+32,x
                 inx
-                bne -
+                bne restore_fs_workspace_loop
 
                 php
                 jsr release_nmi
