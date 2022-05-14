@@ -29,6 +29,8 @@ import { WriteStream } from 'tty';
 import * as path from 'path';
 import { Chalk } from 'chalk';
 import * as beeblink from './beeblink';
+import * as errors from './errors';
+import * as inf from './inf';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -165,6 +167,68 @@ export class BufferBuilder {
 
     public createBuffer(): Buffer {
         return Buffer.from(this.bytes);
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export class BufferReader {
+    private buffer: Buffer;
+    private offset = 0;
+
+    public constructor(buffer: Buffer) {
+        this.buffer = buffer;
+    }
+
+    public readUInt8(): number {
+        this.prepareForRead(1);
+        return this.buffer[this.offset - 1];
+    }
+
+    public readUInt16LE(): number {
+        this.prepareForRead(2);
+        return this.buffer.readUInt16LE(this.offset - 2);
+    }
+
+    public readUInt32LE(): number {
+        this.prepareForRead(4);
+        return this.buffer.readUInt32LE(this.offset - 4);
+    }
+
+    public readString(terminator: number): string {
+        let str = '';
+
+        while (this.offset < this.buffer.length && this.buffer[this.offset] !== terminator) {
+            str += String.fromCharCode(this.buffer[this.offset]);
+            ++this.offset;
+        }
+
+        if (this.offset === this.buffer.length) {
+            return errors.generic('Bad request');
+        } else {
+            ++this.offset;
+        }
+
+        return str;
+    }
+
+    public readBuffer(): Buffer {
+        const buffer = Buffer.alloc(this.buffer.length - this.offset);
+
+        this.buffer.copy(buffer, 0, this.offset);
+
+        this.offset = this.buffer.length;
+
+        return buffer;
+    }
+
+    private prepareForRead(n: number): void {
+        if (this.offset + n >= this.buffer.length) {
+            return errors.generic('Bad request');
+        }
+
+        this.offset += n;
     }
 }
 
@@ -795,3 +859,20 @@ export function getFirstLine(b: Buffer): string {
 
     return b.toString('binary', 0, i).trim();
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// Causes a 'Exists on server' error if the given host file or metadata
+// counterpart exists.
+//
+// This is to cater for trying to create a new file that would have the same
+// PC name as an existing file. Could be due to mismatches between BBC names
+// in the .inf files and the actual names on disk, could be due to loose
+// non-BBC files on disk...
+export async function mustNotExist(hostPath: string): Promise<void> {
+    if (await fsExists(hostPath) || await fsExists(hostPath + inf.ext)) {
+        return errors.exists('Exists on server');
+    }
+}
+

@@ -25,7 +25,6 @@
 import * as assert from 'assert';
 import * as utils from './utils';
 import * as beebfs from './beebfs';
-import { MAX_DISK_IMAGE_PART_SIZE } from './beeblink';
 import * as errors from './errors';
 import * as diskimage from './diskimage';
 
@@ -240,10 +239,10 @@ export class WriteFlow extends diskimage.Flow {
         checkImage(image);
     }
 
-    public start(oshwm: number, himem: number): diskimage.IStartFlow {
+    public start(bufferAddress: number, bufferSize: number): diskimage.IStartFlow {
         // 8 KB = ~1 second with UPURS. Don't exceed 2 seconds'-worth of data,
         // as the disk will spin down.
-        this.init(oshwm, himem, 256 + MAX_PART_SIZE_BYTES);
+        this.init(bufferAddress, bufferSize, 256 + MAX_PART_SIZE_BYTES);
 
         return {
             fs: 0,
@@ -330,8 +329,8 @@ export class ReadFlow extends diskimage.Flow {
         this.numSectorsUsed = 0;
     }
 
-    public start(oshwm: number, himem: number): diskimage.IStartFlow {
-        this.init(oshwm, himem, 256 + MAX_PART_SIZE_BYTES);
+    public start(bufferAddress: number, bufferSize: number): diskimage.IStartFlow {
+        this.init(bufferAddress, bufferSize, 256 + MAX_PART_SIZE_BYTES);
 
         return {
             fs: 0,

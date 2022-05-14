@@ -54,41 +54,11 @@ export const DEFAULT_LOAD = SHOULDNT_LOAD;
 export const DEFAULT_EXEC = SHOULDNT_EXEC;
 export const DEFAULT_ATTR = R_ATTR | W_ATTR;
 
-const IGNORE_DIR_FILE_NAME = utils.getCaseNormalizedPath('.beeblink-ignore');
+const IGNORE_DIR_FILE_NAME = '.beeblink-ignore';
 
 const VOLUME_FILE_NAME = '.volume';
 
 const HOST_NAME_ESCAPE_CHAR = '#';
-
-const HOST_NAME_CHARS: string[] = [];
-for (let c = 0; c < 256; ++c) {
-    let escape = false;
-
-    if (c < 32) {
-        escape = true;
-    } else if (c > 126) {
-        escape = true;
-    } else if ('/'.indexOf(String.fromCharCode(c)) >= 0) {
-        // not valid on Windows or Unix
-        escape = true;
-    } else if ('<>:"\\|?*'.indexOf(String.fromCharCode(c)) >= 0) {
-        // not valid on Windows
-        escape = true;
-    } else if (' .'.indexOf(String.fromCharCode(c)) >= 0) {
-        // It's worth escaping '.', because it makes it impossible to create a
-        // BBC file that ends with '.inf'...
-        escape = true;
-    } else if (String.fromCharCode(c) === HOST_NAME_ESCAPE_CHAR) {
-        // the escape char itself.
-        escape = true;
-    }
-
-    if (escape) {
-        HOST_NAME_CHARS.push('#' + utils.hex2(c));
-    } else {
-        HOST_NAME_CHARS.push(String.fromCharCode(c));
-    }
-}
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -114,7 +84,40 @@ export function getBootOptionDescription(option: number): string {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+const HOST_NAME_CHARS: string[] = [];
+
 export function getHostChars(str: string): string {
+    if (HOST_NAME_CHARS.length === 0) {
+        for (let c = 0; c < 256; ++c) {
+            let escape = false;
+
+            if (c < 32) {
+                escape = true;
+            } else if (c > 126) {
+                escape = true;
+            } else if ('/'.indexOf(String.fromCharCode(c)) >= 0) {
+                // not valid on Windows or Unix
+                escape = true;
+            } else if ('<>:"\\|?*'.indexOf(String.fromCharCode(c)) >= 0) {
+                // not valid on Windows
+                escape = true;
+            } else if (' .'.indexOf(String.fromCharCode(c)) >= 0) {
+                // It's worth escaping '.', because it makes it impossible to create a
+                // BBC file that ends with '.inf'...
+                escape = true;
+            } else if (String.fromCharCode(c) === HOST_NAME_ESCAPE_CHAR) {
+                // the escape char itself.
+                escape = true;
+            }
+
+            if (escape) {
+                HOST_NAME_CHARS.push('#' + utils.hex2(c));
+            } else {
+                HOST_NAME_CHARS.push(String.fromCharCode(c));
+            }
+        }
+    }
+
     let result = '';
 
     for (let i = 0; i < str.length; ++i) {
@@ -1308,7 +1311,7 @@ export class FS {
             }
 
             hostPath = this.getHostPath(fqn);
-            await errors.mustNotExist(hostPath);
+            await utils.mustNotExist(hostPath);
 
             // Create file.
             await this.OSFILECreate(fqn, 0, 0, 0);
@@ -1605,7 +1608,7 @@ export class FS {
         } else {
             hostPath = this.getHostPath(fqn);
 
-            await errors.mustNotExist(hostPath);
+            await utils.mustNotExist(hostPath);
         }
 
         const attr = DEFAULT_ATTR;

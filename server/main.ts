@@ -1112,9 +1112,9 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
     } else if (process.platform === 'darwin') {
         if (portInfo.locationId === undefined) {
             process.stderr.write(`Not setting FTDI latency timer for ${getSerialPortPath(portInfo)} - no locationId.\n`);
-        } else if(portInfo.productId===undefined) {
+        } else if (portInfo.productId === undefined) {
             process.stderr.write(`Not setting FTDI latency timer for ${getSerialPortPath(portInfo)} - no productId.\n`);
-        } else if(portInfo.vendorId===undefined) {
+        } else if (portInfo.vendorId === undefined) {
             process.stderr.write(`Not setting FTDI latency timer for ${getSerialPortPath(portInfo)} - no vendorId.\n`);
         } else {
             // Send USB control request to set the latency timer.
@@ -1552,7 +1552,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                 const maxChunkSize = 512;//arbitrary.
                 let srcIdx = 0;
                 while (srcIdx < responseData.length) {
-                    const chunk = responseData.slice(srcIdx, srcIdx + maxChunkSize);
+                    const chunk = responseData.subarray(srcIdx, srcIdx + maxChunkSize);
 
                     let resolveResult: ((result: boolean) => void) | undefined;
 
@@ -1701,6 +1701,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
                     process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed.\n`);
                     portState.active = false;
                 }).catch((error) => {
+                    process.stderr.write(`${error.stack}`);
                     process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed due to error: ${error}\n`);
                     portState.active = false;
                 });

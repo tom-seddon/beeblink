@@ -132,11 +132,11 @@ export interface IFinishFlow {
 
 // Represents a disk image read/write flow.
 export abstract class Flow {
-    private oshwm: number | undefined;
+    private bufferAddress: number | undefined;
 
     // Start the flow. Determine buffer address, size and overall feasibility
     // based on supplied OSHWM and HIMEM values, and produce data for response.
-    public abstract start(oshwm: number, himem: number): IStartFlow;
+    public abstract start(bufferAddress: number, bufferSize: number): IStartFlow;
 
     // Set catalogue, if reading, as returned by BBC.
     public abstract setCat(cat: Buffer): void;
@@ -150,20 +150,20 @@ export abstract class Flow {
     // Finish the operation.
     public abstract finish(): Promise<IFinishFlow>;
 
-    public getOSHWM(): number {
-        if (this.oshwm === undefined) {
+    public getBufferAddress(): number {
+        if (this.bufferAddress === undefined) {
             return errors.generic(`Flow error`);
         }
 
-        return this.oshwm;
+        return this.bufferAddress;
     }
 
-    protected init(oshwm: number, himem: number, minRequired: number): void {
-        if (oshwm + minRequired > himem) {
+    protected init(bufferAddress: number, bufferSize: number, minRequired: number): void {
+        if (minRequired > bufferSize) {
             return errors.generic(`No room`);
         }
 
-        this.oshwm = oshwm;
+        this.bufferAddress = bufferAddress;
     }
 }
 

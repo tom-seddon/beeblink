@@ -55,8 +55,11 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
         return errors.generic('Bad DFS format (file count)');
     }
 
-    const cat0 = Buffer.from(data.buffer, track0Offset, SECTOR_SIZE_BYTES);
-    const cat1 = Buffer.from(data.buffer, track0Offset + SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES);
+    // const cat0 = Buffer.from(data, track0Offset, SECTOR_SIZE_BYTES);
+    // const cat1 = Buffer.from(data, track0Offset + SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES);
+
+    const cat0 = data.subarray(track0Offset, track0Offset + SECTOR_SIZE_BYTES);
+    const cat1 = data.subarray(track0Offset + SECTOR_SIZE_BYTES, track0Offset + SECTOR_SIZE_BYTES + SECTOR_SIZE_BYTES);
 
     if (allSectors) {
         const numSectors = cat1[0x07] | ((cat1[0x06] & 0x03) << 8);
@@ -73,6 +76,20 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
         return usedTracks;
     } else {
         const usedTracksSet = new Set<number>();
+
+        if (log !== undefined) {
+            log.withIndent('data: ', () => {
+                log.dumpBuffer(data);
+            });
+
+            log.withIndent('cat0: ', () => {
+                log.dumpBuffer(cat0);
+            });
+
+            log.withIndent('cat1: ', () => {
+                log.dumpBuffer(cat1);
+            });
+        }
 
         for (let offset = 8; offset <= cat1[0x05]; offset += 8) {
 
@@ -266,7 +283,7 @@ export class WriteFlow extends diskimage.Flow {
         sortTrackAddresses(this.tracks);
     }
 
-    public start(oshwm: number, himem: number): diskimage.IStartFlow {
+    public start(bufferAddress: number, bufferSize: number): diskimage.IStartFlow {
         // It's a bit stupid having this check here, but when calling
         // errors.generic from the constructor, the TS compiler moans that
         // fields aren't always being initialized - even though errors.generic
@@ -280,7 +297,7 @@ export class WriteFlow extends diskimage.Flow {
             }
         }
 
-        this.init(oshwm, himem, 4096);
+        this.init(bufferAddress, bufferSize, 4096);
 
         return {
             fs: DFS_FS,
@@ -365,8 +382,8 @@ export class ReadFlow extends diskimage.Flow {
         this.file = file;
     }
 
-    public start(oshwm: number, himem: number): diskimage.IStartFlow {
-        this.init(oshwm, himem, 4096);
+    public start(bufferAddress: number, bufferSize: number): diskimage.IStartFlow {
+        this.init(bufferAddress, bufferSize, 4096);
 
         const osword1 = createReadOSWORD(this.drive, 0, 0, 2);
 
@@ -381,6 +398,12 @@ export class ReadFlow extends diskimage.Flow {
     public setCat(p: Buffer): void {
         if (this.tracks !== undefined) {
             return errors.generic(`Invalid setCat`);
+        }
+
+        if (this.log !== undefined) {
+            this.log.withIndent('cat: ', () => {
+                this.log!.dumpBuffer(p);
+            });
         }
 
         this.tracks = [];

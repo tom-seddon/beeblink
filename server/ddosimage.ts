@@ -94,8 +94,8 @@ export class ReadFlow extends diskimage.Flow {
         this.file = file;
     }
 
-    public start(oshwm: number, himem: number): diskimage.IStartFlow {
-        this.init(oshwm, himem, 256 + 2 * TRACK_SIZE_BYTES);
+    public start(bufferAddress: number, bufferSize: number): diskimage.IStartFlow {
+        this.init(bufferAddress, bufferSize, 256 + 2 * TRACK_SIZE_BYTES);
 
         const osword1 = dfsimage.createReadOSWORD(this.drive, 0, 0, TRACK_SIZE_SECTORS);
 

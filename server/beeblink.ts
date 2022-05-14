@@ -377,6 +377,24 @@ export const REQUEST_FINISH_DISK_IMAGE_FLOW = 0x1f;
 // +5 byte[] - payload bytes, up to max requested
 export const REQUEST_WRAPPED = 0x20;
 
+// Read a disk and save it to an image. The operation formerly known as *READ.
+//
+// P = 4 bytes, start of buffer to use; 4 bytes, size of buffer to use;
+// CR-terminated disk type; CR-terminated drive string; 1 byte all flag;
+// CR-terminated file name
+//
+// Response as per REQUEST_START_DISK_IMAGE_FLOW.
+export const REQUEST_READ_DISK_IMAGE = 0x21;
+
+// Write a disk image to a disk. The operation formerly known as *WRITE.
+//
+// P = 4 bytes, start of buffer to use; 4 bytes, size of buffer to use;
+// CR-terminated disk type; CR-terminated drive string; 1 byte all flag;
+// CR-terminated file name
+//
+// Response as per REQUEST_READ_DISK_IMAGE.
+export const REQUEST_WRITE_DISK_IMAGE = 0x22;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -606,4 +624,4 @@ export const RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER = 5;
 //
 // The additional stuff part promises to be <256 bytes. Mask this value with
 // 0xff00 to determine the maximum valid size for the sector data.
-export const MAX_DISK_IMAGE_PART_SIZE = 4351;
+//export const MAX_DISK_IMAGE_PART_SIZE = 4351;

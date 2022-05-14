@@ -86,6 +86,8 @@ class Handler {
     public readonly name: string;
     public readonly fun: (handler: Handler, p: Buffer) => Promise<Response>;
     private quiet: boolean;
+    private fullRequestDump: boolean = false;
+    private fullResponseDump: boolean = false;
 
     public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<Response>) {
         this.name = name;
@@ -106,6 +108,24 @@ class Handler {
         this.quiet = true;
         return this;
     }
+
+    public showFullRequestDump(): boolean {
+        return this.fullRequestDump;
+    }
+
+    public showFullResponseDump(): boolean {
+        return this.fullResponseDump;
+    }
+
+    public withFullRequestDump(): Handler {
+        this.fullRequestDump = true;
+        return this;
+    }
+
+    public withFullResponseDump(): Handler {
+        this.fullResponseDump = true;
+        return this;
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -121,27 +141,20 @@ enum DefaultsCommandMode {
 /////////////////////////////////////////////////////////////////////////
 
 enum DiskImageType {
-    ADFS_UsedSectors,
-    ADFS_AllSectors,
-    SSD_UsedSectors,
-    SSD_AllSectors,
-    DSD_UsedSectors,
-    DSD_AllSectors,
-    SDD_DDOS_AllSectors,
-    DDD_DDOS_AllSectors,
+    ADFS,
+    SSD,
+    DSD,
+    SDD_DDOS,
+    DDD_DDOS,
 }
 
-interface IDiskImageDetails {
+interface IDiskImageFlowDetails {
+    bufferAddress: number;
+    bufferSize: number;
     fileName: string;
     drive: number;
     type: DiskImageType;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-function getIOAddress(addr: number): number {
-    return 0xffff0000 + (addr & 0xffff);
+    readAllSectors: boolean;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -232,11 +245,13 @@ export default class Server {
         this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('SPEED_TEST', this.handleSpeedTest);
         this.handlers[beeblink.REQUEST_SET_FILE_HANDLE_RANGE] = new Handler('SET_FILE_HANDLE_RANGE', this.handleSetFileHandleRange);
         this.handlers[beeblink.REQUEST_START_DISK_IMAGE_FLOW] = new Handler('START_DISK_IMAGE_FLOW', this.handleStartDiskImageFlow);
-        this.handlers[beeblink.REQUEST_SET_DISK_IMAGE_CAT] = new Handler('SET_DISK_IMAGE_CAT', this.handleSetDiskImageCat);
+        this.handlers[beeblink.REQUEST_SET_DISK_IMAGE_CAT] = new Handler('SET_DISK_IMAGE_CAT', this.handleSetDiskImageCat).withFullRequestDump();
         this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('NEXT_DISK_IMAGE_part', this.handleNextDiskImagePart);
         this.handlers[beeblink.REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT] = new Handler('SET_LAST_DISK_IMAGE_OSWORD_RESULT', this.handleSetLastDiskImageOSWORDResult);
         this.handlers[beeblink.REQUEST_FINISH_DISK_IMAGE_FLOW] = new Handler('FINISH_DISK_IMAGE_FLOW', this.handleFinishDiskImageFlow);
         this.handlers[beeblink.REQUEST_WRAPPED] = new Handler('REQUEST_WRAPPED', this.handleWrapped);
+        this.handlers[beeblink.REQUEST_READ_DISK_IMAGE] = new Handler('REQUEST_READ_DISK_IMAGE', this.handleReadDiskImage);
+        this.handlers[beeblink.REQUEST_WRITE_DISK_IMAGE] = new Handler('REQUEST_WRITE_DISK_IMAGE', this.handleWriteDiskImage);
 
         this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stderr, logPrefix !== undefined);
         this.log.colours = colours;
@@ -244,16 +259,18 @@ export default class Server {
     }
 
     public async handleRequest(request: Request): Promise<Response> {
-        this.dumpPacket(request);
+        const handler = this.handlers[request.c];
 
-        const response = await this.handleRequestInternal(request);
+        this.dumpPacket(request, handler !== undefined && handler.showFullRequestDump());
 
-        this.dumpPacket(response);
+        const response = await this.handleRequestInternal(handler, request);
+
+        this.dumpPacket(response, handler !== undefined && handler.showFullResponseDump());
 
         return response;
     }
 
-    private dumpPacket(packet: Request | Response): void {
+    private dumpPacket(packet: Request | Response, fullDump: boolean): void {
         if (this.dumpPackets) {
             let desc: string | undefined;
             let typeName: string;
@@ -274,14 +291,13 @@ export default class Server {
                 this.log.p(` (${packet.p.length} (0x${utils.hex8(packet.p.length)}) byte(s)`);
                 this.log.pn('');
 
-                this.log.dumpBuffer(packet.p, 10);
+                this.log.dumpBuffer(packet.p, fullDump ? undefined : 10);
             });
         }
     }
 
-    private async handleRequestInternal(request: Request): Promise<Response> {
+    private async handleRequestInternal(handler: Handler | undefined, request: Request): Promise<Response> {
         try {
-            const handler = this.handlers[request.c];
             if (handler === undefined) {
                 return this.internalError('Unsupported request: &' + utils.hex2(request.c));
             } else {
@@ -947,20 +963,25 @@ export default class Server {
     private async handleStartDiskImageFlow(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBeAtLeast(handler, p, 4);
 
+        const oshwm = p.readUInt16LE(0);
+        const himem = p.readUInt16LE(2);
+
+        return await this.startDiskImageFlow2(oshwm, himem - oshwm);
+    }
+
+    // TODO: Awful naming, that'll get tidied up (promise...)
+    private async startDiskImageFlow2(bufferAddress: number, bufferSize: number): Promise<Response> {
         if (this.diskImageFlow === undefined) {
             return errors.generic(`No disk image flow`);
         }
 
-        const oshwm = p.readUInt16LE(0);
-        const himem = p.readUInt16LE(2);
-
-        const start = this.diskImageFlow.start(oshwm, himem);
+        const start = this.diskImageFlow.start(bufferAddress, bufferSize);
 
         const buffer = Buffer.alloc(21);
         const fsStarCommandBuffer = encodeForOSCLI(start.fsStarCommand);
         const starCommandBuffer = encodeForOSCLI(start.starCommand);
 
-        let nextAddr = oshwm + buffer.length;
+        let nextAddr = bufferAddress + buffer.length;
         let nextOffset = 0;
 
         buffer.writeUInt8(start.fs, nextOffset);
@@ -981,7 +1002,7 @@ export default class Server {
             buffer.writeUInt16LE(nextAddr, nextOffset);
             nextOffset += 2;
 
-            buffer.writeUInt8(nextAddr + diskimage.getDiskOSWORDErrorOffset(start.osword1) - oshwm, nextOffset);
+            buffer.writeUInt8(nextAddr + diskimage.getDiskOSWORDErrorOffset(start.osword1) - bufferAddress, nextOffset);
             ++nextOffset;
 
             nextAddr += start.osword1.block.length;
@@ -996,7 +1017,7 @@ export default class Server {
             buffer.writeUInt16LE(nextAddr, nextOffset);
             nextOffset += 2;
 
-            buffer.writeUInt8(nextAddr + diskimage.getDiskOSWORDErrorOffset(start.osword2) - oshwm, nextOffset);
+            buffer.writeUInt8(nextAddr + diskimage.getDiskOSWORDErrorOffset(start.osword2) - bufferAddress, nextOffset);
             ++nextOffset;
 
             nextAddr += start.osword2.block.length;
@@ -1009,20 +1030,20 @@ export default class Server {
         const buffers: Buffer[] = [buffer, fsStarCommandBuffer, starCommandBuffer];
 
         if (start.osword1 !== undefined) {
-            start.osword1.block.writeUInt32LE(getIOAddress(nextAddr), 1);
+            start.osword1.block.writeUInt32LE(nextAddr, 1);
             buffers.push(start.osword1.block);
 
             nextAddr += diskimage.getDiskOSWORDTransferSizeBytes(start.osword1);
         }
 
         if (start.osword2 !== undefined) {
-            start.osword2.block.writeUInt32LE(getIOAddress(nextAddr), 1);
+            start.osword2.block.writeUInt32LE(nextAddr, 1);
             buffers.push(start.osword2.block);
 
             nextAddr += diskimage.getDiskOSWORDTransferSizeBytes(start.osword2);
         }
 
-        buffer.writeUInt32LE(getIOAddress(payloadAddr), nextOffset);
+        buffer.writeUInt32LE(payloadAddr, nextOffset);
         nextOffset += 4;
 
         buffer.writeUInt32LE(nextAddr - payloadAddr, nextOffset);
@@ -1054,19 +1075,19 @@ export default class Server {
 
             const buffer = Buffer.alloc(14);
 
-            const payloadAddr = this.diskImageFlow.getOSHWM() + buffer.length + part.osword.block.length + messageBuffer.length;
+            const payloadAddr = this.diskImageFlow.getBufferAddress() + buffer.length + part.osword.block.length + messageBuffer.length;
 
             buffer.writeUInt8(part.osword.reason, 0);
-            buffer.writeUInt16LE(this.diskImageFlow.getOSHWM() + buffer.length, 1);
+            buffer.writeUInt16LE(this.diskImageFlow.getBufferAddress() + buffer.length, 1);
             buffer.writeUInt8(buffer.length + diskimage.getDiskOSWORDErrorOffset(part.osword), 3);
-            buffer.writeUInt16LE(this.diskImageFlow.getOSHWM() + buffer.length + part.osword.block.length, 4);
+            buffer.writeUInt16LE(this.diskImageFlow.getBufferAddress() + buffer.length + part.osword.block.length, 4);
 
-            part.osword.block.writeUInt32LE(getIOAddress(payloadAddr), 1);
+            part.osword.block.writeUInt32LE(payloadAddr, 1);
 
             const buffers: Buffer[] = [buffer, part.osword.block, messageBuffer];
             if (part.osword.data === undefined) {
                 // read - set up payload.
-                buffer.writeUInt32LE(getIOAddress(payloadAddr), 6);
+                buffer.writeUInt32LE(payloadAddr, 6);
                 buffer.writeUInt32LE(diskimage.getDiskOSWORDTransferSizeBytes(part.osword), 10);
             } else {
                 // write - add data to read. Leave payload at 0 bytes.
@@ -1095,7 +1116,7 @@ export default class Server {
         const finish = await this.diskImageFlow.finish();
 
         const buffer = Buffer.alloc(5);
-        let nextAddr = this.diskImageFlow.getOSHWM() + buffer.length;
+        let nextAddr = this.diskImageFlow.getBufferAddress() + buffer.length;
 
         const fsStarCommandBuffer = encodeForOSCLI(finish.fsStarCommand);
         const starCommandBuffer = encodeForOSCLI(finish.starCommand);
@@ -1120,7 +1141,7 @@ export default class Server {
 
         const maxResponsePayloadSize = p.readUInt32LE(1);
 
-        const request = new Request(p[0], p.slice(5));
+        const request = new Request(p[0], p.subarray(5));
 
         const response = await this.handleRequest(request);
 
@@ -1131,6 +1152,22 @@ export default class Server {
         response.p.copy(wrappedResponsePayload, 5);
 
         return new Response(beeblink.RESPONSE_DATA, wrappedResponsePayload);
+    }
+
+    private async handleReadDiskImage(handler: Handler, p: Buffer): Promise<Response> {
+        const details = this.getDiskImageFlowDetailsFromRequestPayload(p);
+
+        const flow = await this.createDiskImageReadFlow(details);
+        this.startDiskImageFlow(flow);
+        return await this.startDiskImageFlow2(details.bufferAddress, details.bufferSize);
+    }
+
+    private async handleWriteDiskImage(handler: Handler, p: Buffer): Promise<Response> {
+        const details = this.getDiskImageFlowDetailsFromRequestPayload(p);
+
+        const flow = await this.createDiskImageWriteFlow(details);
+        this.startDiskImageFlow(flow);
+        return await this.startDiskImageFlow2(details.bufferAddress, details.bufferSize);
     }
 
     private internalError(text: string): never {
@@ -1667,7 +1704,54 @@ export default class Server {
         return this.textResponse('Volume: ' + volume.name + BNL + 'Path: ' + volume.path + BNL);
     }
 
-    private getDiskImageDetails(commandLine: CommandLine): IDiskImageDetails {
+    private getDiskImageFlowDetailsFromRequestPayload(p: Buffer): IDiskImageFlowDetails {
+        this.log.pn(`getDiskImageFlowDetailsFromRequestPayload`);
+
+        const reader = new utils.BufferReader(p);
+
+        const bufferAddress = reader.readUInt32LE();
+        const bufferSize = reader.readUInt32LE();
+        const typeStr = reader.readString(13);
+        const driveStr = reader.readString(13);
+        const readAllSectors = reader.readUInt8() !== 0;
+        const fileName = reader.readString(13);
+
+        let type: DiskImageType;
+        if (typeStr === 'adfs') {
+            type = DiskImageType.ADFS;
+        } else if (typeStr === 'ssd') {
+            type = DiskImageType.SSD;
+        } else if (typeStr === 'dsd') {
+            type = DiskImageType.DSD;
+        } else if (typeStr === 'sdd_ddos') {
+            type = DiskImageType.SDD_DDOS;
+        } else if (typeStr === 'ddd_ddos') {
+            type = DiskImageType.DDD_DDOS;
+        } else {
+            return errors.generic('Unknown disk type');
+        }
+
+        this.log.pn(`Got disk image flow details from payload:`);
+        this.log.withIndent('    ', () => {
+            this.log.pn(`Buffer address: 0x${utils.hex8(bufferAddress)}`);
+            this.log.pn(`Buffer size: ${bufferSize} (0x${utils.hex8(bufferSize)})`);
+            this.log.pn(`Drive: "${driveStr}"`);
+            this.log.pn(`Type: ${type} ("${typeStr}")`);
+            this.log.pn(`Read all sectors: ${readAllSectors}`);
+            this.log.pn(`File name: "${fileName}"`);
+        });
+
+        return {
+            bufferAddress,
+            bufferSize,
+            fileName,
+            drive: +driveStr,
+            type,
+            readAllSectors
+        };
+    }
+
+    private getDiskImageFlowDetailsFromCommandLine(commandLine: CommandLine): IDiskImageFlowDetails {
         if (commandLine.parts.length < 4) {
             return errors.syntax();
         }
@@ -1684,39 +1768,48 @@ export default class Server {
         }
 
         let type: DiskImageType;
+        let readAllSectors: boolean;
         switch (typeStr.toLowerCase()) {
             case 'a':
-                type = DiskImageType.ADFS_UsedSectors;
+                type = DiskImageType.ADFS;
+                readAllSectors = false;
                 break;
 
             case 'a*':
-                type = DiskImageType.ADFS_AllSectors;
+                type = DiskImageType.ADFS;
+                readAllSectors = true;
                 break;
 
             case 's':
-                type = DiskImageType.SSD_UsedSectors;
+                type = DiskImageType.SSD;
+                readAllSectors = false;
                 break;
 
             case 's*':
-                type = DiskImageType.SSD_AllSectors;
+                type = DiskImageType.SSD;
+                readAllSectors = true;
                 break;
 
             case 'd':
-                type = DiskImageType.DSD_UsedSectors;
+                type = DiskImageType.DSD;
+                readAllSectors = false;
                 break;
 
             case 'd*':
-                type = DiskImageType.DSD_AllSectors;
+                type = DiskImageType.DSD;
+                readAllSectors = true;
                 break;
 
             case 'do':
             case 'do*':
-                type = DiskImageType.DDD_DDOS_AllSectors;
+                type = DiskImageType.DDD_DDOS;
+                readAllSectors = true;
                 break;
 
             case 'so':
             case 'so*':
-                type = DiskImageType.SDD_DDOS_AllSectors;
+                type = DiskImageType.SDD_DDOS;
+                readAllSectors = true;
                 break;
 
             default:
@@ -1724,9 +1817,12 @@ export default class Server {
         }
 
         return {
+            bufferAddress: 0,//hack
+            bufferSize: 0,//hack
             fileName: commandLine.parts[1],
             drive: +driveStr,
             type,
+            readAllSectors,
         };
     }
 
@@ -1739,79 +1835,85 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_SPECIAL, p);
     }
 
-    private checkDiskImageDSDDrive(details: IDiskImageDetails): void {
+    private checkDiskImageDSDDrive(details: IDiskImageFlowDetails): void {
         if (details.drive !== 0 && details.drive !== 1) {
             return errors.badDrive();
         }
     }
 
-    private checkDiskImageADFSDrive(details: IDiskImageDetails): void {
+    private checkDiskImageADFSDrive(details: IDiskImageFlowDetails): void {
         // there's only a 3-bit field for ADFS drives.
         if (details.drive < 0 || details.drive > 7) {
             return errors.badDrive();
         }
     }
 
-    private async readCommand(commandLine: CommandLine): Promise<Response> {
-        const details = this.getDiskImageDetails(commandLine);
-
+    private async createDiskImageReadFlow(details: IDiskImageFlowDetails): Promise<diskimage.Flow> {
         const file = await this.bfs.getBeebFileForWrite(await this.bfs.parseFQN(details.fileName));
 
         switch (details.type) {
-            case DiskImageType.ADFS_AllSectors:
-            case DiskImageType.ADFS_UsedSectors:
+            case DiskImageType.ADFS:
                 this.checkDiskImageADFSDrive(details);
-                return this.startDiskImageFlow(new adfsimage.ReadFlow(details.drive, details.type === DiskImageType.ADFS_AllSectors, file, this.log));
+                return new adfsimage.ReadFlow(details.drive, details.readAllSectors, file, this.log);
 
-            case DiskImageType.SSD_AllSectors:
-            case DiskImageType.SSD_UsedSectors:
-                return this.startDiskImageFlow(new dfsimage.ReadFlow(details.drive, false, details.type === DiskImageType.SSD_AllSectors, file, this.log));
+            case DiskImageType.SSD:
+                return new dfsimage.ReadFlow(details.drive, false, details.readAllSectors, file, this.log);
 
-            case DiskImageType.DSD_AllSectors:
-            case DiskImageType.DSD_UsedSectors:
+            case DiskImageType.DSD:
                 this.checkDiskImageDSDDrive(details);
-                return this.startDiskImageFlow(new dfsimage.ReadFlow(details.drive, true, details.type === DiskImageType.DSD_AllSectors, file, this.log));
+                return new dfsimage.ReadFlow(details.drive, true, details.readAllSectors, file, this.log);
 
-            case DiskImageType.SDD_DDOS_AllSectors:
-                return this.startDiskImageFlow(new ddosimage.ReadFlow(details.drive, false, file, this.log));
+            case DiskImageType.SDD_DDOS:
+                return new ddosimage.ReadFlow(details.drive, false, file, this.log);
 
-            case DiskImageType.DDD_DDOS_AllSectors:
-                return this.startDiskImageFlow(new ddosimage.ReadFlow(details.drive, true, file, this.log));
+            case DiskImageType.DDD_DDOS:
+                return new ddosimage.ReadFlow(details.drive, true, file, this.log);
 
             default:
                 return errors.generic(`Unsupported type`);
         }
     }
 
-    private async writeCommand(commandLine: CommandLine): Promise<Response> {
-        const details = this.getDiskImageDetails(commandLine);
-
+    private async createDiskImageWriteFlow(details: IDiskImageFlowDetails): Promise<diskimage.Flow> {
         const data = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(details.fileName)));
 
         switch (details.type) {
-            case DiskImageType.ADFS_AllSectors:
-            case DiskImageType.ADFS_UsedSectors:
+            case DiskImageType.ADFS:
                 this.checkDiskImageADFSDrive(details);
-                return this.startDiskImageFlow(new adfsimage.WriteFlow(details.drive, details.type === DiskImageType.ADFS_AllSectors, data, this.log));
+                return new adfsimage.WriteFlow(details.drive, details.readAllSectors, data, this.log);
 
-            case DiskImageType.SSD_AllSectors:
-            case DiskImageType.SSD_UsedSectors:
-                return this.startDiskImageFlow(new dfsimage.WriteFlow(details.drive, false, details.type === DiskImageType.SSD_AllSectors, data, this.log));
+            case DiskImageType.SSD:
+                return new dfsimage.WriteFlow(details.drive, false, details.readAllSectors, data, this.log);
 
-            case DiskImageType.DSD_AllSectors:
-            case DiskImageType.DSD_UsedSectors:
+            case DiskImageType.DSD:
                 this.checkDiskImageDSDDrive(details);
-                return this.startDiskImageFlow(new dfsimage.WriteFlow(details.drive, true, details.type === DiskImageType.DSD_AllSectors, data, this.log));
+                return new dfsimage.WriteFlow(details.drive, true, details.readAllSectors, data, this.log);
 
-            case DiskImageType.SDD_DDOS_AllSectors:
-                return this.startDiskImageFlow(new ddosimage.WriteFlow(details.drive, false, data, this.log));
+            case DiskImageType.SDD_DDOS:
+                return new ddosimage.WriteFlow(details.drive, false, data, this.log);
 
-            case DiskImageType.DDD_DDOS_AllSectors:
-                return this.startDiskImageFlow(new ddosimage.WriteFlow(details.drive, true, data, this.log));
+            case DiskImageType.DDD_DDOS:
+                return new ddosimage.WriteFlow(details.drive, true, data, this.log);
 
             default:
                 return errors.generic(`Unsupported type`);
         }
+    }
+
+    private async readCommand(commandLine: CommandLine): Promise<Response> {
+        const details = this.getDiskImageFlowDetailsFromCommandLine(commandLine);
+
+        const flow = await this.createDiskImageReadFlow(details);
+
+        return this.startDiskImageFlow(flow);
+    }
+
+    private async writeCommand(commandLine: CommandLine): Promise<Response> {
+        const details = this.getDiskImageFlowDetailsFromCommandLine(commandLine);
+
+        const flow = await this.createDiskImageWriteFlow(details);
+
+        return this.startDiskImageFlow(flow);
     }
 
     private async defaultsCommand(commandLine: CommandLine): Promise<Response> {

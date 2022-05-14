@@ -22,12 +22,6 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-import * as utils from './utils';
-import * as inf from './inf';
-
-//////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////
-
 export class BeebError extends Error {
     public readonly code: number;
     public readonly text: string;
@@ -103,20 +97,3 @@ export function nodeError(error: NodeJS.ErrnoException): never {
         return discFault(`POSIX error: ${error.code}`);
     }
 }
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-// Causes a 'Exists on server' error if the given host file or metadata
-// counterpart exists.
-//
-// This is to cater for trying to create a new file that would have the same
-// PC name as an existing file. Could be due to mismatches between BBC names
-// in the .inf files and the actual names on disk, could be due to loose
-// non-BBC files on disk...
-export async function mustNotExist(hostPath: string): Promise<void> {
-    if (await utils.fsExists(hostPath) || await utils.fsExists(hostPath + inf.ext)) {
-        return exists('Exists on server');
-    }
-}
-
