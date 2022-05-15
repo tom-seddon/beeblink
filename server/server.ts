@@ -957,85 +957,64 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_YES);
     }
 
-    // TODO: Awful naming, that'll get tidied up (promise...)
+    private writeOSWORDBlock(osword: diskimage.IDiskOSWORD | undefined, builder: utils.BufferBuilder, blockAddressOffset: number | undefined, errorAddressOffset: number | undefined): number | undefined {
+        if (osword !== undefined) {
+            const offset = builder.getLength();
+
+            builder.setUInt32LE(builder.getNextAddress(), blockAddressOffset!);
+
+            builder.setUInt32LE(builder.getNextAddress() + diskimage.getDiskOSWORDErrorOffset(osword), errorAddressOffset!);
+
+            builder.writeBuffer(osword.block);
+
+            return offset + diskimage.getDiskOSWORDAddressOffset(osword);
+        } else {
+            return undefined;
+        }
+    }
+
+    private writeCRTerminatedString(str: string, builder: utils.BufferBuilder, stringAddressOffset: number): void {
+        builder.setUInt32LE(builder.getNextAddress(), stringAddressOffset);
+
+        builder.writeString(str);
+        builder.writeUInt8(13);
+    }
+
     private async startDiskImageFlow(diskImageFlow: diskimage.Flow, bufferAddress: number, bufferSize: number): Promise<Response> {
         this.diskImageFlow = diskImageFlow;
 
         const start = this.diskImageFlow.start(bufferAddress, bufferSize);
 
-        const buffer = Buffer.alloc(21);
-        const fsStarCommandBuffer = encodeForOSCLI(start.fsStarCommand);
-        const starCommandBuffer = encodeForOSCLI(start.starCommand);
+        const builder = new utils.BufferBuilder(bufferAddress);
 
-        let nextAddr = bufferAddress + buffer.length;
-        let nextOffset = 0;
+        builder.writeUInt8(start.fs);
+        const fsStarCommandAddressOffset = builder.writeUInt32LE(0);
+        const starCommandAddressOffset = builder.writeUInt32LE(0);
 
-        buffer.writeUInt8(start.fs, nextOffset);
-        ++nextOffset;
+        builder.writeUInt8(start.osword1 !== undefined ? start.osword1.reason : 0);
+        const osword1BlockAddressOffset = builder.writeUInt32LE(0);
+        const osword1ErrorAddressOffset = builder.writeUInt32LE(0);
+        const osword1TransferSizeBytes = start.osword1 !== undefined ? diskimage.getDiskOSWORDTransferSizeBytes(start.osword1) : 0;
 
-        buffer.writeUInt16LE(nextAddr, nextOffset);
-        nextOffset += 2;
-        nextAddr += fsStarCommandBuffer.length;
+        builder.writeUInt8(start.osword2 !== undefined ? start.osword2.reason : 0);
+        const osword2BlockAddressOffset = builder.writeUInt32LE(0);
+        const osword2ErrorAddressOffset = builder.writeUInt32LE(0);
+        const osword2TransferSizeBytes = start.osword2 !== undefined ? diskimage.getDiskOSWORDTransferSizeBytes(start.osword2) : 0;
 
-        buffer.writeUInt16LE(nextAddr, nextOffset);
-        nextOffset += 2;
-        nextAddr += starCommandBuffer.length;
+        const catPayloadAddressOffset = builder.writeUInt32LE(0);
+        builder.writeUInt32LE(osword1TransferSizeBytes + osword2TransferSizeBytes);
 
-        if (start.osword1 !== undefined) {
-            buffer.writeUInt8(start.osword1.reason, nextOffset);
-            ++nextOffset;
+        this.writeCRTerminatedString(start.fsStarCommand, builder, fsStarCommandAddressOffset);
+        this.writeCRTerminatedString(start.starCommand, builder, starCommandAddressOffset);
 
-            buffer.writeUInt16LE(nextAddr, nextOffset);
-            nextOffset += 2;
+        const osword1DataAddressOffset = this.writeOSWORDBlock(start.osword1, builder, osword1BlockAddressOffset, osword1ErrorAddressOffset);
+        const osword2DataAddressOffset = this.writeOSWORDBlock(start.osword2, builder, osword2BlockAddressOffset, osword2ErrorAddressOffset);
 
-            buffer.writeUInt8(nextAddr + diskimage.getDiskOSWORDErrorOffset(start.osword1) - bufferAddress, nextOffset);
-            ++nextOffset;
+        builder.setUInt32LE(builder.getNextAddress(), catPayloadAddressOffset);
+        builder.maybeSetUInt32LE(builder.getNextAddress(), osword1DataAddressOffset);
+        builder.maybeSetUInt32LE(builder.getNextAddress() + osword1TransferSizeBytes, osword2DataAddressOffset);
 
-            nextAddr += start.osword1.block.length;
-        } else {
-            nextOffset += 4;
-        }
-
-        if (start.osword2 !== undefined) {
-            buffer.writeUInt8(start.osword2.reason, nextOffset);
-            ++nextOffset;
-
-            buffer.writeUInt16LE(nextAddr, nextOffset);
-            nextOffset += 2;
-
-            buffer.writeUInt8(nextAddr + diskimage.getDiskOSWORDErrorOffset(start.osword2) - bufferAddress, nextOffset);
-            ++nextOffset;
-
-            nextAddr += start.osword2.block.length;
-        } else {
-            nextOffset += 4;
-        }
-
-        const payloadAddr = nextAddr;
-
-        const buffers: Buffer[] = [buffer, fsStarCommandBuffer, starCommandBuffer];
-
-        if (start.osword1 !== undefined) {
-            start.osword1.block.writeUInt32LE(nextAddr, 1);
-            buffers.push(start.osword1.block);
-
-            nextAddr += diskimage.getDiskOSWORDTransferSizeBytes(start.osword1);
-        }
-
-        if (start.osword2 !== undefined) {
-            start.osword2.block.writeUInt32LE(nextAddr, 1);
-            buffers.push(start.osword2.block);
-
-            nextAddr += diskimage.getDiskOSWORDTransferSizeBytes(start.osword2);
-        }
-
-        buffer.writeUInt32LE(payloadAddr, nextOffset);
-        nextOffset += 4;
-
-        buffer.writeUInt32LE(nextAddr - payloadAddr, nextOffset);
-        nextOffset += 4;
-
-        return newResponse(beeblink.RESPONSE_DATA, Buffer.concat(buffers));
+        return newResponse(beeblink.RESPONSE_DATA, builder.createBuffer());
     }
 
     private async handleSetDiskImageCat(handler: Handler, p: Buffer): Promise<Response> {
@@ -1067,18 +1046,13 @@ export default class Server {
             const resultPayloadSizeOffset = builder.writeUInt32LE(0);
 
             // Add CR-terminated message.
-            builder.setUInt32LE(builder.getNextAddress(), messageAddressOffset);
-            builder.writeString(part.message);
-            builder.writeUInt8(13);
+            this.writeCRTerminatedString(part.message, builder, messageAddressOffset);
 
             // Add OSWORD parameter block.
-            const oswordBlockOffset = builder.getLength();
-            builder.setUInt32LE(builder.getNextAddress(), oswordBlockAddressOffset);
-            builder.setUInt32LE(builder.getNextAddress() + diskimage.getDiskOSWORDErrorOffset(part.osword), oswordBlockErrorAddressOffset);
-            builder.writeBuffer(part.osword.block);
+            const dataAddressOffset = this.writeOSWORDBlock(part.osword, builder, oswordBlockAddressOffset, oswordBlockErrorAddressOffset)!;
 
             // Add buffer.
-            builder.setUInt32LE(builder.getNextAddress(), oswordBlockOffset + diskimage.getDiskOSWORDAddressOffset(part.osword));
+            builder.setUInt32LE(builder.getNextAddress(), dataAddressOffset); //oswordBlockOffset + diskimage.getDiskOSWORDAddressOffset(part.osword));
             if (part.osword.data === undefined) {
                 // Read operation. Set up payload.
                 builder.setUInt32LE(resultPayloadAddressOffset, builder.getNextAddress());

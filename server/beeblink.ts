@@ -310,7 +310,7 @@ export const REQUEST_SET_DISK_IMAGE_CAT = 0x1c;
 //
 // Response is DATA if there is another part. Store at OSHWM:
 
-// +0  byte  - A code for OSWORD
+// +0  byte  - accumulator value for OSWORD
 // +1  dword - address of OSWORD block
 // +5  dword - address of error result for OSWORD
 // +9  dword  - address of CR-terminated message to print
@@ -357,17 +357,16 @@ export const REQUEST_WRAPPED = 0x20;
 // Response is data to be stored in buffer:
 
 // +0  byte  - FS to select with ROM service call $12, or 0 if not selecting FS this way
-// +1  word  - address of * command to execute to select FS
-// +3  word  - address of * command to execute after selecting FS
-// +5  byte  - code for first OSWORD block, or 0 if none
-// +6  word  - address of first OSWORD block
-// +8  byte  - offset from OSHWM of error result for first OSWORD call
-// +9  byte  - code for second OSWORD block, or 0 if none
-// +10  word  - address of second OSWORD block
-// +12  byte  - offset from OSHWM of error result for second OSWORD call
-// +13  dword - payload addr for the SET_DISK_IMAGE_CAT
-// +17 dword - payload size for the SET_DISK_IMAGE_CAT (may be 0)
-// +21
+// +1  dword - address of * command to execute to select FS
+// +5  dword - address of * command to execute after selecting FS
+// +9  byte  - accumulator value for first OSWORD, or 0 if none
+// +10 dword - address of first OSWORD block
+// +14 dword - address of error result for first OSWORD
+// +18 byte  - accumulator value for second OSWORD, or 0 if none
+// +19 dword - address of second OSWORD block
+// +23 dword - address of error result for second OSWORD
+// +27 dword - payload addr for the SET_DISK_IMAGE_CAT
+// +31 dword - payload size for the SET_DISK_IMAGE_CAT (may be 0)
 
 // Select other filing system, do the OSWORDs as appropriate, then do a
 // SET_DISK_IMAGE CAT to set things going.

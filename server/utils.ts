@@ -141,6 +141,12 @@ export class BufferBuilder {
         this.bytes[offset + 3] = (value >> 24) & 0xff;
     }
 
+    public maybeSetUInt32LE(value: number, offset: number | undefined): void {
+        if (offset !== undefined) {
+            this.setUInt32LE(value, offset);
+        }
+    }
+
     public writeUInt32LE(value: number): number {
         const offset = this.bytes.length;
 
