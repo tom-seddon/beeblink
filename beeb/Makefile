@@ -65,7 +65,7 @@ BUILD_TIME:=$(shell $(SHELLCMD) strftime -d _ '_Y-_m-_d _H:_M:_S')
 all : programs roms
 
 .PHONY : programs
-programs: _update_program _uputest_program
+programs: _uputest_program
 
 .PHONY : roms
 roms : _avr_rom _tube_serial_rom _upurs_rom
@@ -87,10 +87,6 @@ $(DEST)/beeblink_constants.s65 : ../server/beeblink.ts ../tools/make_constants.p
 
 ##########################################################################
 ##########################################################################
-
-.PHONY : _update_program
-_update_program : _dest $(DEST)/beeblink_constants.s65
-	$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=update IO=1 DRIVE=0
 
 .PHONY : _uputest_program
 _uputest_program: _dest

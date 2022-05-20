@@ -14,3 +14,4 @@ $.SPEEDTEST2 diff=bbcbasic
 $.SPEEDTEST3 diff=bbcbasic
 $.RTOOL diff=bbcbasic
 $.IMAGER diff=bbcbasic
+$.SELFUPDATE diff=bbcbasic
