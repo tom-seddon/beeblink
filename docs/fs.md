@@ -338,20 +338,6 @@ also refuse to overwrite the bank containing the BLFS.
 The `Q` parameter is included for compatibility with the B+/Master
 syntax, and is ignored. The operation never uses main memory.
 
-### `SELFUPDATE`
-
-**If you answer `Y` to the prompt, it will overwrite I/O processor
-memory from &3000 onwards!**
-
-Attempt to update the ROM, if it's loaded into sideways RAM. If it
-looks like it might be loaded into a write-protected ABR cartridge, it
-will attempt to unlock the ABR and lock it again afterwards.
-
-The server must be able to find the ROM file - see
-[the bootstrap process](./bootstrap.md).
-
-This is mainly for my benefit when working on the ROM code.
-
 ### `TITLE <title>`
 
 Set current drive's title.

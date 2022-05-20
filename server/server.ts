@@ -207,7 +207,6 @@ export default class Server {
             new Command('LOCATE', '<afsp> (<format>)', this.locateCommand),
             new Command('NEWVOL', '<vsp>', this.newvolCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
-            new Command('SELFUPDATE', undefined, this.selfupdateCommand),
             new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand),
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
@@ -1613,10 +1612,6 @@ export default class Server {
         builder.writeBuffer(rom);
 
         return newResponse(beeblink.RESPONSE_SPECIAL, builder);
-    }
-
-    private async selfupdateCommand(commandLine: CommandLine): Promise<Response> {
-        return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_SELFUPDATE);
     }
 
     private async titleCommand(commandLine: CommandLine): Promise<Response> {

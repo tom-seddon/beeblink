@@ -88,9 +88,6 @@ blfs_num_handles=DEFAULT_NUM_FILE_HANDLES
 
 ; If true, enable *VOLBROWSER.
 enable_volbrowser=true
-
-; If true, enable *SELFUPDATE.
-enable_selfupdate=true
                 .endweak
 
 ;-------------------------------------------------------------------------
@@ -3258,11 +3255,6 @@ special:
                 beq volumes_browser_special
                 .endif
 
-                .if enable_selfupdate
-                cmp #RESPONSE_SPECIAL_SELFUPDATE
-                beq selfupdate_special
-                .endif
-                
                 cmp #RESPONSE_SPECIAL_SRLOAD
                 beq srload_special
 
@@ -3727,162 +3719,6 @@ yes:
                 sec
                 rts
                 
-                .pend
-
-;-------------------------------------------------------------------------
-;
-; *SELFUPDATE.
-;
-selfupdate_special: .proc
-                jsr discard_remaining_payload
-                
-                lda #$77        ;close *SPOOL/*EXEC handles (AUG 141)
-                jsr osbyte
-
-                jsr check_if_sure
-                bcs +
-                rts
-                
-+
-
-new_rom=$3f00
-
-abr_offset=brkthunk
-relocator=$7f00            ;where to put the relocating code
-
-                lda #$80
-                sta abr_offset
-
-                lda #REQUEST_GET_ROM
-                ldx #0
-                jsr send_request_1_with_restart
-
-                jsr recv_response
-
-size_ok:
-                jsr unlock_ABR
-                bcs recv_rom
-                
-                jsr discard_remaining_payload
-
-                .brk_error 255,"ROM not writeable"
-                
-recv_rom:
-                jsr pcprint
-                .text 22,0      ;mode 0
-                .text 28,0,5,79,0 ;keep out of the way of $3f00
-                .text 255
-                
-                sty abr_offset
-
-                ; tya
-                ; jsr get_ascii_hi_nybble
-                ; jsr oswrch
-
-                ; tya
-                ; jsr get_ascii_lo_nybble
-                ; jsr oswrch
-
-                ; lda #' '
-                ; jsr oswrch
-                
-                lda #<new_rom
-                sta payload_addr+0
-                lda #>new_rom
-                sta payload_addr+1
-                lda #$ff
-                sta payload_addr+2
-                sta payload_addr+3
-
-                jsr recv_file_data
-                
-                jsr pcprint
-                .text "Old: ",255
-
-                ldx #9
-print_old_name_loop:
-                lda $8000,x
-                jsr print_rom_name_char
-                inx
-                cpx $8007
-                bne print_old_name_loop
-
-                jsr pcprint
-                .text 10,13,"New: ",255
-
-                ldx #9
-print_new_name_loop:
-                lda new_rom,x
-                jsr print_rom_name_char
-                inx
-                cpx new_rom+7
-                bne print_new_name_loop
-
-                ldx #0
-copy_relocator_loop:
-                lda relocator_start,x
-                sta relocator,x
-                inx
-                cpx #relocator_end-relocator_start
-                bne copy_relocator_loop
-
-                sei
-                jmp relocator
-
-is_rom:
-                ; after call, BNE will be taken if RAM, BEQ taken if
-                ; ROM.
-                lda rom_version_number
-                tax
-                eor #$ff
-                sta rom_version_number
-                cpx rom_version_number
-                stx rom_version_number
-                rts
-
-                ; In principle the relocator could be part of the ROM,
-                ; but it's easier just to copy it into main RAM...
-relocator_start: .proc
-                .logical relocator
-                ldx #0
-                ldy #$40        ;just copy all 16K...
-copy_loop:
-read:
-                lda new_rom,x
-write:
-                sta $8000,x
-                inx
-                bne copy_loop
-                inc read+2
-                inc write+2
-                dey
-                bne copy_loop
-
-                ldx #0
-print_loop:
-                lda message,x
-                jsr oswrch
-                inx
-                cpx #message_end-message
-                bne print_loop
-print_done:
-                ldy abr_offset
-                bmi hang
-
-                iny             ;form lock offset
-                jsr write_ABR_m128
-                
-hang:
-                jmp hang
-                
-message:
-                .text 10,13,"Press CTRL+BREAK."
-message_end:
-                
-                .here
-                .pend
-relocator_end:
-                .cerror relocator_end-relocator_start>80,"relocator too large"
                 .pend
 
 ;-------------------------------------------------------------------------

@@ -571,12 +571,9 @@ export const RESPONSE_SPECIAL_VOLUME_BROWSER = 0;
 // No longer used.
 export const RESPONSE_SPECIAL_01 = 1;
 export const RESPONSE_SPECIAL_02 = 2;
-
 export const RESPONSE_SPECIAL_03 = 3;
 export const RESPONSE_SPECIAL_04 = 4;
-
-// Do a *SELFUPDATE.
-export const RESPONSE_SPECIAL_SELFUPDATE = 5;
+export const RESPONSE_SPECIAL_05 = 5;
 
 // Do *SRLOAD.
 //
