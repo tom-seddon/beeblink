@@ -213,10 +213,6 @@ fs_scratch_workspace_start:
                 .struct_section star_command_workspace
                 .struct_section volumes_browser_workspace
                 .struct_section srload_workspace
-                
-                ; disk_image_workspace must go in the scratch section
-                ; - it's fiddled with while DFS or ADFS is active.
-                .struct_section disk_image_workspace
                 .endu
                 
                 .cerror *>$c0,"FS scratch workspace overflow"
@@ -246,13 +242,6 @@ cmd_ptr: .fill 0
 brk_ptr: .fill 0
                 .fill 2
                 .send misc_workspace
-
-;-------------------------------------------------------------------------
-
-                .section disk_image_workspace
-disk_image_temp: .fill 2
-disk_image_data: .fill 2
-                .send disk_image_workspace
 
 ;-------------------------------------------------------------------------
 
