@@ -214,12 +214,22 @@ fs_scratch_workspace_start:
                 .struct_section volumes_browser_workspace
                 .struct_section srload_workspace
                 .endu
-                
+
+                ; It's not actually a massive problem if the above
+                ; sections overflow
                 .cerror *>$c0,"FS scratch workspace overflow"
+
+                ; Payload workspace. This can go anywhere, so just
+                ; follow straight on from the scratch workspace and if
+                ; it overflows then no problem.
+                .struct_section payload_workspace
 
 ;-------------------------------------------------------------------------
 
+; This region has to go in the persistent FS area.
+                .if *<$c0
 *=$c0
+                .endif
 fs_workspace_start:
                 .dsection fs_workspace
                 .dsection link_workspace
@@ -245,11 +255,10 @@ brk_ptr: .fill 0
 
 ;-------------------------------------------------------------------------
 
-; Strictly speaking, the payload stuff could go in the scratch
-; workspace. But it's 8 bytes, and this doesn't leave much space for
-; all the other stuff...
+; The payload workspace is scratch workspace, but it can't overlap
+; anything else.
                 
-                .section fs_workspace
+                .section payload_workspace
                 
 ; Holds payload size on entry to send_request_n.
 ;
@@ -260,7 +269,14 @@ payload_counter: .fill 4
 ; Address to transfer payload data to/from. 32-bit address in host
 ; (top 16 bits set) or parasite memory.
 payload_addr: .fill 4
+                
+                .endsection payload_workspace
 
+;-------------------------------------------------------------------------
+
+
+                .section fs_workspace
+                
 ; Address of command line for *RUN. Stored in private workspace so
 ; OSARGS A=0 Y=1 can retrieve it.
 command_line_ptr: .fill 2
