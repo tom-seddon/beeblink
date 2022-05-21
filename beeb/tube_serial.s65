@@ -1047,16 +1047,16 @@ _..=[send_host_bytes]           ; R=0 I=0 H=1 p=0
 _..=[send_host_page]            ; R=0 I=0 H=1 p=1
 _..=[itu_send_parasite_bytes]   ; R=0 I=1 H=0 p=0
 _..=[itu_send_parasite_page]    ; R=0 I=1 H=0 p=1
-_..=[itu_send_host_page]        ; R=0 I=1 H=1 p=1
 _..=[itu_send_host_bytes]       ; R=0 I=1 H=1 p=0
+_..=[itu_send_host_page]        ; R=0 I=1 H=1 p=1
 _..=[recv_parasite_bytes]       ; R=1 I=0 H=0 p=0
 _..=[recv_parasite_page]        ; R=1 I=0 H=0 p=1
 _..=[recv_host_bytes]           ; R=1 I=0 H=1 p=0
 _..=[recv_host_page]            ; R=1 I=0 H=1 p=1
 _..=[itu_recv_parasite_bytes]   ; R=1 I=1 H=0 p=0
 _..=[itu_recv_parasite_page]    ; R=1 I=1 H=0 p=1
-_..=[itu_recv_host_page]        ; R=1 I=1 H=1 p=1
 _..=[itu_recv_host_bytes]       ; R=1 I=1 H=1 p=0
+_..=[itu_recv_host_page]        ; R=1 I=1 H=1 p=1
 link_transfer_routines=_
 
 link_transfer_routines_lsb: .byte <link_transfer_routines
