@@ -3288,16 +3288,6 @@ release_tube: .proc
 ;
 ; Produce a delay that's some multiple of 12 cycles.
 ;
-delay_1536_cycles:
-                jsr delay_768_cycles
-delay_768_cycles:
-                jsr delay_384_cycles
-delay_384_cycles:
-                jsr delay_192_cycles
-delay_192_cycles:
-                jsr delay_96_cycles
-delay_96_cycles:
-                jsr delay_48_cycles
 delay_48_cycles:
                 jsr delay_12_cycles
 delay_36_cycles:
@@ -4153,9 +4143,9 @@ buf_size=50
 
                 lda #$80        ;open for write (AUG 343)
 
-                .debug_print ['OSFIND: before: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
+                ;.debug_print ['OSFIND: before: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
                 jsr osfind
-                .debug_print ['OSFIND:  after: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
+                ;.debug_print ['OSFIND:  after: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
 
                 cmp #0
                 bne +
@@ -4198,7 +4188,7 @@ buf_size=50
                 lda #126
                 sta build_osword0_block+4
 
-                .debug_print ['*BUILD buffer: &01',DP_X,'\r\n']
+                ;.debug_print ['*BUILD buffer: &01',DP_X,'\r\n']
 
 read_lines_loop:
                 lda build_line+1
@@ -4220,9 +4210,9 @@ read_lines_loop:
 write_line_loop:
                 ldy build_handle
                 lda $101,x
-                .debug_print ['OSBPUT: before: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
+                ;.debug_print ['OSBPUT: before: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
                 jsr osbput
-                .debug_print ['OSBPUT:  after: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
+                ;.debug_print ['OSBPUT:  after: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
                 cmp #13
                 beq wrote_line
                 inx
@@ -4254,9 +4244,9 @@ done:
 
                 lda #0          ;close file (AUG 342)
                 ldy build_handle
-                .debug_print ['OSFIND: before: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
+                ;.debug_print ['OSFIND: before: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
                 jsr osfind
-                .debug_print ['OSFIND:  after: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
+                ;.debug_print ['OSFIND:  after: a=',DP_A,' x=',DP_X,' y=',DP_Y,'\r\n']
 
                 jsr osnewl
 
