@@ -101,6 +101,10 @@ configured=$08
 
 tube_serial: .block
 
+syncdp: .macro items
+                ;.debug_print \items 
+                .endm
+                
 txdp: .macro items
                 ;.debug_print \items 
                 .endm
@@ -363,7 +367,7 @@ start_sync:
                 sta num_sync_zeros_received+1
 
                 .block
-                .debug_print ['Sync step 0...\r\n']
+                .syncdp ['Sync step 0...\r\n']
                 lda #1
                 jsr reset_startup_counter
 sync_step_0_loop:
@@ -377,7 +381,7 @@ sync_step_0_loop:
                 .bend
 
                 .block
-                .debug_print ['Sync step 1...\r\n']
+                .syncdp ['Sync step 1...\r\n']
                 lda #255
                 jsr reset_startup_counter
 sync_step_1_loop:
@@ -416,7 +420,7 @@ sync_step_1_loop:
                 .block
                 ; Keep reading until the 1 byte is received. Continue
                 ; sending zeros meanwhile.
-                .debug_print ['Sync step 2...\r\n']
+                .syncdp ['Sync step 2...\r\n']
                 lda #16
                 jsr reset_startup_counter
 sync_step_2_loop:
@@ -440,7 +444,7 @@ sync_step_2_loop:
 
                 .block
                 ; Send a single non-zero byte.
-                .debug_print ['Sync step 3...\r\n']
+                .syncdp ['Sync step 3...\r\n']
                 lda #16
                 jsr reset_startup_counter
 sync_step_3_loop:
@@ -452,7 +456,7 @@ sync_step_3_loop:
                 bcc sync_step_3_loop
                 .bend
 ok:
-                .debug_print ['Sync success (probably)\r\n']
+                .syncdp ['Sync success (probably)\r\n']
                 clc             ;good
                 rts
 
@@ -1026,7 +1030,7 @@ init_link_transfer_thunk:
                 sta link_transfer_thunk+1
                 lda link_transfer_routines_msb,x
                 sta link_transfer_thunk+2
-                .debug_print ['Transfer thunk: ',link_transfer_thunk+0,link_transfer_thunk+1,link_transfer_thunk+2,' (idx=&',DP_X,')\r\n']
+                ;.debug_print ['Transfer thunk: ',link_transfer_thunk+0,link_transfer_thunk+1,link_transfer_thunk+2,' (idx=&',DP_X,')\r\n']
                 rts
 
                 ; Initiate a Tube transfer, if necessary.
@@ -1035,7 +1039,7 @@ initiate_tube_transfer:
                 bpl +           ;taken if Tube transfer wanted
                 rts
 +
-                .debug_print ['Tube transfer: mode=&',DP_A,' addr=&',payload_addr+3,payload_addr+2,payload_addr+1,payload_addr+0,'\r\n']
+                ;.debug_print ['Tube transfer: mode=&',DP_A,' addr=&',payload_addr+3,payload_addr+2,payload_addr+1,payload_addr+0,'\r\n']
                 ldx #<payload_addr
                 ldy #>payload_addr
                 jmp $406
