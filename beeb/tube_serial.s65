@@ -86,7 +86,7 @@ send_1_byte_messages=true
                 
                 .virtual $fefe
 fifo:
-                .endv
+                .endvirtual
 
                 .virtual $feff
 status: .block
@@ -94,8 +94,8 @@ rx_data=$01
 tx_space=$02
 suspend=$04
 configured=$08
-                .bend
-                .endv
+                .endblock
+                .endvirtual
 
 ;-------------------------------------------------------------------------
 
@@ -103,11 +103,11 @@ tube_serial: .block
 
 syncdp: .macro items
                 ;.debug_print \items 
-                .endm
+                .endmacro
                 
 txdp: .macro items
                 ;.debug_print \items 
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 
@@ -129,7 +129,7 @@ recv=2                      ;host->parasite when doing a Tube transfer
 ; Crude dir validity check.
 check_dir: .macro dir
                 .cerror \dir!=send&&\dir!=recv,'bad send/recv dir'
-                .endm
+                .endmacro
 
 ; Get appropriate status register flag for dir.
 get_status_flag_for_dir: .function dir
@@ -153,7 +153,7 @@ num_sync_zeros_received: .fill 2
 startup_itu: .fill 1
 startup_counter: .fill 2
 startup_sync_counter: .fill 1
-                .send link_startup_workspace
+                .endsection link_startup_workspace
 
 ; ; The link startup workspace is a not-very-generous 8 bytes.
 ; startup_end_time=brkthunk+0
@@ -169,7 +169,7 @@ link_old_y: .fill 1
 link_value: .fill 1
 link_transfer_flags: .fill 1
 link_transfer_thunk: .fill 3    ;$4C, LSB, MSB
-                .send link_workspace
+                .endsection link_workspace
                 
 ;-------------------------------------------------------------------------
 ; Check if ACCCON ITU needs resetting to access the FTDI device.
@@ -209,7 +209,7 @@ is_itu: .proc
                 ror a
                 
                 rts
-                .pend
+                .endproc
 
 ;-------------------------------------------------------------------------
 ; Reads status register during startup. Handles Tube palaver if
@@ -238,7 +238,7 @@ startup_read_status: .proc
                 plp
                 .cpu 'default'
                 rts
-                .pend
+                .endproc
 
 ;-------------------------------------------------------------------------
 ; Read FIFO during startup. Handles Tube palaver if required.
@@ -279,7 +279,7 @@ itu:
                 plp
                 .cpu 'default'
                 rts
-                .pend
+                .endproc
 
 ;-------------------------------------------------------------------------
 ; Write FIFO during startup. Handles Tube palaver if required.
@@ -325,7 +325,7 @@ itu:
 
                 asl a           ;restore carry
                 rts
-                .pend
+                .endproc
                 
 ;-------------------------------------------------------------------------
 
@@ -378,7 +378,7 @@ sync_step_0_loop:
                 jsr startup_write_fifo
 
                 bcc sync_step_0_loop
-                .bend
+                .endblock
 
                 .block
                 .syncdp ['Sync step 1...\r\n']
@@ -415,7 +415,7 @@ sync_step_1_loop:
                 lda num_sync_zeros_received+1
                 cmp #>NUM_SERIAL_SYNC_ZEROS
                 bne sync_step_1_loop
-                .bend
+                .endblock
 
                 .block
                 ; Keep reading until the 1 byte is received. Continue
@@ -440,7 +440,7 @@ sync_step_2_loop:
 
                 cmp #1
                 bne failed
-                .bend
+                .endblock
 
                 .block
                 ; Send a single non-zero byte.
@@ -454,7 +454,7 @@ sync_step_3_loop:
                 ldy #$01
                 jsr startup_write_fifo
                 bcc sync_step_3_loop
-                .bend
+                .endblock
 ok:
                 .syncdp ['Sync success (probably)\r\n']
                 clc             ;good
@@ -491,7 +491,7 @@ check_startup_counter:
 
                 
                 
-                .pend
+                .endproc
 
 status_text: .block
 not_ready:
@@ -506,7 +506,7 @@ sync_timed_out_2:
                 .text 'Sync timeout (step 2)',0
 sync_timed_out_3:
                 .text 'Sync timeout (step 3)',0
-                .bend
+                .endblock
                 
 ;-------------------------------------------------------------------------
 ;
@@ -559,7 +559,7 @@ n_bytes:
 
                 clc
                 rts
-                .pend
+                .endproc
 
 ;-------------------------------------------------------------------------
 ;
@@ -591,7 +591,7 @@ n_bytes:
                 
                 rts
                 
-                .pend
+                .endproc
                 
 ;-------------------------------------------------------------------------
 ;
@@ -600,7 +600,7 @@ n_bytes:
 ; (Nothing needs to be done for the Tube serial.)
 unprepare: .proc
                 rts
-                .pend
+                .endproc
 
 ;-------------------------------------------------------------------------
 ;
@@ -608,7 +608,7 @@ unprepare: .proc
 ;
 error: .proc
                 .brk_error 255,'Tube serial transfer = TODO'
-                .pend
+                .endproc
 
 ;-------------------------------------------------------------------------
 ;
@@ -616,7 +616,7 @@ error: .proc
 ;
 nop: .proc
                 rts
-                .pend
+                .endproc
 
 ;-------------------------------------------------------------------------
 ;
@@ -630,7 +630,7 @@ itu_int_tube: .proc
                 tsb acccon
                 rts
                 .cpu 'default'
-                .pend
+                .endproc
                 
 ;-------------------------------------------------------------------------
 ;
@@ -644,7 +644,7 @@ itu_cli_briefly: .proc
                 jsr itu_int_tube
                 cli
                 .cerror *!=itu_sei_ext_tube,'oops'
-                .pend
+                .endproc
 
 ;-------------------------------------------------------------------------
 ;
@@ -662,7 +662,7 @@ itu_sei_ext_tube: .block
                 trb acccon      ;10 +6
                 rts             ;16 +6 = 22
                 .cpu 'default'
-                .bend
+                .endblock
 
 ;-------------------------------------------------------------------------
 ; 
@@ -680,7 +680,7 @@ itu_wait_for_status: .proc
                 bit status
                 beq itu_wait_for_status
                 rts
-                .pend
+                .endproc
                 
 ;-------------------------------------------------------------------------
 ;
@@ -697,7 +697,7 @@ send_byte: .macro
                 beq -
                 sty fifo
                 .txdp ['\r\n']
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -715,7 +715,7 @@ recv_byte: .macro
                 beq -
                 lda fifo
                 .txdp [DP_A,'\r\n']
-                .endm
+                .endmacro
                 
 ;-------------------------------------------------------------------------
 ;
@@ -749,7 +749,7 @@ itu_send_byte: .macro
                 plp
                 .txdp ['\r\n']
                 .cpu 'default'
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -785,7 +785,7 @@ itu_recv_byte: .macro dest
                 .else
                 .txdp ['??\r\n']
                 .endif
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 
@@ -804,7 +804,7 @@ itu:
                 .itu_send_byte
                 ldy link_old_y
                 rts
-                .pend
+                .endproc
 
 ;-------------------------------------------------------------------------
 
@@ -840,7 +840,7 @@ itu:
 +
                 ldy link_old_y
                 rts
-                .pend
+                .endproc
 
 ;-------------------------------------------------------------------------
 
@@ -857,7 +857,7 @@ itu:
                 lda link_value
                 rts
                 
-                .pend
+                .endproc
 
 ;-------------------------------------------------------------------------
 
@@ -896,7 +896,7 @@ itu_recv_status_byte:
                 lda link_value
                 rts
                 
-                .pend
+                .endproc
 
 ; ;-------------------------------------------------------------------------
 ; ;
@@ -1174,7 +1174,7 @@ done:
 
                 rts
 
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -1192,7 +1192,7 @@ transfer_wait_for_status: .macro dir
 -
                 bit status
                 beq -
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -1211,7 +1211,7 @@ itu_transfer_wait_for_status: .macro dir
                 bne +
                 jsr itu_wait_for_status
 +
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -1235,7 +1235,7 @@ transfer_host_data_byte: .macro dir
                 sta (payload_addr),y
                 .endif
                 
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -1259,7 +1259,7 @@ transfer_parasite_data_byte: .macro dir
                 sty tube_fifo3_data
                 .endif
 
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -1277,7 +1277,7 @@ transfer_status_byte: .macro dir
                 lda fifo        ;and discard it
                 .endif
 
-                .endm
+                .endmacro
                 
 ;-------------------------------------------------------------------------
 ;
@@ -1300,7 +1300,7 @@ loop:
 
                 rts
                 
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -1328,7 +1328,7 @@ loop:
                 rts
                 
                 .cpu 'default'
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -1346,7 +1346,7 @@ loop:
                 .transfer_wait_for_status \dir ;+8  8
                 .transfer_host_data_byte \dir  ;+10 18
                 iny                            ;+2  20
-                .next                          ;20n
+                .endrept                       ;20n
 
                 bne loop
 
@@ -1355,7 +1355,7 @@ loop:
 
                 rts
                 
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -1378,7 +1378,7 @@ loop:
                 .itu_transfer_wait_for_status \dir ;0 +9
                 .transfer_host_data_byte \dir      ;9 +10
                 iny                                ;19 +2
-                .next                              ;21n
+                .endrept                           ;21n
 
                 bne loop
 
@@ -1390,7 +1390,7 @@ loop:
                 rts
                 
                 .cpu 'default'
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -1423,7 +1423,7 @@ loop:
                 .transfer_status_byte \dir
                 
                 rts
-                .endm
+                .endmacro
 
 ;-------------------------------------------------------------------------
 ;
@@ -1460,7 +1460,7 @@ transfer:                                         ;...
                 .transfer_status_byte \dir
                 
                 rts
-                .endm
+                .endmacro
                 
 ;-------------------------------------------------------------------------
 ;
@@ -1480,38 +1480,38 @@ transfer:                                         ;...
                 .page
 recv_host_bytes: .proc
                 .transfer_host_bytes_routine recv
-                .pend
-                .endp
+                .endproc
+                .endpage
 
                 .page
 send_host_bytes: .proc
                 .transfer_host_bytes_routine send
-                .pend
-                .endp
+                .endproc
+                .endpage
                 
                 .page
 itu_recv_host_bytes: .proc
                 .itu_transfer_host_bytes_routine recv
-                .pend
-                .endp
+                .endproc
+                .endpage
 
                 .page
 itu_send_host_bytes: .proc
                 .itu_transfer_host_bytes_routine send
-                .pend
-                .endp
+                .endproc
+                .endpage
 
                 .page
 recv_parasite_bytes: .proc
                 .transfer_parasite_bytes_routine recv
-                .pend
-                .endp
+                .endproc
+                .endpage
 
                 .page
 send_parasite_bytes: .proc
                 .transfer_parasite_bytes_routine send
-                 .pend
-                .endp
+                 .endproc
+                .endpage
 
 ;-------------------------------------------------------------------------
 
@@ -1549,8 +1549,8 @@ loop:
                 plp
                 rts
                 .cpu 'default'
-                .pend
-                .endp
+                .endproc
+                .endpage
 
 ;-------------------------------------------------------------------------
 ;
@@ -1587,13 +1587,13 @@ loop:
                 plp
                 rts
                 .cpu 'default'
-                .pend
+                .endproc
 
                 .page
 recv_host_page: .proc
                 .transfer_host_page_routine recv
-                .pend
-                .endp
+                .endproc
+                .endpage
 
 ;-------------------------------------------------------------------------
 
@@ -1604,36 +1604,36 @@ recv_host_page: .proc
                 .page
 send_host_page: .proc
                 .transfer_host_page_routine send
-                .pend
-                .endp
+                .endproc
+                .endpage
 
                 .align 256
                 
                 .page
 itu_recv_host_page: .proc
                 .itu_transfer_host_page_routine recv
-                .pend
-                .endp
+                .endproc
+                .endpage
 
                 .align 256
 
                 .page
 itu_send_host_page: .proc
                 .itu_transfer_host_page_routine send
-                .pend
-                .endp
+                .endproc
+                .endpage
 
                 .page
 recv_parasite_page: .proc
                 .transfer_parasite_page_routine recv
-                .pend
-                .endp
+                .endproc
+                .endpage
 
                 .page
 send_parasite_page: .proc
                 .transfer_parasite_page_routine send
-                .pend
-                .endp
+                .endproc
+                .endpage
 
 ;-------------------------------------------------------------------------
 
@@ -1671,7 +1671,7 @@ loop:
                 sty acccon                         ;+4 21
                 sta tube_fifo3_data                ;+4 25
 
-                .next
+                .endrept
 
                 dec link_value
                 bne loop
@@ -1694,8 +1694,8 @@ get_acccon:
                 tay             ;Y = int Tube
                 rts
                 .cpu 'default'
-                .pend
-                .endp
+                .endproc
+                .endpage
 
 ;-------------------------------------------------------------------------
 ;
@@ -1732,7 +1732,7 @@ loop:
                 jsr wait_status                    ;...
 +                                                  ;...
                 stx fifo                           ;24 +4 = 28
-                .next
+                .endrept
 
                 dec link_value
                 bne loop
@@ -1755,7 +1755,7 @@ get_acccon:
                 tay             ;Y = int tube
                 rts
                 .cpu 'default'
-                .pend
+                .endproc
 
 
 ;-------------------------------------------------------------------------
@@ -1775,7 +1775,7 @@ recv_file_data_host: .proc
 itu:
                 .transfer_file_data_driver_routine 0,itu_recv_host_bytes,itu_recv_host_page,'recv_file_data_host'
                 
-                .pend
+                .endproc
                 .endif
                 
                 .if use_new_send_file_data_host
@@ -1792,7 +1792,7 @@ send_file_data_host: .proc
                 
 itu:
                 .transfer_file_data_driver_routine 0,itu_send_host_bytes,itu_send_host_page,'send_file_data_host'
-                .pend
+                .endproc
                 .endif
 
                 .if use_new_recv_file_data_parasite
@@ -1809,7 +1809,7 @@ recv_file_data_parasite: .proc
 
 itu:
                 .transfer_file_data_driver_routine recv,itu_recv_parasite_bytes,itu_recv_parasite_page,'recv_file_data_parasite'
-                .pend
+                .endproc
                 .endif
 
                 .if use_new_send_file_data_parasite
@@ -1826,14 +1826,14 @@ send_file_data_parasite: .proc
                 
 itu:
                 .transfer_file_data_driver_routine send,itu_send_parasite_bytes,itu_send_parasite_page,'send_file_data_parasite'
-                .pend
+                .endproc
                 .endif
                 
 ;-------------------------------------------------------------------------
 
-                .bend
+                .endblock
                 
-                .send code
+                .endsection code
 
 ;-------------------------------------------------------------------------
                 
