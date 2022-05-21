@@ -102,8 +102,45 @@ configured=$08
 tube_serial: .block
 
 txdp: .macro items
-                ; .debug_print \items 
+                ;.debug_print \items 
                 .endm
+
+;-------------------------------------------------------------------------
+
+use_new_recv_file_data_host=true
+use_new_send_file_data_host=true
+use_new_recv_file_data_parasite=true
+use_new_send_file_data_parasite=true
+                
+;-------------------------------------------------------------------------
+;
+; Transfer mode stuff.
+;
+
+; Supply these to the dir argument of any of the transfer-related
+; macros.
+send=1                      ;parasite->host when doing a Tube transfer
+recv=2                      ;host->parasite when doing a Tube transfer
+
+; Crude dir validity check.
+check_dir: .macro dir
+                .cerror \dir!=send&&\dir!=recv,'bad send/recv dir'
+                .endm
+
+; Get appropriate status register flag for dir.
+get_status_flag_for_dir: .function dir
+                .check_dir dir
+                .endf dir==send?status.tx_space:status.rx_data
+
+; Tube transfer reason code for transfer mode and direction.
+tube_multi_byte=tube_multi_byte_parasite_to_host
+tube_256_byte=tube_256_byte_parasite_to_host
+                
+get_tube_mode: .function mode,dir
+                .check_dir \dir
+                .cerror \mode!=tube_multi_byte&&\mode!=tube_256_byte,'bad Tube transfer mode'
+                .endf mode|(\dir==send?0:1)
+                
                 
 ;-------------------------------------------------------------------------
 
@@ -126,6 +163,8 @@ startup_sync_counter: .fill 1
 link_itu: .fill 1
 link_old_y: .fill 1
 link_value: .fill 1
+link_transfer_flags: .fill 1
+link_transfer_thunk: .fill 3    ;$4C, LSB, MSB
                 .send link_workspace
                 
 ;-------------------------------------------------------------------------
@@ -135,8 +174,8 @@ link_value: .fill 1
 ; set. But it looks like the MOS actually just leaves it alone after
 ; initialisation, so it's all quite safe(tm)...
 ;
-; exit: A=$40 if no handling required (B/B+/M128 with ext Tube or no Tube)
-;       A=$c0 if handling required (M128 with int Tube)
+; exit: A=$00 if no handling required (B/B+/M128 with ext Tube or no Tube)
+;       A=$80 if handling required (M128 with int Tube)
 ; preserves: X; Y
 
 is_itu: .proc
@@ -855,26 +894,177 @@ itu_recv_status_byte:
                 
                 .pend
 
+; ;-------------------------------------------------------------------------
+; ;
+; ; Initiate Tube transfer
+; ;
+; ; Entry:
+; ;
+; ; !payload_addr - parasite address
+; ;
+; ; A = tube transfer mode
+; ;
+; initiate_tube_transfer: .proc
+;                 ldx #<payload_addr
+;                 ldy #>payload_addr
+;                 jmp $406
+;                 .endproc
+
 ;-------------------------------------------------------------------------
 ;
-; Transfer mode stuff.
+; Transfer file data.
 ;
+; Entry:
+;
+; !payload_addr - host or parasite address
+;
+; !payload_counter - negated number of bytes to send
+;
+; A = transfer flags: b7 = 1 = transfer to/from host
+;                          0 = transfer to/from parasite
+;                     b0 = 1 = recv (if parasite, host->parasite)
+;                          0 = send (if parasite, parasite->host)
+transfer_file_data: .proc
+                sta link_transfer_flags
 
-; Fake enum. Supply these to the dir argument of any of the
-; transfer-related macros.
-send=1
-recv=2
+                ; Form routine index from the transfer flags.
+                ;
+                ; (link_itu is currently bit 7 only. But that might
+                ; change.)
+                lda link_itu            ;? I???????
+                asl a                   ;I ????????
+                lda link_transfer_flags ;I H000000R
+                rol a                   ;H 000000RI
+                rol a                   ;0 00000RIH
+                asl a                   ;0 0000RIH0 (b0 = page flag)
+                pha                     ;save routine index
 
-; Crude dir validity check.
-check_dir: .macro dir
-                .cerror \dir!=send&&\dir!=recv,'bad send/recv dir'
-                .endm
+                ; Claim Tube if necessary.
+                lda link_transfer_flags ;N=0 if Tube
+                bmi tube_claimed
+                jsr claim_tube
+tube_claimed:
+                jsr negate_payload_counter
 
-; Get appropriate status register flag for dir.
-get_status_flag_for_dir: .function dir
-                .check_dir dir
-                .endf dir==send?status.tx_space:status.rx_data
+                ; Need to copy any bytes?
+                lda payload_counter+0
+                beq bytes_done  ;taken if only pages
+
+                pla             ;restore routine index
+                pha             ;save routine index
+                tax
+                jsr init_link_transfer_thunk
                 
+                lda #tube_multi_byte
+                jsr initiate_tube_transfer
+
+                ldx payload_counter+0
+                jsr link_transfer_thunk
+
+                ; update dest pointer
+                clc
+                lda payload_addr+0
+                adc payload_counter+0
+                sta payload_addr+0
+                bcc payload_addr_updated_for_bytes
+                inc payload_addr+1
+                bne payload_addr_updated_for_bytes
+                inc payload_addr+2
+                bne payload_addr_updated_for_bytes
+                inc payload_addr+3
+payload_addr_updated_for_bytes:
+
+bytes_done:
+                ; Always set up page routine index, so as to consume
+                ; the saved byte.
+                pla             ;restore routine index
+                tax
+                inx             ;set page flag bit
+                jsr init_link_transfer_thunk
+
+                ; Need to copy any pages?
+                lda #0
+                sta payload_counter+0
+                jsr test_payload_counter
+                beq transfer_done
+
+                jsr negate_payload_counter
+                ; payload_counter bits 8-31 is the negative page
+                ; count.
+pages_loop:
+                lda #tube_256_byte
+                jsr initiate_tube_transfer
+
+                jsr link_transfer_thunk
+
+                inc payload_addr+1
+                bne payload_addr_updated_for_page
+                inc payload_addr+2
+                bne payload_addr_updated_for_page
+                inc payload_addr+3
+payload_addr_updated_for_page:
+
+                inc payload_counter+1 ;page count bits 0-7
+                bne pages_loop
+                inc payload_counter+2 ;page count bits 8-15
+                bne pages_loop
+                inc payload_counter+3 ;page count bits 16-23
+                bne pages_loop
+
+transfer_done:
+                lda link_transfer_flags ;N=0 if Tube
+                bmi tube_released
+                jsr release_tube
+tube_released:
+                rts
+
+                ; Set up the transfer thunk.
+init_link_transfer_thunk:
+                lda #$4c
+                sta link_transfer_thunk+0
+                lda link_transfer_routines_lsb,x
+                sta link_transfer_thunk+1
+                lda link_transfer_routines_msb,x
+                sta link_transfer_thunk+2
+                .debug_print ['Transfer thunk: ',link_transfer_thunk+0,link_transfer_thunk+1,link_transfer_thunk+2,' (idx=&',DP_X,')\r\n']
+                rts
+
+                ; Initiate a Tube transfer, if necessary.
+initiate_tube_transfer:
+                ora link_transfer_flags ;N=0 if Tube
+                bpl +           ;taken if Tube transfer wanted
+                rts
++
+                .debug_print ['Tube transfer: mode=&',DP_A,' addr=&',payload_addr+3,payload_addr+2,payload_addr+1,payload_addr+0,'\r\n']
+                ldx #<payload_addr
+                ldy #>payload_addr
+                jmp $406
+
+_:=[]
+_..=[send_parasite_bytes]       ; R=0 I=0 H=0 p=0
+_..=[send_parasite_page]        ; R=0 I=0 H=0 p=1
+_..=[send_host_bytes]           ; R=0 I=0 H=1 p=0
+_..=[send_host_page]            ; R=0 I=0 H=1 p=1
+_..=[itu_send_parasite_bytes]   ; R=0 I=1 H=0 p=0
+_..=[itu_send_parasite_page]    ; R=0 I=1 H=0 p=1
+_..=[itu_send_host_page]        ; R=0 I=1 H=1 p=1
+_..=[itu_send_host_bytes]       ; R=0 I=1 H=1 p=0
+_..=[recv_parasite_bytes]       ; R=1 I=0 H=0 p=0
+_..=[recv_parasite_page]        ; R=1 I=0 H=0 p=1
+_..=[recv_host_bytes]           ; R=1 I=0 H=1 p=0
+_..=[recv_host_page]            ; R=1 I=0 H=1 p=1
+_..=[itu_recv_parasite_bytes]   ; R=1 I=1 H=0 p=0
+_..=[itu_recv_parasite_page]    ; R=1 I=1 H=0 p=1
+_..=[itu_recv_host_page]        ; R=1 I=1 H=1 p=1
+_..=[itu_recv_host_bytes]       ; R=1 I=1 H=1 p=0
+link_transfer_routines=_
+
+link_transfer_routines_lsb: .byte <link_transfer_routines
+link_transfer_routines_msb: .byte >link_transfer_routines
+                
+                .endproc
+
+
 ;-------------------------------------------------------------------------
 ;
 ; Generates driver routine for transferring file data. Sends N lead-up
@@ -1566,6 +1756,12 @@ get_acccon:
 
 ;-------------------------------------------------------------------------
 
+                .if use_new_recv_file_data_host
+recv_file_data_host: .proc
+                lda #$81        ;host, recv
+                jmp transfer_file_data
+                .endproc                
+                .else
 recv_file_data_host: .proc
                 bit link_itu
                 bmi itu
@@ -1576,7 +1772,14 @@ itu:
                 .transfer_file_data_driver_routine 0,itu_recv_host_bytes,itu_recv_host_page,'recv_file_data_host'
                 
                 .pend
-
+                .endif
+                
+                .if use_new_send_file_data_host
+send_file_data_host: .proc
+                lda #$80        ;host, send
+                jmp transfer_file_data
+                .endproc
+                .else
 send_file_data_host: .proc
                 bit link_itu
                 bmi itu
@@ -1586,7 +1789,14 @@ send_file_data_host: .proc
 itu:
                 .transfer_file_data_driver_routine 0,itu_send_host_bytes,itu_send_host_page,'send_file_data_host'
                 .pend
+                .endif
 
+                .if use_new_recv_file_data_parasite
+recv_file_data_parasite: .proc
+                lda #$01        ;parasite, recv
+                jmp transfer_file_data
+                .endproc
+                .else
 recv_file_data_parasite: .proc
                 bit link_itu
                 bmi itu
@@ -1596,7 +1806,14 @@ recv_file_data_parasite: .proc
 itu:
                 .transfer_file_data_driver_routine recv,itu_recv_parasite_bytes,itu_recv_parasite_page,'recv_file_data_parasite'
                 .pend
+                .endif
 
+                .if use_new_send_file_data_parasite
+send_file_data_parasite: .proc
+                lda #$00        ;parasite, send
+                jmp transfer_file_data
+                .endproc
+                .else
 send_file_data_parasite: .proc
                 bit link_itu
                 bmi itu
@@ -1606,6 +1823,7 @@ send_file_data_parasite: .proc
 itu:
                 .transfer_file_data_driver_routine send,itu_send_parasite_bytes,itu_send_parasite_page,'send_file_data_parasite'
                 .pend
+                .endif
                 
 ;-------------------------------------------------------------------------
 

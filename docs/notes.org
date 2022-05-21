@@ -653,7 +653,6 @@ CDx appears to be the data bus? - comes from IC26 (CF30049).
 |  40 | NC    |
 
 
-
 * Serial port
 
 ** bits
@@ -722,4 +721,189 @@ To be reinstated, somewhere.
   - when using `*READ`, you're creating a BBC file, so it will have a
     BBC-style file name and may well end up needing renaming
 
+#+end_src
+
+
+* Tube Serial code tidy-up
+
+Try to fit it into 8 KB, if possible.
+
+Ext Tube = cheese wedge
+Int Tube = ReCoMini6502
+
+SPEEDTEST, 10 runs
+
+** Initial results
+
+*** Ext Tube
+
+#+begin_example
+  Host<->server: 445,440 bytes in 20 tests
+      BBC->PC: 97.5 KBytes/sec
+      PC->BBC: 92.4 KBytes/sec
+  Parasite<->server: 491,520 bytes in 20 tests
+      BBC->PC: 89.3 KBytes/sec
+      PC->BBC: 88.2 KBytes/sec
+#+end_example
+
+*** Int Tube
+
+#+begin_example
+  Host<->server: 445,440 bytes in 20 tests
+      BBC->PC: 86.6 KBytes/sec
+      PC->BBC: 86.1 KBytes/sec
+  Parasite<->server: 491,520 bytes in 20 tests
+      BBC->PC: 62.5 KBytes/sec
+      PC->BBC: 65.1 KBytes/sec
+#+end_example
+
+** Transfer routine table rambles
+
+#+begin_src 6502-asm
+  ;-------------------------------------------------------------------------
+  ;
+  ; Transfer routine indexes
+  ;
+  ; Each entry is (bytes,page)
+
+  ; P: 1 = parasite, 0 = host (set by caller)
+  ; R: 1 = recv (server to host/host to parasite), 0 = send (parasite to host/host to server) (set by caller)
+  ; I: 1 = itu, 0 = xtu (set by driver routine)
+  ; p: 1 = page transfer, 0 = byte transfer (set by driver routine)
+                
+  ;
+  ;   3   2   1
+  ; +---+---+---+---+
+  ; | P | R | I | p |
+  ; +---+---+---+---+
+
+  transfer_routines: .block
+
+  P=8
+  S=4
+  I=2
+  ; p=1 - never set explicitly, there's an INX in the driver
+                
+  _:=[]
+  _..=[recv_host_bytes,recv_host_page]                 ;P=0 S=0 I=0
+  _..=[itu_recv_host_bytes,itu_recv_host_page]         ;P=0 S=0 I=1
+  _..=[send_host_bytes,send_host_page]                 ;P=0 S=1 I=0
+  _..=[itu_send_host_bytes,itu_send_host_page]         ;P=0 S=1 I=1
+  _..=[recv_parasite_bytes,recv_parasite_page]         ;P=1 S=0 I=0
+  _..=[itu_recv_parasite_bytes,itu_recv_parasite_page] ;P=1 S=0 I=1
+  _..=[send_parasite_bytes,send_parasite_page]         ;P=1 S=1 I=0
+  _..=[itu_send_parasite_bytes,itu_send_parasite_page] ;P=1 S=1 I=1
+  list=_
+		  .endblock
+#+end_src
+
+#+begin_src 6502-asm
+  ;-------------------------------------------------------------------------
+  ;
+  ; Transfer file data.
+  ;
+  ; Entry:
+  ;
+  ; ?link_transfer_direction - set as appropriate
+  ;
+  ; !payload_addr - address to write data to
+  ;
+  ; !payload_counter - negative number of bytes left in payload
+  ;
+  transfer_file_data: .proc
+		  sta link_transfer_index
+                
+		  ; Claim Tube if necessary.
+		  lda link_tube_transfer_direction
+		  bmi tube_claimed
+		  jsr claim_tube
+  tube_claimed:
+
+		  jsr negate_payload_counter
+
+		  ; Need to copy any bytes?
+		  lda payload_counter+0
+		  beq bytes_done
+
+		  ; Initiate Tube transfer mode, if required.
+		  ldx #tube_multi_byte_parasite_to_host
+		  jsr initiate_tube_transfer
+
+		  ldy link_transfer_index
+		  jsr prepare_link_transfer_thunk
+		  ldx payload_counter+0
+		  jsr link_transfer_thunk
+
+		  ; update dest pointer
+		  clc
+		  lda payload_addr+0
+		  adc payload_counter+0
+		  sta payload_addr+0
+		  bcc payload_addr_updated_for_bytes
+		  inc payload_addr+1
+		  bne payload_addr_updated_for_bytes
+		  inc payload_addr+2
+		  bne payload_addr_updated_for_bytes
+		  inc payload_addr+3
+  payload_addr_updated_for_bytes:
+
+  bytes_done:
+		  ; Need to copy any pages?
+		  lda #0
+		  sta payload_counter+0
+		  jsr test_payload_counter
+		  beq done
+
+		  jsr negate_payload_counter
+		  ; payload_counter bits 8-31 is the negative page
+		  ; count.
+
+		  ldy link_transfer_index
+		  iny             ;select page transfer routine
+		  jsr prepare_link_transfer_thunk
+                
+  pages_loop:
+		  lda #tube_256_byte_parasite_to_host
+		  jsr initiate_tube_transfer
+
+		  jsr link_transfer_thunk
+
+		  inc payload_addr+1
+		  bne payload_addr_updated_for_page
+		  inc payload_addr+2
+		  bne payload_addr_updated_for_page
+		  inc payload_addr+3
+  payload_addr_updated_for_page:
+
+		  inc payload_counter+1 ;page count bits 0-7
+		  bne pages_loop
+		  inc payload_counter+2 ;page count bits 8-15
+		  bne pages_loop
+		  inc payload_counter+3 ;page count bits 16-23
+		  bne pages_loop
+
+  done:
+		  bit link_tube_transfer_direction
+		  bmi tube_released
+		  jsr release_tube
+  tube_released:
+
+		  rts
+
+  initiate_tube_transfer: .proc
+		  ora link_tube_transfer_direction
+		  bpl +          ;taken if Tube transfer actually wanted
+		  rts
+  +
+		  ldx #<payload_addr
+		  ldy #>payload_addr
+		  jmp $406
+		  .endproc
+
+  prepare_link_transfer_thunk:
+		  lda #$4c
+		  sta link_transfer_thunk+0
+                
+                
+		  .endproc
 #+end_src
