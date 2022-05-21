@@ -119,7 +119,7 @@ tube_claimant_id=35
 
 ; Number of chars to buffer up when printing the
 ; server's string.
-server_string_buffer_size=20
+server_string_buffer_size=50
 
                 .cerror server_string_buffer_size<1,"server string buffer must be 1+ bytes"
                 .cerror server_string_buffer_size>64,"string packet has to fit on the 6502 stack"
@@ -265,10 +265,6 @@ payload_addr: .fill 4
 ; OSARGS A=0 Y=1 can retrieve it.
 command_line_ptr: .fill 2
 
-; print_server_string workspace. Stored anywhere that's out of the
-; way, so that other routines can call this function without fear of
-; their workspace being trampled on.
-server_string_buffer_offset: .fill 1
                 .send fs_workspace
 
 ;-------------------------------------------------------------------------
@@ -3537,14 +3533,12 @@ print_server_string: .proc
                 
                 .endif
 
-                ldx #server_string_buffer_size
-push_stack_loop:
-                pha
-                dex
-                bne push_stack_loop
-
                 tsx
-                stx server_string_buffer_offset
+                txa
+                sec
+                sbc #server_string_buffer_size
+                tax
+                txs
 
 loop:
                 lda #REQUEST_READ_STRING
@@ -3560,41 +3554,40 @@ loop:
                 cmp #RESPONSE_DATA
                 bne done
 
-                ldy server_string_buffer_offset
+                tsx             ;$101,x=string buffer
 recv_chars_loop:
                 jsr recv_payload_byte
                 bcc recv_chars_done
-                sta $101,y
-                iny
-                jmp recv_chars_loop
+                sta $101,x
+                inx
+                bcs recv_chars_loop ;(jmp)
 
 recv_chars_done:
-                tya
-                sec
-                sbc server_string_buffer_offset
-                tax
-                
-                ldy server_string_buffer_offset
-                
-                ; .block
-                ; jsr link_unprepare
+                dex
+                txa             
+                pha             ;save end offset
+                tsx
+
+                ; $101,x = offset of byte past end of string
+                ; $102,x... = string
+
+                txa
+                tay
 print_chars_loop:
-                cpx #0
+                tya
+                cmp $101,x
                 beq print_chars_done
-                lda $101,y
+                lda $102,y
                 jsr oswrch
                 iny
-                dex
                 jmp print_chars_loop
+
 print_chars_done:
-                ; jsr link_prepare
-                ; .bend
-                
-                ; ldy server_string_buffer_offset
-                
+                pla            ;discard the end offset
+
                 bit $ff
                 bmi done2
-                
+
                 jmp loop
 
 done:
@@ -3602,12 +3595,12 @@ done:
                 jsr discard_remaining_payload
 
 done2:
-                
-                ldx #server_string_buffer_size
-pop_stack_loop:
-                pla
-                dex
-                bne pop_stack_loop
+                tsx
+                txa
+                clc
+                adc #server_string_buffer_size
+                tax
+                txs
                 
                 .if print_server_string_voff
                 plp
