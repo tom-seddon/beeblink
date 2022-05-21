@@ -110,13 +110,6 @@ txdp: .macro items
                 .endmacro
 
 ;-------------------------------------------------------------------------
-
-use_new_recv_file_data_host=true
-use_new_send_file_data_host=true
-use_new_recv_file_data_parasite=true
-use_new_send_file_data_parasite=true
-                
-;-------------------------------------------------------------------------
 ;
 ; Transfer mode stuff.
 ;
@@ -1068,114 +1061,6 @@ link_transfer_routines_msb: .byte >link_transfer_routines
                 
                 .endproc
 
-
-;-------------------------------------------------------------------------
-;
-; Generates driver routine for transferring file data. Sends N lead-up
-; bytes, followed by a confirmation byte; then some number of pages,
-; each followed by a confirmation byte.
-;
-; If \tube_dir is 0, no Tube code will be generated; if send or recv,
-; Tube handling will be included.
-;
-; \bytes_routine is the bytes transfer routine to call.
-;
-; \page_routine is the page transfer routine to call. If 0,
-; \bytes_routine will be called instead, with X=0 each time, to
-; transfer 256 bytes.
-; 
-transfer_file_data_driver_routine: .macro tube_dir,bytes_routine,page_routine,name
-                .if \tube_dir!=0
-                .check_dir \tube_dir
-                jsr claim_tube
-                .endif
-
-                jsr negate_payload_counter
-                
-                .txdp [\name,': &',payload_counter+0,' bytes, &',payload_counter+3,payload_counter+2,payload_counter+1,' pages\r\n']
-
-                ; need to copy any bytes?
-                lda payload_counter+0
-                beq bytes_done
-
-                .if \tube_dir!=0
-                ldx #<payload_addr
-                ldy #>payload_addr
-                lda #\tube_dir==send?tube_multi_byte_parasite_to_host:tube_multi_byte_host_to_parasite
-                jsr $406
-                .endif
-
-                ldx payload_counter+0
-                jsr \bytes_routine
-
-                ; update dest pointer
-                clc
-                lda payload_addr+0
-                adc payload_counter+0
-                sta payload_addr+0
-                bcc +
-                inc payload_addr+1
-                bne +
-                inc payload_addr+2
-                bne +
-                inc payload_addr+3
-+
-
-bytes_done:
-                ; need to copy any pages?
-                lda #0
-                sta payload_counter+0
-                jsr test_payload_counter
-                beq done
-
-                jsr negate_payload_counter
-                ; payload_counter bits 8-31 is the negative page
-                ; count.
-pages_loop:
-                .if \page_routine!=0
-                
-                .if \tube_dir!=0
-                ldx #<payload_addr
-                ldy #>payload_addr
-                lda #\tube_dir==send?tube_256_byte_parasite_to_host:tube_256_byte_host_to_parasite
-                jsr $406
-                .endif
-
-                jsr \page_routine
-                
-                .else
-
-                ; (can continue to use existing Tube transfer mode, if
-                ; any)
-                
-                ldx #0          ;transfer 256 bytes
-                jsr \bytes_routine
-                
-                .endif
-
-                inc payload_addr+1
-                bne +
-                inc payload_addr+2
-                bne +
-                inc payload_addr+3
-+
-
-                inc payload_counter+1 ;page count bits 0-7
-                bne pages_loop
-                inc payload_counter+2 ;page count bits 8-15
-                bne pages_loop
-                inc payload_counter+3 ;page count bits 16-23
-                bne pages_loop
-                
-done:
-                .if \tube_dir!=0
-                jsr release_tube
-                .endif
-
-                rts
-
-                .endmacro
-
 ;-------------------------------------------------------------------------
 ;
 ; Generate code to wait for appropriate FIFO readiness for the given
@@ -1760,74 +1645,25 @@ get_acccon:
 
 ;-------------------------------------------------------------------------
 
-                .if use_new_recv_file_data_host
 recv_file_data_host: .proc
                 lda #$81        ;host, recv
                 jmp transfer_file_data
                 .endproc                
-                .else
-recv_file_data_host: .proc
-                bit link_itu
-                bmi itu
-
-                .transfer_file_data_driver_routine 0,recv_host_bytes,recv_host_page,'recv_file_data_host'
-
-itu:
-                .transfer_file_data_driver_routine 0,itu_recv_host_bytes,itu_recv_host_page,'recv_file_data_host'
                 
-                .endproc
-                .endif
-                
-                .if use_new_send_file_data_host
 send_file_data_host: .proc
                 lda #$80        ;host, send
                 jmp transfer_file_data
                 .endproc
-                .else
-send_file_data_host: .proc
-                bit link_itu
-                bmi itu
 
-                .transfer_file_data_driver_routine 0,send_host_bytes,send_host_page,'send_file_data_host'
-                
-itu:
-                .transfer_file_data_driver_routine 0,itu_send_host_bytes,itu_send_host_page,'send_file_data_host'
-                .endproc
-                .endif
-
-                .if use_new_recv_file_data_parasite
 recv_file_data_parasite: .proc
                 lda #$01        ;parasite, recv
                 jmp transfer_file_data
                 .endproc
-                .else
-recv_file_data_parasite: .proc
-                bit link_itu
-                bmi itu
 
-                .transfer_file_data_driver_routine recv,recv_parasite_bytes,recv_parasite_page,'recv_file_data_parasite'
-
-itu:
-                .transfer_file_data_driver_routine recv,itu_recv_parasite_bytes,itu_recv_parasite_page,'recv_file_data_parasite'
-                .endproc
-                .endif
-
-                .if use_new_send_file_data_parasite
 send_file_data_parasite: .proc
                 lda #$00        ;parasite, send
                 jmp transfer_file_data
                 .endproc
-                .else
-send_file_data_parasite: .proc
-                bit link_itu
-                bmi itu
-
-                .transfer_file_data_driver_routine send,send_parasite_bytes,send_parasite_page,'send_file_data_parasite'
-                
-itu:
-                .transfer_file_data_driver_routine send,itu_send_parasite_bytes,itu_send_parasite_page,'send_file_data_parasite'
-                .endproc
-                .endif
                 
 ;-------------------------------------------------------------------------
 
