@@ -68,9 +68,6 @@ enable_debug_print=true
 ; Various verbosity flags.
 verbose_file_data=false
 
-; If true, extra logging for *READ/*WRITE.
-disk_image_verbose=false
-
 ; At some point I found that it might be useful for multiple versions
 ; of the BeebLink FS to coexist, so that I can have a WIP version
 ; (using one link type) and a LKG version (using another), without
@@ -289,8 +286,10 @@ command_line_ptr: .fill 2
                 .dsection header
                 .dsection code
                 .dsection lib_code
-                
-                .cerror *>$c000,"ROM overflow"
+
+                ; Not actually the end of the world if it goes past
+                ; the 8 KB mark, but
+                .cerror *>$a000,"ROM overflow"
                 
                 .section header
                 brk

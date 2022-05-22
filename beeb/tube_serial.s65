@@ -891,22 +891,6 @@ itu_recv_status_byte:
                 
                 .endproc
 
-; ;-------------------------------------------------------------------------
-; ;
-; ; Initiate Tube transfer
-; ;
-; ; Entry:
-; ;
-; ; !payload_addr - parasite address
-; ;
-; ; A = tube transfer mode
-; ;
-; initiate_tube_transfer: .proc
-;                 ldx #<payload_addr
-;                 ldy #>payload_addr
-;                 jmp $406
-;                 .endproc
-
 ;-------------------------------------------------------------------------
 ;
 ; Transfer file data.
@@ -1331,7 +1315,7 @@ transfer_parasite_page_routine: .macro dir
                 .endif
 
                 ldx #0                             ;+2 
-                lda #get_status_flag_for_dir(\dir) ;+2 
+                lda #get_status_flag_for_dir(\dir) ;+2
 loop:
                 bit status                        ;+4 4
                 bne transfer                      ;+3 7
@@ -1340,7 +1324,7 @@ transfer:                                         ;...
                 .transfer_parasite_data_byte \dir ;+8 15
                 inx                               ;+2 17
                 bne loop                          ;+3 20
-
+                
                 .transfer_wait_for_status \dir
                 .transfer_status_byte \dir
                 
@@ -1349,64 +1333,8 @@ transfer:                                         ;...
                 
 ;-------------------------------------------------------------------------
 ;
-; Instantiations of the various macro-generated transfer routines, and
-; some hand-written stuff.
-;
-; This is all just in any old order, whatever's necessary to fit each
-; routine into 1 page so that the branch cycle counts are predictable
-; :(
-
-;-------------------------------------------------------------------------
-
-                .align 256
-                
-;-------------------------------------------------------------------------
-
-                .page
-recv_host_bytes: .proc
-                .transfer_host_bytes_routine recv
-                .endproc
-                .endpage
-
-                .page
-send_host_bytes: .proc
-                .transfer_host_bytes_routine send
-                .endproc
-                .endpage
-                
-                .page
-itu_recv_host_bytes: .proc
-                .itu_transfer_host_bytes_routine recv
-                .endproc
-                .endpage
-
-                .page
-itu_send_host_bytes: .proc
-                .itu_transfer_host_bytes_routine send
-                .endproc
-                .endpage
-
-                .page
-recv_parasite_bytes: .proc
-                .transfer_parasite_bytes_routine recv
-                .endproc
-                .endpage
-
-                .page
-send_parasite_bytes: .proc
-                .transfer_parasite_bytes_routine send
-                 .endproc
-                .endpage
-
-;-------------------------------------------------------------------------
-
-                .align 256
-
-;-------------------------------------------------------------------------
-;
 ; ITU=1 host->parasite bytes transfer.
 ;
-                .page
 itu_recv_parasite_bytes: .proc
                 .cpu '65c02'
                 php
@@ -1435,7 +1363,6 @@ loop:
                 rts
                 .cpu 'default'
                 .endproc
-                .endpage
 
 ;-------------------------------------------------------------------------
 ;
@@ -1455,11 +1382,9 @@ loop:
                 trb acccon                         ;12 +6
                 lda #get_status_flag_for_dir(send) ;18 +2
                 bit status                         ;20 +4
-                .page                              ;
                 bne +                              ;24 +3
                 jsr itu_wait_for_status            ;
 +                                                  ;
-                .endp                              ;
                 sty fifo                           ;27 +4
                 jsr delay_12_cycles                ;31 +12
                 dex                                ;43 +2
@@ -1474,62 +1399,10 @@ loop:
                 .cpu 'default'
                 .endproc
 
-                .page
-recv_host_page: .proc
-                .transfer_host_page_routine recv
-                .endproc
-                .endpage
-
-;-------------------------------------------------------------------------
-
-                .align 256
-                
-;-------------------------------------------------------------------------
-
-                .page
-send_host_page: .proc
-                .transfer_host_page_routine send
-                .endproc
-                .endpage
-
-                .align 256
-                
-                .page
-itu_recv_host_page: .proc
-                .itu_transfer_host_page_routine recv
-                .endproc
-                .endpage
-
-                .align 256
-
-                .page
-itu_send_host_page: .proc
-                .itu_transfer_host_page_routine send
-                .endproc
-                .endpage
-
-                .page
-recv_parasite_page: .proc
-                .transfer_parasite_page_routine recv
-                .endproc
-                .endpage
-
-                .page
-send_parasite_page: .proc
-                .transfer_parasite_page_routine send
-                .endproc
-                .endpage
-
-;-------------------------------------------------------------------------
-
-                .align 256
-                
 ;-------------------------------------------------------------------------
 ;
 ; ITU=1 host->parasite page transfer.
 ;
-                .page
-
 itu_recv_parasite_page: .proc
                 .cpu '65c02'
                 
@@ -1580,7 +1453,6 @@ get_acccon:
                 rts
                 .cpu 'default'
                 .endproc
-                .endpage
 
 ;-------------------------------------------------------------------------
 ;
@@ -1642,6 +1514,60 @@ get_acccon:
                 .cpu 'default'
                 .endproc
 
+
+;-------------------------------------------------------------------------
+;
+; Instantiations of the macro-generated transfer routines.
+;
+;-------------------------------------------------------------------------
+
+recv_host_bytes: .proc
+                .transfer_host_bytes_routine recv
+                .endproc
+
+send_host_bytes: .proc
+                .transfer_host_bytes_routine send
+                .endproc
+                
+itu_recv_host_bytes: .proc
+                .itu_transfer_host_bytes_routine recv
+                .endproc
+
+itu_send_host_bytes: .proc
+                .itu_transfer_host_bytes_routine send
+                .endproc
+
+recv_parasite_bytes: .proc
+                .transfer_parasite_bytes_routine recv
+                .endproc
+
+send_parasite_bytes: .proc
+                .transfer_parasite_bytes_routine send
+                 .endproc
+
+recv_host_page: .proc
+                .transfer_host_page_routine recv
+                .endproc
+
+send_host_page: .proc
+                .transfer_host_page_routine send
+                .endproc
+
+itu_recv_host_page: .proc
+                .itu_transfer_host_page_routine recv
+                .endproc
+
+itu_send_host_page: .proc
+                .itu_transfer_host_page_routine send
+                .endproc
+
+recv_parasite_page: .proc
+                .transfer_parasite_page_routine recv
+                .endproc
+
+send_parasite_page: .proc
+                .transfer_parasite_page_routine send
+                .endproc
 
 ;-------------------------------------------------------------------------
 
