@@ -2,7 +2,7 @@
 
 Prerequisites:
 
-* [node.js 10.13.0 or later](https://nodejs.org/en/download/)
+* [node.js 16.8.0 or later](https://nodejs.org/en/download/)
 
 # Build and run on Windows
 
