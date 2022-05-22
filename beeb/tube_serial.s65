@@ -74,8 +74,6 @@
 ; transfer modes.
 ; -------------------------------------------------------------------------
 
-                .section code
-
                 .cerror NUM_SERIAL_SYNC_ZEROS<0||NUM_SERIAL_SYNC_ZEROS>65535,'NUM_SERIAL_SYNC_ZEROS must be a 16-bit uint'
 
                 ; makes a bit of a difference in FSTEST. 1.3x as many
@@ -892,6 +890,28 @@ itu_recv_status_byte:
                 .endproc
 
 ;-------------------------------------------------------------------------
+
+recv_file_data_host: .proc
+                lda #$81        ;host, recv
+                jmp transfer_file_data
+                .endproc                
+                
+send_file_data_host: .proc
+                lda #$80        ;host, send
+                jmp transfer_file_data
+                .endproc
+
+recv_file_data_parasite: .proc
+                lda #$01        ;parasite, recv
+                jmp transfer_file_data
+                .endproc
+
+send_file_data_parasite: .proc
+                lda #$00        ;parasite, send
+                jmp transfer_file_data
+                .endproc
+
+;-------------------------------------------------------------------------
 ;
 ; Transfer file data.
 ;
@@ -1187,7 +1207,7 @@ loop:
 
                 iny             ;19 +2
                 dex             ;21 +2
-                bne loop        ;23 +3 = 26
+                bne @b loop     ;23 +3 = 26
 
                 .itu_transfer_wait_for_status \dir
                 .transfer_status_byte \dir
@@ -1217,7 +1237,7 @@ loop:
                 iny                            ;+2  20
                 .endrept                       ;20n
 
-                bne loop
+                bne @b loop
 
                 .transfer_wait_for_status \dir
                 .transfer_status_byte \dir
@@ -1279,15 +1299,17 @@ transfer_parasite_bytes_routine: .macro dir
                 nop             ;6 +2
                 bit $70         ;8 +3
                 .endif
-                
+
+                .page                
 loop:
                 .transfer_wait_for_status \dir    ;0 +8
                 jsr delay_24_cycles               ;8 +24
                 bit $70                           ;32 +3
                 .transfer_parasite_data_byte \dir ;35 +8
                 dex                               ;43 +2
-                bne loop                          ;45 +3
-
+                bne @b loop                       ;45 +3
+                .endpage
+                
                 .transfer_wait_for_status \dir
                 .transfer_status_byte \dir
                 
@@ -1316,6 +1338,7 @@ transfer_parasite_page_routine: .macro dir
 
                 ldx #0                             ;+2 
                 lda #get_status_flag_for_dir(\dir) ;+2
+                .page
 loop:
                 bit status                        ;+4 4
                 bne transfer                      ;+3 7
@@ -1323,14 +1346,15 @@ loop:
 transfer:                                         ;...
                 .transfer_parasite_data_byte \dir ;+8 15
                 inx                               ;+2 17
-                bne loop                          ;+3 20
+                bne @b loop                       ;+3 20
+                .endpage
                 
                 .transfer_wait_for_status \dir
                 .transfer_status_byte \dir
                 
                 rts
                 .endmacro
-                
+
 ;-------------------------------------------------------------------------
 ;
 ; ITU=1 host->parasite bytes transfer.
@@ -1353,7 +1377,7 @@ loop:
                 trb acccon                         ;25 +6
                 jsr delay_12_cycles                ;31 +12
                 dex                                ;43 +2
-                bne loop                           ;45 +3
+                bne @b loop                        ;45 +3
                 
                 .itu_transfer_wait_for_status recv
                 .transfer_status_byte recv
@@ -1388,7 +1412,7 @@ loop:
                 sty fifo                           ;27 +4
                 jsr delay_12_cycles                ;31 +12
                 dex                                ;43 +2
-                bne loop                           ;45 +3
+                bne @b loop                        ;45 +3
 
                 .itu_transfer_wait_for_status send
                 .transfer_status_byte send
@@ -1403,6 +1427,9 @@ loop:
 ;
 ; ITU=1 host->parasite page transfer.
 ;
+; The extra cycle from any branch page crossing doesn't make a
+; measurable difference.
+; 
 itu_recv_parasite_page: .proc
                 .cpu '65c02'
                 
@@ -1433,7 +1460,7 @@ loop:
 
                 dec link_value
                 bne loop
-
+                
                 .itu_transfer_wait_for_status recv
                 .transfer_status_byte recv
                 
@@ -1460,6 +1487,9 @@ get_acccon:
 ;
 ; The 38 cycle initial delay is included in the setup.
 ;
+; The extra cycle from any page crossing doesn't make a measurable
+; difference.
+; 
 itu_send_parasite_page: .proc
                 .cpu '65c02'
 bytes_per_iteration=8
@@ -1521,6 +1551,8 @@ get_acccon:
 ;
 ;-------------------------------------------------------------------------
 
+; These aren't a bottleneck.
+                
 recv_host_bytes: .proc
                 .transfer_host_bytes_routine recv
                 .endproc
@@ -1528,6 +1560,21 @@ recv_host_bytes: .proc
 send_host_bytes: .proc
                 .transfer_host_bytes_routine send
                 .endproc
+
+; These are unrolled 8x, and the extra cycle from any page crossing
+; doesn't make a measurable difference.
+                
+recv_host_page: .proc
+                .transfer_host_page_routine recv
+                .endproc
+
+send_host_page: .proc
+                .transfer_host_page_routine send
+                .endproc
+
+;-------------------------------------------------------------------------
+
+; These aren't a bottleneck.
                 
 itu_recv_host_bytes: .proc
                 .itu_transfer_host_bytes_routine recv
@@ -1537,22 +1584,9 @@ itu_send_host_bytes: .proc
                 .itu_transfer_host_bytes_routine send
                 .endproc
 
-recv_parasite_bytes: .proc
-                .transfer_parasite_bytes_routine recv
-                .endproc
-
-send_parasite_bytes: .proc
-                .transfer_parasite_bytes_routine send
-                 .endproc
-
-recv_host_page: .proc
-                .transfer_host_page_routine recv
-                .endproc
-
-send_host_page: .proc
-                .transfer_host_page_routine send
-                .endproc
-
+; These are unrolled 8x, and have a 64tass long branch. So no
+; alignment restrictions.
+                
 itu_recv_host_page: .proc
                 .itu_transfer_host_page_routine recv
                 .endproc
@@ -1560,6 +1594,36 @@ itu_recv_host_page: .proc
 itu_send_host_page: .proc
                 .itu_transfer_host_page_routine send
                 .endproc
+
+;-------------------------------------------------------------------------
+
+; These 4 routines are somewhat carefully timed, and have branches
+; that shouldn't cross a page boundary.
+;
+; Luckily, they're all quite short, and the region of interest will
+; fit... just... into 128 bytes. The page routines are key, but no
+; harm in having the bytes routine a bit faster too.
+;
+; SPEEDTEST results with no page crossings:
+                
+; Parasite<->server: 245,760 bytes in 10 tests
+;     BBC->PC: 89.2 KBytes/sec
+;     PC->BBC: 88.2 KBytes/sec
+                
+; With 100% page crossings:
+                
+; Parasite<->server: 245,760 bytes in 10 tests
+;     BBC->PC: 85.2 KBytes/sec
+;     PC->BBC: 84.2 KBytes/sec
+                
+                .align 128
+recv_parasite_bytes: .proc
+                .transfer_parasite_bytes_routine recv
+                .endproc
+
+send_parasite_bytes: .proc
+                .transfer_parasite_bytes_routine send
+                 .endproc
 
 recv_parasite_page: .proc
                 .transfer_parasite_page_routine recv
@@ -1571,31 +1635,7 @@ send_parasite_page: .proc
 
 ;-------------------------------------------------------------------------
 
-recv_file_data_host: .proc
-                lda #$81        ;host, recv
-                jmp transfer_file_data
-                .endproc                
-                
-send_file_data_host: .proc
-                lda #$80        ;host, send
-                jmp transfer_file_data
-                .endproc
-
-recv_file_data_parasite: .proc
-                lda #$01        ;parasite, recv
-                jmp transfer_file_data
-                .endproc
-
-send_file_data_parasite: .proc
-                lda #$00        ;parasite, send
-                jmp transfer_file_data
-                .endproc
-                
-;-------------------------------------------------------------------------
-
                 .endblock
-                
-                .endsection code
 
 ;-------------------------------------------------------------------------
                 

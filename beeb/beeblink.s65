@@ -286,6 +286,7 @@ command_line_ptr: .fill 2
                 .dsection header
                 .dsection code
                 .dsection lib_code
+                .dsection driver_code
 
                 ; Not actually the end of the world if it goes past
                 ; the 8 KB mark, but
@@ -325,7 +326,8 @@ end:
 link_avr=false
 link_tube_serial=false
                 .endweak
-                
+
+                .section driver_code
                 .if link_avr
                 .include "avr.s65"
                 .elsif link_tube_serial
@@ -335,6 +337,7 @@ link_tube_serial=false
                 .else
                 .error "unknown link type"
                 .endif
+                .endsection driver_code
 
 ;-------------------------------------------------------------------------
 

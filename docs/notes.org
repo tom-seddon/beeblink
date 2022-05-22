@@ -735,175 +735,171 @@ SPEEDTEST, 10 runs
 
 ** Initial results
 
-*** Ext Tube
-
 #+begin_example
-  Host<->server: 445,440 bytes in 20 tests
-      BBC->PC: 97.5 KBytes/sec
-      PC->BBC: 92.4 KBytes/sec
-  Parasite<->server: 491,520 bytes in 20 tests
-      BBC->PC: 89.3 KBytes/sec
-      PC->BBC: 88.2 KBytes/sec
+Sun May 22 15:18:59 2022
+
+No Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 96.3 KBytes/sec
+    PC->BBC: 92.0 KBytes/sec
+
+Internal Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 90.5 KBytes/sec
+    PC->BBC: 86.2 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 62.3 KBytes/sec
+    PC->BBC: 65.0 KBytes/sec
+
+External Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 96.6 KBytes/sec
+    PC->BBC: 92.1 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 89.2 KBytes/sec
+    PC->BBC: 88.2 KBytes/sec
 #+end_example
 
-*** Int Tube
+** Short branches
+
+ITU routines unrolled 4x rather than 8x
 
 #+begin_example
-  Host<->server: 445,440 bytes in 20 tests
-      BBC->PC: 86.6 KBytes/sec
-      PC->BBC: 86.1 KBytes/sec
-  Parasite<->server: 491,520 bytes in 20 tests
-      BBC->PC: 62.5 KBytes/sec
-      PC->BBC: 65.1 KBytes/sec
+Sun May 22 15:43:15 2022
+
+No Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 97.4 KBytes/sec
+    PC->BBC: 91.6 KBytes/sec
+
+Internal Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 89.1 KBytes/sec
+    PC->BBC: 85.7 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 60.3 KBytes/sec
+    PC->BBC: 62.8 KBytes/sec
+
+External Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 97.3 KBytes/sec
+    PC->BBC: 91.4 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 89.2 KBytes/sec
+    PC->BBC: 88.2 KBytes/sec
 #+end_example
 
-** Transfer routine table rambles
+** Short branches, page aligned
 
-#+begin_src 6502-asm
-  ;-------------------------------------------------------------------------
-  ;
-  ; Transfer routine indexes
-  ;
-  ; Each entry is (bytes,page)
+#+begin_example
+Sun May 22 15:48:09 2022
 
-  ; P: 1 = parasite, 0 = host (set by caller)
-  ; R: 1 = recv (server to host/host to parasite), 0 = send (parasite to host/host to server) (set by caller)
-  ; I: 1 = itu, 0 = xtu (set by driver routine)
-  ; p: 1 = page transfer, 0 = byte transfer (set by driver routine)
-                
-  ;
-  ;   3   2   1
-  ; +---+---+---+---+
-  ; | P | R | I | p |
-  ; +---+---+---+---+
+No Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 97.0 KBytes/sec
+    PC->BBC: 92.2 KBytes/sec
 
-  transfer_routines: .block
+Internal Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 90.2 KBytes/sec
+    PC->BBC: 85.6 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 60.9 KBytes/sec
+    PC->BBC: 63.3 KBytes/sec
 
-  P=8
-  S=4
-  I=2
-  ; p=1 - never set explicitly, there's an INX in the driver
-                
-  _:=[]
-  _..=[recv_host_bytes,recv_host_page]                 ;P=0 S=0 I=0
-  _..=[itu_recv_host_bytes,itu_recv_host_page]         ;P=0 S=0 I=1
-  _..=[send_host_bytes,send_host_page]                 ;P=0 S=1 I=0
-  _..=[itu_send_host_bytes,itu_send_host_page]         ;P=0 S=1 I=1
-  _..=[recv_parasite_bytes,recv_parasite_page]         ;P=1 S=0 I=0
-  _..=[itu_recv_parasite_bytes,itu_recv_parasite_page] ;P=1 S=0 I=1
-  _..=[send_parasite_bytes,send_parasite_page]         ;P=1 S=1 I=0
-  _..=[itu_send_parasite_bytes,itu_send_parasite_page] ;P=1 S=1 I=1
-  list=_
-		  .endblock
-#+end_src
+External Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 97.1 KBytes/sec
+    PC->BBC: 92.2 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 89.1 KBytes/sec
+    PC->BBC: 88.1 KBytes/sec
+#+end_example
 
-#+begin_src 6502-asm
-  ;-------------------------------------------------------------------------
-  ;
-  ; Transfer file data.
-  ;
-  ; Entry:
-  ;
-  ; ?link_transfer_direction - set as appropriate
-  ;
-  ; !payload_addr - address to write data to
-  ;
-  ; !payload_counter - negative number of bytes left in payload
-  ;
-  transfer_file_data: .proc
-		  sta link_transfer_index
-                
-		  ; Claim Tube if necessary.
-		  lda link_tube_transfer_direction
-		  bmi tube_claimed
-		  jsr claim_tube
-  tube_claimed:
+** Long branches, page aligned
 
-		  jsr negate_payload_counter
+ITU routines unrolled 8x
 
-		  ; Need to copy any bytes?
-		  lda payload_counter+0
-		  beq bytes_done
+#+begin_example
+Sun May 22 15:53:04 2022
 
-		  ; Initiate Tube transfer mode, if required.
-		  ldx #tube_multi_byte_parasite_to_host
-		  jsr initiate_tube_transfer
+No Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 97.1 KBytes/sec
+    PC->BBC: 92.1 KBytes/sec
 
-		  ldy link_transfer_index
-		  jsr prepare_link_transfer_thunk
-		  ldx payload_counter+0
-		  jsr link_transfer_thunk
+Internal Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 90.6 KBytes/sec
+    PC->BBC: 86.3 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 62.5 KBytes/sec
+    PC->BBC: 65.0 KBytes/sec
 
-		  ; update dest pointer
-		  clc
-		  lda payload_addr+0
-		  adc payload_counter+0
-		  sta payload_addr+0
-		  bcc payload_addr_updated_for_bytes
-		  inc payload_addr+1
-		  bne payload_addr_updated_for_bytes
-		  inc payload_addr+2
-		  bne payload_addr_updated_for_bytes
-		  inc payload_addr+3
-  payload_addr_updated_for_bytes:
+External Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 95.5 KBytes/sec
+    PC->BBC: 92.1 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 89.2 KBytes/sec
+    PC->BBC: 88.2 KBytes/sec
+#+end_example
 
-  bytes_done:
-		  ; Need to copy any pages?
-		  lda #0
-		  sta payload_counter+0
-		  jsr test_payload_counter
-		  beq done
+** Long branches, all short branches across pages
 
-		  jsr negate_payload_counter
-		  ; payload_counter bits 8-31 is the negative page
-		  ; count.
+Ext Tube parasite<->server regression! - pretty much matches the
+expected degradation from going from 20 cycles/byte to 21 cycles/byte,
+plus a tiny bit of noise due to the $406 calls.
 
-		  ldy link_transfer_index
-		  iny             ;select page transfer routine
-		  jsr prepare_link_transfer_thunk
-                
-  pages_loop:
-		  lda #tube_256_byte_parasite_to_host
-		  jsr initiate_tube_transfer
+#+begin_example
+Sun May 22 16:03:34 2022
 
-		  jsr link_transfer_thunk
+No Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 96.7 KBytes/sec
+    PC->BBC: 91.7 KBytes/sec
 
-		  inc payload_addr+1
-		  bne payload_addr_updated_for_page
-		  inc payload_addr+2
-		  bne payload_addr_updated_for_page
-		  inc payload_addr+3
-  payload_addr_updated_for_page:
+Internal Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 90.6 KBytes/sec
+    PC->BBC: 86.0 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 62.4 KBytes/sec
+    PC->BBC: 65.0 KBytes/sec
 
-		  inc payload_counter+1 ;page count bits 0-7
-		  bne pages_loop
-		  inc payload_counter+2 ;page count bits 8-15
-		  bne pages_loop
-		  inc payload_counter+3 ;page count bits 16-23
-		  bne pages_loop
+External Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 96.7 KBytes/sec
+    PC->BBC: 91.4 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 85.2 KBytes/sec
+    PC->BBC: 84.2 KBytes/sec
+#+end_example
 
-  done:
-		  bit link_tube_transfer_direction
-		  bmi tube_released
-		  jsr release_tube
-  tube_released:
+** Final
 
-		  rts
+#+begin_example
+Sun May 22 16:39:47 2022
 
-  initiate_tube_transfer: .proc
-		  ora link_tube_transfer_direction
-		  bpl +          ;taken if Tube transfer actually wanted
-		  rts
-  +
-		  ldx #<payload_addr
-		  ldy #>payload_addr
-		  jmp $406
-		  .endproc
+No Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 97.4 KBytes/sec
+    PC->BBC: 91.7 KBytes/sec
 
-  prepare_link_transfer_thunk:
-		  lda #$4c
-		  sta link_transfer_thunk+0
-                
-                
-		  .endproc
-#+end_src
+Internal Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 90.7 KBytes/sec
+    PC->BBC: 86.2 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 62.1 KBytes/sec
+    PC->BBC: 65.0 KBytes/sec
+
+External Tube
+Host<->server: 222,720 bytes in 10 tests
+    BBC->PC: 97.2 KBytes/sec
+    PC->BBC: 91.4 KBytes/sec
+Parasite<->server: 245,760 bytes in 10 tests
+    BBC->PC: 89.2 KBytes/sec
+    PC->BBC: 88.2 KBytes/sec
+#+end_example
+
