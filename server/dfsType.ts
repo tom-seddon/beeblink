@@ -566,8 +566,6 @@ class DFSType implements beebfs.IFSType {
             const beebFileInfos = await inf.getINFsForFolder(driveHostPath, log);
 
             for (const beebFileInfo of beebFileInfos) {
-                let text = false;
-
                 if (!this.isValidBeebFileName(beebFileInfo.name)) {
                     continue;
                 }
@@ -579,15 +577,9 @@ class DFSType implements beebfs.IFSType {
                     continue;
                 }
 
-                if (beebFileInfo.noINF) {
-                    if (beebFileInfo.name[0] === '!') {
-                        text = true;
-                    }
-                }
-
                 const dfsFQN = new DFSFQN(driveName, dir, name);
 
-                const file = new beebfs.File(beebFileInfo.hostPath, new beebfs.FQN(volume, dfsFQN), beebFileInfo.load, beebFileInfo.exec, beebFileInfo.attr | beebfs.DEFAULT_ATTR, text);
+                const file = new beebfs.File(beebFileInfo.hostPath, new beebfs.FQN(volume, dfsFQN), beebFileInfo.load, beebFileInfo.exec, beebFileInfo.attr | beebfs.DEFAULT_ATTR, false);
 
                 if (log !== undefined) {
                     log.pn(`${file}`);

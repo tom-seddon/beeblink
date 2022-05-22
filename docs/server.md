@@ -96,8 +96,6 @@ empty .inf file:
 * load and execution addresses will both be &FFFFFFFF (see the `Won't`
   error)
 * the file will be unlocked
-* if the directory name is `!`, it will be treated as a text file (see
-  below)
   
 The .inf file will be created or updated automatically if any of its
 properties change. This will affect the interpretation of files in the
