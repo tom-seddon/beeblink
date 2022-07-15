@@ -98,8 +98,7 @@ empty .inf file:
 * the file will be unlocked
   
 The .inf file will be created or updated automatically if any of its
-properties change. This will affect the interpretation of files in the
-`!` directory.
+properties change.
 
 When creating a folder for an alphabetic drive on a case-sensitive
 filing system, use a lower-case letter - the server doesn't promise to

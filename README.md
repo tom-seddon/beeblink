@@ -92,15 +92,13 @@ to get `beeblink_upurs_fe60.rom` copied onto your BBC.
 # Use
 
 See [the filing system docs](./docs/fs.md) for some info about how to
-use it from the BBC side.
+use it.
 
-[The server docs](./docs/server.md) have some information about useful
-command line options, and a few notes about sharing files between BBC
-and PC.
+[The server docs](./docs/server.md) have some additional information
+about useful command line options, and a few notes about sharing files
+between BBC and PC.
 
 [If you use git, some notes on git interop](./docs/git.md).
-
-[Some notes about using BeebLink with the UPURS cable](./docs/upurs.md).
 
 # Building it yourself
 

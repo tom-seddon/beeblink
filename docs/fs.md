@@ -17,7 +17,7 @@ However you run it, after a moment you should get a message along the
 lines of `/dev/tty.usbserial-FT33WLVU: serving.`, indicating that the
 server is ready.
 
-## Whirlwind tour
+## Checking that it works
 
 With the server ready and the ROM installed, press CTRL+B+BREAK on the
 BBC. Assuming it's all working, you should get the usual message, and
@@ -32,7 +32,8 @@ a BeebLink banner.
 	>
 
 The suggested command line for the server will make the BeebLink tools
-accessible. Do a `*.` to get a catalagoue. (Exact output may differ.)
+volume accessible. Do a `*.` to get a catalagoue. (Exact output may
+differ.)
 
     >*.
     Volume: beeblink
@@ -44,9 +45,8 @@ accessible. Do a `*.` to get a catalagoue. (Exact output may differ.)
 	
     >
 
-Or press SHIFT+BREAK to launch them. (The tools are discussed below.)
-
-It's supposed to feel a lot like using the ordinary DFS.
+Do a SHIFT+BREAK to launch the tools menu.
+[For more about the tools, see the tools documentation](./tools.md).
 
 ## Creating and changing volumes
 
@@ -202,7 +202,7 @@ modified working copy rather than the exact contents of that commit.
 ### `BUILD <fsp>` (*B/B+*)
 
 Create a text file line by line. Designed for creating `!BOOT`, but
-not much else...
+not much else - there's a limit of 64 bytes per line.
 
 ### `DISC`, `DISK`
 
@@ -282,7 +282,7 @@ Produce hex dump of file.
 
 Show the list of currently open files.
 
-### `*INFO <afsp>` (*B/B+*)
+### `INFO <afsp>` (*B/B+*)
 
 Show metadata of the file(s) specified - lock status, load address,
 execution address and size.
@@ -441,41 +441,6 @@ system 4 (DFS) when called upon to identify itself via
 On a Master 128 it will also install temporary filing system entries
 for `DISC` and `DISK` (which will just be ignored if the DFS is also
 present).
-
-# BeebLink tools
-
-The BeebLink tools can be found in the `beeblink` volume. Press
-SHIFT+BREAK to load the menu, and select the tool of interest.
-
-## Speed Test
-
-Measure bandwidth between server and client. If running over the Tube,
-parasite bandwidth is measured as well.
-
-Don't take the results too seriously. You may not see these figures in
-actual use.
-
-(I use this when modifying the transfer code, to check whether my
-changes have made a meaningful improvement or not.)
-
-## ROM Update
-
-Update BLFS ROM contents. For use when upgrading to a new version of
-BeebLink (or for me when updating the ROM code).
-
-Unzip the updated ROMs zip to the directory you run the server from.
-The ROM Update program will get the server to transfer the appropriate
-ROM (according to link type) to the Beeb.
-
-If the BLFS ROM is non-writeable, the update process will leave the
-updated version in RAM. Note the `*SAVE` command line printed; use
-this to save a copy of the ROM somewhere, which you can use with your
-usual EPROM/EEPROM/etc. tools.
-
-If the BLFS ROM is writeable, it will be overwritten. Press CTRL+BREAK
-as prompted to reset the Beeb. (Note the `*SAVE` command line... if
-anything goes wrong after reset, you can potentially use this to save
-a copy of the previous ROM somewhere.)
 
 # Non-standard errors
 

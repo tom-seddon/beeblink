@@ -444,14 +444,6 @@ These are weak symbols. If not defined, link-agnostic code will be
 used, that simply calls `link_(send|recv)_payload_byte` repeatedly.
 This works, but you probably won't get max throughput...
 
-### `link_num_speedtest_iterations` ###
-
-Number of iterations to perform when doing `*SPEEDTEST`. Each
-iteration sends or receives from `PAGE` to `HIMEM`, and it's just a
-question of how long you fancy waiting, given the speed of the link.
-
-Must be an even number.
-
 ## Server side
 
 TBD...
