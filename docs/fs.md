@@ -405,6 +405,9 @@ The ROM will print debug messages when the `V` option is on. This is
 handy when working on the ROM, but you probably don't want it
 otherwise!
 
+**Debug verbosity is not designed for use in conjunction
+with `*SPOOL`.**
+
 ## `*` - trap *DISC
 
 Some programs do `*DISC` in their loader or `!BOOT`, which is no good
