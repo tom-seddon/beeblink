@@ -79,6 +79,11 @@
                 ; makes a bit of a difference in FSTEST. 1.3x as many
                 ; BGETs per second.
 send_1_byte_messages=true
+
+                ; if true, include some stuff for filling a buffer
+                ; with logging data (assumes BLFS is loaded into
+                ; sideways RAM)
+debug_buffer=false
                 
 ;-------------------------------------------------------------------------
                 
@@ -160,6 +165,9 @@ link_old_y: .fill 1
 link_value: .fill 1
 link_transfer_flags: .fill 1
 link_transfer_thunk: .fill 3    ;$4C, LSB, MSB
+                .if debug_buffer
+link_debug_buffer_ptr: .fill 2
+                .endif
                 .endsection link_workspace
                 
 ;-------------------------------------------------------------------------
@@ -928,6 +936,10 @@ send_file_data_parasite: .proc
 transfer_file_data: .proc
                 sta link_transfer_flags
 
+                .if debug_buffer
+                jsr debug_buffer_reset
+                .endif
+
                 ; Form routine index from the transfer flags.
                 ;
                 ; (link_itu is currently bit 7 only. But that might
@@ -1635,6 +1647,63 @@ send_parasite_page: .proc
 
 ;-------------------------------------------------------------------------
 
+                .if debug_buffer
+debug_buffer_reset: .proc
+                .cpu '65c02'
+                pha
+                phx
+                phy
+
+                jsr reset_ptr
+
+                ldy #($c000-debug_buffer_contents+255)>>8
+                ldx #0
+                lda #$ff
+-
+                jsr debug_buffer_store_a
+                inx
+                bne -
+                dey
+                bne -
+                
+                jsr reset_ptr
+                ply
+                plx
+                pla
+                .cpu 'default'
+                rts
+
+reset_ptr:
+                lda #<debug_buffer_contents
+                sta link_debug_buffer_ptr+0
+                lda #>debug_buffer_contents
+                sta link_debug_buffer_ptr+1
+                rts
+                .endproc
+
+debug_buffer_store_y:
+                pha
+                tya
+                jsr debug_buffer_store_a
+                pla
+                rts
+
+debug_buffer_store_a:
+                .cpu '65c02'
+                bit link_debug_buffer_ptr+1
+                bvs +
+                sta (link_debug_buffer_ptr)
+                inc link_debug_buffer_ptr+0
+                bne +
+                inc link_debug_buffer_ptr+1
++
+                .cpu 'default'
+                rts
+
+                .align 256
+debug_buffer_contents:
+                .endif
+                
                 .endblock
 
 ;-------------------------------------------------------------------------
