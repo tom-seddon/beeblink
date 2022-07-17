@@ -1054,22 +1054,22 @@ initiate_tube_transfer:
                 jmp $406
 
 _:=[]
-_..=[send_parasite_bytes]       ; R=0 I=0 H=0 p=0
-_..=[send_parasite_page]        ; R=0 I=0 H=0 p=1
-_..=[send_host_bytes]           ; R=0 I=0 H=1 p=0
-_..=[send_host_page]            ; R=0 I=0 H=1 p=1
-_..=[itu_send_parasite_bytes]   ; R=0 I=1 H=0 p=0
-_..=[itu_send_parasite_page]    ; R=0 I=1 H=0 p=1
-_..=[itu_send_host_bytes]       ; R=0 I=1 H=1 p=0
-_..=[itu_send_host_page]        ; R=0 I=1 H=1 p=1
-_..=[recv_parasite_bytes]       ; R=1 I=0 H=0 p=0
-_..=[recv_parasite_page]        ; R=1 I=0 H=0 p=1
-_..=[recv_host_bytes]           ; R=1 I=0 H=1 p=0
-_..=[recv_host_page]            ; R=1 I=0 H=1 p=1
-_..=[itu_recv_parasite_bytes]   ; R=1 I=1 H=0 p=0
-_..=[itu_recv_parasite_page]    ; R=1 I=1 H=0 p=1
-_..=[itu_recv_host_bytes]       ; R=1 I=1 H=1 p=0
-_..=[itu_recv_host_page]        ; R=1 I=1 H=1 p=1
+_..=[send_parasite_bytes]       ; R=0 I=0 H=0 p=0 $0
+_..=[send_parasite_page]        ; R=0 I=0 H=0 p=1 $1
+_..=[send_host_bytes]           ; R=0 I=0 H=1 p=0 $2
+_..=[send_host_page]            ; R=0 I=0 H=1 p=1 $3
+_..=[itu_send_parasite_bytes]   ; R=0 I=1 H=0 p=0 $4
+_..=[itu_send_parasite_page]    ; R=0 I=1 H=0 p=1 $5
+_..=[itu_send_host_bytes]       ; R=0 I=1 H=1 p=0 $6
+_..=[itu_send_host_page]        ; R=0 I=1 H=1 p=1 $7
+_..=[recv_parasite_bytes]       ; R=1 I=0 H=0 p=0 $8
+_..=[recv_parasite_page]        ; R=1 I=0 H=0 p=1 $9
+_..=[recv_host_bytes]           ; R=1 I=0 H=1 p=0 $a
+_..=[recv_host_page]            ; R=1 I=0 H=1 p=1 $b
+_..=[itu_recv_parasite_bytes]   ; R=1 I=1 H=0 p=0 $c
+_..=[itu_recv_parasite_page]    ; R=1 I=1 H=0 p=1 $d
+_..=[itu_recv_host_bytes]       ; R=1 I=1 H=1 p=0 $e
+_..=[itu_recv_host_page]        ; R=1 I=1 H=1 p=1 $f
 link_transfer_routines=_
 
 link_transfer_routines_lsb: .byte <link_transfer_routines
@@ -1472,11 +1472,13 @@ loop:
 
                 dec link_value
                 bne loop
-                
+
+                stx acccon      ;re-select internal Tube
                 .itu_transfer_wait_for_status recv
                 .transfer_status_byte recv
                 
                 jsr itu_int_tube
+
                 plp
                 rts
 
