@@ -288,9 +288,11 @@ command_line_ptr: .fill 2
                 .dsection lib_code
                 .dsection driver_code
 
-                ; Not actually the end of the world if it goes past
-                ; the 8 KB mark, but
-                .cerror *>$a000,"ROM overflow"
+                ; It's actually fine for the ROM to be the full 16 KB,
+                ; but the goal is for shipping versions to be 8 KB
+                ; max.
+                
+                .cerror *>$a000,format("ROM overflow: %d bytes too large",*-$a000)
                 
                 .section header
                 brk
