@@ -1357,15 +1357,10 @@ add_y_to_payload_counter: .proc
                 tya
                 adc payload_counter+0
                 sta payload_counter+0
-                bcc done
-                inc payload_counter+1
-                bne done
-                inc payload_counter+2
-                bne done
-                inc payload_counter+3
-done:
+                bcs @b inc_payload_counter.top_24_bits
                 rts
                 .pend
+                
 ;-------------------------------------------------------------------------
 ;
 ; ORs all 4 bytes of the payload size into the accumulator.
@@ -1390,23 +1385,20 @@ test_payload_counter: .proc
 ;
 negate_payload_counter: .proc
                 pha
-                
-                lda payload_counter+0
-                eor #$ff
-                sta payload_counter+0
-                
-                lda payload_counter+1
-                eor #$ff
-                sta payload_counter+1
+                txa
+                pha
 
-                lda payload_counter+2
+                ldx #3
+-
+                lda payload_counter,x
                 eor #$ff
-                sta payload_counter+2
+                sta payload_counter,x
 
-                lda payload_counter+3
-                eor #$ff
-                sta payload_counter+3
+                dex
+                bpl -
 
+                pla
+                tax
                 pla
 
                 ; fall through to inc_payload_counter
@@ -1423,6 +1415,7 @@ negate_payload_counter: .proc
 inc_payload_counter: .block
                 inc payload_counter+0
                 bne done
+top_24_bits:
                 inc payload_counter+1
                 bne done
                 inc payload_counter+2
