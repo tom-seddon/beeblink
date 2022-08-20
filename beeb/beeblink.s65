@@ -2711,10 +2711,6 @@ blfs_osbput: .proc
                 ; $102,x = old X
                 ; $103,x = old A
 
-                ; OSBPUT requests are always 2 bytes.
-                lda #2
-                jsr set_payload_counter
-
                 ; Might be able to send OSBPUT_FNF, if the last
                 ; request was OSBPUT or OSBPUT_FNF.
                 lda last_request
@@ -2724,10 +2720,19 @@ blfs_osbput: .proc
                 beq maybe_send_osbput_fnf
 
 send_osbput:
+                lda #2
+                jsr set_payload_counter
+
                 lda #REQUEST_OSBPUT
                 jsr send_request_n_without_restart
 
-                jsr send_payload
+                tsx
+                lda $101,x      ;file handle
+                sta rept_byte_access_handle
+                jsr send_payload_byte
+
+                lda $103,x      ;value
+                jsr send_payload_byte ;value
 
                 ; Assume no OSBPUT_FNF possible.
                 lda #0
@@ -2755,15 +2760,6 @@ osbput_done:
                 rts
 
 send_payload:
-                tsx
-                
-                lda 2+$101,x      ;file handle (+2 due to JSR)
-                sta rept_byte_access_handle
-                jsr send_payload_byte
-
-                lda 2+$103,x      ;value
-                jmp send_payload_byte ;value (+2 due to JSR)
-
 maybe_send_osbput_fnf:
                 ; The last request was OSBPUT or OSBPUT_FNF. Might be
                 ; able to send OSBPUT_FNF, if the handle matches.
@@ -2780,10 +2776,12 @@ maybe_send_osbput_fnf:
                 dec rept_byte_access_counter
 
 send_osbput_fnf:
+                tsx
+                lda $103,x      ;value to write
+                tax
+                
                 lda #REQUEST_OSBPUT_FNF
-                jsr send_request_n_without_restart
-
-                jsr send_payload
+                jsr send_request_1_without_restart
 
                 jmp osbput_done
                 

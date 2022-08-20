@@ -88,16 +88,22 @@ class Handler {
     private quiet: boolean;
     private fullRequestDump: boolean = false;
     private fullResponseDump: boolean = false;
+    private resetLastOSBPUTHandle: boolean;
 
     public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<Response>) {
         this.name = name;
         this.fun = fun;
         this.quiet = false;
+        this.resetLastOSBPUTHandle = true;
     }
 
     // JS crap that's seemingly impossible to deal with in any non-annoying way.
     public async applyFun(thisObject: any, p: Buffer): Promise<Response> {
         return await this.fun.apply(thisObject, [this, p]);
+    }
+
+    public shouldResetLastOSBPUTHandle(): boolean {
+        return this.resetLastOSBPUTHandle;
     }
 
     public shouldLog(): boolean {
@@ -124,6 +130,11 @@ class Handler {
 
     public withFullResponseDump(): Handler {
         this.fullResponseDump = true;
+        return this;
+    }
+
+    public withoutResetLastOSBPUTHandle(): Handler {
+        this.resetLastOSBPUTHandle = false;
         return this;
     }
 }
@@ -188,6 +199,8 @@ export default class Server {
     private dumpPackets: boolean;
     private diskImageFlow: diskimage.Flow | undefined;
     private linkSupportsFireAndForgetRequests: boolean;
+    private lastOSBPUTHandle: number | undefined;
+    private resetLastOSBPUTHandle: boolean;
 
     public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, log: utils.Log, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
         this.romPathByLinkSubtype = romPathByLinkSubtype;
@@ -236,7 +249,7 @@ export default class Server {
         this.handlers[beeblink.REQUEST_OSARGS] = new Handler('OSARGS', this.handleOSARGS);
         this.handlers[beeblink.REQUEST_EOF] = new Handler('EOF', this.handleEOF);
         this.handlers[beeblink.REQUEST_OSBGET] = new Handler('OSBGET', this.handleOSBGET);//.withNoLogging();
-        this.handlers[beeblink.REQUEST_OSBPUT] = new Handler('OSBPUT', this.handleOSBPUT);//.withNoLogging();
+        this.handlers[beeblink.REQUEST_OSBPUT] = new Handler('OSBPUT', this.handleOSBPUT).withoutResetLastOSBPUTHandle();//.withNoLogging();
         this.handlers[beeblink.REQUEST_STAR_INFO] = new Handler('STAR_INFO', this.handleStarInfo);
         this.handlers[beeblink.REQUEST_STAR_EX] = new Handler('STAR_EX', this.handleStarEx);
         this.handlers[beeblink.REQUEST_OSGBPB] = new Handler('OSGBPB', this.handleOSGBPB);
@@ -254,11 +267,13 @@ export default class Server {
         this.handlers[beeblink.REQUEST_WRITE_DISK_IMAGE] = new Handler('REQUEST_WRITE_DISK_IMAGE', this.handleWriteDiskImage);
 
         if (this.linkSupportsFireAndForgetRequests) {
-            this.handlers[beeblink.REQUEST_OSBPUT_FNF] = new Handler('OSBPUT_FNF', this.handleOSBPUT);//.withNoLogging();
+            this.handlers[beeblink.REQUEST_OSBPUT_FNF] = new Handler('OSBPUT_FNF', this.handleOSBPUTFireAndForget).withoutResetLastOSBPUTHandle();//.withNoLogging();
         }
 
         this.log = log;
         this.dumpPackets = dumpPackets;
+
+        this.resetLastOSBPUTHandle = true;
     }
 
     public async handleRequest(request: Request): Promise<Response> {
@@ -269,6 +284,10 @@ export default class Server {
         const response = await this.handleRequestInternal(handler, request);
 
         this.dumpPacket(response, handler !== undefined && handler.showFullResponseDump());
+
+        if (handler === undefined || handler.shouldResetLastOSBPUTHandle()) {
+            this.lastOSBPUTHandle = undefined;
+        }
 
         return response;
     }
@@ -671,6 +690,30 @@ export default class Server {
         }
     }
 
+    private async handleOSBPUTFireAndForget(handler: Handler, p: Buffer): Promise<Response> {
+        let byte: number;
+        let handle: number;
+        if (p.length === 1) {
+            if (this.lastOSBPUTHandle === undefined) {
+                this.internalError('No previous OSBPUT');
+            }
+
+            handle = this.lastOSBPUTHandle;
+            byte = p[0];
+        } else if (p.length === 2) {
+            handle = p[0];
+            byte = p[1];
+        } else {
+            this.internalError('Bad OSBPUT payload');
+        }
+
+        this.log.pn('Input: handle=' + utils.hexdec(handle) + ', value=' + utils.hexdecch(byte));
+        this.bfs.OSBPUT(handle, byte);
+        this.lastOSBPUTHandle = handle;
+
+        return newResponse(beeblink.RESPONSE_YES, 0);
+    }
+
     private async handleOSBPUT(handler: Handler, p: Buffer): Promise<Response> {
         this.payloadMustBe(handler, p, 2);
 
@@ -681,6 +724,7 @@ export default class Server {
         this.log.pn('Input: handle=' + utils.hexdec(handle) + ', value=' + utils.hexdecch(byte));
 
         const newPtr = this.bfs.OSBPUT(handle, byte);
+        this.lastOSBPUTHandle = handle;
 
         if (this.linkSupportsFireAndForgetRequests) {
             const numOSBPUTsLeft = Math.min(beebfs.MAX_FILE_SIZE - newPtr, 255);

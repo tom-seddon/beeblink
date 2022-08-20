@@ -246,14 +246,6 @@ export const REQUEST_OSBGET = 0x10;
 // P = handle; byte
 export const REQUEST_OSBPUT = 0x11;
 
-// Do an OSBPUT that definitely won't produce an error.
-//
-// (If an error is produced, that's a bug. The server logs the error and
-// discards it.)
-//
-// P = handle; byte
-export const REQUEST_OSBPUT_FNF = 0x60;
-
 // Do a *INFO or *EX due to Master 128 OSFSC call.
 //
 // Response is TEXT.
@@ -408,6 +400,15 @@ export const REQUEST_READ_DISK_IMAGE = 0x21;
 //
 // Response (and restrictions) as per REQUEST_READ_DISK_IMAGE.
 export const REQUEST_WRITE_DISK_IMAGE = 0x22;
+
+// Do an OSBPUT that definitely won't produce an error.
+//
+// (If an error is produced, that's a bug. The server logs the error and
+// discards it.)
+//
+// P = handle; byte
+// or, P = byte (and handle is the same as the previous OSBPUT)
+export const REQUEST_OSBPUT_FNF = 0x60;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
