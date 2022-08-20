@@ -1,0 +1,7 @@
+$.WRITESSD diff=bbcbasic
+$.DFSIMG diff=bbcbasic
+$.TEST99 diff=bbcbasic
+$.COPYROMS diff=bbcbasic
+$.BPUT-TEST diff=bbcbasic
+$.BPUT1 diff=bbcbasic
+$.BPUT2 diff=bbcbasic
