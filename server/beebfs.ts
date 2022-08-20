@@ -793,9 +793,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public constructor(logPrefix: string | undefined, folders: string[], pcFolders: string[], colours: Chalk | undefined, gaManipulator: gitattributes.Manipulator | undefined) {
-        this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stdout, logPrefix !== undefined);
-        this.log.colours = colours;
+    public constructor(folders: string[], pcFolders: string[], gaManipulator: gitattributes.Manipulator | undefined, log: utils.Log) {
+        this.log = log;
 
         this.folders = folders.slice();
         this.pcFolders = pcFolders.slice();
@@ -1163,12 +1162,14 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public OSBPUT(handle: number, byte: number): void {
+    public OSBPUT(handle: number, byte: number): number {
         const openFile = this.mustBeOpen(this.getOpenFileByHandle(handle));
 
         this.mustBeOpenForWrite(openFile);
 
         this.bputInternal(openFile, byte);
+
+        return openFile.ptr;
     }
 
     /////////////////////////////////////////////////////////////////////////

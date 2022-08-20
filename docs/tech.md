@@ -93,13 +93,24 @@ Messages type 0 is reserved for link-specific uses.
 
 Mostly out of scope for this doc... the best "documentation" is the
 .ts file that is the authoritative list of numbers and payload
-formats, along with a few notes: [beeblink.ts](../server/beeblink.ts)
-
+formats, along with a few notes: [beeblink.ts](../server/beeblink.ts).
 This file is used as-is by the TypeScript code, and
 [preprocessed](../tools/make_constants.py) to create an include file
 useable by the 6502 ROM code.
 
-Two notes:
+Request types are 7-bit numbers, divided up as follows:
+
+- $00 - $01 - link-specific requests with unspecified behaviour
+- $02...$5f - ordinary requests. Beeb sends request and waits for
+  server to send expected response back
+- $60...$6f - fire-and-forget requests that produce no server
+  response. Beeb sends request, then (when possible for link type)
+  continues immediately, under the assumption the server will receive
+  the request in due course
+- $70...$7e - reserved for additional future expansion
+- $7f - always invalid
+
+Three notes:
 
 - text produced by the server is retrieved in parts, one
   request/response per part. Each part is buffered on the stack, then
@@ -108,6 +119,8 @@ Two notes:
 
 - any request can always return ERROR. The request/response routine in
   the ROM looks after this by automatically issuing an appropriate BRK
+  
+- the HTTP link type doesn't support fire-and-forget requests yet
   
 # Link types
 

@@ -90,6 +90,14 @@ export const DEFAULT_NUM_FILE_HANDLES = 16;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
+
+// Inclusive-exclusive range of fire-and-forgest requests. Requests within this
+// range don't send a response back to the Beeb.
+export const FNF_REQUESTS_BEGIN = 0x60;
+export const FNF_REQUESTS_END = 0x70;
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
 //
 // Request types 0x00/0x80 and 0x01/0x81 are link-dependent and may have special
 // syntax.
@@ -230,13 +238,21 @@ export const REQUEST_OSBGET = 0x10;
 
 // Do an OSBPUT.
 //
-// Response is YES.
+// Response is RESPONSE_OSBPUT.
 //
 // This is sadly not as efficient as OSBGET. In fact, it's as bad as it can
 // possibly be.
 //
 // P = handle; byte
 export const REQUEST_OSBPUT = 0x11;
+
+// Do an OSBPUT that definitely won't produce an error.
+//
+// (If an error is produced, that's a bug. The server logs the error and
+// discards it.)
+//
+// P = handle; byte
+export const REQUEST_OSBPUT_FNF = 0x60;
 
 // Do a *INFO or *EX due to Master 128 OSFSC call.
 //
@@ -342,10 +358,13 @@ export const REQUEST_FINISH_DISK_IMAGE_FLOW = 0x1f;
 // request payload
 //
 // Response is DATA:
-//
+
 // +0 byte - response code
 // +1 dword - actual size of payload, even if greater than max
 // +5 byte[] - payload bytes, up to max requested
+
+// The response to a fire-and-forget request has response code $00 and a 0-byte
+// payload.
 export const REQUEST_WRAPPED = 0x20;
 
 // Read a disk and save it to an image. The operation formerly known as *READ.
@@ -556,6 +575,15 @@ export const RESPONSE_SPECIAL = 0x0f;
 //
 // P = 1 byte, the exact respones type.
 export const RESPONSE_VOLUME_BROWSER = 0x10;
+
+// Respond to a OSBPUT.
+//
+// P = 1 byte, number of fire-and-forget OSBPUTs that can definitely be
+// submitted without producing an error.
+//
+// N.B., it's just a coincidence that RESPONSE_OSBPUT has the same value as
+// REQUEST_OSBPUT.
+export const RESPONSE_OSBPUT = 0x11;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////

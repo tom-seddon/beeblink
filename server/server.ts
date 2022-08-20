@@ -4,17 +4,17 @@
 // BeebLink - BBC Micro file storage system
 //
 // Copyright (C) 2018, 2019, 2020 Tom Seddon
-// 
+//
 // This program is free software: you can redistribute it and/or
 // modify it under the terms of the GNU General Public License as
 // published by the Free Software Foundation, either version 3 of the
 // License, or (at your option) any later version.
-// 
+//
 // This program is distributed in the hope that it will be useful, but
 // WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 // General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
@@ -172,6 +172,8 @@ function encodeForOSCLI(command: string): Buffer {
 // with the packet writing. Try to isolate the lower levels from the packet
 // format.
 
+
+
 export default class Server {
     private bfs: beebfs.FS;
     private linkSubtype: number | undefined;
@@ -185,12 +187,14 @@ export default class Server {
     private speedTest: speedtest.SpeedTest | undefined;
     private dumpPackets: boolean;
     private diskImageFlow: diskimage.Flow | undefined;
+    private linkSupportsFireAndForgetRequests: boolean;
 
-    public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, logPrefix: string | undefined, colours: Chalk | undefined, dumpPackets: boolean) {
+    public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, log: utils.Log, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
         this.romPathByLinkSubtype = romPathByLinkSubtype;
         this.linkSubtype = undefined;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
+        this.linkSupportsFireAndForgetRequests = linkSupportsFireAndForgetRequests;
 
         this.commands = [
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
@@ -249,8 +253,11 @@ export default class Server {
         this.handlers[beeblink.REQUEST_READ_DISK_IMAGE] = new Handler('REQUEST_READ_DISK_IMAGE', this.handleReadDiskImage);
         this.handlers[beeblink.REQUEST_WRITE_DISK_IMAGE] = new Handler('REQUEST_WRITE_DISK_IMAGE', this.handleWriteDiskImage);
 
-        this.log = new utils.Log(logPrefix !== undefined ? logPrefix : '', process.stderr, logPrefix !== undefined);
-        this.log.colours = colours;
+        if (this.linkSupportsFireAndForgetRequests) {
+            this.handlers[beeblink.REQUEST_OSBPUT_FNF] = new Handler('OSBPUT_FNF', this.handleOSBPUT);//.withNoLogging();
+        }
+
+        this.log = log;
         this.dumpPackets = dumpPackets;
     }
 
@@ -670,12 +677,20 @@ export default class Server {
         const handle = p[0];
         const byte = p[1];
 
-        // 
+        //
         this.log.pn('Input: handle=' + utils.hexdec(handle) + ', value=' + utils.hexdecch(byte));
 
-        this.bfs.OSBPUT(handle, byte);
+        const newPtr = this.bfs.OSBPUT(handle, byte);
 
-        return newResponse(beeblink.RESPONSE_YES, 0);
+        if (this.linkSupportsFireAndForgetRequests) {
+            const numOSBPUTsLeft = Math.min(beebfs.MAX_FILE_SIZE - newPtr, 255);
+
+            this.log.pn(`Output: FNF OSBPUT counter=${numOSBPUTsLeft}`);
+
+            return newResponse(beeblink.RESPONSE_OSBPUT, numOSBPUTsLeft);
+        } else {
+            return newResponse(beeblink.RESPONSE_YES, 0);
+        }
     }
 
     private async handleStarInfo(handler: Handler, p: Buffer): Promise<Response> {
@@ -1107,7 +1122,12 @@ export default class Server {
 
         const request = new Request(p[0], p.subarray(5));
 
-        const response = await this.handleRequest(request);
+        let response = await this.handleRequest(request);
+
+        if (request.isFireAndForget()) {
+            // Sneak in and replace the response.
+            response = new Request(0, Buffer.alloc(0));
+        }
 
         const wrappedSize = Math.min(response.p.length, maxResponsePayloadSize);
         const wrappedResponsePayload = Buffer.alloc(5 + wrappedSize);

@@ -24,6 +24,7 @@
 
 import Message from './Message';
 import * as utils from './utils';
+import * as beeblink from './beeblink';
 
 export default class Request extends Message {
     public constructor(c: number, p: Buffer) {
@@ -32,5 +33,9 @@ export default class Request extends Message {
 
     public toString(): string {
         return this.toStringHelper(utils.getRequestTypeName(this.c));
+    }
+
+    public isFireAndForget(): boolean {
+        return this.c >= beeblink.FNF_REQUESTS_BEGIN && this.c < beeblink.FNF_REQUESTS_END;
     }
 }

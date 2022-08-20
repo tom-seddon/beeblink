@@ -966,7 +966,7 @@ function getRomPathsForSerial(options: ICommandLineOptions): Map<number, string>
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): void {
+function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<Server>): void {
     if (!options.http) {
         return;
     }
@@ -1035,7 +1035,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
             // Find the Server for this sender id.
             let server = serverBySenderId.get(senderId);
             if (server === undefined) {
-                server = await createServer('HTTP', getRomPathsForAVR(options));
+                server = await createServer('HTTP', getRomPathsForAVR(options), false);
                 serverBySenderId.set(senderId, server);
             }
 
@@ -1482,7 +1482,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                     p = Buffer.alloc(size);
                 }
 
-                serialLog.pn(`Got request 0x${utils.hex2(c)}. Waiting for ${p.length} payload bytes...`);
+                serialLog.pn(`Got request 0x${utils.hex2(c)} (${utils.getRequestTypeName(c)}). Waiting for ${p.length} payload bytes...`);
 
                 for (let i = 0; i < p.length; ++i) {
                     p[i] = await readByte();
@@ -1503,99 +1503,105 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
 
             const response = await server.handleRequest(request);
 
-            let responseData: Buffer;
-
-            // serialLog.withIndent('response: ', () => {
-            //     serialLog.pn(`c=0x${utils.hex2(response.c)}`);
-            //     serialLog.withIndent(`p=`, () => {
-            //         serialLog.dumpBuffer(response.p, 10);
-            //     });
-            // });
-
-            let destIdx = 0;
-
-            if (response.p.length === 1 && !options.serial_full_size_messages) {
-                responseData = Buffer.alloc(3);
-
-                responseData[destIdx++] = response.c & 0x7f;
-                responseData[destIdx++] = response.p[0];
-                responseData[destIdx++] = 1;//confirmation byte
+            if (request.isFireAndForget()) {
+                // Do nothing.
+                serialLog.pn('(Fire-and-forget request - no response)');
             } else {
-                responseData = Buffer.alloc(1 + 4 + response.p.length + ((response.p.length + 255) >> 8));
+                serialLog.pn(`Sending response 0x${utils.hex2(response.c)} (${utils.getResponseTypeName(response.c)})`);
+                let responseData: Buffer;
 
-                responseData[destIdx++] = response.c | 0x80;
+                // serialLog.withIndent('response: ', () => {
+                //     serialLog.pn(`c=0x${utils.hex2(response.c)}`);
+                //     serialLog.withIndent(`p=`, () => {
+                //         serialLog.dumpBuffer(response.p, 10);
+                //     });
+                // });
 
-                responseData.writeUInt32LE(response.p.length, destIdx);
-                destIdx += 4;
+                let destIdx = 0;
 
-                for (let srcIdx = 0; srcIdx < response.p.length; ++srcIdx) {
-                    responseData[destIdx++] = response.p[srcIdx];
+                if (response.p.length === 1 && !options.serial_full_size_messages) {
+                    responseData = Buffer.alloc(3);
 
-                    if (getNegativeOffsetLSB(srcIdx, response.p) === 0) {
-                        responseData[destIdx++] = 1;//confirmation byte
+                    responseData[destIdx++] = response.c & 0x7f;
+                    responseData[destIdx++] = response.p[0];
+                    responseData[destIdx++] = 1;//confirmation byte
+                } else {
+                    responseData = Buffer.alloc(1 + 4 + response.p.length + ((response.p.length + 255) >> 8));
+
+                    responseData[destIdx++] = response.c | 0x80;
+
+                    responseData.writeUInt32LE(response.p.length, destIdx);
+                    destIdx += 4;
+
+                    for (let srcIdx = 0; srcIdx < response.p.length; ++srcIdx) {
+                        responseData[destIdx++] = response.p[srcIdx];
+
+                        if (getNegativeOffsetLSB(srcIdx, response.p) === 0) {
+                            responseData[destIdx++] = 1;//confirmation byte
+                        }
                     }
                 }
-            }
 
-            assert.strictEqual(destIdx, responseData.length);
+                assert.strictEqual(destIdx, responseData.length);
 
-            // This doesn't seem to work terribly well! - should probably just
-            // write the whole lot in one big lump and then use the JS analogue
-            // of tcflush, whatever it is (assuming there is one, and it's
-            // Windows-friendly).
-            {
-                serialLog.pn(`Sending ${responseData.length} bytes response data...`);
-                dataOutLog.withIndent('data out: ', () => {
-                    dataOutLog.dumpBuffer(responseData);
-                });
-
-                const maxChunkSize = 512;//arbitrary.
-                let srcIdx = 0;
-                while (srcIdx < responseData.length) {
-                    const chunk = responseData.subarray(srcIdx, srcIdx + maxChunkSize);
-
-                    let resolveResult: ((result: boolean) => void) | undefined;
-
-                    function callResolveResult(result: boolean): void {
-                        if (resolveResult !== undefined) {
-                            const r = resolveResult;
-                            resolveResult = undefined;
-
-                            r(result);
-                        }
-                    }
-
-                    readWaiter = {
-                        reject: undefined,
-                        resolve: (): void => {
-                            serialLog.pn(`Received data while sending - returning to sync state`);
-                            callResolveResult(false);
-                        },
-                    };
-
-                    const ok = await new Promise<boolean>((resolve, reject) => {
-                        resolveResult = resolve;
-
-                        function write(): boolean {
-                            return port.write(chunk, (error: any): void => {
-                                if (error !== null && error !== undefined) {
-                                    reject(error);
-                                } else {
-                                    callResolveResult(true);
-                                }
-                            });
-                        }
-
-                        if (!write()) {
-                            port.once('drain', write);
-                        }
+                // This doesn't seem to work terribly well! - should probably just
+                // write the whole lot in one big lump and then use the JS analogue
+                // of tcflush, whatever it is (assuming there is one, and it's
+                // Windows-friendly).
+                {
+                    serialLog.pn(`Sending ${responseData.length} bytes response data...`);
+                    dataOutLog.withIndent('data out: ', () => {
+                        dataOutLog.dumpBuffer(responseData);
                     });
 
-                    if (!ok) {
-                        break request_response_loop;
-                    }
+                    const maxChunkSize = 512;//arbitrary.
+                    let srcIdx = 0;
+                    while (srcIdx < responseData.length) {
+                        const chunk = responseData.subarray(srcIdx, srcIdx + maxChunkSize);
 
-                    srcIdx += maxChunkSize;
+                        let resolveResult: ((result: boolean) => void) | undefined;
+
+                        function callResolveResult(result: boolean): void {
+                            if (resolveResult !== undefined) {
+                                const r = resolveResult;
+                                resolveResult = undefined;
+
+                                r(result);
+                            }
+                        }
+
+                        readWaiter = {
+                            reject: undefined,
+                            resolve: (): void => {
+                                serialLog.pn(`Received data while sending - returning to sync state`);
+                                callResolveResult(false);
+                            },
+                        };
+
+                        const ok = await new Promise<boolean>((resolve, reject) => {
+                            resolveResult = resolve;
+
+                            function write(): boolean {
+                                return port.write(chunk, (error: any): void => {
+                                    if (error !== null && error !== undefined) {
+                                        reject(error);
+                                    } else {
+                                        callResolveResult(true);
+                                    }
+                                });
+                            }
+
+                            if (!write()) {
+                                port.once('drain', write);
+                            }
+                        });
+
+                        if (!ok) {
+                            break request_response_loop;
+                        }
+
+                        srcIdx += maxChunkSize;
+                    }
                 }
             }
 
@@ -1668,7 +1674,7 @@ interface IPortState {
     active: boolean;
 }
 
-async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>) => Promise<Server>): Promise<void> {
+async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<Server>): Promise<void> {
     const log = new utils.Log('SERIAL-DEVICES', process.stdout, options.serial_verbose !== null);
 
     const portStateByPortPath = new Map<string, IPortState>();
@@ -1681,7 +1687,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
             if (value === undefined) {
                 log.pn(`${portPath}: new serial port`);
                 value = {
-                    server: await createServer('SERIAL', getRomPathsForSerial(options)),
+                    server: await createServer('SERIAL', getRomPathsForSerial(options), true),
                     active: false,//not quite active just yet!
                 };
                 portStateByPortPath.set(portPath, value);
@@ -1740,20 +1746,24 @@ async function main(options: ICommandLineOptions) {
 
     let nextConnectionId = 1;
 
-    async function createServer(additionalPrefix: string, romPathByLinkSubtype: Map<number, string>): Promise<Server> {
+    async function createServer(additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean): Promise<Server> {
         const connectionId = nextConnectionId++;
         const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
 
         const bfsLogPrefix = options.fs_verbose ? 'FS' + connectionId : undefined;
-        const serverLogPrefix = options.server_verbose ? additionalPrefix + 'SRV' + connectionId : undefined;
+        const bfsLog = new utils.Log(bfsLogPrefix !== undefined ? bfsLogPrefix : '', process.stderr, bfsLogPrefix !== undefined);
+        bfsLog.colours = colours;
 
-        const bfs = new beebfs.FS(bfsLogPrefix, options.folders, options.pcFolders, colours, gaManipulator);
+        const serverLogPrefix = options.server_verbose ? additionalPrefix + 'SRV' + connectionId : undefined;
+        const serverLog = new utils.Log(serverLogPrefix !== undefined ? serverLogPrefix : '', process.stderr, serverLogPrefix !== undefined);
+
+        const bfs = new beebfs.FS(options.folders, options.pcFolders, gaManipulator, bfsLog,);
 
         if (defaultVolume !== undefined) {
             await bfs.mount(defaultVolume);
         }
 
-        const server = new Server(romPathByLinkSubtype, bfs, serverLogPrefix, colours, options.server_data_verbose);
+        const server = new Server(romPathByLinkSubtype, bfs, serverLog, options.server_data_verbose, linkSupportsFireAndForgetRequests);
         return server;
     }
 

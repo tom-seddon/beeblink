@@ -87,6 +87,8 @@ blfs_num_handles=DEFAULT_NUM_FILE_HANDLES
 enable_volbrowser=true
                 .endweak
 
+                .cerror blfs_num_handles>64,'too many handles'
+                
 ;-------------------------------------------------------------------------
                 
 ; FS number for DFS
@@ -277,6 +279,22 @@ payload_addr: .fill 4
 ; Address of command line for *RUN. Stored in private workspace so
 ; OSARGS A=0 Y=1 can retrieve it.
 command_line_ptr: .fill 2
+
+; Request code of last request sent. Used to detect repeated
+; OSBGET/OSBPUT.
+;
+; This never gets explicitly initialised, but the link startup process
+; issues a REQUEST_SET_FILE_HANDLE_RANGE, so it starts out as
+; something sensible.
+last_request: .fill 1
+
+; Handle for repeated byte access.
+rept_byte_access_handle: .fill 1
+                
+; Counter for repeated byte access.
+rept_byte_access_counter: .block
+                .fill 1
+                .endblock
 
                 .send fs_workspace
 
@@ -1549,14 +1567,17 @@ reg:
 ;
 
 send_request_n_with_restart:
+                sta last_request
                 jsr link_begin_send_with_restart
                 bcs link_status_brk
                 jmp negate_payload_counter
 
 send_request_n_without_restart:
+                sta last_request
                 jsr link_begin_send_without_restart
                 jmp negate_payload_counter
 
+                
 ;-------------------------------------------------------------------------
 ;
 ; Send a request with a 1-byte payload.
@@ -2689,30 +2710,83 @@ blfs_osbput: .proc
                 ; $101,x = old Y
                 ; $102,x = old X
                 ; $103,x = old A
-                
-                ; Ugh. A 2-byte payload is the worst possible case.
+
+                ; OSBPUT requests are always 2 bytes.
                 lda #2
                 jsr set_payload_counter
 
+                ; Might be able to send OSBPUT_FNF, if the last
+                ; request was OSBPUT or OSBPUT_FNF.
+                lda last_request
+                cmp #REQUEST_OSBPUT
+                beq maybe_send_osbput_fnf
+                cmp #REQUEST_OSBPUT_FNF
+                beq maybe_send_osbput_fnf
+
+send_osbput:
                 lda #REQUEST_OSBPUT
                 jsr send_request_n_without_restart
 
-                tsx
-                
-                lda $101,x      ;file handle
-                jsr send_payload_byte
+                jsr send_payload
 
-                lda $103,x      ;value
-                jsr send_payload_byte ;value
+                ; Assume no OSBPUT_FNF possible.
+                lda #0
+                sta rept_byte_access_counter
 
-                jsr recv_response_and_discard_payload
+                jsr recv_response
 
+                ; The server will respond with RESPONSE_OSBPUT if
+                ; OSBPUT_FNF is possible.
+                cmp #RESPONSE_OSBPUT
+                bne response_done
+
+                jsr recv_payload_byte
+                sta rept_byte_access_counter
+
+response_done:
+                jsr discard_remaining_payload
+
+osbput_done:
                 pla
                 tay
                 pla
                 tax
                 pla
                 rts
+
+send_payload:
+                tsx
+                
+                lda 2+$101,x      ;file handle (+2 due to JSR)
+                sta rept_byte_access_handle
+                jsr send_payload_byte
+
+                lda 2+$103,x      ;value
+                jmp send_payload_byte ;value (+2 due to JSR)
+
+maybe_send_osbput_fnf:
+                ; The last request was OSBPUT or OSBPUT_FNF. Might be
+                ; able to send OSBPUT_FNF, if the handle matches.
+                tsx
+                lda $101,x      ;file handle
+                cmp rept_byte_access_handle
+                bne send_osbput ;taken if handle differs
+
+                ; The last request was OSBPUT or OSBPUT_FNF to this
+                ; handle. Might be able to send OSBPUT_FNF, if we can
+                ; be sure it will succeed.
+                lda rept_byte_access_counter
+                beq send_osbput ;taken if we can't be certain
+                dec rept_byte_access_counter
+
+send_osbput_fnf:
+                lda #REQUEST_OSBPUT_FNF
+                jsr send_request_n_without_restart
+
+                jsr send_payload
+
+                jmp osbput_done
+                
                 .pend
 
 ;-------------------------------------------------------------------------
@@ -3479,12 +3553,12 @@ send_host_done:
 ; transfer mode.
 ;
 send_file_data_parasite_bytewise: .proc
-                .debug_print ["Send from parasite memory\r\n"],verbose_file_data
+                ; .debug_print ["Send from parasite memory\r\n"],verbose_file_data
 
-                .debug_print ["  claiming tube\r\n"],verbose_file_data
+                ; .debug_print ["  claiming tube\r\n"],verbose_file_data
                 jsr claim_tube
 
-                .debug_print ["  initiating transfer\r\n"],verbose_file_data
+                ; .debug_print ["  initiating transfer\r\n"],verbose_file_data
                 ldx #<payload_addr
                 ldy #>payload_addr
                 lda #tube_multi_byte_parasite_to_host
@@ -3508,9 +3582,9 @@ send_tube_loop:
                 jmp send_tube_loop
 
 send_tube_done:
-                .debug_print ["  releasing tube\r\n"],verbose_file_data
+                ; .debug_print ["  releasing tube\r\n"],verbose_file_data
                 jsr release_tube
-                .debug_print ["  done\r\n"],verbose_file_data
+                ; .debug_print ["  done\r\n"],verbose_file_data
                 rts
                 
                 .pend
