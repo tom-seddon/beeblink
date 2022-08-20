@@ -48,6 +48,11 @@ module or battery-backed write-protectable sideways RAM - it's no fun
 having to reload the ROM each time you power on, or have it zapped by
 careless programs!
 
+(If upgrading: you're advised to run the same version of ROM and
+server, though the server does try to support older ROMs at least well
+enough to allow `*CAT` and `RTOOL` to work. Newer ROM + older server
+on the other hand is not supported.)
+
 You can connect BBC and PC using a Tube USB serial adapter or a UPURS
 cable.
 
