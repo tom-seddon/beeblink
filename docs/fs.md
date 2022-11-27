@@ -300,8 +300,8 @@ Show contents of text file, with lines numbered.
 Print info for any file(s) in any volumes matching `<afsp>`. (`<afsp>`
 may not contain volume or drive specifiers.)
 
-`<format>`, if specified, is a list of chars indicating what info to
-print out for each file:
+`<format>`, if specified, is a list of codes indicating what info to
+print out for each file: (codes are not case-sensitive)
 
 * `N` - file name, fully qualified
 * `A` - attributes
@@ -309,6 +309,8 @@ print out for each file:
 * `E` - exec address
 * `S` - file size
 * `H` - SHA1 hash
+* `C` - server creation time
+* `M` - server modification time
 
 If not specified, the format is `N` - just the name.
 
@@ -387,6 +389,11 @@ The volume browser isn't recommended in 20-column modes.
 ### `WDUMP <fsp>`
 
 Produce wide hex dump of file, for use in 80 column modes.
+
+### `WINFO <afsp>`
+
+Produce wide *INFO output showing server modification time of each
+file. Designed for use in 80 column modes, but readable in 40.
 
 # `BLCONFIG` options
 

@@ -22,6 +22,7 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+import * as fs from 'fs';
 import * as path from 'path';
 import * as beebfs from './beebfs';
 import * as utils from './utils';
@@ -386,13 +387,21 @@ class PCType implements beebfs.IFSType {
     }
 
     public getInfoText(file: beebfs.File, fileSize: number): string {
-        const pcFQN = mustBePCFQN(file.fqn.fsFQN);
+        return this.getCommonInfoText(file, fileSize);
+    }
 
-        return `${pcFQN.name.padEnd(MAX_NAME_LENGTH)}  ${utils.hex(fileSize, 6)}`;
+    public getWideInfoText(file: beebfs.File, stats: fs.Stats): string {
+        return `${this.getCommonInfoText(file, stats.size)} ${utils.getDateString(stats.mtime)}`;
     }
 
     public getAttrString(file: beebfs.File): string | undefined {
         return undefined;
+    }
+
+    private getCommonInfoText(file: beebfs.File, fileSize: number): string {
+        const pcFQN = mustBePCFQN(file.fqn.fsFQN);
+
+        return `${pcFQN.name.padEnd(MAX_NAME_LENGTH)}  ${utils.hex(fileSize, 6)}`;
     }
 }
 

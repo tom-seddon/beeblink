@@ -88,12 +88,27 @@ export function outsideFile(handle: number): never {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-// Try (if not very hard) to translate POSIX-style Node errors into
+// Try (if not very hard) to translate Node errors into
 // something that makes more sense for the Beeb.
-export function nodeError(error: NodeJS.ErrnoException): never {
-    if (error.code === 'ENOENT') {
+export function nodeError(error: unknown): never {
+    const errno = getErrno(error);
+    if (errno === 'ENOENT') {
         return fileNotFound();
+    } else if (errno !== undefined) {
+        return discFault(`POSIX error: ${errno}`);
     } else {
-        return discFault(`POSIX error: ${error.code}`);
+        return discFault(`Node error: ${error}`);
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+// Check if the error matches the given errno.
+export function getErrno(error: unknown): string | undefined {
+    if (typeof error === 'object' && error !== null && 'code' in error) {
+        return (error as any).code;
+    } else {
+        return undefined;
     }
 }

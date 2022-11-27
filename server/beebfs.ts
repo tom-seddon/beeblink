@@ -22,6 +22,7 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { DEFAULT_FIRST_FILE_HANDLE, DEFAULT_NUM_FILE_HANDLES } from './beeblink';
@@ -469,8 +470,12 @@ export interface IFSType {
     getNewAttributes(oldAttr: number, attrString: string): number | undefined;
 
     // get *INFO/*EX text for the given file. Show name, attributes and
-    // metadata. Newline will be added automatically.
+    // metadata. Don't append newline - that will be added automatically.
     getInfoText(file: File, fileSize: number): string;
+
+    // get *WINFO text for the given file. Don't append newline - that will be
+    // added automatically.
+    getWideInfoText(file: File, stats: fs.Stats): string;
 
     // get *INFO/*EX-style attributes string for the given file.
     //
@@ -986,7 +991,7 @@ export class FS {
         try {
             await utils.fsMkdir(volumePath);
         } catch (error) {
-            if (error.code !== 'EEXIST') {
+            if (errors.getErrno(error) !== 'EEXIST') {
                 errors.nodeError(error);
             }
         }
@@ -1035,6 +1040,26 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    public async getWideInfoText(file: File): Promise<string> {
+        const stats = await this.tryGetFileStats(file);
+
+        if (stats === undefined) {
+            return file.fqn.volume.type.getInfoText(file, 0);
+        } else {
+            return file.fqn.volume.type.getWideInfoText(file, stats);
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public getAttrString(file: File): string | undefined {
+        return file.fqn.volume.type.getAttrString(file);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     public async starLocate(arg: string): Promise<File[]> {
         const volumes = await this.findAllVolumesMatching('*');
 
@@ -1063,12 +1088,19 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    public async tryGetFileStats(file: File): Promise<fs.Stats | undefined> {
+        return await utils.tryStat(file.hostPath);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     // This is never used anywhere where the error case is particularly
     // important.
     //
     // TODO: should this info be part of the File type?
     public async tryGetFileSize(file: File): Promise<number> {
-        const hostStat = await utils.tryStat(file.hostPath);
+        const hostStat = await this.tryGetFileStats(file);
         if (hostStat === undefined) {
             return 0;
         }

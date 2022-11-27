@@ -22,6 +22,7 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+import * as fs from 'fs';
 import * as utils from './utils';
 import * as beeblink from './beeblink';
 import * as beebfs from './beebfs';
@@ -231,6 +232,7 @@ export default class Server {
             new Command('VOL', '(<avsp>) (R)', this.volCommand),
             new Command('VOLS', '(<avsp>)', this.volsCommand),
             new Command('WDUMP', '<fsp>', this.wdumpCommand),
+            new Command('WINFO', '<afsp>', this.winfoCommand),
         ];
 
         this.handlers = [];
@@ -1351,6 +1353,27 @@ export default class Server {
         return await this.filesInfoResponse(fqn);
     }
 
+    private async winfoCommand(commandLine: CommandLine): Promise<Response> {
+        if (commandLine.parts.length < 2) {
+            return errors.syntax();
+        }
+
+        const afsp = await this.bfs.parseFQN(commandLine.parts[1]);
+        const files = await this.bfs.findFilesMatching(afsp);
+
+        if (files.length === 0) {
+            return errors.fileNotFound();
+        }
+
+        let text = '';
+
+        for (const file of files) {
+            text += `${await this.bfs.getWideInfoText(file)}${BNL}`;
+        }
+
+        return this.textResponse(text);
+    }
+
     private async accessCommand(commandLine: CommandLine): Promise<Response> {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
@@ -1452,9 +1475,9 @@ export default class Server {
             format = 'n';
         }
 
-        format = format.toLowerCase();
-
         const foundFiles: beebfs.File[] = await this.bfs.starLocate(commandLine.parts[1]);
+
+        format = format.toLowerCase();
 
         let text = '';
         if (foundFiles.length === 0) {
@@ -1506,11 +1529,21 @@ export default class Server {
                 }
             }
 
+            let needStat = false;
+            if (format.indexOf('s') >= 0 || format.indexOf('c') >= 0 || format.indexOf('m') >= 0) {
+                needStat = true;
+            }
+
             const lines = [];
             for (let foundFileIdx = 0; foundFileIdx < foundFiles.length; ++foundFileIdx) {
                 const foundFile = foundFiles[foundFileIdx];
 
                 let line = '';
+
+                let stats: fs.Stats | undefined;
+                if (needStat) {
+                    stats = await this.bfs.tryGetFileStats(foundFile);
+                }
 
                 for (const c of format) {
                     switch (c) {
@@ -1519,6 +1552,7 @@ export default class Server {
                             break;
 
                         case 'a':
+                            line += ` ${this.bfs.getAttrString(foundFile)}`;
                             break;
 
                         case 'l':
@@ -1530,15 +1564,30 @@ export default class Server {
                             break;
 
                         case 's':
-                            {
-                                const fileSize = await this.bfs.tryGetFileSize(foundFile);
-                                line += ` ${utils.hex8(fileSize).toUpperCase()}`;
+                            if (stats === undefined) {
+                                line += ` (s?)`;
+                            } else {
+                                line += ` ${utils.hex8(stats.size).toUpperCase()}`;
                             }
                             break;
 
                         case 'h':
-                            {
-                                line += ` ${foundFileHashes[foundFileIdx].substr(0, foundFileHashWidth)}`;
+                            line += ` ${foundFileHashes[foundFileIdx].substr(0, foundFileHashWidth)}`;
+                            break;
+
+                        case 'c':
+                            if (stats === undefined) {
+                                line += ` (c?)`;
+                            } else {
+                                line += ` ${utils.getDateString(stats.ctime)}`;
+                            }
+                            break;
+
+                        case 'm':
+                            if (stats === undefined) {
+                                line += ` (m?)`;
+                            } else {
+                                line += ` ${utils.getDateString(stats.mtime)}`;
                             }
                             break;
 
@@ -1555,14 +1604,6 @@ export default class Server {
             for (const line of lines) {
                 text += `${line}${utils.BNL}`;
             }
-
-            // for (const foundFile of foundFiles) {
-            //     text += `${foundPath}${utils.BNL}`;
-            // }
-            // for (const foundFile of foundFiles) {
-            //     text+=`${foundFile.getFullPath()}${utils.BNL}`;
-            //     text += '::' + foundFile.name.volume.name + ':' + foundFile.name.drive + '.' + foundFile.name.dir + '.' + foundFile.name.name + utils.BNL;
-            // }
         }
 
         return this.textResponse(text);

@@ -895,3 +895,15 @@ export async function mustNotExist(hostPath: string): Promise<void> {
     }
 }
 
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export function getDateString(d: Date): string {
+    const year = d.getFullYear();
+
+    function d2(n: number): string {
+        return `${Math.floor(n / 10) % 10}${(n | 0) % 10}`;
+    }
+
+    return `${d2(year / 100)}${d2(year)}-${d2(1 + d.getMonth())}-${d2(1 + d.getDate())} ${d2(d.getHours())}:${d2(d.getMinutes())}:${d2(d.getSeconds())}`;
+}
