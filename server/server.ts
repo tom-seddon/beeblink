@@ -1115,7 +1115,7 @@ export default class Server {
             builder.setUInt32LE(builder.getNextAddress(), dataAddressOffset); //oswordBlockOffset + diskimage.getDiskOSWORDAddressOffset(part.osword));
             if (part.osword.data === undefined) {
                 // Read operation. Set up payload.
-                builder.setUInt32LE(resultPayloadAddressOffset, builder.getNextAddress());
+                builder.setUInt32LE(builder.getNextAddress(), resultPayloadAddressOffset);
                 builder.setUInt32LE(diskimage.getDiskOSWORDTransferSizeBytes(part.osword), resultPayloadSizeOffset);
             } else {
                 // Write operation. Add data to read, and leave the result
