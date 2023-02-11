@@ -25,7 +25,6 @@
 import * as fs from 'fs';
 import * as util from 'util';
 import * as os from 'os';
-import { WriteStream } from 'tty';
 import * as path from 'path';
 import { Chalk } from 'chalk';
 import * as beeblink from './beeblink';
@@ -907,3 +906,48 @@ export function getDateString(d: Date): string {
 
     return `${d2(year / 100)}${d2(year)}-${d2(1 + d.getMonth())}-${d2(1 + d.getDate())} ${d2(d.getHours())}:${d2(d.getMinutes())}:${d2(d.getSeconds())}`;
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export function getBASICStringExpr(text: Buffer): string {
+    let quotes = false;
+    let r = '';
+
+    for (let i = 0; i < text.length; ++i) {
+        const v = text[i];
+        if (v >= 32 && v < 126) {
+            if (!quotes) {
+                if (i > 0) {
+                    r += '+';
+                }
+
+                r += '"';
+                quotes = true;
+            }
+
+            const ch = String.fromCharCode(text[i]);
+            if (ch === '"') {
+                r += '"';
+            }
+
+            r += ch;
+        } else {
+            if (quotes) {
+                r += '"+';
+                quotes = false;
+            } else if (i > 0) {
+                r += '+';
+            }
+
+            r += 'CHR$(' + v + ')';
+        }
+    }
+
+    if (quotes) {
+        r += '"';
+    }
+
+    return r;
+}
+

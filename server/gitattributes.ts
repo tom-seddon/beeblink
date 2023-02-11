@@ -34,7 +34,6 @@ export class Manipulator {
     private log: utils.Log;
     private extraVerbose: boolean = false;
     private quiescentCallbacks: (() => void)[];
-    private completionMessage: string | undefined;
 
     public constructor(verbose: boolean) {
         this.queue = [];
@@ -148,7 +147,7 @@ export class Manipulator {
             const spacesRE = new RegExp('\\s+');
 
             let added = false;
-            let removed = false;
+            let removed = false;// tslint:disable-line no-unused-variable
             let fileChanged = false;
 
             let lineIdx = 0;

@@ -116,7 +116,7 @@ function mustBePCFSP(fsFSP: beebfs.IFSFSP): PCFSP {
 class PCState implements beebfs.IFSState {
     public readonly volume: beebfs.Volume;
 
-    private readonly log: utils.Log;
+    private readonly log: utils.Log;// tslint:disable-line no-unused-variable
 
     public constructor(volume: beebfs.Volume, settings: any | undefined, log: utils.Log) {
         this.volume = volume;

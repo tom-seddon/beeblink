@@ -23,25 +23,19 @@
 //////////////////////////////////////////////////////////////////////////
 
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { DEFAULT_FIRST_FILE_HANDLE, DEFAULT_NUM_FILE_HANDLES } from './beeblink';
 import * as utils from './utils';
-import { Chalk } from 'chalk';
 import * as gitattributes from './gitattributes';
 import * as errors from './errors';
 import CommandLine from './CommandLine';
-import * as inf from './inf';
 import dfsType from './dfsType';
 import pcType from './pcType';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-const MAX_NUM_DRIVES = 8;
 export const MAX_FILE_SIZE = 0xffffff;
-
-const MIN_FILE_HANDLE = 0xa0;
 
 export const SHOULDNT_LOAD = 0xffffffff;
 export const SHOULDNT_EXEC = 0xffffffff;
@@ -769,14 +763,6 @@ export class FS {
         }
 
         return true;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    private static isValidFileNameChar(char: string) {
-        const c = char.charCodeAt(0);
-        return c >= 32 && c < 127;
     }
 
     /////////////////////////////////////////////////////////////////////////

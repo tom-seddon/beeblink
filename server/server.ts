@@ -26,14 +26,12 @@ import * as fs from 'fs';
 import * as utils from './utils';
 import * as beeblink from './beeblink';
 import * as beebfs from './beebfs';
-import * as path from 'path';
 import * as volumebrowser from './volumebrowser';
 import * as speedtest from './speedtest';
 import * as dfsimage from './dfsimage';
 import * as adfsimage from './adfsimage';
 import * as crypto from 'crypto';
 import { BNL } from './utils';
-import { Chalk } from 'chalk';
 import Request from './Request';
 import Response from './Response';
 import * as errors from './errors';
@@ -195,7 +193,6 @@ export default class Server {
     private diskImageFlow: diskimage.Flow | undefined;
     private linkSupportsFireAndForgetRequests: boolean;
     private lastOSBPUTHandle: number | undefined;
-    private resetLastOSBPUTHandle: boolean;
 
     public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, log: utils.Log, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
         this.romPathByLinkSubtype = romPathByLinkSubtype;
@@ -268,8 +265,6 @@ export default class Server {
 
         this.log = log;
         this.dumpPackets = dumpPackets;
-
-        this.resetLastOSBPUTHandle = true;
     }
 
     public async handleRequest(request: Request): Promise<Response> {
@@ -388,11 +383,6 @@ export default class Server {
     }
 
     private async handleReset(handler: Handler, p: Buffer): Promise<void> {
-        let linkSubtype = 0;
-        if (p.length > 1) {
-            linkSubtype = p[1];
-        }
-
         this.log.pn('reset type=' + p[0]);
         if (p[0] === 1 || p[0] === 2) {
             // Power-on reset or CTRL+BREAK
@@ -851,47 +841,6 @@ export default class Server {
         return newResponse(beeblink.RESPONSE_BOOT_OPTION, option);
     }
 
-    private getBASICStringExpr(text: Buffer): string {
-        let quotes = false;
-        let r = '';
-
-        for (let i = 0; i < text.length; ++i) {
-            const v = text[i];
-            if (v >= 32 && v < 126) {
-                if (!quotes) {
-                    if (i > 0) {
-                        r += '+';
-                    }
-
-                    r += '"';
-                    quotes = true;
-                }
-
-                const ch = String.fromCharCode(text[i]);
-                if (ch === '"') {
-                    r += '"';
-                }
-
-                r += ch;
-            } else {
-                if (quotes) {
-                    r += '"+';
-                    quotes = false;
-                } else if (i > 0) {
-                    r += '+';
-                }
-
-                r += 'CHR$(' + v + ')';
-            }
-        }
-
-        if (quotes) {
-            r += '"';
-        }
-
-        return r;
-    }
-
     private async handleVolumeBrowser(handler: Handler, p: Buffer): Promise<Buffer | Response> {
         this.payloadMustBeAtLeast(handler, p, 1);
 
@@ -934,7 +883,7 @@ export default class Server {
                 }
 
                 if (result.volume !== undefined) {
-                    const volume = await this.bfs.mount(result.volume);
+                    await this.bfs.mount(result.volume);
                     builder.writeString('New volume: ' + result.volume.name + BNL);
 
                     if (result.boot) {
@@ -1838,81 +1787,6 @@ export default class Server {
             drive: +driveStr,
             type,
             readAllSectors
-        };
-    }
-
-    private getDiskImageFlowDetailsFromCommandLine(commandLine: CommandLine): IDiskImageFlowDetails {
-        if (commandLine.parts.length < 4) {
-            return errors.syntax();
-        }
-
-        const driveStr = commandLine.parts[2];
-        if (driveStr.length !== 1 || !utils.isdigit(driveStr)) {
-            return errors.syntax();
-        }
-
-        const typeStr = commandLine.parts[3].toLowerCase();
-
-        if (typeStr.length === 0) {
-            return errors.syntax();
-        }
-
-        let type: DiskImageType;
-        let readAllSectors: boolean;
-        switch (typeStr.toLowerCase()) {
-            case 'a':
-                type = DiskImageType.ADFS;
-                readAllSectors = false;
-                break;
-
-            case 'a*':
-                type = DiskImageType.ADFS;
-                readAllSectors = true;
-                break;
-
-            case 's':
-                type = DiskImageType.SSD;
-                readAllSectors = false;
-                break;
-
-            case 's*':
-                type = DiskImageType.SSD;
-                readAllSectors = true;
-                break;
-
-            case 'd':
-                type = DiskImageType.DSD;
-                readAllSectors = false;
-                break;
-
-            case 'd*':
-                type = DiskImageType.DSD;
-                readAllSectors = true;
-                break;
-
-            case 'do':
-            case 'do*':
-                type = DiskImageType.DDD_DDOS;
-                readAllSectors = true;
-                break;
-
-            case 'so':
-            case 'so*':
-                type = DiskImageType.SDD_DDOS;
-                readAllSectors = true;
-                break;
-
-            default:
-                return errors.syntax();
-        }
-
-        return {
-            bufferAddress: 0,//hack
-            bufferSize: 0,//hack
-            fileName: commandLine.parts[1],
-            drive: +driveStr,
-            type,
-            readAllSectors,
         };
     }
 

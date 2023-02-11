@@ -20,7 +20,6 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-import * as path from 'path';
 import * as utils from './utils';
 import * as beebfs from './beebfs';
 
@@ -79,7 +78,7 @@ export class Browser {
     private colIdx: number;
     private filter: string;
     private filterLCs: string[];
-    private log: utils.Log;
+    private log: utils.Log;// tslint:disable-line no-unused-variable
     private mode: BrowserMode;
     private boxTL: string;
     private boxTR: string;
@@ -391,7 +390,6 @@ export class Browser {
         this.printTAB(x, y);
 
         const blank = ''.padEnd(this.width, ' ');
-        const border = ' +' + ''.padEnd(this.width - 4, '-') + '+ ';
 
         this.print(blank);
 

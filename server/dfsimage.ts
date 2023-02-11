@@ -25,7 +25,6 @@
 import * as utils from './utils';
 import * as beebfs from './beebfs';
 import * as errors from './errors';
-import * as server from './server';
 import * as diskimage from './diskimage';
 
 //////////////////////////////////////////////////////////////////////////

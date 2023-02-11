@@ -32,6 +32,7 @@
         "strict-boolean-expressions": true,
         "object-literal-sort-keys": false,
         "no-unnecessary-type-assertion": true,
-        "strict-type-predicates": true
+        "strict-type-predicates": true,
+        "no-unused-variable": true
     }
 }

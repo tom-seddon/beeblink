@@ -29,12 +29,10 @@ import * as assert from 'assert';
 import * as beeblink from './beeblink';
 import * as beebfs from './beebfs';
 import Server from './server';
-import { Chalk } from 'chalk';
 import chalk from 'chalk';
 import * as gitattributes from './gitattributes';
 import * as http from 'http';
 import Request from './Request';
-import Response from './Response';
 import * as SerialPort from 'serialport';
 import * as os from 'os';
 
@@ -149,11 +147,6 @@ interface ICommandLineOptions {
     serial_test_send_file: string | null;
 }
 
-//const gLog = new utils.Log('', process.stderr);
-const gError = new utils.Log('ERROR', process.stderr);
-//const gSendLog = new utils.Log('SEND', process.stderr);
-
-
 // don't shift to do this!
 //
 // > 255*16777216
@@ -199,33 +192,33 @@ async function deviceControlTransfer(device: usb.Device, bmRequestType: number, 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function getUSBDeviceStringDescriptor(device: usb.Device, iIdentifier: number): Promise<string | undefined> {
-    if (iIdentifier === 0) {
-        return undefined;
-    }
+// async function getUSBDeviceStringDescriptor(device: usb.Device, iIdentifier: number): Promise<string | undefined> {
+//     if (iIdentifier === 0) {
+//         return undefined;
+//     }
 
-    let value: string | undefined;
-    try {
-        value = await new Promise<string | undefined>((resolve, reject) => {
-            device.getStringDescriptor(iIdentifier, (error, buffer) => {
-                //tslint:disable-next-line strict-type-predicates
-                if (error !== undefined && error !== null) {
-                    reject(error);
-                } else {
-                    resolve(buffer);
-                }
-            });
-        });
-    } catch (error) {
-        return undefined;//`<<usb.Device.getStringDescriptor failed: ${error}>>`;
-    }
+//     let value: string | undefined;
+//     try {
+//         value = await new Promise<string | undefined>((resolve, reject) => {
+//             device.getStringDescriptor(iIdentifier, (error, buffer) => {
+//                 //tslint:disable-next-line strict-type-predicates
+//                 if (error !== undefined && error !== null) {
+//                     reject(error);
+//                 } else {
+//                     resolve(buffer);
+//                 }
+//             });
+//         });
+//     } catch (error) {
+//         return undefined;//`<<usb.Device.getStringDescriptor failed: ${error}>>`;
+//     }
 
-    if (value === undefined) {
-        return undefined;//`<<usb.Device.getStringDescriptor retured nothing>>`;
-    }
+//     if (value === undefined) {
+//         return undefined;//`<<usb.Device.getStringDescriptor retured nothing>>`;
+//     }
 
-    return value;
-}
+//     return value;
+// }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -425,49 +418,49 @@ function getOSXLocationId(d: usb.Device): string {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function listUSBDevices(): Promise<void> {
-    const devices = usb.getDeviceList();
+// async function listUSBDevices(): Promise<void> {
+//     const devices = usb.getDeviceList();
 
-    process.stdout.write(`${devices.length} USB devices:\n`);
-    for (let i = 0; i < devices.length; ++i) {
-        const device: usb.Device = devices[i];
+//     process.stdout.write(`${devices.length} USB devices:\n`);
+//     for (let i = 0; i < devices.length; ++i) {
+//         const device: usb.Device = devices[i];
 
-        process.stdout.write(`${i}.BusNumber: ${device.busNumber}, DeviceAddress: ${device.deviceAddress}`);
-        if (process.platform === 'darwin') {
-            process.stdout.write(` (LocationId: 0x${getOSXLocationId(device)}/${device.deviceAddress})`);
-        }
+//         process.stdout.write(`${i}.BusNumber: ${device.busNumber}, DeviceAddress: ${device.deviceAddress}`);
+//         if (process.platform === 'darwin') {
+//             process.stdout.write(` (LocationId: 0x${getOSXLocationId(device)}/${device.deviceAddress})`);
+//         }
 
-        process.stdout.write(`\n`);
+//         process.stdout.write(`\n`);
 
-        process.stdout.write(`    PID: ${utils.hex4(device.deviceDescriptor.idProduct)}, VID: ${utils.hex4(device.deviceDescriptor.idVendor)}\n`);
-        process.stdout.write(`    PortNumbers: ${device.portNumbers}\n`);
+//         process.stdout.write(`    PID: ${utils.hex4(device.deviceDescriptor.idProduct)}, VID: ${utils.hex4(device.deviceDescriptor.idVendor)}\n`);
+//         process.stdout.write(`    PortNumbers: ${device.portNumbers}\n`);
 
-        let parentIndex: number | undefined;
-        for (let j = 0; j < devices.length; ++j) {
-            if (device.parent === devices[j]) {
-                parentIndex = j;
-                break;
-            }
-        }
-        if (parentIndex === undefined) {
-            process.stdout.write(`    No parent device.\n`);
-        } else {
-            process.stdout.write(`    Parent: ${parentIndex}\n`);
-        }
+//         let parentIndex: number | undefined;
+//         for (let j = 0; j < devices.length; ++j) {
+//             if (device.parent === devices[j]) {
+//                 parentIndex = j;
+//                 break;
+//             }
+//         }
+//         if (parentIndex === undefined) {
+//             process.stdout.write(`    No parent device.\n`);
+//         } else {
+//             process.stdout.write(`    Parent: ${parentIndex}\n`);
+//         }
 
-        try {
-            device.open(false);
+//         try {
+//             device.open(false);
 
-            process.stdout.write(`    Serial: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iSerialNumber)}\n`);
-            process.stdout.write(`    Product: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iProduct)}\n`);
-            process.stdout.write(`    Manufacturer: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iManufacturer)}\n`);
+//             process.stdout.write(`    Serial: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iSerialNumber)}\n`);
+//             process.stdout.write(`    Product: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iProduct)}\n`);
+//             process.stdout.write(`    Manufacturer: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iManufacturer)}\n`);
 
-            device.close();
-        } catch (error) {
-            process.stdout.write(`   Failed to open device: ${error}\n`);
-        }
-    }
-}
+//             device.close();
+//         } catch (error) {
+//             process.stdout.write(`   Failed to open device: ${error}\n`);
+//         }
+//     }
+// }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -1723,7 +1716,6 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
 
 async function main(options: ICommandLineOptions) {
     const log = new utils.Log('', process.stderr, options.verbose);
-    //gSendLog.enabled = options.send_verbose;
 
     if (!await handleCommandLineOptions(options, log)) {
         return;

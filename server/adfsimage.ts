@@ -22,7 +22,6 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-import * as assert from 'assert';
 import * as utils from './utils';
 import * as beebfs from './beebfs';
 import * as errors from './errors';
@@ -212,7 +211,7 @@ export class WriteFlow extends diskimage.Flow {
     private drive: number;
     private allSectors: boolean;
     private image: Buffer;
-    private log: utils.Log | undefined;
+    private log: utils.Log | undefined;// tslint:disable-line no-unused-variable
     private parts: ISectors[];
     private numSectorsUsed: number;
     private numSectorsWritten: number;
@@ -308,7 +307,7 @@ export class ReadFlow extends diskimage.Flow {
     private drive: number;
     private allSectors: boolean;
     private file: beebfs.File;
-    private log: utils.Log | undefined;
+    private log: utils.Log | undefined;// tslint:disable-line no-unused-variable
     private parts: ISectors[];
     private partIdx: number;
     private image: Buffer | undefined;
