@@ -427,6 +427,8 @@ export interface IFSType {
     // the volume.
     readonly matchAllFSP: IFSFSP;
 
+    readonly name: string;
+
     // create new state for this type of FS.
     createState(volume: Volume, state: any | undefined, log: utils.Log): IFSState;
 

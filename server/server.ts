@@ -143,15 +143,6 @@ class Handler {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-enum DefaultsCommandMode {
-    Set,
-    Reset,
-    Print,
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 enum DiskImageType {
     ADFS,
     SSD,
@@ -218,7 +209,7 @@ export default class Server {
             new Command('DRIVE', '(<drive>)', this.driveCommand),
             new Command('DRIVES', '', this.drivesCommand),
             new Command('DUMP', '<fsp>', this.dumpCommand),
-            new Command('FILES', undefined, this.filesCommand),
+            new Command('HSTATUS', '([HF])', this.hstatusCommand),
             new Command('INFO', '<afsp>', this.infoCommand),
             new Command('LIB', '(<dir>)', this.libCommand),
             new Command('LIST', '<fsp>', this.listCommand),
@@ -1340,8 +1331,47 @@ export default class Server {
         return this.textResponse(text);
     }
 
-    private async filesCommand(commandLine: CommandLine): Promise<Response> {
-        return this.textResponse(this.bfs.getOpenFilesOutput());
+    private async hstatusCommand(commandLine: CommandLine): Promise<Response> {
+        let text = '';
+
+        const begin = () => {
+            if (text.length > 0) {
+                text += BNL;
+            }
+        };
+
+        const flagsUC = commandLine.parts.length >= 2 ? commandLine.parts[1].toLowerCase() : undefined;
+
+        if (flagsUC === undefined || flagsUC === 'h') {
+            begin();
+
+            text += `Status:${BNL}${BNL}`;
+
+            try {
+                const volume = this.bfs.getVolume();
+                text += `Volume name: ${volume.name}${BNL}`;
+                text += `Volume path: ${volume.path}${BNL}`;
+                text += `Volume type: ${volume.type.name}${BNL}`;
+                text += this.bfs.getDefaultsString();
+            } catch (error) {
+                // getVolume throws if no volume, and this is the 1% of times
+                // where that's a bit annoying.
+                text += `${error}${BNL}`;
+            }
+        }
+
+        if (flagsUC === undefined || flagsUC === 'f') {
+            begin();
+
+            text += `Open files:${BNL}${BNL}`;
+            text += this.bfs.getOpenFilesOutput();
+        }
+
+        if (text.length === 0) {
+            return errors.syntax();
+        }
+
+        return this.textResponse(text);
     }
 
     private async infoCommand(commandLine: CommandLine): Promise<Response> {
@@ -1957,27 +1987,14 @@ export default class Server {
     }
 
     private async defaultsCommand(commandLine: CommandLine): Promise<Response> {
-        let mode: DefaultsCommandMode;
+        const modeLC = commandLine.parts.length >= 2 ? commandLine.parts[1].toLowerCase() : undefined;
 
-        if (commandLine.parts.length >= 2) {
-            const modeStr = commandLine.parts[1].toLowerCase();
-            if (modeStr === 's') {
-                mode = DefaultsCommandMode.Set;
-            } else if (modeStr === 'r') {
-                mode = DefaultsCommandMode.Reset;
-            } else if (modeStr === 'p') {
-                mode = DefaultsCommandMode.Print;
-            } else {
-                return errors.syntax();
-            }
-        } else {
-            mode = DefaultsCommandMode.Set;
-        }
-
-        if (mode === DefaultsCommandMode.Set) {
+        if (modeLC === undefined || modeLC === 's') {
             this.bfs.setDefaults();
-        } else if (mode === DefaultsCommandMode.Reset) {
+        } else if (modeLC === 'r') {
             this.bfs.resetDefaults();
+        } else {
+            return errors.syntax();
         }
 
         return this.textResponse(this.bfs.getDefaultsString());

@@ -407,6 +407,8 @@ class DFSType implements beebfs.IFSType {
 
     public readonly matchAllFSP: beebfs.IFSFSP = new DFSFSP(undefined, undefined, undefined);
 
+    public readonly name = 'BeebLink/DFS';
+
     public createState(volume: beebfs.Volume, settings: any | undefined, log: utils.Log): beebfs.IFSState {
         return new DFSState(volume, settings, log);
     }
@@ -751,7 +753,7 @@ class DFSType implements beebfs.IFSType {
     }
 
     public getInfoText(file: beebfs.File, fileSize: number): string {
-        return this.getCommonInfoText(file,fileSize);
+        return this.getCommonInfoText(file, fileSize);
     }
 
     public getWideInfoText(file: beebfs.File, stats: fs.Stats): string {

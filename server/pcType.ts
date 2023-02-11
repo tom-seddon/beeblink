@@ -211,6 +211,8 @@ class PCState implements beebfs.IFSState {
 class PCType implements beebfs.IFSType {
     public readonly matchAllFSP: beebfs.IFSFSP = new PCFSP(undefined);
 
+    public readonly name = 'PC';
+
     public createState(volume: beebfs.Volume, settings: any | undefined, log: utils.Log): beebfs.IFSState {
         return new PCState(volume, settings, log);
     }
