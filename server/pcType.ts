@@ -27,6 +27,7 @@ import * as path from 'path';
 import * as beebfs from './beebfs';
 import * as utils from './utils';
 import * as errors from './errors';
+import * as server from './server';
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -202,6 +203,10 @@ class PCState implements beebfs.IFSState {
         }
 
         return names;
+    }
+
+    public getCommands(): server.Command[] {
+        return [];
     }
 }
 

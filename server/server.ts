@@ -178,13 +178,13 @@ function encodeForOSCLI(command: string): Buffer {
 // with the packet writing. Try to isolate the lower levels from the packet
 // format.
 
-export default class Server {
+export class Server {
     private bfs: beebfs.FS;
     private linkSubtype: number | undefined;
     private romPathByLinkSubtype: Map<number, string>;
     private stringBuffer: Buffer | undefined;
     private stringBufferIdx: number;
-    private commands: Command[];
+    private commonCommands: Command[];
     private handlers: (Handler | undefined)[];
     private log: utils.Log;
     private volumeBrowser: volumebrowser.Browser | undefined;
@@ -201,7 +201,7 @@ export default class Server {
         this.stringBufferIdx = 0;
         this.linkSupportsFireAndForgetRequests = linkSupportsFireAndForgetRequests;
 
-        this.commands = [
+        this.commonCommands = [
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
             new Command('DEFAULTS', '([SRP])', this.defaultsCommand),
             new Command('DELETE', '<fsp>', this.deleteCommand),
@@ -487,6 +487,24 @@ export default class Server {
         return false;
     }
 
+    // it's a bit wasteful having the list regenerated every time... luckily the
+    // PC is fast, and the BBC is slow...
+    //
+    // Should really do a bit better though.
+    private getCommands(): Command[] {
+        const commands = [];
+
+        for (const command of this.commonCommands) {
+            commands.push(command);
+        }
+
+        for (const command of this.bfs.getCommands()) {
+            commands.push(command);
+        }
+
+        return commands;
+    }
+
     private async handleStarCommand(handler: Handler, p: Buffer): Promise<Response> {
         const commandLine = this.initCommandLine(p.toString('binary'));
 
@@ -496,7 +514,7 @@ export default class Server {
 
         let matchedCommand: Command | undefined;
 
-        for (const command of this.commands) {
+        for (const command of this.getCommands()) {
             if (this.matchStarCommand(command.nameUC, commandLine)) {
                 matchedCommand = command;
                 break;
@@ -533,7 +551,7 @@ export default class Server {
 
     private async handleHelpBLFS(handler: Handler, p: Buffer): Promise<string> {
         let help = '';
-        for (const command of this.commands) {
+        for (const command of this.getCommands()) {
             help += '  ' + command.nameUC;
             if (command.syntax !== undefined) {
                 help += ' ' + command.syntax;
@@ -912,7 +930,7 @@ export default class Server {
         }
     }
 
-    private async handleSpeedTest(handler: Handler, p: Buffer): Promise<string|Response> {
+    private async handleSpeedTest(handler: Handler, p: Buffer): Promise<string | Response> {
         this.payloadMustBeAtLeast(handler, p, 1);
 
         if (p[0] === beeblink.REQUEST_SPEED_TEST_RESET) {

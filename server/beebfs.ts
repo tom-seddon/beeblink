@@ -31,6 +31,7 @@ import * as errors from './errors';
 import CommandLine from './CommandLine';
 import dfsType from './dfsType';
 import pcType from './pcType';
+import * as server from './server';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -409,6 +410,12 @@ export interface IFSState {
 
     // read names, for OSGBPB 6.
     readNames(): Promise<string[]>;
+
+    // return list of type-specific commands.
+    //
+    // This is only called when the FS type potentially changes, so it's OK if
+    // it does something expensive.
+    getCommands(): server.Command[];
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -779,6 +786,7 @@ export class FS {
     private log: utils.Log;
 
     private state: IFSState | undefined;
+    private stateCommands: undefined | server.Command[];
     private defaults: any | undefined;
 
     private gaManipulator: gitattributes.Manipulator | undefined;
@@ -806,6 +814,21 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    public getCommands(): server.Command[] {
+        if (this.stateCommands === undefined) {
+            if (this.state === undefined) {
+                return [];
+            }
+
+            this.stateCommands = this.state.getCommands();
+        }
+
+        return this.stateCommands;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     public async parseDirString(dirString: string): Promise<FSP> {
         return await this.parseFileOrDirString(dirString, true);
     }
@@ -827,7 +850,7 @@ export class FS {
             }
         }
 
-        this.state = volume.type.createState(volume, undefined, this.log);
+        this.setState(volume.type.createState(volume, undefined, this.log));
         this.resetDefaults();
     }
 
@@ -873,7 +896,7 @@ export class FS {
     // Reset dirs and close open files.
     public async reset() {
         if (this.state !== undefined) {
-            this.state = this.state.volume.type.createState(this.state.volume, this.defaults, this.log);
+            this.setState(this.state.volume.type.createState(this.state.volume, this.defaults, this.log));
         }
 
         await this.OSFINDClose(0);
@@ -1562,6 +1585,14 @@ export class FS {
                 }
             }
         }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private setState(state: IFSState): void {
+        this.state = state;
+        this.stateCommands = undefined;
     }
 
     /////////////////////////////////////////////////////////////////////////

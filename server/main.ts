@@ -28,7 +28,7 @@ import * as path from 'path';
 import * as assert from 'assert';
 import * as beeblink from './beeblink';
 import * as beebfs from './beebfs';
-import Server from './server';
+import { Server } from './server';
 import chalk from 'chalk';
 import * as gitattributes from './gitattributes';
 import * as http from 'http';

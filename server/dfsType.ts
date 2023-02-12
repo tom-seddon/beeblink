@@ -29,6 +29,9 @@ import * as beebfs from './beebfs';
 import * as errors from './errors';
 import * as inf from './inf';
 import * as utils from './utils';
+import { BNL } from './utils';
+import * as server from './server';
+import CommandLine from './CommandLine';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -379,6 +382,16 @@ class DFSState implements beebfs.IFSState {
 
         return names;
     }
+
+    public getCommands(): server.Command[] {
+        return [
+            //new server.Command('TEST', undefined, this.testCommand),
+        ];
+    }
+
+    // private async testCommand(commandLine: CommandLine): Promise<string> {
+    //     return `hello${BNL}`;
+    // }
 
     private getDirOrLibFQN(fsp: beebfs.FSP): DFSFQN {
         const dfsFSP = mustBeDFSFSP(fsp.fsFSP);
