@@ -119,7 +119,7 @@ class PCState implements beebfs.IFSState {
 
     private readonly log: utils.Log;// tslint:disable-line no-unused-variable
 
-    public constructor(volume: beebfs.Volume, settings: any | undefined, log: utils.Log) {
+    public constructor(volume: beebfs.Volume, log: utils.Log) {
         this.volume = volume;
         this.log = log;
     }
@@ -140,12 +140,20 @@ class PCState implements beebfs.IFSState {
         return '';
     }
 
-    public getSettings(): any | undefined {
+    public getTransientSettings(): any | undefined {
         return undefined;
     }
 
-    public getSettingsString(settings: any | undefined): string {
+    public getTransientSettingsString(settings: any | undefined): string {
         return ``;
+    }
+
+    public getPersistentSettings(): any | undefined {
+        return undefined;
+    }
+
+    public getPersistentSettingsString(settings: any | undefined): string {
+        return '';
     }
 
     public async getFileForRUN(fsp: beebfs.FSP, tryLibDir: boolean): Promise<beebfs.File | undefined> {
@@ -155,7 +163,7 @@ class PCState implements beebfs.IFSState {
 
     public async getCAT(commandLine: string | undefined): Promise<string | undefined> {
         if (commandLine === undefined) {
-            return await this.volume.type.getCAT(new beebfs.FSP(this.volume, false, new PCFSP(undefined)), this);
+            return await this.volume.type.getCAT(new beebfs.FSP(this.volume, undefined, new PCFSP(undefined)), this);
         } else {
             return undefined;
         }
@@ -218,8 +226,8 @@ class PCType implements beebfs.IFSType {
 
     public readonly name = 'PC';
 
-    public createState(volume: beebfs.Volume, settings: any | undefined, log: utils.Log): beebfs.IFSState {
-        return new PCState(volume, settings, log);
+    public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log): Promise<beebfs.IFSState> {
+        return new PCState(volume, log);
     }
 
     public canWrite(): boolean {

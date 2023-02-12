@@ -104,6 +104,7 @@ const SUPPORTED_USB_SERIAL_DEVICES: IUSBSerialDevice[] = [
 interface IConfigFile {
     folders: string[] | undefined;
     pc_folders: string[] | undefined;
+    tube_host_folders: string[] | undefined;
     default_volume: string | undefined;
     avr_rom: string | undefined;
     tube_serial_rom: string | undefined;
@@ -140,6 +141,7 @@ interface ICommandLineOptions {
     list_serial_devices: boolean;
     serial_exclude: string[] | null;
     pcFolders: string[];
+    tubeHostFolders: string[];
     serial_test_pc_to_bbc: boolean;
     serial_test_bbc_to_pc: boolean;
     serial_full_size_messages: boolean;
@@ -280,6 +282,7 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
 
     loadFolders(options.folders, config.folders);
     loadFolders(options.pcFolders, config.pc_folders);
+    loadFolders(options.tubeHostFolders, config.tube_host_folders);
 
     options.git = options.git || config.git === true;
 
@@ -833,6 +836,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
             default_volume: options.default_volume !== null ? options.default_volume : undefined,
             folders: options.folders,
             pc_folders: options.pcFolders,
+            tube_host_folders: options.tubeHostFolders,
             avr_rom: options.avr_rom !== null ? options.avr_rom : undefined,
             tube_serial_rom: options.tube_serial_rom !== null ? options.tube_serial_rom : undefined,
             upurs_rom: options.upurs_rom !== null ? options.upurs_rom : undefined,
@@ -1721,7 +1725,7 @@ async function main(options: ICommandLineOptions) {
         return;
     }
 
-    const volumes = await beebfs.FS.findAllVolumes(options.folders, options.pcFolders, log);
+    const volumes = await beebfs.FS.findAllVolumes(options.folders, options.pcFolders, options.tubeHostFolders, log);
 
     const gaManipulator = await createGitattributesManipulator(options, volumes);
 
@@ -1749,7 +1753,7 @@ async function main(options: ICommandLineOptions) {
         const serverLogPrefix = options.server_verbose ? additionalPrefix + 'SRV' + connectionId : undefined;
         const serverLog = new utils.Log(serverLogPrefix !== undefined ? serverLogPrefix : '', process.stderr, serverLogPrefix !== undefined);
 
-        const bfs = new beebfs.FS(options.folders, options.pcFolders, gaManipulator, bfsLog,);
+        const bfs = new beebfs.FS(options.folders, options.pcFolders, options.tubeHostFolders, gaManipulator, bfsLog,);
 
         if (defaultVolume !== undefined) {
             await bfs.mount(defaultVolume);
@@ -1850,7 +1854,8 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     // makes it easier to later detect the absence of --default-volume.
     always(['--default-volume'], { metavar: 'DEFAULT-VOLUME', help: 'load volume %(metavar)s on startup' });
     always(['--pc'], { dest: 'pcFolders', action: 'append', defaultValue: [], metavar: 'FOLDER', help: 'use %(metavar)s as a PC volume' });
-    always(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'folder to search for volumes' });
+    always(['--tube-host'], { dest: 'tubeHostFolders', action: 'append', defaultValue: [], metavar: 'FOLDER', help: 'use %(metavar)s as a Tube Host volume' });
+    always(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'folder to search for BeebLink volumes' });
 
     return parser;
 }
