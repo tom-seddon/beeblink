@@ -1,3 +1,4 @@
+#+STARTUP: overview
 * Random notes
 
 Brain dump that's on GitHub so I have a backup.
@@ -652,7 +653,6 @@ CDx appears to be the data bus? - comes from IC26 (CF30049).
 |  38 | NC    |
 |  40 | NC    |
 
-
 * Serial port
 
 ** bits
@@ -722,7 +722,6 @@ To be reinstated, somewhere.
     BBC-style file name and may well end up needing renaming
 
 #+end_src
-
 
 * Tube Serial code tidy-up
 
@@ -903,3 +902,56 @@ Parasite<->server: 245,760 bytes in 10 tests
     PC->BBC: 88.2 KBytes/sec
 #+end_example
 
+
+* Star commands
+
+** BeebLink set
+
+(All commands can of course raise an error with a ~brk~.)
+
+- ~-~ :: no specific result
+- ~text~ :: prints some text
+- ~special~ :: returns a command-specific ~RESPONSE_SPECIAL~ response
+
+| Command                          | Result type |
+|----------------------------------+-------------|
+| ~ACCESS <afsp> (<mode>)~         | -           |
+| ~DEFAULTS ([SRP])~               | text        |
+| ~DELETE <fsp>~                   | -           |
+| ~DIR (<dir>)~                    | -           |
+| ~DRIVE (<drive>)~                | -           |
+| ~DRIVES~                         | text        |
+| ~DUMP <fsp>~                     | text        |
+| ~FILES~                          | text        |
+| ~INFO <afsp>~                    | text        |
+| ~LIB (<dir>)~                    | -           |
+| ~LIST <fsp>~                     | text        |
+| ~LOCATE <afsp> (<format>)~       | text        |
+| ~NEWVOL <vsp>~                   | text        |
+| ~RENAME <old fsp> <new fsp>~     | -           |
+| ~SRLOAD <fsp> <addr> <bank> (Q)~ | special     |
+| ~TITLE <title>~                  | -           |
+| ~TYPE <fsp>~                     | text        |
+| ~VOLBROWSER~                     | special     |
+| ~VOL (<avsp>) (R)~               | text        |
+| ~VOLS (<avsp>)~                  | text        |
+| ~WDUMP <fsp>~                    | text        |
+| ~WINFO <afsp>~                   | text        |
+
+** TubeHost extras
+
+| Command  | Result | Notes                       |
+|----------+--------+-----------------------------|
+| HCF      |        |                             |
+| DDIR     |        |                             |
+| HFOLDERS |        |                             |
+| HMKF     |        |                             |
+| HSTATUS  |        | now part of BeebLink proper |
+| DCAT     |        |                             |
+| DCREATE  |        |                             |
+| DIN      |        |                             |
+| DBOOT    |        |                             |
+| DOUT     |        |                             |
+| HRESET   |        |                             |
+| IAM/I AM |        | probably won't add this     |
+| VERSION  |        | covered by *BLVERSION       |

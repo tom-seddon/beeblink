@@ -222,8 +222,6 @@ class PCState implements beebfs.IFSState {
 //////////////////////////////////////////////////////////////////////////
 
 class PCType implements beebfs.IFSType {
-    public readonly matchAllFSP: beebfs.IFSFSP = new PCFSP(undefined);
-
     public readonly name = 'PC';
 
     public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log): Promise<beebfs.IFSState> {
@@ -297,10 +295,12 @@ class PCType implements beebfs.IFSType {
         return pcFQN.name;
     }
 
-    public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | beebfs.IFSFSP, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | beebfs.IFSFSP | undefined, log: utils.Log | undefined): Promise<beebfs.File[]> {
         let nameRegExp: RegExp;
 
-        if (pattern instanceof PCFQN) {
+        if (pattern === undefined) {
+            nameRegExp = utils.getRegExpFromAFSP('*');
+        } else if (pattern instanceof PCFQN) {
             nameRegExp = utils.getRegExpFromAFSP(pattern.name);
         } else if (pattern instanceof PCFSP) {
             if (pattern.name !== undefined) {

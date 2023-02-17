@@ -446,10 +446,6 @@ export interface IFSState {
 // Handle FS-specific stuff that doesn't require any state.
 
 export interface IFSType {
-    // a IFSFP for use with findBeebFilesMatching that will match all files in
-    // the volume.
-    readonly matchAllFSP: IFSFSP;
-
     readonly name: string;
 
     // create new state for this type of FS.
@@ -465,8 +461,8 @@ export interface IFSType {
 
     // get list of Beeb files matching the given FSP/FQN in the given volume. If
     // an FQN, do a wildcard match; if an FSP, same, treating any undefined
-    // values as matching anything.
-    findBeebFilesMatching(volume: Volume, pattern: IFSFSP | IFSFQN, log: utils.Log | undefined): Promise<File[]>;
+    // values as matching anything; if undefined, find absolutely everything.
+    findBeebFilesMatching(volume: Volume, pattern: IFSFSP | IFSFQN | undefined, log: utils.Log | undefined): Promise<File[]>;
 
     // parse file/dir string, starting at index i. 
     parseFileOrDirString(str: string, i: number, parseAsDir: boolean): IFSFSP;

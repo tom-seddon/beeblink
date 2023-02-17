@@ -60,6 +60,7 @@ export const badDrive = createErrorFactory(205, 'Bad drive');
 export const badDir = createErrorFactory(206, 'Bad dir');
 export const badAttribute = createErrorFactory(207, 'Bad attribute');
 export const fileNotFound = createErrorFactory(214, 'File not found');
+export const notFound = createErrorFactory(214, 'Not found');
 // Empty message for 220 directs the server to create a suitable one
 // automatically.
 export const syntax = createErrorFactory(220, '');

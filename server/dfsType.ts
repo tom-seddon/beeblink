@@ -424,8 +424,6 @@ class DFSType implements beebfs.IFSType {
         return c >= 32 && c < 127;
     }
 
-    public readonly matchAllFSP: beebfs.IFSFSP = new DFSFSP(undefined, undefined, undefined);
-
     public readonly name = 'BeebLink/DFS';
 
     public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log): Promise<beebfs.IFSState> {
@@ -556,12 +554,19 @@ class DFSType implements beebfs.IFSType {
         return path.join(dfsFQN.drive.toUpperCase(), beebfs.getHostChars(dfsFQN.dir) + '.' + beebfs.getHostChars(fqn.name));
     }
 
-    public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | beebfs.IFSFSP, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | beebfs.IFSFSP | undefined, log: utils.Log | undefined): Promise<beebfs.File[]> {
         let driveNames: string[];
         let dirRegExp: RegExp;
         let nameRegExp: RegExp;
 
-        if (pattern instanceof DFSFQN) {
+        if (pattern === undefined) {
+            driveNames = [];
+            for (const drive of await this.findDrivesForVolume(volume)) {
+                driveNames.push(drive.name);
+            }
+            dirRegExp = utils.getRegExpFromAFSP('*');
+            nameRegExp = utils.getRegExpFromAFSP('*');
+        } else if (pattern instanceof DFSFQN) {
             driveNames = [pattern.drive];
             dirRegExp = utils.getRegExpFromAFSP(pattern.dir);
             nameRegExp = utils.getRegExpFromAFSP(pattern.name);

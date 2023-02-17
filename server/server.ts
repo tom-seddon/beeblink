@@ -64,22 +64,34 @@ function newResponse(c: number, p?: number | Buffer | utils.BufferBuilder) {
 export class Command {
     public readonly nameUC: string;
     public readonly syntax: string | undefined;
-
     // Return undefined to respond with a YES response.
     //
     // Return string or Buffer to set up a text response with that as the text.
     //
     // Return Response to respond with that response.
-    public readonly fun: (commandLine: CommandLine) => Promise<void | string | Buffer | Response>;
+    private readonly fun: (commandLine: CommandLine) => Promise<void | string | Buffer | Response>;
+    private readonly thisAny: any;
 
-    public constructor(name: string, syntax: string | undefined, fun: (commandLine: CommandLine) => Promise<void | string | Response>) {
+    public constructor(name: string, syntax: string | undefined, thisAny: any, fun: (commandLine: CommandLine) => Promise<void | string | Response>) {
         this.nameUC = name.toUpperCase();
         this.syntax = syntax;
         this.fun = fun;
+        this.thisAny = thisAny;
     }
 
-    public async applyFun(thisObject: any, commandLine: CommandLine): Promise<void | string | Buffer | Response> {
-        return await this.fun.apply(thisObject, [commandLine]);
+    public async call(commandLine: CommandLine): Promise<void | string | Buffer | Response> {
+        // JS crap that's seemingly impossible to deal with in any non-annoying way.
+        return await this.fun.apply(this.thisAny, [commandLine]);
+    }
+
+    public getSyntaxString(): string {
+        let syntax = this.nameUC;
+
+        if (this.syntax !== undefined) {
+            syntax += ` ${this.syntax}`;
+        }
+
+        return syntax;
     }
 }
 
@@ -88,22 +100,24 @@ export class Command {
 
 class Handler {
     public readonly name: string;
-    public readonly fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>;
+    private readonly fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>;
+    private thisAny: any;
     private quiet: boolean;
     private fullRequestDump: boolean = false;
     private fullResponseDump: boolean = false;
     private resetLastOSBPUTHandle: boolean;
 
-    public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>) {
+    public constructor(name: string, thisAny: any, fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>) {
         this.name = name;
         this.fun = fun;
+        this.thisAny = thisAny;
         this.quiet = false;
         this.resetLastOSBPUTHandle = true;
     }
 
-    // JS crap that's seemingly impossible to deal with in any non-annoying way.
-    public async applyFun(thisObject: any, p: Buffer): Promise<void | string | Buffer | Response> {
-        return await this.fun.apply(thisObject, [this, p]);
+    public async call(p: Buffer): Promise<void | string | Buffer | Response> {
+        // JS crap that's seemingly impossible to deal with in any non-annoying way.
+        return await this.fun.apply(this.thisAny, [this, p]);
     }
 
     public shouldResetLastOSBPUTHandle(): boolean {
@@ -202,65 +216,65 @@ export class Server {
         this.linkSupportsFireAndForgetRequests = linkSupportsFireAndForgetRequests;
 
         this.commonCommands = [
-            new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
-            new Command('DEFAULTS', '([SRP])', this.defaultsCommand),
-            new Command('DELETE', '<fsp>', this.deleteCommand),
-            new Command('DIR', '(<dir>)', this.dirCommand),
-            new Command('DRIVE', '(<drive>)', this.driveCommand),
-            new Command('DRIVES', '', this.drivesCommand),
-            new Command('DUMP', '<fsp>', this.dumpCommand),
-            new Command('HSTATUS', '([HF])', this.hstatusCommand),
-            new Command('INFO', '<afsp>', this.infoCommand),
-            new Command('LIB', '(<dir>)', this.libCommand),
-            new Command('LIST', '<fsp>', this.listCommand),
-            new Command('LOCATE', '<afsp> (<format>)', this.locateCommand),
-            new Command('NEWVOL', '<vsp>', this.newvolCommand),
-            new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
-            new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand),
-            new Command('TITLE', '<title>', this.titleCommand),
-            new Command('TYPE', '<fsp>', this.typeCommand),
-            new Command('VOLBROWSER', undefined, this.volbrowserCommand),
-            new Command('VOL', '(<avsp>) (R)', this.volCommand),
-            new Command('VOLS', '(<avsp>)', this.volsCommand),
-            new Command('WDUMP', '<fsp>', this.wdumpCommand),
-            new Command('WINFO', '<afsp>', this.winfoCommand),
+            new Command('ACCESS', '<afsp> (<mode>)', this, this.accessCommand),
+            new Command('DEFAULTS', '([SRP])', this, this.defaultsCommand),
+            new Command('DELETE', '<fsp>', this, this.deleteCommand),
+            new Command('DIR', '(<dir>)', this, this.dirCommand),
+            new Command('DRIVE', '(<drive>)', this, this.driveCommand),
+            new Command('DRIVES', '', this, this.drivesCommand),
+            new Command('DUMP', '<fsp>', this, this.dumpCommand),
+            new Command('HSTATUS', '([HF])', this, this.hstatusCommand),
+            new Command('INFO', '<afsp>', this, this.infoCommand),
+            new Command('LIB', '(<dir>)', this, this.libCommand),
+            new Command('LIST', '<fsp>', this, this.listCommand),
+            new Command('LOCATE', '<afsp> (<format>)', this, this.locateCommand),
+            new Command('NEWVOL', '<vsp>', this, this.newvolCommand),
+            new Command('RENAME', '<old fsp> <new fsp>', this, this.renameCommand),
+            new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this, this.srloadCommand),
+            new Command('TITLE', '<title>', this, this.titleCommand),
+            new Command('TYPE', '<fsp>', this, this.typeCommand),
+            new Command('VOLBROWSER', undefined, this, this.volbrowserCommand),
+            new Command('VOL', '(<avsp>) (R)', this, this.volCommand),
+            new Command('VOLS', '(<avsp>)', this, this.volsCommand),
+            new Command('WDUMP', '<fsp>', this, this.wdumpCommand),
+            new Command('WINFO', '<afsp>', this, this.winfoCommand),
         ];
 
         this.handlers = [];
-        this.handlers[beeblink.REQUEST_GET_ROM] = new Handler('GET_ROM', this.handleGetROM);
-        this.handlers[beeblink.REQUEST_RESET] = new Handler('RESET', this.handleReset);
-        this.handlers[beeblink.REQUEST_ECHO_DATA] = new Handler('ECHO_DATA', this.handleEchoData);
-        this.handlers[beeblink.REQUEST_READ_STRING] = new Handler('READ_STRING', this.handleReadString).withNoLogging();
-        this.handlers[beeblink.REQUEST_READ_STRING_VERBOSE] = new Handler('READ_STRING_VERBOSE', this.handleReadString);
-        this.handlers[beeblink.REQUEST_STAR_CAT] = new Handler('STAR_CAT', this.handleStarCat);
-        this.handlers[beeblink.REQUEST_STAR_COMMAND] = new Handler('STAR_COMMAND', this.handleStarCommand);
-        this.handlers[beeblink.REQUEST_STAR_RUN] = new Handler('STAR_RUN', this.handleStarRun);
-        this.handlers[beeblink.REQUEST_HELP_BLFS] = new Handler('HELP_BLFS', this.handleHelpBLFS);
-        this.handlers[beeblink.REQUEST_OSFILE] = new Handler('OSFILE', this.handleOSFILE);
-        this.handlers[beeblink.REQUEST_OSFIND_OPEN] = new Handler('OSFIND_OPEN', this.handleOSFINDOpen);
-        this.handlers[beeblink.REQUEST_OSFIND_CLOSE] = new Handler('OSFIND_CLOSE', this.handleOSFINDClose);
-        this.handlers[beeblink.REQUEST_OSARGS] = new Handler('OSARGS', this.handleOSARGS);
-        this.handlers[beeblink.REQUEST_EOF] = new Handler('EOF', this.handleEOF);
-        this.handlers[beeblink.REQUEST_OSBGET] = new Handler('OSBGET', this.handleOSBGET);//.withNoLogging();
-        this.handlers[beeblink.REQUEST_OSBPUT] = new Handler('OSBPUT', this.handleOSBPUT).withoutResetLastOSBPUTHandle();//.withNoLogging();
-        this.handlers[beeblink.REQUEST_STAR_INFO] = new Handler('STAR_INFO', this.handleStarInfo);
-        this.handlers[beeblink.REQUEST_STAR_EX] = new Handler('STAR_EX', this.handleStarEx);
-        this.handlers[beeblink.REQUEST_OSGBPB] = new Handler('OSGBPB', this.handleOSGBPB);
-        this.handlers[beeblink.REQUEST_OPT] = new Handler('OPT', this.handleOPT);
-        this.handlers[beeblink.REQUEST_BOOT_OPTION] = new Handler('GET_BOOT_OPTION', this.handleGetBootOption);
-        this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('VOLUME_BROWSER', this.handleVolumeBrowser);
-        this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('SPEED_TEST', this.handleSpeedTest);
-        this.handlers[beeblink.REQUEST_SET_FILE_HANDLE_RANGE] = new Handler('SET_FILE_HANDLE_RANGE', this.handleSetFileHandleRange);
-        this.handlers[beeblink.REQUEST_SET_DISK_IMAGE_CAT] = new Handler('SET_DISK_IMAGE_CAT', this.handleSetDiskImageCat).withFullRequestDump();
-        this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('NEXT_DISK_IMAGE_part', this.handleNextDiskImagePart);
-        this.handlers[beeblink.REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT] = new Handler('SET_LAST_DISK_IMAGE_OSWORD_RESULT', this.handleSetLastDiskImageOSWORDResult);
-        this.handlers[beeblink.REQUEST_FINISH_DISK_IMAGE_FLOW] = new Handler('FINISH_DISK_IMAGE_FLOW', this.handleFinishDiskImageFlow);
-        this.handlers[beeblink.REQUEST_WRAPPED] = new Handler('REQUEST_WRAPPED', this.handleWrapped);
-        this.handlers[beeblink.REQUEST_READ_DISK_IMAGE] = new Handler('REQUEST_READ_DISK_IMAGE', this.handleReadDiskImage);
-        this.handlers[beeblink.REQUEST_WRITE_DISK_IMAGE] = new Handler('REQUEST_WRITE_DISK_IMAGE', this.handleWriteDiskImage);
+        this.handlers[beeblink.REQUEST_GET_ROM] = new Handler('GET_ROM', this, this.handleGetROM);
+        this.handlers[beeblink.REQUEST_RESET] = new Handler('RESET', this, this.handleReset);
+        this.handlers[beeblink.REQUEST_ECHO_DATA] = new Handler('ECHO_DATA', this, this.handleEchoData);
+        this.handlers[beeblink.REQUEST_READ_STRING] = new Handler('READ_STRING', this, this.handleReadString).withNoLogging();
+        this.handlers[beeblink.REQUEST_READ_STRING_VERBOSE] = new Handler('READ_STRING_VERBOSE', this, this.handleReadString);
+        this.handlers[beeblink.REQUEST_STAR_CAT] = new Handler('STAR_CAT', this, this.handleStarCat);
+        this.handlers[beeblink.REQUEST_STAR_COMMAND] = new Handler('STAR_COMMAND', this, this.handleStarCommand);
+        this.handlers[beeblink.REQUEST_STAR_RUN] = new Handler('STAR_RUN', this, this.handleStarRun);
+        this.handlers[beeblink.REQUEST_HELP_BLFS] = new Handler('HELP_BLFS', this, this.handleHelpBLFS);
+        this.handlers[beeblink.REQUEST_OSFILE] = new Handler('OSFILE', this, this.handleOSFILE);
+        this.handlers[beeblink.REQUEST_OSFIND_OPEN] = new Handler('OSFIND_OPEN', this, this.handleOSFINDOpen);
+        this.handlers[beeblink.REQUEST_OSFIND_CLOSE] = new Handler('OSFIND_CLOSE', this, this.handleOSFINDClose);
+        this.handlers[beeblink.REQUEST_OSARGS] = new Handler('OSARGS', this, this.handleOSARGS);
+        this.handlers[beeblink.REQUEST_EOF] = new Handler('EOF', this, this.handleEOF);
+        this.handlers[beeblink.REQUEST_OSBGET] = new Handler('OSBGET', this, this.handleOSBGET);//.withNoLogging();
+        this.handlers[beeblink.REQUEST_OSBPUT] = new Handler('OSBPUT', this, this.handleOSBPUT).withoutResetLastOSBPUTHandle();//.withNoLogging();
+        this.handlers[beeblink.REQUEST_STAR_INFO] = new Handler('STAR_INFO', this, this.handleStarInfo);
+        this.handlers[beeblink.REQUEST_STAR_EX] = new Handler('STAR_EX', this, this.handleStarEx);
+        this.handlers[beeblink.REQUEST_OSGBPB] = new Handler('OSGBPB', this, this.handleOSGBPB);
+        this.handlers[beeblink.REQUEST_OPT] = new Handler('OPT', this, this.handleOPT);
+        this.handlers[beeblink.REQUEST_BOOT_OPTION] = new Handler('REQUEST_BOOT_OPTION', this, this.handleGetBootOption);
+        this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('VOLUME_BROWSER', this, this.handleVolumeBrowser);
+        this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('SPEED_TEST', this, this.handleSpeedTest);
+        this.handlers[beeblink.REQUEST_SET_FILE_HANDLE_RANGE] = new Handler('SET_FILE_HANDLE_RANGE', this, this.handleSetFileHandleRange);
+        this.handlers[beeblink.REQUEST_SET_DISK_IMAGE_CAT] = new Handler('SET_DISK_IMAGE_CAT', this, this.handleSetDiskImageCat).withFullRequestDump();
+        this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('NEXT_DISK_IMAGE_part', this, this.handleNextDiskImagePart);
+        this.handlers[beeblink.REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT] = new Handler('SET_LAST_DISK_IMAGE_OSWORD_RESULT', this, this.handleSetLastDiskImageOSWORDResult);
+        this.handlers[beeblink.REQUEST_FINISH_DISK_IMAGE_FLOW] = new Handler('FINISH_DISK_IMAGE_FLOW', this, this.handleFinishDiskImageFlow);
+        this.handlers[beeblink.REQUEST_WRAPPED] = new Handler('REQUEST_WRAPPED', this, this.handleWrapped);
+        this.handlers[beeblink.REQUEST_READ_DISK_IMAGE] = new Handler('REQUEST_READ_DISK_IMAGE', this, this.handleReadDiskImage);
+        this.handlers[beeblink.REQUEST_WRITE_DISK_IMAGE] = new Handler('REQUEST_WRITE_DISK_IMAGE', this, this.handleWriteDiskImage);
 
         if (this.linkSupportsFireAndForgetRequests) {
-            this.handlers[beeblink.REQUEST_OSBPUT_FNF] = new Handler('OSBPUT_FNF', this.handleOSBPUTFireAndForget).withoutResetLastOSBPUTHandle();//.withNoLogging();
+            this.handlers[beeblink.REQUEST_OSBPUT_FNF] = new Handler('OSBPUT_FNF', this, this.handleOSBPUTFireAndForget).withoutResetLastOSBPUTHandle();//.withNoLogging();
         }
 
         this.log = log;
@@ -333,7 +347,7 @@ export class Server {
                 }
 
                 try {
-                    return this.getResponseForResult(await handler.applyFun(this, request.p));
+                    return this.getResponseForResult(await handler.call(request.p));
                 } finally {
                     if (handler.shouldLog()) {
                         this.log.out();
@@ -487,23 +501,23 @@ export class Server {
         return false;
     }
 
-    // it's a bit wasteful having the list regenerated every time... luckily the
-    // PC is fast, and the BBC is slow...
-    //
-    // Should really do a bit better though.
-    private getCommands(): Command[] {
-        const commands = [];
+    // // it's a bit wasteful having the list regenerated every time... luckily the
+    // // PC is fast, and the BBC is slow...
+    // //
+    // // Should really do a bit better though.
+    // private getCommands(): Command[] {
+    //     const commands = [];
 
-        for (const command of this.commonCommands) {
-            commands.push(command);
-        }
+    //     for (const command of this.commonCommands) {
+    //         commands.push(command);
+    //     }
 
-        for (const command of this.bfs.getCommands()) {
-            commands.push(command);
-        }
+    //     for (const command of this.bfs.getCommands()) {
+    //         commands.push(command);
+    //     }
 
-        return commands;
-    }
+    //     return commands;
+    // }
 
     private async handleStarCommand(handler: Handler, p: Buffer): Promise<Response> {
         const commandLine = this.initCommandLine(p.toString('binary'));
@@ -512,28 +526,37 @@ export class Server {
             return errors.badCommand();
         }
 
+        this.log.pn(`${commandLine.parts.length} command line parts:`);
+        for (let i = 0; i < commandLine.parts.length; ++i) {
+            this.log.pn(`    ${i}. "${commandLine.parts[i]}"`);
+        }
+
         let matchedCommand: Command | undefined;
 
-        for (const command of this.getCommands()) {
+        for (const command of this.commonCommands) {
             if (this.matchStarCommand(command.nameUC, commandLine)) {
                 matchedCommand = command;
                 break;
             }
         }
 
-        this.log.pn(`${commandLine.parts.length} command line parts:`);
-        for (let i = 0; i < commandLine.parts.length; ++i) {
-            this.log.pn(`    ${i}. "${commandLine.parts[i]}"`);
+        if (matchedCommand === undefined) {
+            for (const command of this.bfs.getCommands()) {
+                if (this.matchStarCommand(command.nameUC, commandLine)) {
+                    matchedCommand = command;
+                    break;
+                }
+            }
         }
 
         if (matchedCommand !== undefined) {
+            this.log.pn('Matched command: ' + matchedCommand.getSyntaxString());
             try {
-                return this.getResponseForResult(await matchedCommand.applyFun(this, commandLine));
+                return this.getResponseForResult(await matchedCommand.call(commandLine));
             } catch (error) {
                 if (error instanceof errors.BeebError) {
                     if (error.code === 220 && error.text === '') {
-                        const text = 'Syntax: ' + matchedCommand.nameUC + (matchedCommand.syntax !== undefined ? ' ' + matchedCommand.syntax : '');
-                        return errors.syntax(text);
+                        return errors.syntax(`Syntax: ${matchedCommand.getSyntaxString()}`);
                     }
                 }
 
@@ -551,12 +574,18 @@ export class Server {
 
     private async handleHelpBLFS(handler: Handler, p: Buffer): Promise<string> {
         let help = '';
-        for (const command of this.getCommands()) {
-            help += '  ' + command.nameUC;
-            if (command.syntax !== undefined) {
-                help += ' ' + command.syntax;
+
+        for (const command of this.commonCommands) {
+            help += `  ${command.getSyntaxString()}${BNL}`;
+        }
+
+        const extraCommands = this.bfs.getCommands();
+        if (extraCommands.length > 0) {
+            help += ` Volume-specific:${BNL}`;
+            for (const command of extraCommands) {
+                help += `  ${command.getSyntaxString()}${BNL}`;
             }
-            help += BNL;
+
         }
 
         return help;
@@ -855,6 +884,8 @@ export class Server {
     private async handleGetBootOption(handler: Handler, p: Buffer): Promise<Response> {
         // const option = await beebfs.BeebFS.loadBootOption(this.bfs.getVolume(), this.bfs.getDrive());
         const option = await this.bfs.getBootOption();
+
+        this.log.pn(`Boot option: ${option}`);
 
         return newResponse(beeblink.RESPONSE_BOOT_OPTION, option);
     }

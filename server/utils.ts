@@ -653,6 +653,22 @@ export async function tryStat(filePath: string): Promise<fs.Stats | undefined> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+export async function isFolder(folderPath: string): Promise<boolean> {
+    const stat = await tryStat(folderPath);
+    if (stat === undefined) {
+        return false;
+    }
+
+    if (!stat.isDirectory()) {
+        return false;
+    }
+
+    return true;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 export async function saveJSON(filePath: string, obj: any): Promise<void> {
     try {
         await fsWriteFile(filePath, JSON.stringify(obj));

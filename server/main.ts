@@ -322,6 +322,7 @@ async function isGit(folderPath: string): Promise<boolean> {
     for (; ;) {
         const gitPath = path.join(folderPath, '.git');
 
+        // TODO: utils.isFolder
         const stat = await utils.tryStat(gitPath);
         if (stat !== undefined) {
             if (stat.isDirectory()) {
