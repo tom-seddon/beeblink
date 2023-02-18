@@ -126,6 +126,7 @@ interface ICommandLineOptions {
     server_verbose: boolean;
     default_volume: string | null;
     fatal_verbose: boolean;
+    locate_verbose: boolean;
     folders: string[];
     load_config: string | null;
     save_config: string | null;
@@ -147,6 +148,7 @@ interface ICommandLineOptions {
     serial_full_size_messages: boolean;
     serial_include: string[] | null;
     serial_test_send_file: string | null;
+    excludeVolumeRegExps: string[];
 }
 
 // don't shift to do this!
@@ -874,6 +876,24 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     }
 
     return true;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+function createSearchFolders(options: ICommandLineOptions): beebfs.IFSSearchFolders {
+    const pathExcludeRegExps: RegExp[] = [];
+    for (const regExpStr of options.excludeVolumeRegExps) {
+        pathExcludeRegExps.push(new RegExp(regExpStr));
+    }
+
+    return {
+        beebLinkSearchFolders: options.folders,
+        pcFolders: options.pcFolders,
+        tubeHostFolders: options.tubeHostFolders,
+        pathExcludeRegExps,
+    };
+
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -1726,7 +1746,9 @@ async function main(options: ICommandLineOptions) {
         return;
     }
 
-    const volumes = await beebfs.FS.findAllVolumes(options.folders, options.pcFolders, options.tubeHostFolders, log);
+    const searchFolders = createSearchFolders(options);
+
+    const volumes = await beebfs.FS.findAllVolumes(searchFolders, log);
 
     const gaManipulator = await createGitattributesManipulator(options, volumes);
 
@@ -1754,7 +1776,7 @@ async function main(options: ICommandLineOptions) {
         const serverLogPrefix = options.server_verbose ? additionalPrefix + 'SRV' + connectionId : undefined;
         const serverLog = new utils.Log(serverLogPrefix !== undefined ? serverLogPrefix : '', process.stderr, serverLogPrefix !== undefined);
 
-        const bfs = new beebfs.FS(options.folders, options.pcFolders, options.tubeHostFolders, gaManipulator, bfsLog,);
+        const bfs = new beebfs.FS(searchFolders, gaManipulator, bfsLog, options.locate_verbose);
 
         if (defaultVolume !== undefined) {
             await bfs.mount(defaultVolume);
@@ -1823,6 +1845,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     fullHelpOnly(['--server-data-verbose'], { action: 'storeTrue', help: 'dump request/response data (requires --server-verbose)' });
     fullHelpOnly(['--libusb-debug-level'], { type: integer, metavar: 'LEVEL', help: 'if provided, set libusb debug logging level to %(metavar)s' });
     fullHelpOnly(['--fatal-verbose'], { action: 'storeTrue', help: 'print debugging info on a fatal error' });
+    fullHelpOnly(['--locate-verbose'], { action: 'storeTrue', help: 'extra *LOCATE output (requires --server-verbose)' });
 
     // Git
     always(['--git'], { action: 'storeTrue', help: 'look after .gitattributes for BBC volumes' });
@@ -1856,7 +1879,8 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     always(['--default-volume'], { metavar: 'DEFAULT-VOLUME', help: 'load volume %(metavar)s on startup' });
     always(['--pc'], { dest: 'pcFolders', action: 'append', defaultValue: [], metavar: 'FOLDER', help: 'use %(metavar)s as a PC volume' });
     always(['--tube-host'], { dest: 'tubeHostFolders', action: 'append', defaultValue: [], metavar: 'FOLDER', help: 'use %(metavar)s as a Tube Host volume' });
-    always(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'folder to search for BeebLink volumes' });
+    always(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'search %(metavar)s for BeebLink volumes' });
+    fullHelpOnly(['--exclude-volume'], { dest: 'excludeVolumeRegExps', action: 'append', defaultValue: [], metavar: 'REGEXP', help: 'for this run, exclude volume(s) with paths matching regexp %(metavar)s' });
 
     return parser;
 }

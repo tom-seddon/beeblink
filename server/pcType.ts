@@ -163,7 +163,7 @@ class PCState implements beebfs.IFSState {
 
     public async getCAT(commandLine: string | undefined): Promise<string | undefined> {
         if (commandLine === undefined) {
-            return await this.volume.type.getCAT(new beebfs.FSP(this.volume, undefined, new PCFSP(undefined)), this);
+            return await this.volume.type.getCAT(new beebfs.FSP(this.volume, undefined, new PCFSP(undefined)), this, this.log);
         } else {
             return undefined;
         }
@@ -202,7 +202,7 @@ class PCState implements beebfs.IFSState {
     }
 
     public async readNames(): Promise<string[]> {
-        const files = await this.volume.type.findBeebFilesMatching(this.volume, new PCFSP(undefined), undefined);
+        const files = await this.volume.type.findBeebFilesMatching(this.volume, new PCFSP(undefined), false, undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -295,7 +295,7 @@ class PCType implements beebfs.IFSType {
         return pcFQN.name;
     }
 
-    public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | beebfs.IFSFSP | undefined, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | beebfs.IFSFSP | undefined, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {
         let nameRegExp: RegExp;
 
         if (pattern === undefined) {
@@ -311,6 +311,9 @@ class PCType implements beebfs.IFSType {
         } else {
             throw new Error('not PCFQN or PCFSP');
         }
+
+        // The recursion flag is ignored. PC folders are not (yet?)
+        // hierarchical.
 
         let hostNames: string[];
         try {
@@ -357,12 +360,12 @@ class PCType implements beebfs.IFSType {
         return beebFiles;
     }
 
-    public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined): Promise<string> {
+    public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined, log: utils.Log): Promise<string> {
         let text = '';
 
         text += `Volume: ${fsp.volume.path}${utils.BNL}${utils.BNL}`;
 
-        const beebFiles = await this.findBeebFilesMatching(fsp.volume, new PCFSP('*'), undefined);
+        const beebFiles = await this.findBeebFilesMatching(fsp.volume, new PCFSP('*'), false, undefined);
         for (const beebFile of beebFiles) {
             mustBePCFQN(beebFile.fqn.fsFQN);
         }

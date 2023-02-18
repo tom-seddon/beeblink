@@ -301,7 +301,7 @@ class DFSState implements beebfs.IFSState {
             return undefined;
         }
 
-        return await this.volume.type.getCAT(new beebfs.FSP(this.volume, undefined, new DFSFSP(drive, undefined, undefined)), this);
+        return await this.volume.type.getCAT(new beebfs.FSP(this.volume, undefined, new DFSFSP(drive, undefined, undefined)), this, this.log);
     }
 
     public starDrive(arg: string | undefined): boolean {
@@ -378,7 +378,7 @@ class DFSState implements beebfs.IFSState {
     }
 
     public async readNames(): Promise<string[]> {
-        const files = await this.volume.type.findBeebFilesMatching(this.volume, new DFSFSP(this.drive, this.dir, undefined), undefined);
+        const files = await this.volume.type.findBeebFilesMatching(this.volume, new DFSFSP(this.drive, this.dir, undefined), false, undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -554,7 +554,7 @@ class DFSType implements beebfs.IFSType {
         return path.join(dfsFQN.drive.toUpperCase(), beebfs.getHostChars(dfsFQN.dir) + '.' + beebfs.getHostChars(fqn.name));
     }
 
-    public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | beebfs.IFSFSP | undefined, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | beebfs.IFSFSP | undefined, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {
         let driveNames: string[];
         let dirRegExp: RegExp;
         let nameRegExp: RegExp;
@@ -585,6 +585,8 @@ class DFSType implements beebfs.IFSType {
         } else {
             throw new Error('not DFSFQN or DFSFSP');
         }
+
+        // The recurse flag is ignored. There is no hierarchy within a BeebLink volume.
 
         const beebFiles: beebfs.File[] = [];
 
@@ -623,7 +625,7 @@ class DFSType implements beebfs.IFSType {
         return beebFiles;
     }
 
-    public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined): Promise<string> {
+    public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined, log: utils.Log): Promise<string> {
         const dfsFSP = mustBeDFSFSP(fsp.fsFSP);
 
         let dfsState: DFSState | undefined;
@@ -637,7 +639,7 @@ class DFSType implements beebfs.IFSType {
             return errors.badDrive();
         }
 
-        const beebFiles = await this.findBeebFilesMatching(fsp.volume, new DFSFSP(dfsFSP.drive, undefined, undefined), undefined);
+        const beebFiles = await this.findBeebFilesMatching(fsp.volume, new DFSFSP(dfsFSP.drive, undefined, undefined), false, undefined);
 
         let text = '';
 
