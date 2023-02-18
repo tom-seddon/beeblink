@@ -337,7 +337,7 @@ class DFSState implements beebfs.IFSState {
         this.libDir = libFQN.dir;
     }
 
-    public async starDrives(): Promise<string> {
+    public async getDrivesOutput(): Promise<string> {
         const drives = await mustBeDFSType(this.volume.type).findDrivesForVolume(this.volume);
 
         let text = '';

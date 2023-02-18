@@ -415,8 +415,8 @@ export interface IFSState {
     // handle *LIB.
     starLib(fsp: FSP | undefined): void;
 
-    // handle *DRIVES.
-    starDrives(): Promise<string>;
+    // handle *HSTATUS drives output.
+    getDrivesOutput(): Promise<string>;
 
     // read boot option, for OSGBPB 5 or SHIFT+BREAK.
     getBootOption(): Promise<number>;
@@ -993,8 +993,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async starDrives(): Promise<string> {
-        return await this.getState().starDrives();
+    public async getDrivesOutput(): Promise<string> {
+        return await this.getState().getDrivesOutput();
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1186,7 +1186,7 @@ export class FS {
         }
 
         if (!anyOpen) {
-            text += 'No files open.' + utils.BNL;
+            text += 'No files open' + utils.BNL;
         }
 
         return text;

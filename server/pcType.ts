@@ -181,7 +181,7 @@ class PCState implements beebfs.IFSState {
         return notSupported();
     }
 
-    public async starDrives(): Promise<string> {
+    public async getDrivesOutput(): Promise<string> {
         return '';
     }
 

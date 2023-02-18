@@ -221,7 +221,6 @@ export class Server {
             new Command('DELETE', '<fsp>', this, this.deleteCommand),
             new Command('DIR', '(<dir>)', this, this.dirCommand),
             new Command('DRIVE', '(<drive>)', this, this.driveCommand),
-            new Command('DRIVES', '', this, this.drivesCommand),
             new Command('DUMP', '<fsp>', this, this.dumpCommand),
             new Command('HSTATUS', '([HF])', this, this.hstatusCommand),
             new Command('INFO', '<afsp>', this, this.infoCommand),
@@ -1334,18 +1333,16 @@ export class Server {
     private async hstatusCommand(commandLine: CommandLine): Promise<string> {
         let text = '';
 
-        const begin = () => {
+        const begin = (title: string) => {
             if (text.length > 0) {
                 text += BNL;
             }
+
+            text += `${title}:${BNL}${BNL}`;
         };
 
-        const flagsUC = commandLine.parts.length >= 2 ? commandLine.parts[1].toLowerCase() : undefined;
-
-        if (flagsUC === undefined || flagsUC === 'h') {
-            begin();
-
-            text += `Status:${BNL}${BNL}`;
+        const status = () => {
+            begin(`Status`);
 
             try {
                 text += this.getVolumeInfoString(this.bfs.getVolume());
@@ -1355,17 +1352,31 @@ export class Server {
                 // where that's a bit annoying.
                 text += `${error}${BNL}`;
             }
-        }
+        };
 
-        if (flagsUC === undefined || flagsUC === 'f') {
-            begin();
-
-            text += `Open files:${BNL}${BNL}`;
+        const files = () => {
+            begin(`Open files`);
             text += this.bfs.getOpenFilesOutput();
-        }
+        };
 
-        if (text.length === 0) {
-            return errors.syntax();
+        const drives = async () => {
+            begin(`Drives`);
+            text += await this.bfs.getDrivesOutput();
+        };
+
+        if (commandLine.parts.length >= 2) {
+            for (const char of commandLine.parts[1].toLowerCase()) {
+                switch (char) {
+                    case 'h': status(); break;
+                    case 'f': files(); break;
+                    case 'd': await drives(); break;
+                    default: return errors.syntax();
+                }
+            }
+        } else {
+            status();
+            files();
+            await drives();
         }
 
         return text;
@@ -1440,10 +1451,6 @@ export class Server {
     private async driveCommand(commandLine: CommandLine): Promise<void> {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starDrive(arg);
-    }
-
-    private async drivesCommand(commandLine: CommandLine): Promise<string> {
-        return await this.bfs.starDrives();
     }
 
     private async libCommand(commandLine: CommandLine): Promise<void> {

@@ -527,17 +527,17 @@ class TubeHostState implements beebfs.IFSState {
         this.libDir = libFQN.dir;
     }
 
-    public async starDrives(): Promise<string> {
+    public async getDrivesOutput(): Promise<string> {
         let text = '';
 
         for (let i = 0; i < this.driveFolders.length; ++i) {
-            text += `Disk ${i}: `;
-
             if (this.driveFolders[i] !== undefined) {
-                text += this.driveFolders[i];
+                text += `Disk ${i}: ${this.driveFolders[i]}${utils.BNL}`;
             }
+        }
 
-            text += utils.BNL;
+        if (text.length === 0) {
+            text += `All drives empty${utils.BNL}`;
         }
 
         return text;

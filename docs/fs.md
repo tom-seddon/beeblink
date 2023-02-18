@@ -269,21 +269,17 @@ Change directory and/or drive on the current volume.
 
 Change drive on the current volume.
 
-### `DRIVES`
-
-Show the list of drives in the current volume.
-
 ### `DUMP <fsp>` (*B/B+*)
 
 Produce hex dump of file.
 
-### `HSTATUS ([HF])`
+### `HSTATUS ([HFD]+)`
 
-Show server status: current volume details, and currently open files.
+Show current status: general info (current volume, current defaults),
+currently open files, and currently available drives.
 
-Use `*HSTATUS H` to show just the status.
-
-Use `*HSTATUS F` to show just the open files.
+Supply codes on the command line to restrict the output: `H` to show
+the status, `F` to show open files, and `D` to show drives.
 
 ### `INFO <afsp>` (*B/B+*)
 
