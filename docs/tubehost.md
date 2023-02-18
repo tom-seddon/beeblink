@@ -45,3 +45,4 @@ and so on.
 - looks like TubeHost has no specific file name limited, but the
   BeebLink 10 char limit currently still applies
   
+- the library drive L is not yet supported
