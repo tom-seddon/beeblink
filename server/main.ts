@@ -793,13 +793,13 @@ async function serialTestSendFile(options: ICommandLineOptions, filePath: string
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function handleCommandLineOptions(options: ICommandLineOptions, log: utils.Log): Promise<boolean> {
-    log.pn('libusb_debug_level: ``' + options.libusb_debug_level + '\'\'');
+async function handleCommandLineOptions(options: ICommandLineOptions, log: utils.Log | undefined): Promise<boolean> {
+    log?.pn('libusb_debug_level: ``' + options.libusb_debug_level + '\'\'');
     if (options.libusb_debug_level !== null) {
         usb.setDebugLevel(options.libusb_debug_level);
     }
 
-    log.pn('cwd: ``' + process.cwd() + '\'\'');
+    log?.pn('cwd: ``' + process.cwd() + '\'\'');
 
     if (options.serial_test_pc_to_bbc) {
         void serialTestPCToBBC(options);
@@ -823,8 +823,8 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         return false;
     }
 
-    //log.pn('load_config: ``' + options.load_config + '\'\'');
-    log.pn('save_config: ``' + options.save_config + '\'\'');
+    //log?.pn('load_config: ``' + options.load_config + '\'\'');
+    log?.pn('save_config: ``' + options.save_config + '\'\'');
 
     if (options.folders.length === 0) {
         throw new Error('no folders specified');
@@ -1119,7 +1119,7 @@ function findUSBDeviceForSerialPort(portInfo: SerialPort.PortInfo): usb.Device |
     return undefined;
 }
 
-async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, serialLog: utils.Log): Promise<void> {
+async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, serialLog: utils.Log | undefined): Promise<void> {
     if (process.platform === 'win32') {
         // When trying to open the device with libusb, the device open
         // fails with LIBUSB_ERROR_UNSUPPORTED. See, e.g.,
@@ -1164,7 +1164,7 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
                 usbDevice.open();
 
                 // logic copied out of libftdi's ftdi_usb_open_dev.
-                serialLog.pn(`Setting USB device configuration...`);
+                serialLog?.pn(`Setting USB device configuration...`);
                 if (usbDevice.configDescriptor.bConfigurationValue !== usbDevice.allConfigDescriptors[0].bConfigurationValue) {
                     await new Promise<void>((resolve, reject) => {
                         usbDevice!.setConfiguration(usbDevice!.allConfigDescriptors[0].bConfigurationValue, (err) => {
@@ -1185,17 +1185,17 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
                 const ftdiInterface = 0;
                 const ftdiIndex = 1;
 
-                //serialLog.pn(`${usbDevice.interfaces.length} interfaces`);
+                //serialLog?.pn(`${usbDevice.interfaces.length} interfaces`);
 
                 try {
                     // 1 = INTERFACE_A.
-                    serialLog.pn(`Claiming USB device interface...`);
+                    serialLog?.pn(`Claiming USB device interface...`);
                     usbDevice.__claimInterface(ftdiInterface);
                 } catch (error) {
-                    serialLog.pn(`Ignoring claimInterface error: ${error}`);
+                    serialLog?.pn(`Ignoring claimInterface error: ${error}`);
                 }
 
-                serialLog.pn(`Setting latency timer...`);
+                serialLog?.pn(`Setting latency timer...`);
                 await deviceControlTransfer(usbDevice,
                     FTDI_DEVICE_OUT_REQTYPE,
                     SIO_SET_LATENCY_TIMER_REQUEST,
@@ -1203,7 +1203,7 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
                     ftdiIndex,
                     undefined);
 
-                serialLog.pn(`Done... hopefully.`);
+                serialLog?.pn(`Done... hopefully.`);
             } catch (error) {
                 process.stderr.write(`Error setting FTDI latency timer for ${getSerialPortPath(portInfo)}: ${error}\n`);
             } finally {
@@ -1323,7 +1323,9 @@ async function drainPort(port: SerialPort): Promise<void> {
 }
 
 async function handleSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, server: Server): Promise<void> {
-    const serialLog = new utils.Log(getSerialPortPath(portInfo), process.stdout, isSerialDeviceVerbose(portInfo, options.serial_verbose));
+    const f = process.stdout;
+
+    const serialLog = utils.Log.create(getSerialPortPath(portInfo), f, isSerialDeviceVerbose(portInfo, options.serial_verbose));
 
     let port: SerialPort;
     try {
@@ -1341,16 +1343,16 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
     const readBuffers: Buffer[] = [];
     let readIndex = 0;
 
-    const dataInLog = new utils.Log(getSerialPortPath(portInfo), serialLog.f, isSerialDeviceVerbose(portInfo, options.serial_data_verbose));
-    const dataOutLog = new utils.Log(getSerialPortPath(portInfo), serialLog.f, isSerialDeviceVerbose(portInfo, options.serial_data_verbose));
-    const syncLog = new utils.Log(`${getSerialPortPath(portInfo)}: sync`, serialLog.f, isSerialDeviceVerbose(portInfo, options.serial_sync_verbose));
+    const dataInLog = utils.Log.create(getSerialPortPath(portInfo), f, isSerialDeviceVerbose(portInfo, options.serial_data_verbose));
+    const dataOutLog = utils.Log.create(getSerialPortPath(portInfo), f, isSerialDeviceVerbose(portInfo, options.serial_data_verbose));
+    const syncLog = utils.Log.create(`${getSerialPortPath(portInfo)}: sync`, f, isSerialDeviceVerbose(portInfo, options.serial_sync_verbose));
 
-    process.stderr.write(`${getSerialPortPath(portInfo)}: serving. (verbose=${serialLog.enabled}, data-verbose=(in: ${dataInLog.enabled}, out: ${dataOutLog.enabled}), sync-verbose=${syncLog.enabled})\n`);
+    process.stderr.write(`${getSerialPortPath(portInfo)}: serving. (verbose=${utils.Log.isEnabled(serialLog)}, data-verbose=(in: ${utils.Log.isEnabled(dataInLog)}, out: ${utils.Log.isEnabled(dataOutLog)}), sync-verbose=${utils.Log.isEnabled(syncLog)})\n`);
 
     port.on('data', (data: Buffer): void => {
         readBuffers.push(data);
 
-        dataInLog.withIndent('data in: ', () => {
+        dataInLog?.withIndent('data in: ', () => {
             dataInLog.dumpBuffer(data);
         });
 
@@ -1377,27 +1379,27 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
     }
 
     port.on('error', (error: any): void => {
-        serialLog.pn(`error: ${error}`);
+        serialLog?.pn(`error: ${error}`);
         rejectReadWaiter(error);
     });
 
     port.on('close', (error: any): void => {
-        serialLog.pn(`close: ${error}`);
+        serialLog?.pn(`close: ${error}`);
         rejectReadWaiter(error);
     });
 
     async function readByte(): Promise<number> {
         if (readBuffers.length === 0) {
-            //dataInLog.pn(`readByte: waiting for more data...`);
+            //dataInLog?.pn(`readByte: waiting for more data...`);
 
             await new Promise<void>((resolve, reject): void => {
                 readWaiter = { resolve, reject };
             });
 
-            //dataInLog.pn(`readByte: got some data`);
+            //dataInLog?.pn(`readByte: got some data`);
         }
 
-        //dataInLog.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
+        //dataInLog?.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
         const byte = readBuffers[0][readIndex++];
 
         if (readIndex === readBuffers[0].length) {
@@ -1414,7 +1416,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
         if (byte === 1) {
             return true;
         } else {
-            serialLog.pn(`Got confirmation byte: ${byte}  - returning to sync state`);
+            serialLog?.pn(`Got confirmation byte: ${byte}  - returning to sync state`);
             return false;
         }
     }
@@ -1470,7 +1472,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
 
         request_response_loop:
         for (; ;) {
-            serialLog.pn(`Waiting for request...`);
+            serialLog?.pn(`Waiting for request...`);
             const cmdByte = await readByte();
 
             let request: Request;
@@ -1479,7 +1481,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                 const variableSizeRequest = (cmdByte & 0x80) !== 0;
 
                 if (c === 0 || c === 0x7f) {
-                    serialLog.pn(`Got command ${utils.hex2(c)} - returning to sync state`);
+                    serialLog?.pn(`Got command ${utils.hex2(c)} - returning to sync state`);
                     // Special syntax.
                     break request_response_loop;
                 }
@@ -1489,7 +1491,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                     // 1-byte payload.
                     p = Buffer.alloc(1);
                 } else {
-                    serialLog.pn(`Waiting for payload size...`);
+                    serialLog?.pn(`Waiting for payload size...`);
                     // Variable-size payload.
                     const b0 = await readByte();
                     const b1 = await readByte();
@@ -1500,14 +1502,14 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                     p = Buffer.alloc(size);
                 }
 
-                serialLog.pn(`Got request 0x${utils.hex2(c)} (${utils.getRequestTypeName(c)}). Waiting for ${p.length} payload bytes...`);
+                serialLog?.pn(`Got request 0x${utils.hex2(c)} (${utils.getRequestTypeName(c)}). Waiting for ${p.length} payload bytes...`);
 
                 for (let i = 0; i < p.length; ++i) {
                     p[i] = await readByte();
 
                     const j = getNegativeOffsetLSB(i, p);
 
-                    //serialLog.pn(`    index ${i} (-ve LSB=0x${utils.hex2(j)}): value=${p[i]} (0x${utils.hex2(p[i])})`);
+                    //serialLog?.pn(`    index ${i} (-ve LSB=0x${utils.hex2(j)}): value=${p[i]} (0x${utils.hex2(p[i])})`);
 
                     if (j === 0) {
                         if (!await readConfirmationByte()) {
@@ -1523,13 +1525,13 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
 
             if (request.isFireAndForget()) {
                 // Do nothing.
-                serialLog.pn('(Fire-and-forget request - no response)');
+                serialLog?.pn('(Fire-and-forget request - no response)');
             } else {
-                serialLog.pn(`Sending response 0x${utils.hex2(response.c)} (${utils.getResponseTypeName(response.c)})`);
+                serialLog?.pn(`Sending response 0x${utils.hex2(response.c)} (${utils.getResponseTypeName(response.c)})`);
                 let responseData: Buffer;
 
                 // serialLog.withIndent('response: ', () => {
-                //     serialLog.pn(`c=0x${utils.hex2(response.c)}`);
+                //     serialLog?.pn(`c=0x${utils.hex2(response.c)}`);
                 //     serialLog.withIndent(`p=`, () => {
                 //         serialLog.dumpBuffer(response.p, 10);
                 //     });
@@ -1567,8 +1569,8 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                 // of tcflush, whatever it is (assuming there is one, and it's
                 // Windows-friendly).
                 {
-                    serialLog.pn(`Sending ${responseData.length} bytes response data...`);
-                    dataOutLog.withIndent('data out: ', () => {
+                    serialLog?.pn(`Sending ${responseData.length} bytes response data...`);
+                    dataOutLog?.withIndent('data out: ', () => {
                         dataOutLog.dumpBuffer(responseData);
                     });
 
@@ -1591,7 +1593,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                         readWaiter = {
                             reject: undefined,
                             resolve: (): void => {
-                                serialLog.pn(`Received data while sending - returning to sync state`);
+                                serialLog?.pn(`Received data while sending - returning to sync state`);
                                 callResolveResult(false);
                             },
                         };
@@ -1625,7 +1627,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
 
             await drainPort(port);
 
-            serialLog.pn(`Done one request/response.`);
+            serialLog?.pn(`Done one request/response.`);
         }
 
         // Sync loop.
@@ -1634,19 +1636,19 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
         let synced = false;
 
         do {
-            serialLog.pn(`Sync: flushing buffers...`);
+            serialLog?.pn(`Sync: flushing buffers...`);
 
             // https://stackoverflow.com/questions/13013387/clearing-the-serial-ports-buffer
             //await delayMS(500);
             await flushPort(port);
             //await delayMS(500);
 
-            serialLog.pn(`Sync: Waiting for ${beeblink.NUM_SERIAL_SYNC_ZEROS} sync 0x00 bytes...`);
+            serialLog?.pn(`Sync: Waiting for ${beeblink.NUM_SERIAL_SYNC_ZEROS} sync 0x00 bytes...`);
 
             let numZeros = 0;
             while (numZeros < beeblink.NUM_SERIAL_SYNC_ZEROS) {
                 const x = await readByte();
-                syncLog.pn(`read server step 1 sync byte: ${x} (${numZeros} 0x00 bytes read)`);
+                syncLog?.pn(`read server step 1 sync byte: ${x} (${numZeros} 0x00 bytes read)`);
                 if (x !== 0) {
                     numZeros = 0;
                 } else {
@@ -1654,9 +1656,9 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                 }
             }
 
-            serialLog.pn(`Received ${numZeros} 0 sync bytes.`);
+            serialLog?.pn(`Received ${numZeros} 0 sync bytes.`);
 
-            serialLog.pn(`sync: write server step 2 sync data`);
+            serialLog?.pn(`sync: write server step 2 sync data`);
             await writeSyncData();
 
             // eat remaining sync 0s.
@@ -1666,21 +1668,21 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
                 do {
                     x = await readByte();
                     ++n;
-                    syncLog.pn(`read server step 3 sync byte: ${x} (${n} bytes read)`);
+                    syncLog?.pn(`read server step 3 sync byte: ${x} (${n} bytes read)`);
 
                     // if (n > 5 * beeblink.NUM_SERIAL_SYNC_ZEROS) {
                     //     // a previous sync was probably interrupted, so send the sync data again.
-                    //     serialLog.pn(`taking too long! - sending server step 1 sync data again...`);
+                    //     serialLog?.pn(`taking too long! - sending server step 1 sync data again...`);
                     //     await writeSyncData();
                     //     n = 0;
                     // }
                 } while (x === 0);
 
                 if (x === 1) {
-                    serialLog.pn(`Got 0x01 byte - now synced`);
+                    serialLog?.pn(`Got 0x01 byte - now synced`);
                     synced = true;
                 } else {
-                    serialLog.pn(`No sync - bad sync value: ${x} (0x${utils.hex2(x)})`);
+                    serialLog?.pn(`No sync - bad sync value: ${x} (0x${utils.hex2(x)})`);
                 }
             }
         } while (!synced);
@@ -1693,7 +1695,7 @@ interface IPortState {
 }
 
 async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<Server>): Promise<void> {
-    const log = new utils.Log('SERIAL-DEVICES', process.stdout, options.serial_verbose !== null);
+    const log = utils.Log.create('SERIAL-DEVICES', process.stdout, options.serial_verbose !== null);
 
     const portStateByPortPath = new Map<string, IPortState>();
 
@@ -1703,7 +1705,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
 
             let value = portStateByPortPath.get(portPath);
             if (value === undefined) {
-                log.pn(`${portPath}: new serial port`);
+                log?.pn(`${portPath}: new serial port`);
                 value = {
                     server: await createServer('SERIAL', getRomPathsForSerial(options), true),
                     active: false,//not quite active just yet!
@@ -1740,7 +1742,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
 /////////////////////////////////////////////////////////////////////////
 
 async function main(options: ICommandLineOptions) {
-    const log = new utils.Log('', process.stderr, options.verbose);
+    const log = utils.Log.create('', process.stderr, options.verbose);
 
     if (!await handleCommandLineOptions(options, log)) {
         return;
@@ -1770,11 +1772,13 @@ async function main(options: ICommandLineOptions) {
         const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
 
         const bfsLogPrefix = options.fs_verbose ? 'FS' + connectionId : undefined;
-        const bfsLog = new utils.Log(bfsLogPrefix !== undefined ? bfsLogPrefix : '', process.stderr, bfsLogPrefix !== undefined);
-        bfsLog.colours = colours;
+        const bfsLog = utils.Log.create(bfsLogPrefix !== undefined ? bfsLogPrefix : '', process.stderr, bfsLogPrefix !== undefined);
+        if (bfsLog !== undefined) {
+            bfsLog.colours = colours;
+        }
 
         const serverLogPrefix = options.server_verbose ? additionalPrefix + 'SRV' + connectionId : undefined;
-        const serverLog = new utils.Log(serverLogPrefix !== undefined ? serverLogPrefix : '', process.stderr, serverLogPrefix !== undefined);
+        const serverLog = utils.Log.create(serverLogPrefix !== undefined ? serverLogPrefix : '', process.stderr, serverLogPrefix !== undefined);
 
         const bfs = new beebfs.FS(searchFolders, gaManipulator, bfsLog, options.locate_verbose);
 

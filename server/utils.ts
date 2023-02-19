@@ -254,6 +254,30 @@ export class BufferReader {
 /////////////////////////////////////////////////////////////////////////
 
 export class Log {
+    // In general, logs can't be enabled or disabled at runtime. So if the log
+    // isn't enabled, it's simply not created.
+    public static create(prefix: string, f: { write(buffer: Buffer | string, cb?: () => void): boolean } | undefined, enabled: boolean = true) {
+        if (enabled) {
+            return new Log(prefix, f, enabled);
+        } else {
+            return undefined;
+        }
+    }
+
+    public static isEnabled(log: Log | undefined): boolean {
+        if (log !== undefined) {
+            return log.enabled;
+        } else {
+            return false;
+        }
+    }
+
+    public static setEnabled(log: Log | undefined, enabled: boolean): void {
+        if (log !== undefined) {
+            log.enabled = enabled;
+        }
+    }
+
     public enabled: boolean;
     public f: { write(buffer: Buffer | string, cb?: () => void): boolean } | undefined;
     public colours: Chalk | undefined;

@@ -29,8 +29,6 @@ import * as errors from './errors';
 // The precise logic for this stuff eluded me, so I just threw together this
 // mishmash of nonsense that kind of does roughly the same thing as the DFS.
 
-//const gParseLog = new utils.Log('PARSE', process.stderr, true);
-
 export default class CommandLine {
     public readonly parts: string[];
     private part: string | undefined;

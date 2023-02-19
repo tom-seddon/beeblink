@@ -160,9 +160,7 @@ async function scanTubeHostFolder(folderPath: string, log: utils.Log | undefined
     //const indexRegExp = new RegExp('^([0-9]+)\\.', 'i');
     let maxIndex: undefined | number;
 
-    if (log !== undefined) {
-        log.pn(`scanTubeHostFolder: ${folderPath} - ${ents.length} entries`);
-    }
+    log?.pn(`scanTubeHostFolder: ${folderPath} - ${ents.length} entries`);
 
     for (const ent of ents) {
         if (ent.isDirectory()) {
@@ -395,9 +393,9 @@ class TubeHostState implements beebfs.IFSState {
     public folderPath: string;
     public driveFolders: (string | undefined)[];
 
-    private readonly log: utils.Log;// tslint:disable-line no-unused-variable
+    private readonly log: utils.Log | undefined;// tslint:disable-line no-unused-variable
 
-    public constructor(volume: beebfs.Volume, transientSettingsAny: any | undefined, persistentSettingsAny: any | undefined, log: utils.Log) {
+    public constructor(volume: beebfs.Volume, transientSettingsAny: any | undefined, persistentSettingsAny: any | undefined, log: utils.Log | undefined) {
         this.volume = volume;
         this.log = log;
 
@@ -520,10 +518,10 @@ class TubeHostState implements beebfs.IFSState {
         let drive: string;
         if (commandLine === undefined) {
             drive = this.drive;
-            this.log.pn(`THs getCAT: drive (from default)=\`\`${drive}''`);
+            this.log?.pn(`THs getCAT: drive (from default)=\`\`${drive}''`);
         } else if (TubeHostType.isValidDrive(commandLine)) {
             drive = commandLine;
-            this.log.pn(`THs getCAT: drive (from command line)=\`\`${drive}''`);
+            this.log?.pn(`THs getCAT: drive (from command line)=\`\`${drive}''`);
         } else {
             return undefined;
         }
@@ -534,7 +532,7 @@ class TubeHostState implements beebfs.IFSState {
         }
 
         const fsp = new beebfs.FSP(this.volume, this, new TubeHostFSP(driveFolder, drive, undefined, undefined));
-        this.log.pn(`THs getCAT: fsp=${fsp}`);
+        this.log?.pn(`THs getCAT: fsp=${fsp}`);
         return await this.volume.type.getCAT(fsp, this, this.log);
     }
 
@@ -882,7 +880,7 @@ class TubeHostType implements beebfs.IFSType {
 
     public readonly name = 'TubeHost';
 
-    public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log): Promise<beebfs.IFSState> {
+    public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log | undefined): Promise<beebfs.IFSState> {
         const state = new TubeHostState(volume, transientSettings, persistentSettings, log);
 
         await state.initialise();
@@ -1057,9 +1055,7 @@ class TubeHostType implements beebfs.IFSType {
 
                 const file = new beebfs.File(info.hostPath, new beebfs.FQN(volume, tubeHostFQN), info.load, info.exec, info.attr, false);
 
-                if (log !== undefined) {
-                    log.pn(`${file} `);
-                }
+                log?.pn(`${file} `);
 
                 beebFiles.push(file);
             }
@@ -1115,14 +1111,12 @@ class TubeHostType implements beebfs.IFSType {
 
         }
 
-        if (log !== undefined) {
-            log.out();
-        }
+        log?.out();
 
         return beebFiles;
     }
 
-    public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined, log: utils.Log): Promise<string> {
+    public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined, log: utils.Log | undefined): Promise<string> {
         const tubeHostFSP = mustBeTubeHostFSP(fsp.fsFSP);
 
         if (tubeHostFSP.drive === undefined || tubeHostFSP.name !== undefined) {

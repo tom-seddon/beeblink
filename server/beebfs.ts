@@ -449,7 +449,7 @@ export interface IFSType {
     readonly name: string;
 
     // create new state for this type of FS.
-    createState(volume: Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log): Promise<IFSState>;
+    createState(volume: Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log | undefined): Promise<IFSState>;
 
     // whether this FS supports writing.
     canWrite(): boolean;
@@ -475,7 +475,7 @@ export interface IFSType {
     getHostPath(fqn: IFSFQN): string;
 
     // get *CAT text for FSP.
-    getCAT(fsp: FSP, state: IFSState | undefined, log: utils.Log): Promise<string>;
+    getCAT(fsp: FSP, state: IFSState | undefined, log: utils.Log | undefined): Promise<string>;
 
     // delete the given file.
     deleteFile(file: File): Promise<void>;
@@ -537,10 +537,8 @@ export interface IFSFQN {
 //
 // If throwIfNotFound, wil throw FileNotFound if the file isn't found -
 // otherwise, return undefined.
-export async function getBeebFile(fqn: FQN, wildcardsOK: boolean, throwIfNotFound: boolean, log?: utils.Log): Promise<File | undefined> {
-    if (log !== undefined) {
-        log.pn(`getBeebFile: ${fqn}; wildCardsOK=${wildcardsOK} throwIfNotFound=${throwIfNotFound}`);
-    }
+export async function getBeebFile(fqn: FQN, wildcardsOK: boolean, throwIfNotFound: boolean, log?: utils.Log | undefined): Promise<File | undefined> {
+    log?.pn(`getBeebFile: ${fqn}; wildCardsOK=${wildcardsOK} throwIfNotFound=${throwIfNotFound}`);
 
     if (!wildcardsOK) {
         if (fqn.fsFQN.isWildcard()) {
@@ -549,9 +547,7 @@ export async function getBeebFile(fqn: FQN, wildcardsOK: boolean, throwIfNotFoun
     }
 
     const files = await fqn.volume.type.findBeebFilesMatching(fqn.volume, fqn.fsFQN, false, log);
-    if (log !== undefined) {
-        log.pn(`found ${files.length} file(s)`);
-    }
+    log?.pn(`found ${files.length} file(s)`);
 
     if (files.length === 0) {
         if (throwIfNotFound) {
@@ -706,18 +702,14 @@ export class FS {
         }
 
         async function findBeebLinkVolumesMatchingRecursive(folderPath: string, indent: string): Promise<boolean> {
-            if (log !== undefined) {
-                log.pn(indent + 'Looking in: ' + folderPath + '...');
-            }
+            log?.pn(indent + 'Looking in: ' + folderPath + '...');
 
             let names: string[];
             try {
                 names = await utils.fsReaddir(folderPath);
             } catch (error) {
                 process.stderr.write('WARNING: failed to read files in folder: ' + folderPath + '\n');
-                if (log !== undefined) {
-                    log.pn('Error was: ' + error);
-                }
+                log?.pn('Error was: ' + error);
                 return false;
             }
 
@@ -835,7 +827,7 @@ export class FS {
     private firstFileHandle: number;
     private openFiles: (OpenFile | undefined)[];
 
-    private log: utils.Log;
+    private log: utils.Log | undefined;
 
     private state: IFSState | undefined;
     private stateCommands: undefined | server.Command[];
@@ -848,7 +840,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public constructor(searchFolders: IFSSearchFolders, gaManipulator: gitattributes.Manipulator | undefined, log: utils.Log, locateVerbose: boolean) {
+    public constructor(searchFolders: IFSSearchFolders, gaManipulator: gitattributes.Manipulator | undefined, log: utils.Log | undefined, locateVerbose: boolean) {
         this.log = log;
 
         this.searchFolders = searchFolders;
@@ -1076,13 +1068,13 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async parseFQN(fileString: string): Promise<FQN> {
-        this.log.pn('parseFQN: ``' + fileString + '\'\'');
+        this.log?.pn('parseFQN: ``' + fileString + '\'\'');
 
         const fsp = await this.parseFileString(fileString);
-        this.log.pn('    fsp: ' + fsp);
+        this.log?.pn('    fsp: ' + fsp);
 
         const fqn = new FQN(fsp.volume, fsp.volume.type.createFQN(fsp.fsFSP, this.state));
-        this.log.pn(`    fqn: ${fqn}`);
+        this.log?.pn(`    fqn: ${fqn}`);
 
         return fqn;
     }
@@ -1132,19 +1124,19 @@ export class FS {
         const foundFiles: File[] = [];
 
         if (this.locateVerbose) {
-            this.log.pn(`starLocate: arg=\`\`${arg}''`);
+            this.log?.pn(`starLocate: arg=\`\`${arg}''`);
         }
 
         for (let volumeIdx = 0; volumeIdx < volumes.length; ++volumeIdx) {
             const volume = volumes[volumeIdx];
 
             if (this.locateVerbose) {
-                this.log.pn(`Volume ${1 + volumeIdx}/${volumes.length}: ${volume.name}: ${volume.path}`);
+                this.log?.pn(`Volume ${1 + volumeIdx}/${volumes.length}: ${volume.name}: ${volume.path}`);
             }
 
             try {
                 if (this.locateVerbose) {
-                    this.log.in('  ');
+                    this.log?.in('  ');
                 }
 
                 let fsp: IFSFSP;
@@ -1163,7 +1155,7 @@ export class FS {
                 }
             } finally {
                 if (this.locateVerbose) {
-                    this.log.out();
+                    this.log?.out();
                 }
             }
         }
@@ -1358,7 +1350,7 @@ export class FS {
             return errors.badName();
         }
 
-        this.log.pn('OSFIND: mode=$' + utils.hex2(mode) + ' nameString=``' + nameString + '\'\'');
+        this.log?.pn('OSFIND: mode=$' + utils.hex2(mode) + ' nameString=``' + nameString + '\'\'');
 
         const index = this.openFiles.indexOf(undefined);
         if (index < 0) {
@@ -1381,7 +1373,7 @@ export class FS {
                     if (otherOpenFile !== undefined) {
                         if (otherOpenFile.hostPath === file.hostPath) {
                             if (otherOpenFile.write || write) {
-                                this.log.pn(`        already open: handle=0x${this.firstFileHandle + otherIndex}`);
+                                this.log?.pn(`        already open: handle=0x${this.firstFileHandle + otherIndex}`);
                                 return errors.open();
                             }
                         }
@@ -1389,8 +1381,8 @@ export class FS {
                 }
             }
 
-            this.log.pn('        hostPath=``' + file.hostPath + '\'\'');
-            this.log.pn('        text=' + file.text);
+            this.log?.pn('        hostPath=``' + file.hostPath + '\'\'');
+            this.log?.pn('        text=' + file.text);
 
             // File exists.
             hostPath = file.hostPath;
@@ -1445,7 +1437,7 @@ export class FS {
 
         const openFile = new OpenFile(this.firstFileHandle + index, hostPath, fqn, read, write, contents);
         this.openFiles[index] = openFile;
-        this.log.pn(`        handle=0x${openFile.handle}`);
+        this.log?.pn(`        handle=0x${openFile.handle}`);
         return openFile.handle;
     }
 
@@ -1596,8 +1588,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async rename(oldFQN: FQN, newFQN: FQN): Promise<void> {
-        this.log.pn('oldFQN: ' + oldFQN);
-        this.log.pn('newFQN: ' + newFQN);
+        this.log?.pn('oldFQN: ' + oldFQN);
+        this.log?.pn('newFQN: ' + newFQN);
 
         if (!oldFQN.volume.equals(newFQN.volume)) {
             return errors.badDrive();
@@ -1644,17 +1636,17 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async setFileHandleRange(firstFileHandle: number, numFileHandles: number): Promise<void> {
-        this.log.pn(`Set file handle range: first handle = 0x${utils.hex2(firstFileHandle)}, num handles = ${numFileHandles}`);
+        this.log?.pn(`Set file handle range: first handle = 0x${utils.hex2(firstFileHandle)}, num handles = ${numFileHandles}`);
 
         if (firstFileHandle <= 0 || numFileHandles < 1 || firstFileHandle + numFileHandles > 256) {
-            this.log.pn(`Ignoring invalid settings.`);
+            this.log?.pn(`Ignoring invalid settings.`);
         } else {
             if (firstFileHandle !== this.firstFileHandle || numFileHandles !== this.openFiles.length) {
-                this.log.pn(`Settings have changed - closing any open files.`);
+                this.log?.pn(`Settings have changed - closing any open files.`);
                 try {
                     await this.closeAllFiles();
                 } catch (error) {
-                    this.log.pn(`Ignoring closeAllFiles error: ${error}`);
+                    this.log?.pn(`Ignoring closeAllFiles error: ${error}`);
                 }
 
                 this.firstFileHandle = firstFileHandle;

@@ -214,9 +214,9 @@ class DFSState implements beebfs.IFSState {
     public libDrive: string;
     public libDir: string;
 
-    private readonly log: utils.Log;// tslint:disable-line no-unused-variable
+    private readonly log: utils.Log | undefined;// tslint:disable-line no-unused-variable
 
-    public constructor(volume: beebfs.Volume, transientSettingsAny: any | undefined, log: utils.Log) {
+    public constructor(volume: beebfs.Volume, transientSettingsAny: any | undefined, log: utils.Log | undefined) {
         this.volume = volume;
         this.log = log;
 
@@ -426,7 +426,7 @@ class DFSType implements beebfs.IFSType {
 
     public readonly name = 'BeebLink/DFS';
 
-    public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log): Promise<beebfs.IFSState> {
+    public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log | undefined): Promise<beebfs.IFSState> {
         return new DFSState(volume, transientSettings, log);
     }
 
@@ -610,22 +610,18 @@ class DFSType implements beebfs.IFSType {
 
                 const file = new beebfs.File(beebFileInfo.hostPath, new beebfs.FQN(volume, dfsFQN), beebFileInfo.load, beebFileInfo.exec, beebFileInfo.attr | beebfs.DEFAULT_ATTR, false);
 
-                if (log !== undefined) {
-                    log.pn(`${file}`);
-                }
+                log?.pn(`${file}`);
 
                 beebFiles.push(file);
             }
         }
 
-        if (log !== undefined) {
-            log.out();
-        }
+        log?.out();
 
         return beebFiles;
     }
 
-    public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined, log: utils.Log): Promise<string> {
+    public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined, log: utils.Log | undefined): Promise<string> {
         const dfsFSP = mustBeDFSFSP(fsp.fsFSP);
 
         let dfsState: DFSState | undefined;

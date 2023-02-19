@@ -117,9 +117,9 @@ function mustBePCFSP(fsFSP: beebfs.IFSFSP): PCFSP {
 class PCState implements beebfs.IFSState {
     public readonly volume: beebfs.Volume;
 
-    private readonly log: utils.Log;// tslint:disable-line no-unused-variable
+    private readonly log: utils.Log | undefined;// tslint:disable-line no-unused-variable
 
-    public constructor(volume: beebfs.Volume, log: utils.Log) {
+    public constructor(volume: beebfs.Volume, log: utils.Log | undefined) {
         this.volume = volume;
         this.log = log;
     }
@@ -224,7 +224,7 @@ class PCState implements beebfs.IFSState {
 class PCType implements beebfs.IFSType {
     public readonly name = 'PC';
 
-    public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log): Promise<beebfs.IFSState> {
+    public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log | undefined): Promise<beebfs.IFSState> {
         return new PCState(volume, log);
     }
 
@@ -360,7 +360,7 @@ class PCType implements beebfs.IFSType {
         return beebFiles;
     }
 
-    public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined, log: utils.Log): Promise<string> {
+    public async getCAT(fsp: beebfs.FSP, state: beebfs.IFSState | undefined, log: utils.Log | undefined): Promise<string> {
         let text = '';
 
         text += `Volume: ${fsp.volume.path}${utils.BNL}${utils.BNL}`;

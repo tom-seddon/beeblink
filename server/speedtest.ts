@@ -33,7 +33,7 @@ export class SpeedTest {
         this.lastHRTime = process.hrtime();
     }
 
-    public gotTestData(parasite: boolean, data: Buffer, log: utils.Log): Buffer {
+    public gotTestData(parasite: boolean, data: Buffer, log: utils.Log | undefined): Buffer {
         const stats = parasite ? this.parasiteStats : this.hostStats;
 
         if (stats.originalData === undefined) {
@@ -42,7 +42,7 @@ export class SpeedTest {
 
         if (stats.expectedData !== undefined) {
             if (data.length !== stats.expectedData.length) {
-                log.pn('** data length mismatch');
+                log?.pn('** data length mismatch');
             } else {
                 let n = 0;
                 let f = -1;
@@ -55,7 +55,7 @@ export class SpeedTest {
                     }
                 }
 
-                log.pn('** f=' + f + ', n=' + n);
+                log?.pn('** f=' + f + ', n=' + n);
             }
 
             if (!data.equals(stats.expectedData)) {

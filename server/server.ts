@@ -200,7 +200,7 @@ export class Server {
     private stringBufferIdx: number;
     private commonCommands: Command[];
     private handlers: (Handler | undefined)[];
-    private log: utils.Log;
+    private log: utils.Log | undefined;
     private volumeBrowser: volumebrowser.Browser | undefined;
     private speedTest: speedtest.SpeedTest | undefined;
     private dumpPackets: boolean;
@@ -208,7 +208,7 @@ export class Server {
     private linkSupportsFireAndForgetRequests: boolean;
     private lastOSBPUTHandle: number | undefined;
 
-    public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, log: utils.Log, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
+    public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, log: utils.Log | undefined, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
         this.romPathByLinkSubtype = romPathByLinkSubtype;
         this.linkSubtype = undefined;
         this.bfs = bfs;
@@ -309,15 +309,15 @@ export class Server {
                 typeName = 'Response';
             }
 
-            this.log.withIndent(`${typeName}: `, () => {
-                this.log.p(`Type: ${packet.c} (0x${utils.hex2(packet.c)})`);
+            this.log?.withIndent(`${typeName}: `, () => {
+                this.log!.p(`Type: ${packet.c} (0x${utils.hex2(packet.c)})`);
                 if (desc !== undefined) {
-                    this.log.p(` (${desc})`);
+                    this.log!.p(` (${desc})`);
                 }
-                this.log.p(` (${packet.p.length} (0x${utils.hex8(packet.p.length)}) byte(s)`);
-                this.log.pn('');
+                this.log!.p(` (${packet.p.length} (0x${utils.hex8(packet.p.length)}) byte(s)`);
+                this.log!.pn('');
 
-                this.log.dumpBuffer(packet.p, fullDump ? undefined : 10);
+                this.log!.dumpBuffer(packet.p, fullDump ? undefined : 10);
             });
         }
     }
@@ -338,27 +338,27 @@ export class Server {
             if (handler === undefined) {
                 return this.internalError('Unsupported request: &' + utils.hex2(request.c));
             } else {
-                const logWasEnabled = this.log.enabled;
+                const logWasEnabled = utils.Log.isEnabled(this.log);
                 if (handler.shouldLog()) {
-                    this.log.in(handler.name + ': ');
+                    this.log?.in(handler.name + ': ');
                 } else {
-                    this.log.enabled = false;
+                    utils.Log.setEnabled(this.log, false);
                 }
 
                 try {
                     return this.getResponseForResult(await handler.call(request.p));
                 } finally {
                     if (handler.shouldLog()) {
-                        this.log.out();
-                        this.log.ensureBOL();
+                        this.log?.out();
+                        this.log?.ensureBOL();
                     } else {
-                        this.log.enabled = logWasEnabled;
+                        utils.Log.setEnabled(this.log, logWasEnabled);
                     }
                 }
             }
         } catch (error) {
             if (error instanceof errors.BeebError) {
-                this.log.pn('Error response: ' + error.toString());
+                this.log?.pn('Error response: ' + error.toString());
 
                 const builder = new utils.BufferBuilder();
 
@@ -386,7 +386,7 @@ export class Server {
             } else {
                 try {
                     const rom = await utils.fsReadFile(romPath);
-                    this.log.pn('ROM is ' + rom.length + ' bytes');
+                    this.log?.pn('ROM is ' + rom.length + ' bytes');
                     return newResponse(beeblink.RESPONSE_DATA, rom);
                 } catch (error) {
                     return errors.nodeError(error);
@@ -396,7 +396,7 @@ export class Server {
     }
 
     private async handleReset(handler: Handler, p: Buffer): Promise<void> {
-        this.log.pn('reset type=' + p[0]);
+        this.log?.pn('reset type=' + p[0]);
         if (p[0] === 1 || p[0] === 2) {
             // Power-on reset or CTRL+BREAK
             try {
@@ -412,15 +412,15 @@ export class Server {
 
         if (p.length > 1) {
             this.linkSubtype = p[1];
-            this.log.pn(`link subtype=${this.linkSubtype}`);
+            this.log?.pn(`link subtype=${this.linkSubtype}`);
         } else {
             this.linkSubtype = 0;
-            this.log.pn(`link subtype=${this.linkSubtype} (inferred)`);
+            this.log?.pn(`link subtype=${this.linkSubtype} (inferred)`);
         }
     }
 
     private async handleEchoData(handler: Handler, p: Buffer): Promise<Response> {
-        this.log.pn('Sending ' + p.length + ' byte(s) back...');
+        this.log?.pn('Sending ' + p.length + ' byte(s) back...');
         return newResponse(beeblink.RESPONSE_DATA, p);
     }
 
@@ -428,10 +428,10 @@ export class Server {
         this.payloadMustBe(handler, p, 1);
 
         if (this.stringBuffer === undefined) {
-            this.log.pn('string not present.');
+            this.log?.pn('string not present.');
             return newResponse(beeblink.RESPONSE_NO, 0);
         } else if (this.stringBufferIdx >= this.stringBuffer.length) {
-            this.log.pn('string exhausted.');
+            this.log?.pn('string exhausted.');
             return newResponse(beeblink.RESPONSE_NO, 0);
         } else {
             let n = Math.min(this.stringBuffer.length - this.stringBufferIdx, p[0]);
@@ -439,7 +439,7 @@ export class Server {
                 n = 1;
             }
 
-            this.log.pn('sending ' + n + ' byte(s) out of ' + p[0] + ' requested');
+            this.log?.pn('sending ' + n + ' byte(s) out of ' + p[0] + ' requested');
 
             // still can't figure out how the Buffer API works from TypeScript.
             const result = Buffer.alloc(n);
@@ -449,7 +449,7 @@ export class Server {
 
             this.stringBufferIdx += n;
 
-            this.log.pn('result: ' + JSON.stringify(result.toString('binary')));
+            this.log?.pn('result: ' + JSON.stringify(result.toString('binary')));
 
             return newResponse(beeblink.RESPONSE_DATA, result);
         }
@@ -525,9 +525,9 @@ export class Server {
             return errors.badCommand();
         }
 
-        this.log.pn(`${commandLine.parts.length} command line parts:`);
+        this.log?.pn(`${commandLine.parts.length} command line parts:`);
         for (let i = 0; i < commandLine.parts.length; ++i) {
-            this.log.pn(`    ${i}. "${commandLine.parts[i]}"`);
+            this.log?.pn(`    ${i}. "${commandLine.parts[i]}"`);
         }
 
         let matchedCommand: Command | undefined;
@@ -549,7 +549,7 @@ export class Server {
         }
 
         if (matchedCommand !== undefined) {
-            this.log.pn('Matched command: ' + matchedCommand.getSyntaxString());
+            this.log?.pn('Matched command: ' + matchedCommand.getSyntaxString());
             try {
                 return this.getResponseForResult(await matchedCommand.call(commandLine));
             } catch (error) {
@@ -629,19 +629,19 @@ export class Server {
 
         p.copy(data, 0, i);
 
-        this.log.pn('Name: ``' + nameString + '\'\'');
-        this.log.pn('Input: A=0x' + utils.hex2(a) + ', ' + data.length + ' data byte(s)');
+        this.log?.pn('Name: ``' + nameString + '\'\'');
+        this.log?.pn('Input: A=0x' + utils.hex2(a) + ', ' + data.length + ' data byte(s)');
 
         const osfileResult = await this.bfs.OSFILE(a, nameString, block, data);
 
-        this.log.p('Output: A=0x' + utils.hex2(osfileResult.fileType));
+        this.log?.p('Output: A=0x' + utils.hex2(osfileResult.fileType));
         if (osfileResult.block !== undefined) {
-            this.log.p(', ' + this.getOSFILEBlockString(osfileResult.block));
+            this.log?.p(', ' + this.getOSFILEBlockString(osfileResult.block));
         }
         if (osfileResult.data !== undefined) {
-            this.log.p(', ' + osfileResult.data.length + ' data byte(s), load address 0x' + utils.hex8(osfileResult.dataLoad!));
+            this.log?.p(', ' + osfileResult.data.length + ' data byte(s), load address 0x' + utils.hex8(osfileResult.dataLoad!));
         }
-        this.log.p('\n');
+        this.log?.p('\n');
 
         const builder = new utils.BufferBuilder();
 
@@ -664,11 +664,11 @@ export class Server {
 
         const nameString = p.toString('binary', 1);
 
-        this.log.pn('Input: mode=0x' + utils.hex2(mode) + ', name=``' + nameString + '\'\'');
+        this.log?.pn('Input: mode=0x' + utils.hex2(mode) + ', name=``' + nameString + '\'\'');
 
         const handle = await this.bfs.OSFINDOpen(mode, nameString);
 
-        this.log.pn('Output: handle=' + utils.hexdec(handle));
+        this.log?.pn('Output: handle=' + utils.hexdec(handle));
 
         return newResponse(beeblink.RESPONSE_OSFIND, handle);
     }
@@ -678,7 +678,7 @@ export class Server {
 
         const handle = p[0];
 
-        this.log.pn('Input: handle=' + utils.hexdec(handle));
+        this.log?.pn('Input: handle=' + utils.hexdec(handle));
 
         await this.bfs.OSFINDClose(handle);
 
@@ -692,11 +692,11 @@ export class Server {
         const handle = p[1];
         const value = p.readUInt32LE(2);
 
-        this.log.pn('Input: A=0x' + utils.hex2(a) + ', handle=' + utils.hexdec(handle) + ', value=0x' + utils.hex8(value));
+        this.log?.pn('Input: A=0x' + utils.hex2(a) + ', handle=' + utils.hexdec(handle) + ', value=0x' + utils.hex8(value));
 
         const newValue = await this.bfs.OSARGS(a, handle, value);
 
-        this.log.pn('Output: value=0x' + utils.hex8(newValue));
+        this.log?.pn('Output: value=0x' + utils.hex8(newValue));
 
         const responseData = Buffer.alloc(4);
         responseData.writeUInt32LE(newValue, 0);
@@ -721,7 +721,7 @@ export class Server {
 
         const byte = this.bfs.OSBGET(handle);
 
-        this.log.p('Input: handle=' + utils.hexdec(handle) + '; Output: ' + (byte === undefined ? 'EOF' : 'value=' + utils.hexdecch(byte)));
+        this.log?.p('Input: handle=' + utils.hexdec(handle) + '; Output: ' + (byte === undefined ? 'EOF' : 'value=' + utils.hexdecch(byte)));
 
         if (byte === undefined) {
             // 254 is what the Master 128 DFS returns, and who am I to argue?
@@ -748,7 +748,7 @@ export class Server {
             this.internalError('Bad OSBPUT payload');
         }
 
-        this.log.pn('Input: handle=' + utils.hexdec(handle) + ', value=' + utils.hexdecch(byte));
+        this.log?.pn('Input: handle=' + utils.hexdec(handle) + ', value=' + utils.hexdecch(byte));
         this.bfs.OSBPUT(handle, byte);
         this.lastOSBPUTHandle = handle;
     }
@@ -760,7 +760,7 @@ export class Server {
         const byte = p[1];
 
         //
-        this.log.pn('Input: handle=' + utils.hexdec(handle) + ', value=' + utils.hexdecch(byte));
+        this.log?.pn('Input: handle=' + utils.hexdec(handle) + ', value=' + utils.hexdecch(byte));
 
         const newPtr = this.bfs.OSBPUT(handle, byte);
         this.lastOSBPUTHandle = handle;
@@ -768,7 +768,7 @@ export class Server {
         if (this.linkSupportsFireAndForgetRequests) {
             const numOSBPUTsLeft = Math.min(beebfs.MAX_FILE_SIZE - newPtr, 255);
 
-            this.log.pn(`Output: FNF OSBPUT counter=${numOSBPUTsLeft}`);
+            this.log?.pn(`Output: FNF OSBPUT counter=${numOSBPUTsLeft}`);
 
             return newResponse(beeblink.RESPONSE_OSBPUT, numOSBPUTsLeft);
         } else {
@@ -825,22 +825,22 @@ export class Server {
         p.copy(data, 0, i);
         i += p.length;
 
-        this.log.pn('Input: A=0x' + utils.hex2(a) + ', handle=' + utils.hexdec(handle) + ', addr=0x' + utils.hex8(addr) + ', size=' + utils.hexdec(numBytes) + ', PTR#=' + utils.hexdec(newPtr) + ', ' + data.length + ' data bytes');
+        this.log?.pn('Input: A=0x' + utils.hex2(a) + ', handle=' + utils.hexdec(handle) + ', addr=0x' + utils.hex8(addr) + ', size=' + utils.hexdec(numBytes) + ', PTR#=' + utils.hexdec(newPtr) + ', ' + data.length + ' data bytes');
 
         const result = await this.bfs.OSGBPB(a, handle, numBytes, newPtr, data);
 
-        this.log.withIndent('Output: ', () => {
-            this.log.p('Output: C=' + result.c + ', addr=0x' + utils.hex8(addr) + ', bytes left=' + result.numBytesLeft + ', PTR#=' + result.ptr);
+        this.log?.withIndent('Output: ', () => {
+            this.log!.p('Output: C=' + result.c + ', addr=0x' + utils.hex8(addr) + ', bytes left=' + result.numBytesLeft + ', PTR#=' + result.ptr);
             if (result.data !== undefined) {
-                this.log.p(', ' + result.data.length + ' data bytes');
+                this.log!.p(', ' + result.data.length + ' data bytes');
             }
-            this.log.p('\n');
+            this.log!.p('\n');
 
             if (a >= 1 && a <= 4) {
                 // Probably not actually all that interesting.
             } else {
                 if (result.data !== undefined) {
-                    this.log.dumpBuffer(result.data);
+                    this.log!.dumpBuffer(result.data);
                 }
             }
         });
@@ -875,7 +875,7 @@ export class Server {
         const x = p[0];
         const y = p[1];
 
-        this.log.pn('*OPT ' + x + ',' + y);
+        this.log?.pn('*OPT ' + x + ',' + y);
 
         await this.bfs.OPT(x, y);
     }
@@ -884,7 +884,7 @@ export class Server {
         // const option = await beebfs.BeebFS.loadBootOption(this.bfs.getVolume(), this.bfs.getDrive());
         const option = await this.bfs.getBootOption();
 
-        this.log.pn(`Boot option: ${option}`);
+        this.log?.pn(`Boot option: ${option}`);
 
         return newResponse(beeblink.RESPONSE_BOOT_OPTION, option);
     }
@@ -893,7 +893,7 @@ export class Server {
         this.payloadMustBeAtLeast(handler, p, 1);
 
         if (p[0] === beeblink.REQUEST_VOLUME_BROWSER_RESET) {
-            this.log.pn('REQUEST_VOLUME_BROWSER_RESET');
+            this.log?.pn('REQUEST_VOLUME_BROWSER_RESET');
 
             this.payloadMustBe(handler, p, 5);
 
@@ -908,17 +908,17 @@ export class Server {
 
             const text = this.volumeBrowser.getInitialString();
 
-            //this.log.pn('Browser initial string: ' + this.getBASICStringExpr(text));
+            //this.log?.pn('Browser initial string: ' + this.getBASICStringExpr(text));
 
             return text;
         } else if (p[0] === beeblink.REQUEST_VOLUME_BROWSER_KEYPRESS && this.volumeBrowser !== undefined) {
-            this.log.pn('REQUEST_VOLUME_BROWSER_KEYPRESS');
+            this.log?.pn('REQUEST_VOLUME_BROWSER_KEYPRESS');
 
             this.payloadMustBe(handler, p, 3);
 
             const result = this.volumeBrowser.handleKey(p[2], p[1] !== 0);
 
-            //this.log.pn('done=' + result.done + ', text=' + (result.text === undefined ? 'N/A' : this.getBASICStringExpr(result.text)));
+            //this.log?.pn('done=' + result.done + ', text=' + (result.text === undefined ? 'N/A' : this.getBASICStringExpr(result.text)));
 
             if (result.done) {
                 let responseType = beeblink.RESPONSE_VOLUME_BROWSER_CANCELED;
@@ -964,14 +964,14 @@ export class Server {
         this.payloadMustBeAtLeast(handler, p, 1);
 
         if (p[0] === beeblink.REQUEST_SPEED_TEST_RESET) {
-            this.log.pn('REQUEST_SPEED_TEST_RESET');
+            this.log?.pn('REQUEST_SPEED_TEST_RESET');
 
             this.speedTest = new speedtest.SpeedTest();
 
             return newResponse(beeblink.RESPONSE_YES);
         } else if (p[0] === beeblink.REQUEST_SPEED_TEST_TEST && this.speedTest !== undefined) {
-            this.log.pn('REQUEST_SPEED_TEST_TEST');
-            this.log.pn('payload size = 0x' + p.length.toString(16));
+            this.log?.pn('REQUEST_SPEED_TEST_TEST');
+            this.log?.pn('payload size = 0x' + p.length.toString(16));
 
             this.payloadMustBeAtLeast(handler, p, 2);
 
@@ -984,7 +984,7 @@ export class Server {
 
             return newResponse(beeblink.RESPONSE_DATA, responseData);
         } else if (p[0] === beeblink.REQUEST_SPEED_TEST_STATS && this.speedTest !== undefined) {
-            this.log.pn('REQUEST_SPEED_TEST_STATS');
+            this.log?.pn('REQUEST_SPEED_TEST_STATS');
 
             this.payloadMustBeAtLeast(handler, p, 6);
 
@@ -995,11 +995,11 @@ export class Server {
 
             return newResponse(beeblink.RESPONSE_YES);
         } else if (p[0] === beeblink.REQUEST_SPEED_TEST_DONE && this.speedTest !== undefined) {
-            this.log.pn('REQUEST_SPEED_TEST_DONE');
+            this.log?.pn('REQUEST_SPEED_TEST_DONE');
 
             const s = this.speedTest.getString();
 
-            this.log.withNoIndent(() => this.log.pn(s));
+            this.log?.withNoIndent(() => this.log?.pn(s));
 
             return s;
         } else {
@@ -1197,7 +1197,7 @@ export class Server {
     private payloadMustBeAtLeast(handler: Handler, p: Buffer, minSize: number) {
         if (p.length < minSize) {
             const message = 'Bad ' + handler.name + ' request';
-            this.log.pn('Payload length = ' + p.length + ', but must be at least ' + minSize + ': ' + message);
+            this.log?.pn('Payload length = ' + p.length + ', but must be at least ' + minSize + ': ' + message);
             this.internalError(message);
         }
     }
@@ -1205,7 +1205,7 @@ export class Server {
     private payloadMustBe(handler: Handler, p: Buffer, size: number) {
         if (p.length !== size) {
             const message = 'Bad ' + handler.name + ' request';
-            this.log.pn('Payload length = ' + p.length + ', but must be ' + size + ': ' + message);
+            this.log?.pn('Payload length = ' + p.length + ', but must be ' + size + ': ' + message);
             this.internalError(message);
         }
     }
@@ -1263,20 +1263,20 @@ export class Server {
     private initCommandLine(commandLineString: string): CommandLine {
         let commandLine: CommandLine;
 
-        this.log.pn('command line=' + JSON.stringify(commandLineString));
+        this.log?.pn('command line=' + JSON.stringify(commandLineString));
         try {
             commandLine = new CommandLine(commandLineString);
         } catch (error) {
             if (error instanceof errors.BeebError) {
-                this.log.pn('parse error: ' + error.toString());
+                this.log?.pn('parse error: ' + error.toString());
             }
 
             throw error;
         }
 
-        this.log.pn(commandLine.parts.length + ' part(s), Y=' + utils.hexdec(commandLine.getY()));
+        this.log?.pn(commandLine.parts.length + ' part(s), Y=' + utils.hexdec(commandLine.getY()));
         for (let i = 0; i < commandLine.parts.length; ++i) {
-            this.log.pn('[' + i + ']: ' + JSON.stringify(commandLine.parts[i]));
+            this.log?.pn('[' + i + ']: ' + JSON.stringify(commandLine.parts[i]));
         }
 
         return commandLine;
@@ -1287,7 +1287,7 @@ export class Server {
             return errors.badName();
         }
 
-        this.log.pn('*RUN: ``' + commandLine.parts[0] + '\'\' (try lib dir: ' + tryLibDir + ')');
+        this.log?.pn('*RUN: ``' + commandLine.parts[0] + '\'\' (try lib dir: ' + tryLibDir + ')');
 
         const fsp = await this.bfs.parseFileString(commandLine.parts[0]);
         const file = await this.bfs.getFileForRUN(fsp, tryLibDir);
@@ -1725,7 +1725,7 @@ export class Server {
 
         const rom = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
 
-        this.log.pn(`Addr: 0x${utils.hex4(addr)}, bank: 0x${utils.hex2(addr)}, size: 0x${utils.hex4(rom.length)}`);
+        this.log?.pn(`Addr: 0x${utils.hex4(addr)}, bank: 0x${utils.hex2(addr)}, size: 0x${utils.hex4(rom.length)}`);
 
         if (addr < 0x8000 || addr + rom.length > 0xc000) {
             return errors.wont();
@@ -1800,7 +1800,7 @@ export class Server {
     }
 
     private getDiskImageFlowDetailsFromRequestPayload(p: Buffer): IDiskImageFlowDetails {
-        this.log.pn(`getDiskImageFlowDetailsFromRequestPayload`);
+        this.log?.pn(`getDiskImageFlowDetailsFromRequestPayload`);
 
         const reader = new utils.BufferReader(p);
 
@@ -1826,14 +1826,14 @@ export class Server {
             return errors.generic('Unknown disk type');
         }
 
-        this.log.pn(`Got disk image flow details from payload: `);
-        this.log.withIndent('    ', () => {
-            this.log.pn(`Buffer address: 0x${utils.hex8(bufferAddress)} `);
-            this.log.pn(`Buffer size: ${bufferSize} (0x${utils.hex8(bufferSize)})`);
-            this.log.pn(`Drive: "${driveStr}"`);
-            this.log.pn(`Type: ${type} ("${typeStr}")`);
-            this.log.pn(`Read all sectors: ${readAllSectors} `);
-            this.log.pn(`File name: "${fileName}"`);
+        this.log?.pn(`Got disk image flow details from payload: `);
+        this.log?.withIndent('    ', () => {
+            this.log!.pn(`Buffer address: 0x${utils.hex8(bufferAddress)} `);
+            this.log!.pn(`Buffer size: ${bufferSize} (0x${utils.hex8(bufferSize)})`);
+            this.log!.pn(`Drive: "${driveStr}"`);
+            this.log!.pn(`Type: ${type} ("${typeStr}")`);
+            this.log!.pn(`Read all sectors: ${readAllSectors} `);
+            this.log!.pn(`File name: "${fileName}"`);
         });
 
         return {
