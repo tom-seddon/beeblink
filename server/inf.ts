@@ -41,7 +41,7 @@ export const extRegExp = new RegExp(`\\${ext}$$`, 'i');
 // FS-specific), as will 'attr' (so DFS-type .inf files can have attributes
 // written as 'L').
 export async function writeFile(hostPath: string, name: string, load: number, exec: number, attr: string): Promise<void> {
-    let inf = `${name} ${load.toString(16)} ${exec.toString(16)}`;
+    let inf = `${name} ${utils.hex8(load)} ${utils.hex8(exec)}`;
 
     if (attr !== '') {
         inf += ` ${attr}`;
