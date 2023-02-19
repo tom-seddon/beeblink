@@ -2154,11 +2154,10 @@ loop:
                 jsr osbyte ;vectors claimed (AUG p167, p324)
 
                 ; clear FS zero page.
-                ldx #$f
+                ldx #$1f
                 lda #0
 -
-                sta fs_workspace_start,x
-                sta fs_scratch_workspace_start,x
+                sta $b0,x
                 dex
                 bpl -
 
