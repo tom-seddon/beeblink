@@ -289,7 +289,7 @@ class PCType implements beebfs.IFSType {
         return new PCFQN(pcFSP.name);
     }
 
-    public getHostPath(fqn: beebfs.IFSFQN): string {
+    public getIdealVolumeRelativeHostPath(fqn: beebfs.IFSFQN): string {
         const pcFQN = mustBePCFQN(fqn);
 
         return pcFQN.name;

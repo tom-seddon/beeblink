@@ -1020,7 +1020,7 @@ class TubeHostType implements beebfs.IFSType {
         return new TubeHostFQN(hostFolder, drive, dir, tubeHostFSP.name);
     }
 
-    public getHostPath(fqn: beebfs.IFSFQN): string {
+    public getIdealVolumeRelativeHostPath(fqn: beebfs.IFSFQN): string {
         const tubeHostFQN = mustBeTubeHostFQN(fqn);
 
         return path.join(tubeHostFQN.drive.toUpperCase(), beebfs.getHostChars(tubeHostFQN.dir) + '.' + beebfs.getHostChars(fqn.name));
@@ -1233,7 +1233,7 @@ class TubeHostType implements beebfs.IFSType {
     public async renameFile(oldFile: beebfs.File, newFQN: beebfs.FQN): Promise<void> {
         const newFQNTubeHostName = mustBeTubeHostFQN(newFQN.fsFQN);
 
-        const newHostPath = path.join(newFQN.volume.path, this.getHostPath(newFQNTubeHostName));
+        const newHostPath = path.join(newFQN.volume.path, this.getIdealVolumeRelativeHostPath(newFQNTubeHostName));
         await utils.mustNotExist(newHostPath);
 
         const newFile = new beebfs.File(newHostPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr, false);

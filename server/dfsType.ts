@@ -548,7 +548,7 @@ class DFSType implements beebfs.IFSType {
         return new DFSFQN(drive, dir, dfsFSP.name);
     }
 
-    public getHostPath(fqn: beebfs.IFSFQN): string {
+    public getIdealVolumeRelativeHostPath(fqn: beebfs.IFSFQN): string {
         const dfsFQN = mustBeDFSFQN(fqn);
 
         return path.join(dfsFQN.drive.toUpperCase(), beebfs.getHostChars(dfsFQN.dir) + '.' + beebfs.getHostChars(fqn.name));
@@ -724,7 +724,7 @@ class DFSType implements beebfs.IFSType {
     public async renameFile(oldFile: beebfs.File, newFQN: beebfs.FQN): Promise<void> {
         const newFQNDFSName = mustBeDFSFQN(newFQN.fsFQN);
 
-        const newHostPath = path.join(newFQN.volume.path, this.getHostPath(newFQNDFSName));
+        const newHostPath = path.join(newFQN.volume.path, this.getIdealVolumeRelativeHostPath(newFQNDFSName));
         await utils.mustNotExist(newHostPath);
 
         const newFile = new beebfs.File(newHostPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr, false);

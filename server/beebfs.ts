@@ -472,7 +472,9 @@ export interface IFSType {
 
     // get ideal host path for FQN, relative to whichever volume it's in. Used
     // when creating a new file.
-    getHostPath(fqn: IFSFQN): string;
+    //
+    // (Only the IFSFQN is supplied; the caller handles the volume.)
+    getIdealVolumeRelativeHostPath(fqn: IFSFQN): string;
 
     // get *CAT text for FSP.
     getCAT(fsp: FSP, state: IFSState | undefined, log: utils.Log | undefined): Promise<string>;
@@ -485,6 +487,9 @@ export interface IFSType {
     renameFile(file: File, newName: FQN): Promise<void>;
 
     // write the metadata for the given file.
+    //
+    // (Only the IFSFQN is supplied. It presumably contains all the info the FS
+    // needs to work out what Beeb name to record.)
     writeBeebMetadata(hostPath: string, fqn: IFSFQN, load: number, exec: number, attr: number): Promise<void>;
 
     // get new attributes from attribute string. Return undefined if invalid.
@@ -1609,7 +1614,7 @@ export class FS {
         if (this.gaManipulator !== undefined) {
             if (!newFQN.volume.isReadOnly()) {
                 // could be cleverer than this.
-                this.gaManipulator.renameFile(oldFile.hostPath, newFQN.volume.type.getHostPath(newFQN.fsFQN));
+                this.gaManipulator.renameFile(oldFile.hostPath, newFQN.volume.type.getIdealVolumeRelativeHostPath(newFQN.fsFQN));
             }
         }
     }
@@ -1671,7 +1676,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private getHostPath(fqn: FQN): string {
-        return path.join(fqn.volume.path, fqn.volume.type.getHostPath(fqn.fsFQN));
+        return path.join(fqn.volume.path, fqn.volume.type.getIdealVolumeRelativeHostPath(fqn.fsFQN));
     }
 
     /////////////////////////////////////////////////////////////////////////
