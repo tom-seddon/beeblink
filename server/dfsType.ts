@@ -551,7 +551,7 @@ class DFSType implements beebfs.IFSType {
     public getIdealVolumeRelativeHostPath(fqn: beebfs.IFSFQN): string {
         const dfsFQN = mustBeDFSFQN(fqn);
 
-        return path.join(dfsFQN.drive.toUpperCase(), beebfs.getHostChars(dfsFQN.dir) + '.' + beebfs.getHostChars(fqn.name));
+        return path.join(dfsFQN.drive.toUpperCase(), beebfs.getHostChars(dfsFQN.dir) + '.' + beebfs.getHostChars(dfsFQN.name));
     }
 
     public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | beebfs.IFSFSP | undefined, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {

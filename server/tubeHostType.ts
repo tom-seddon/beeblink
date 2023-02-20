@@ -1023,7 +1023,7 @@ class TubeHostType implements beebfs.IFSType {
     public getIdealVolumeRelativeHostPath(fqn: beebfs.IFSFQN): string {
         const tubeHostFQN = mustBeTubeHostFQN(fqn);
 
-        return path.join(tubeHostFQN.drive.toUpperCase(), beebfs.getHostChars(tubeHostFQN.dir) + '.' + beebfs.getHostChars(fqn.name));
+        return path.join(tubeHostFQN.drive.toUpperCase(), beebfs.getHostChars(tubeHostFQN.dir) + '.' + beebfs.getHostChars(tubeHostFQN.name));
     }
 
     public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | beebfs.IFSFSP | undefined, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {

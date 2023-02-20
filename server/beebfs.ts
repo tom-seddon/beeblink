@@ -526,7 +526,6 @@ export interface IFSFSP {
 /////////////////////////////////////////////////////////////////////////
 
 export interface IFSFQN {
-    readonly name: string;
     equals(other: IFSFQN): boolean;
     toString(): string;
     isWildcard(): boolean;
