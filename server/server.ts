@@ -783,7 +783,7 @@ export class Server {
             return errors.badName();
         }
 
-        const fqn = await this.bfs.parseFQN(commandLine.parts[0]);
+        const fqn = await this.bfs.parseFileString(commandLine.parts[0]);
 
         return await this.filesInfoResponse(fqn);
     }
@@ -793,9 +793,9 @@ export class Server {
 
         let fqn;
         if (commandLine.parts.length === 0) {
-            fqn = await this.bfs.parseFQN('*');
+            fqn = await this.bfs.parseFileString('*');
         } else {
-            fqn = await this.bfs.parseFQN(commandLine.parts[0]);
+            fqn = await this.bfs.parseFileString(commandLine.parts[0]);
         }
 
         return await this.filesInfoResponse(fqn);
@@ -1387,7 +1387,7 @@ export class Server {
             return errors.syntax();
         }
 
-        const fqn = await this.bfs.parseFQN(commandLine.parts[1]);
+        const fqn = await this.bfs.parseFileString(commandLine.parts[1]);
         return await this.filesInfoResponse(fqn);
     }
 
@@ -1396,7 +1396,7 @@ export class Server {
             return errors.syntax();
         }
 
-        const afsp = await this.bfs.parseFQN(commandLine.parts[1]);
+        const afsp = await this.bfs.parseFileString(commandLine.parts[1]);
         const files = await this.bfs.findFilesMatching(afsp);
 
         if (files.length === 0) {
@@ -1422,7 +1422,7 @@ export class Server {
             attrString = commandLine.parts[2];
         }
 
-        const fqn = await this.bfs.parseFQN(commandLine.parts[1]);
+        const fqn = await this.bfs.parseFileString(commandLine.parts[1]);
         const beebFiles = await this.bfs.findFilesMatching(fqn);
         for (const beebFile of beebFiles) {
             // the validity of `attrString' will be checked over and over again,
@@ -1438,7 +1438,7 @@ export class Server {
             return errors.syntax();
         }
 
-        const fqn = await this.bfs.parseFQN(commandLine.parts[1]);
+        const fqn = await this.bfs.parseFileString(commandLine.parts[1]);
 
         await this.bfs.delete(fqn);
     }
@@ -1463,7 +1463,7 @@ export class Server {
             return errors.syntax();
         }
 
-        const lines = await this.bfs.readTextFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
+        const lines = await this.bfs.readTextFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFileString(commandLine.parts[1])));
 
         return lines.join(BNL) + BNL;
     }
@@ -1473,7 +1473,7 @@ export class Server {
             return errors.syntax();
         }
 
-        const lines = await this.bfs.readTextFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
+        const lines = await this.bfs.readTextFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFileString(commandLine.parts[1])));
 
         let text = '';
 
@@ -1646,7 +1646,7 @@ export class Server {
             return errors.syntax();
         }
 
-        const data = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
+        const data = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFileString(commandLine.parts[1])));
 
         let text = '';
 
@@ -1694,8 +1694,8 @@ export class Server {
             return errors.syntax();
         }
 
-        const oldFQN = await this.bfs.parseFQN(commandLine.parts[1]);
-        const newFQN = await this.bfs.parseFQN(commandLine.parts[2]);
+        const oldFQN = await this.bfs.parseFileString(commandLine.parts[1]);
+        const newFQN = await this.bfs.parseFileString(commandLine.parts[2]);
 
         await this.bfs.rename(oldFQN, newFQN);
     }
@@ -1723,7 +1723,7 @@ export class Server {
 
         addr &= 0xffff;
 
-        const rom = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(commandLine.parts[1])));
+        const rom = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFileString(commandLine.parts[1])));
 
         this.log?.pn(`Addr: 0x${utils.hex4(addr)}, bank: 0x${utils.hex2(addr)}, size: 0x${utils.hex4(rom.length)}`);
 
@@ -1860,7 +1860,7 @@ export class Server {
     }
 
     private async createDiskImageReadFlow(details: IDiskImageFlowDetails): Promise<diskimage.Flow> {
-        const file = await this.bfs.getBeebFileForWrite(await this.bfs.parseFQN(details.fileName));
+        const file = await this.bfs.getBeebFileForWrite(await this.bfs.parseFileString(details.fileName));
 
         switch (details.type) {
             case DiskImageType.ADFS:
@@ -1886,7 +1886,7 @@ export class Server {
     }
 
     private async createDiskImageWriteFlow(details: IDiskImageFlowDetails): Promise<diskimage.Flow> {
-        const data = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFQN(details.fileName)));
+        const data = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFileString(details.fileName)));
 
         switch (details.type) {
             case DiskImageType.ADFS:

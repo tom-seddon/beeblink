@@ -140,12 +140,14 @@ export function getHostChars(str: string): string {
 export class FQN {
     // Volume this FQN refers to.
     public readonly volume: Volume;
+    public readonly volumeExplicit: boolean;
 
     // FS-specific name portion of this FQN.
     public fsFQN: IFSFQN;
 
-    public constructor(volume: Volume, fsFQN: IFSFQN) {
+    public constructor(volume: Volume, volumeExplicit: boolean, fsFQN: IFSFQN) {
         this.volume = volume;
+        this.volumeExplicit = volumeExplicit;
         this.fsFQN = fsFQN;
     }
 
@@ -165,7 +167,7 @@ export class File {
     // Path of this file on the PC filing system.
     public readonly hostPath: string;
 
-    // Actual BBC file name.
+    // Actual BBC file name. 
     public readonly fqn: FQN;
 
     // BBC-style attributes.
@@ -266,40 +268,6 @@ export class Volume {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// Name of Beeb file or dir, that may or may not exist, as entered on the
-// command line. Components not supplied are set to undefined.
-//
-// A BeebFSP always includes a volume. wasExplicitVolume indicates whether the
-// ::VOLUME syntax was used.
-export class FSP {
-    // Volume this FSP refers to.
-    public readonly volume: Volume;
-
-    // If the volume refers to one that's currently set, state is the state
-    // associated with it; if undefined, the ::VOLUME syntax was used.
-    public readonly state: IFSState | undefined;
-
-    // FS-specific portion of the FSP.
-    public readonly fsFSP: IFSFSP;
-
-    public constructor(volume: Volume, state: IFSState | undefined, name: IFSFSP) {
-        this.volume = volume;
-        this.state = state;
-        this.fsFSP = name;
-    }
-
-    public toString(): string {
-        return `::${this.volume.name}${this.fsFSP}`;
-    }
-
-    public wasExplicitVolume(): boolean {
-        return this.state === undefined;
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 export class OSGBPBResult {
     public readonly c: boolean;
     public readonly numBytesLeft: number | undefined;
@@ -394,7 +362,7 @@ export interface IFSState {
 
     // get file to use for *RUN. If tryLibDir is false, definitely don't try lib
     // drive/directory.
-    getFileForRUN(fsp: FSP, tryLibDir: boolean): Promise<File | undefined>;
+    getFileForRUN(fqn: FQN, tryLibDir: boolean): Promise<File | undefined>;
 
     // get *CAT text, given command line. Handle default case, when
     // commandLine===undefined, and any straightforward special cases that would
@@ -410,10 +378,10 @@ export interface IFSState {
     starDrive(arg: string | undefined): void;
 
     // handle *DIR.
-    starDir(fsp: FSP | undefined): void;
+    starDir(fqn: FQN | undefined): void;
 
     // handle *LIB.
-    starLib(fsp: FSP | undefined): void;
+    starLib(fqn: FQN | undefined): void;
 
     // handle *HSTATUS drives output.
     getDrivesOutput(): Promise<string>;
@@ -462,13 +430,13 @@ export interface IFSType {
     // get list of Beeb files matching the given FSP/FQN in the given volume. If
     // an FQN, do a wildcard match; if an FSP, same, treating any undefined
     // values as matching anything; if undefined, find absolutely everything.
-    findBeebFilesMatching(volume: Volume, pattern: IFSFSP | IFSFQN | undefined, recurse: boolean, log: utils.Log | undefined): Promise<File[]>;
+    findBeebFilesMatching(volume: Volume, pattern: IFSFQN | undefined, recurse: boolean, log: utils.Log | undefined): Promise<File[]>;
 
     // parse file/dir string, starting at index i. 
-    parseFileOrDirString(str: string, i: number, parseAsDir: boolean): IFSFSP;
+    parseFileOrDirString(str: string, i: number, state: IFSState | undefined, parseAsDir: boolean): IFSFQN;
 
     // create appropriate FSFQN from FSFSP, filling in defaults from the given State as appropriate.
-    createFQN(fsp: IFSFSP, state: IFSState | undefined): IFSFQN;
+    //createFQN(fsp: IFSFSP, state: IFSState | undefined): IFSFQN;
 
     // get ideal host path for FQN, relative to whichever volume it's in. Used
     // when creating a new file.
@@ -476,8 +444,8 @@ export interface IFSType {
     // (Only the IFSFQN is supplied; the caller handles the volume.)
     getIdealVolumeRelativeHostPath(fqn: IFSFQN): string;
 
-    // get *CAT text for FSP.
-    getCAT(fsp: FSP, state: IFSState | undefined, log: utils.Log | undefined): Promise<string>;
+    // get *CAT text.
+    getCAT(fqn: FQN, state: IFSState | undefined, log: utils.Log | undefined): Promise<string>;
 
     // delete the given file.
     deleteFile(file: File): Promise<void>;
@@ -518,9 +486,9 @@ export interface IFSType {
 //
 // explicitly mentioning toString avoids the no-empty-interface tslint warning
 // (that I haven't decided what to do about yet).
-export interface IFSFSP {
-    toString(): string;
-}
+// export interface IFSFSP {
+//     toString(): string;
+// }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -879,14 +847,14 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async parseDirString(dirString: string): Promise<FSP> {
+    public async parseDirString(dirString: string): Promise<FQN> {
         return await this.parseFileOrDirString(dirString, true);
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async parseFileString(fileString: string): Promise<FSP> {
+    public async parseFileString(fileString: string): Promise<FQN> {
         return await this.parseFileOrDirString(fileString, false);
     }
 
@@ -975,34 +943,34 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async starDir(arg: string | undefined): Promise<void> {
-        let fsp: FSP | undefined;
+        let fqn: FQN | undefined;
 
         if (arg !== undefined) {
-            fsp = await this.parseDirString(arg);
+            fqn = await this.parseDirString(arg);
 
-            if (fsp.wasExplicitVolume()) {
-                await this.mount(fsp.volume);
+            if (fqn.volumeExplicit) {
+                await this.mount(fqn.volume);
             }
         }
 
-        this.getState().starDir(fsp);
+        this.getState().starDir(fqn);
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
     public async starLib(arg: string | undefined): Promise<void> {
-        let fsp: FSP | undefined;
+        let fqn: FQN | undefined;
 
         if (arg !== undefined) {
-            fsp = await this.parseDirString(arg);
+            fqn = await this.parseDirString(arg);
 
-            if (fsp.wasExplicitVolume()) {
+            if (fqn.volumeExplicit) {
                 return errors.badDir();
             }
         }
 
-        this.getState().starLib(fsp);
+        this.getState().starLib(fqn);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1071,21 +1039,6 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async parseFQN(fileString: string): Promise<FQN> {
-        this.log?.pn('parseFQN: ``' + fileString + '\'\'');
-
-        const fsp = await this.parseFileString(fileString);
-        this.log?.pn('    fsp: ' + fsp);
-
-        const fqn = new FQN(fsp.volume, fsp.volume.type.createFQN(fsp.fsFSP, this.state));
-        this.log?.pn(`    fqn: ${fqn}`);
-
-        return fqn;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     public async findFilesMatching(fqn: FQN): Promise<File[]> {
         return await fqn.volume.type.findBeebFilesMatching(fqn.volume, fqn.fsFQN, false, this.log);
     }
@@ -1143,16 +1096,16 @@ export class FS {
                     this.log?.in('  ');
                 }
 
-                let fsp: IFSFSP;
+                let fqn: IFSFQN;
                 try {
-                    fsp = volume.type.parseFileOrDirString(arg, 0, false);
+                    fqn = volume.type.parseFileOrDirString(arg, 0, undefined, false);
                 } catch (error) {
                     // if the arg wasn't even parseable by this volume's type, it
                     // presumably won't match any file...
                     continue;
                 }
 
-                const files = await volume.type.findBeebFilesMatching(volume, fsp, true, this.locateVerbose ? this.log : undefined);
+                const files = await volume.type.findBeebFilesMatching(volume, fqn, true, this.locateVerbose ? this.log : undefined);
 
                 for (const file of files) {
                     foundFiles.push(file);
@@ -1320,7 +1273,7 @@ export class FS {
             return errors.badName();
         }
 
-        const fqn = await this.parseFQN(commandLine.parts[0]);
+        const fqn = await this.parseFileString(commandLine.parts[0]);
 
         if (a === 0) {
             return await this.OSFILESave(fqn, block.readUInt32LE(0), block.readUInt32LE(4), data);
@@ -1364,7 +1317,7 @@ export class FS {
         const write = (mode & 0x80) !== 0;
         const read = (mode & 0x40) !== 0;
 
-        const fqn = await this.parseFQN(commandLine.parts[0]);
+        const fqn = await this.parseFileString(commandLine.parts[0]);
         let hostPath: string;
 
         let contentsBuffer: Buffer | undefined;
@@ -1621,13 +1574,13 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async getFileForRUN(fsp: FSP, tryLibDir: boolean): Promise<File> {
-        if (fsp.wasExplicitVolume()) {
+    public async getFileForRUN(fqn: FQN, tryLibDir: boolean): Promise<File> {
+        if (fqn.volumeExplicit) {
             // Definitely don't try lib drive/dir if volume was specified.
             tryLibDir = false;
         }
 
-        const file = await this.getState().getFileForRUN(fsp, tryLibDir);
+        const file = await this.getState().getFileForRUN(fqn, tryLibDir);
 
         if (file !== undefined) {
             return file;
@@ -2180,13 +2133,14 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async parseFileOrDirString(str: string, parseAsDir: boolean): Promise<FSP> {
+    private async parseFileOrDirString(str: string, parseAsDir: boolean): Promise<FQN> {
         if (str === '') {
             return errors.badName();
         }
 
         let i = 0;
         let volume: Volume;
+        let volumeExplicit: boolean;
         let state: IFSState | undefined;
 
         if (str[i] === ':' && str[i + 1] === ':' && str.length > 3) {
@@ -2221,6 +2175,7 @@ export class FS {
             }
 
             volume = volumes[0];
+            volumeExplicit = true;
 
             i = end;
         } else {
@@ -2228,11 +2183,16 @@ export class FS {
             // the parsing step, but I don't think it matters in practice...
             state = this.getState();
             volume = state.volume;
+            volumeExplicit = false;
         }
 
-        const fsp = volume.type.parseFileOrDirString(str, i, parseAsDir);
+        const fsFQN = volume.type.parseFileOrDirString(str, i, state, parseAsDir);
+        return new FQN(volume, volumeExplicit, fsFQN);
 
-        return new FSP(volume, state, fsp);
+        // const fsp = volume.type.parseFileOrDirString(str, i, parseAsDir);
+
+
+        // return new FSP(volume, state, fsp);
     }
 
     /////////////////////////////////////////////////////////////////////////
