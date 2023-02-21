@@ -30,8 +30,8 @@ import * as gitattributes from './gitattributes';
 import * as errors from './errors';
 import CommandLine from './CommandLine';
 import dfsType from './dfsType';
-import pcType from './pcType';
-import tubeHostType from './tubeHostType';
+//import pcType from './pcType';
+//import tubeHostType from './tubeHostType';
 import * as server from './server';
 
 /////////////////////////////////////////////////////////////////////////
@@ -784,13 +784,13 @@ export class FS {
             return false;
         }
 
-        if (addFolders(searchFolders.pcFolders, pcType)) {
-            return volumes;
-        }
+        // if (addFolders(searchFolders.pcFolders, pcType)) {
+        //     return volumes;
+        // }
 
-        if (addFolders(searchFolders.tubeHostFolders, tubeHostType)) {
-            return volumes;
-        }
+        // if (addFolders(searchFolders.tubeHostFolders, tubeHostType)) {
+        //     return volumes;
+        // }
 
         return volumes;
     }
