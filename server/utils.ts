@@ -777,6 +777,7 @@ export function isBASIC(b: Buffer): boolean {
 
 export const MATCH_N_CHAR = '*';
 export const MATCH_ONE_CHAR = '#';
+const MATCH_ANY_REG_EXP = new RegExp('^.*$');
 
 export function isAmbiguousAFSP(afsp: string): boolean {
     if (afsp.includes(MATCH_N_CHAR)) {
@@ -794,23 +795,27 @@ export function isAmbiguousAFSP(afsp: string): boolean {
 // how DFS does it, in that a * will match chars in the middle of a string,
 // not just at the end.
 export function getRegExpFromAFSP(afsp: string): RegExp {
-    let r = '^';
+    if (afsp === '*') {
+        return MATCH_ANY_REG_EXP;
+    } else {
+        let r = '^';
 
-    for (const c of afsp) {
-        if (c === MATCH_N_CHAR) {
-            r += '.*';
-        } else if (c === MATCH_ONE_CHAR) {
-            r += '.';
-        } else if (isalnum(c)) {
-            r += c;
-        } else {
-            r += '\\' + c;
+        for (const c of afsp) {
+            if (c === MATCH_N_CHAR) {
+                r += '.*';
+            } else if (c === MATCH_ONE_CHAR) {
+                r += '.';
+            } else if (isalnum(c)) {
+                r += c;
+            } else {
+                r += '\\' + c;
+            }
         }
+
+        r += '$';
+
+        return new RegExp(r, 'i');
     }
-
-    r += '$';
-
-    return new RegExp(r, 'i');
 }
 
 /////////////////////////////////////////////////////////////////////////
