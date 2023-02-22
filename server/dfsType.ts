@@ -192,22 +192,20 @@ interface IDFSDrive {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// this is a class purely so that 'instanceof' can be used.
-class DFSTransientSettings {
-    public readonly drive: string;
-    public readonly dir: string;
-    public readonly libDrive: string;
-    public readonly libDir: string;
-
-    public constructor(drive: string, dir: string, libDrive: string, libDir: string) {
-        this.drive = drive;
-        this.dir = dir;
-        this.libDrive = libDrive;
-        this.libDir = libDir;
-    }
+// "path"
+class DFSPath {
+    public constructor(public readonly drive: string, public readonly dir: string) { }
 }
 
-const gDefaultTransientSettings = new DFSTransientSettings('0', '$', '0', '$');
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// this is a class purely so that 'instanceof' can be used.
+class DFSTransientSettings {
+    public constructor(public readonly current: DFSPath, public readonly library: DFSPath) { }
+}
+
+const gDefaultTransientSettings = new DFSTransientSettings(new DFSPath('0', '$'), new DFSPath('0', '$'));
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -227,11 +225,8 @@ class DFSState implements beebfs.IFSState {
 
     public readonly volume: beebfs.Volume;
 
-    private drive: string;
-    private dir: string;
-
-    private libDrive: string;
-    private libDir: string;
+    private current: DFSPath;
+    private library: DFSPath;
 
     private readonly log: utils.Log | undefined;// tslint:disable-line no-unused-variable
 
@@ -241,36 +236,34 @@ class DFSState implements beebfs.IFSState {
 
         const transientSettings = DFSState.getDFSTransientSettings(transientSettingsAny);
 
-        this.drive = transientSettings.drive;
-        this.dir = transientSettings.dir;
-        this.libDrive = transientSettings.libDrive;
-        this.libDir = transientSettings.libDir;
+        this.current = transientSettings.current;
+        this.library = transientSettings.library;
     }
 
     public getCurrentDrive(): string {
-        return this.drive;
+        return this.current.drive;
     }
 
     public getCurrentDir(): string {
-        return this.dir;
+        return this.current.dir;
     }
 
     public getLibraryDrive(): string {
-        return this.libDrive;
+        return this.library.drive;
     }
 
     public getLibraryDir(): string {
-        return this.libDir;
+        return this.library.dir;
     }
 
     public getTransientSettings(): DFSTransientSettings {
-        return new DFSTransientSettings(this.drive, this.dir, this.libDrive, this.libDir);
+        return new DFSTransientSettings(this.current, this.library);
     }
 
     public getTransientSettingsString(settingsAny: any | undefined): string {
         const settings = DFSState.getDFSTransientSettings(settingsAny);
 
-        return `Default dir :${settings.drive}.${settings.dir}${utils.BNL}Default lib :${settings.libDrive}.${settings.libDir}${utils.BNL}`;
+        return `Default dir :${settings.current.drive}.${settings.current.dir}${utils.BNL}Default lib :${settings.library.drive}.${settings.library.dir}${utils.BNL}`;
     }
 
     public getPersistentSettings(): undefined {
@@ -300,7 +293,7 @@ class DFSState implements beebfs.IFSState {
         }
 
         if (tryLibDir) {
-            const libFQN = new beebfs.FQN(fqn.volume, fqn.volumeExplicit, new DFSFQN(this.libDrive, false, this.libDir, false, dfsFQN.name));
+            const libFQN = new beebfs.FQN(fqn.volume, fqn.volumeExplicit, new DFSFQN(this.library.drive, false, this.library.dir, false, dfsFQN.name));
             const libFile = await beebfs.getBeebFile(libFQN, true, false);
             if (libFile !== undefined) {
                 return libFile;
@@ -313,14 +306,14 @@ class DFSState implements beebfs.IFSState {
     public async getCAT(commandLine: string | undefined): Promise<string | undefined> {
         let drive: string;
         if (commandLine === undefined) {
-            drive = this.drive;
+            drive = this.current.drive;
         } else if (DFSType.isValidDrive(commandLine)) {
             drive = commandLine;
         } else {
             return undefined;
         }
 
-        const fqn = new beebfs.FQN(this.volume, false, new DFSFQN(drive, true, this.dir, false, undefined));
+        const fqn = new beebfs.FQN(this.volume, false, new DFSFQN(drive, true, this.current.dir, false, undefined));
         return await this.volume.type.getCAT(fqn, this, this.log);
     }
 
@@ -330,31 +323,25 @@ class DFSState implements beebfs.IFSState {
         }
 
         if (DFSType.isValidDrive(arg)) {
-            this.drive = arg;
+            this.current = new DFSPath(arg, this.current.dir);
         } else {
             const fqn = mustBeDFSFQN(this.volume.type.parseFileOrDirString(arg, 0, this, true));
             if (!fqn.driveExplicit || fqn.dirExplicit) {
                 return errors.badDrive();
             }
 
-            this.drive = fqn.drive;
+            this.current = new DFSPath(fqn.drive, this.current.dir);
         }
 
         return true;
     }
 
     public starDir(fqn: beebfs.FQN): void {
-        const dirFQN = this.getDirOrLibFQN(fqn);
-
-        this.drive = dirFQN.drive;
-        this.dir = dirFQN.dir;
+        this.current = this.getPathFromFQN(fqn);
     }
 
     public starLib(fqn: beebfs.FQN): void {
-        const libFQN = this.getDirOrLibFQN(fqn);
-
-        this.libDrive = libFQN.drive;
-        this.libDir = libFQN.dir;
+        this.library = this.getPathFromFQN(fqn);
     }
 
     public async getDrivesOutput(): Promise<string> {
@@ -379,26 +366,26 @@ class DFSState implements beebfs.IFSState {
 
     public async getBootOption(): Promise<number> {
         const dfsType = mustBeDFSType(this.volume.type);
-        return await dfsType.loadBootOption(this.volume, this.drive);
+        return await dfsType.loadBootOption(this.volume, this.current.drive);
     }
 
     public async setBootOption(option: number): Promise<void> {
         const str = (option & 3).toString() + os.EOL;
-        await beebfs.writeFile(path.join(this.volume.path, this.drive, OPT4_FILE_NAME), Buffer.from(str, 'binary'));
+        await beebfs.writeFile(path.join(this.volume.path, this.current.drive, OPT4_FILE_NAME), Buffer.from(str, 'binary'));
     }
 
     public async setTitle(title: string): Promise<void> {
         const buffer = Buffer.from(title.substr(0, MAX_TITLE_LENGTH) + os.EOL, 'binary');
-        await beebfs.writeFile(path.join(this.volume.path, this.drive, TITLE_FILE_NAME), buffer);
+        await beebfs.writeFile(path.join(this.volume.path, this.current.drive, TITLE_FILE_NAME), buffer);
     }
 
     public async getTitle(): Promise<string> {
         const dfsType = mustBeDFSType(this.volume.type);
-        return await dfsType.loadTitle(this.volume, this.drive);
+        return await dfsType.loadTitle(this.volume, this.current.drive);
     }
 
     public async readNames(): Promise<string[]> {
-        const files = await this.volume.type.findBeebFilesMatching(this.volume, new DFSFQN(this.drive, false, this.dir, false, undefined), false, undefined);
+        const files = await this.volume.type.findBeebFilesMatching(this.volume, new DFSFQN(this.current.drive, false, this.current.dir, false, undefined), false, undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -419,18 +406,14 @@ class DFSState implements beebfs.IFSState {
     //     return `hello${BNL}`;
     // }
 
-    private getDirOrLibFQN(fqn: beebfs.FQN): DFSFQN {
+    private getPathFromFQN(fqn: beebfs.FQN): DFSPath {
         const dfsFQN = mustBeDFSFQN(fqn.fsFQN);
 
         if (fqn.volumeExplicit || dfsFQN.name !== undefined) {
             return errors.badDir();
         }
 
-        // the name part is unused.
-        return new DFSFQN(
-            dfsFQN.driveExplicit ? dfsFQN.drive : this.drive, dfsFQN.driveExplicit,
-            dfsFQN.dirExplicit ? dfsFQN.dir : this.dir, dfsFQN.dirExplicit,
-            undefined);
+        return new DFSPath(dfsFQN.drive, dfsFQN.dir);
     }
 }
 
@@ -568,38 +551,6 @@ class DFSType implements beebfs.IFSType {
 
         return new DFSFQN(drive, driveExplicit, dir, dirExplicit, name);
     }
-
-    // public createFQN(fsp: beebfs.IFSFSP, state: beebfs.IFSState | undefined): DFSFQN {
-    //     const dfsFSP = mustBeDFSFSP(fsp);
-    //     const dfsState = mustBeDFSState(state);
-
-    //     let drive: string;
-    //     if (dfsFSP.drive === undefined) {
-    //         if (dfsState === undefined) {
-    //             return errors.badName();
-    //         }
-
-    //         drive = dfsState.drive;
-    //     } else {
-    //         drive = dfsFSP.drive;
-    //     }
-
-    //     let dir: string;
-    //     if (dfsFSP.dir === undefined) {
-    //         if (dfsState === undefined) {
-    //             return errors.badName();
-    //         }
-    //         dir = dfsState.dir;
-    //     } else {
-    //         dir = dfsFSP.dir;
-    //     }
-
-    //     if (dfsFSP.name === undefined) {
-    //         return errors.badName();
-    //     }
-
-    //     return new DFSFQN(drive, dir, dfsFSP.name);
-    // }
 
     public getIdealVolumeRelativeHostPath(fqn: beebfs.IFSFQN): string {
         const dfsFQN = mustBeDFSFQNWithName(fqn);
