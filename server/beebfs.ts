@@ -138,7 +138,9 @@ export function getHostChars(str: string): string {
 //
 // This was a slightly late addition and isn't used everywhere it should be...
 export class FQN {
-    // Volume this FQN refers to.
+    // Volume this FQN refers to. If this.volumeExplicit, the volume was
+    // explicitly set (e.g., by being provided as part of the name on the
+    // command line); otherwise, it was filled in from the current state.
     public readonly volume: Volume;
     public readonly volumeExplicit: boolean;
 
@@ -427,10 +429,11 @@ export interface IFSType {
     // name.
     isValidBeebFileName(str: string): boolean;
 
-    // get list of Beeb files matching the given FSP/FQN in the given volume. If
-    // an FQN, do a wildcard match; if an FSP, same, treating any undefined
-    // values as matching anything; if undefined, find absolutely everything.
-    findBeebFilesMatching(volume: Volume, pattern: IFSFQN | undefined, recurse: boolean, log: utils.Log | undefined): Promise<File[]>;
+    // get list of all Beeb files in volume.
+    findBeebFilesInVolume(volume: Volume, log: utils.Log | undefined): Promise<File[]>;
+
+    // get list of Beeb files matching FQN. The volume will be of the right type.
+    findBeebFilesMatching(fqn: FQN, recurse: boolean, log: utils.Log | undefined): Promise<File[]>;
 
     // parse file/dir string, starting at index i. 
     parseFileOrDirString(str: string, i: number, state: IFSState | undefined, parseAsDir: boolean): IFSFQN;
@@ -518,7 +521,7 @@ export async function getBeebFile(fqn: FQN, wildcardsOK: boolean, throwIfNotFoun
         }
     }
 
-    const files = await fqn.volume.type.findBeebFilesMatching(fqn.volume, fqn.fsFQN, false, log);
+    const files = await fqn.volume.type.findBeebFilesMatching(fqn, false, log);
     log?.pn(`found ${files.length} file(s)`);
 
     if (files.length === 0) {
@@ -1040,7 +1043,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async findFilesMatching(fqn: FQN): Promise<File[]> {
-        return await fqn.volume.type.findBeebFilesMatching(fqn.volume, fqn.fsFQN, false, this.log);
+        return await fqn.volume.type.findBeebFilesMatching(fqn, false, this.log);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1096,16 +1099,18 @@ export class FS {
                     this.log?.in('  ');
                 }
 
-                let fqn: IFSFQN;
+                let fsFQN: IFSFQN;
                 try {
-                    fqn = volume.type.parseFileOrDirString(arg, 0, undefined, false);
+                    fsFQN = volume.type.parseFileOrDirString(arg, 0, undefined, false);
                 } catch (error) {
                     // if the arg wasn't even parseable by this volume's type, it
                     // presumably won't match any file...
                     continue;
                 }
 
-                const files = await volume.type.findBeebFilesMatching(volume, fqn, true, this.locateVerbose ? this.log : undefined);
+                const fqn = new FQN(volume, true, fsFQN);
+
+                const files = await volume.type.findBeebFilesMatching(fqn, true, this.locateVerbose ? this.log : undefined);
 
                 for (const file of files) {
                     foundFiles.push(file);
@@ -1194,9 +1199,14 @@ export class FS {
             return errors.generic('*CAT internal error');
         }
 
-        const fsp = await this.parseDirString(commandLine);
+        const fqn = await this.parseDirString(commandLine);
 
-        return await fsp.volume.type.getCAT(fsp, this.getState(), this.log);
+        let state: IFSState | undefined = this.getState();
+        if (fqn.volumeExplicit) {
+            state = undefined;
+        }
+
+        return await fqn.volume.type.getCAT(fqn, state, this.log);
     }
 
     /////////////////////////////////////////////////////////////////////////

@@ -159,32 +159,9 @@ class DFSFQN implements beebfs.IFSFQN {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// class DFSFSP implements beebfs.IFSFSP {
-//     public readonly drive: string | undefined;
-//     public readonly dir: string | undefined;
-//     public readonly name: string | undefined;
-
-//     public constructor(drive: string | undefined, dir: string | undefined, name: string | undefined) {
-//         this.drive = drive;
-//         this.dir = dir;
-//         this.name = name;
-//     }
-
-//     public toString(): string {
-//         return `:${this.getString(this.drive)}.${this.getString(this.dir)}.${this.getString(this.name)}`;
-//     }
-
-//     private getString(x: string | undefined): string {
-//         // 2026 = HORIZONTAL ELLIPSIS
-//         return x !== undefined ? x : '\u2026';
-//     }
-// }
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 interface IDFSDrive {
-    readonly name: string;
+    readonly hostFolder: string;
+    readonly beebName: string;
     readonly option: number;
     readonly title: string;
 }
@@ -345,12 +322,12 @@ class DFSState implements beebfs.IFSState {
     }
 
     public async getDrivesOutput(): Promise<string> {
-        const drives = await mustBeDFSType(this.volume.type).findDrivesForVolume(this.volume);
+        const drives = await mustBeDFSType(this.volume.type).findDrivesForVolume(this.volume, undefined);
 
         let text = '';
 
         for (const drive of drives) {
-            text += `${drive.name} - ${beebfs.getBootOptionDescription(drive.option).padEnd(4)}: `;
+            text += `${drive.beebName} - ${beebfs.getBootOptionDescription(drive.option).padEnd(4)}: `;
 
             if (drive.title.length > 0) {
                 text += drive.title;
@@ -385,7 +362,8 @@ class DFSState implements beebfs.IFSState {
     }
 
     public async readNames(): Promise<string[]> {
-        const files = await this.volume.type.findBeebFilesMatching(this.volume, new DFSFQN(this.current.drive, false, this.current.dir, false, undefined), false, undefined);
+        const fqn = new beebfs.FQN(this.volume, true, new DFSFQN(this.current.drive, true, this.current.dir, true, undefined));
+        const files = await this.volume.type.findBeebFilesMatching(fqn, false, undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -527,11 +505,12 @@ class DFSType implements beebfs.IFSType {
 
         let driveExplicit: boolean;
         if (drive === undefined) {
-            if (dfsState === undefined) {
-                return errors.badDrive();
+            if (dfsState !== undefined) {
+                drive = dfsState.getCurrentDrive();
+            } else {
+                drive = gDefaultTransientSettings.current.drive;
             }
 
-            drive = dfsState.getCurrentDrive();
             driveExplicit = false;
         } else {
             driveExplicit = true;
@@ -539,11 +518,12 @@ class DFSType implements beebfs.IFSType {
 
         let dirExplicit: boolean;
         if (dir === undefined) {
-            if (dfsState === undefined) {
-                return errors.badDir();
+            if (dfsState !== undefined) {
+                dir = dfsState.getCurrentDir();
+            } else {
+                dir = gDefaultTransientSettings.current.dir;
             }
 
-            dir = dfsState.getCurrentDir();
             dirExplicit = false;
         } else {
             dirExplicit = true;
@@ -558,63 +538,32 @@ class DFSType implements beebfs.IFSType {
         return path.join(dfsFQN.drive.toUpperCase(), beebfs.getHostChars(dfsFQN.dir) + '.' + beebfs.getHostChars(dfsFQN.name!));
     }
 
-    public async findBeebFilesMatching(volume: beebfs.Volume, pattern: beebfs.IFSFQN | undefined, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        let driveNames: string[];
-        let dirRegExp: RegExp;
-        let nameRegExp: RegExp;
+    public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
+        return await this.findFiles(volume, undefined, undefined, undefined, log);
+    }
 
-        if (pattern === undefined) {
-            driveNames = [];
-            for (const drive of await this.findDrivesForVolume(volume)) {
-                driveNames.push(drive.name);
-            }
-            dirRegExp = utils.getRegExpFromAFSP('*');
-            nameRegExp = utils.getRegExpFromAFSP('*');
-        } else if (pattern instanceof DFSFQN) {
-            driveNames = [pattern.drive];
-            dirRegExp = utils.getRegExpFromAFSP(pattern.dir);
-            if (pattern.name === undefined) {
-                nameRegExp = utils.getRegExpFromAFSP('*');
-            } else {
-                nameRegExp = utils.getRegExpFromAFSP(pattern.name);
-            }
-        } else {
-            throw new Error('pattern not DFSFQN|undefined');
-        }
-
+    public async findBeebFilesMatching(fqn: beebfs.FQN, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {
         // The recurse flag is ignored. There is no hierarchy within a BeebLink volume.
 
-        const beebFiles: beebfs.File[] = [];
+        const dfsFQN = mustBeDFSFQN(fqn.fsFQN);
 
-        for (const driveName of driveNames) {
-            const driveHostPath = path.join(volume.path, driveName);
-            const beebFileInfos = await inf.getINFsForFolder(driveHostPath, log);
+        let driveRegExp: RegExp | undefined;
+        let dirRegExp: RegExp | undefined;
+        let nameRegExp: RegExp | undefined;
 
-            for (const beebFileInfo of beebFileInfos) {
-                if (!this.isValidBeebFileName(beebFileInfo.name)) {
-                    continue;
-                }
-
-                const dir = beebFileInfo.name[0];
-                const name = beebFileInfo.name.slice(2);
-
-                if (dirRegExp.exec(dir) === null || nameRegExp.exec(name) === null) {
-                    continue;
-                }
-
-                const dfsFQN = new DFSFQN(driveName, false, dir, false, name);
-
-                const file = new beebfs.File(beebFileInfo.hostPath, new beebfs.FQN(volume, true, dfsFQN), beebFileInfo.load, beebFileInfo.exec, beebFileInfo.attr | beebfs.DEFAULT_ATTR, false);
-
-                log?.pn(`${file}`);
-
-                beebFiles.push(file);
-            }
+        if (dfsFQN.driveExplicit) {
+            driveRegExp = utils.getRegExpFromAFSP(dfsFQN.drive);
         }
 
-        log?.out();
+        if (dfsFQN.dirExplicit) {
+            dirRegExp = utils.getRegExpFromAFSP(dfsFQN.dir);
+        }
 
-        return beebFiles;
+        if (dfsFQN.name !== undefined) {
+            nameRegExp = utils.getRegExpFromAFSP(dfsFQN.name);
+        }
+
+        return await this.findFiles(fqn.volume, driveRegExp, dirRegExp, nameRegExp, log);
     }
 
     public async getCAT(fqn: beebfs.FQN, state: beebfs.IFSState | undefined, log: utils.Log | undefined): Promise<string> {
@@ -625,7 +574,7 @@ class DFSType implements beebfs.IFSType {
             return errors.badDrive();
         }
 
-        const beebFiles = await this.findBeebFilesMatching(fqn.volume, new DFSFQN(dfsFQN.drive, dfsFQN.driveExplicit, '*', true, undefined), false, undefined);
+        const beebFiles = await this.findBeebFilesMatching(new beebfs.FQN(fqn.volume, true, new DFSFQN(dfsFQN.drive, true, '', false, undefined)), false, undefined);
 
         let text = '';
 
@@ -780,7 +729,7 @@ class DFSType implements beebfs.IFSType {
         }
     }
 
-    public async findDrivesForVolume(volume: beebfs.Volume): Promise<IDFSDrive[]> {
+    public async findDrivesForVolume(volume: beebfs.Volume, driveRegExp: RegExp | undefined): Promise<IDFSDrive[]> {
         let names: string[];
         try {
             names = await utils.fsReaddir(volume.path);
@@ -788,22 +737,67 @@ class DFSType implements beebfs.IFSType {
             return errors.nodeError(error);
         }
 
+        const beebNamesSeen = new Set<string>();
         const drives = [];
 
         for (const name of names) {
             if (DFSType.isValidDrive(name)) {
-                const option = await this.loadBootOption(volume, name);
-                const title = await this.loadTitle(volume, name);
+                if (utils.matchesOptionalRegExp(name, driveRegExp)) {
+                    const beebName = name.toUpperCase();
+                    if (!beebNamesSeen.has(beebName)) {
+                        const option = await this.loadBootOption(volume, name);
+                        const title = await this.loadTitle(volume, name);
 
-                drives.push({
-                    name: name.toUpperCase(),
-                    option,
-                    title
-                });
+                        drives.push({
+                            hostFolder: name,
+                            beebName: name.toUpperCase(),
+                            option,
+                            title
+                        });
+
+                        beebNamesSeen.add(beebName);
+                    }
+                }
             }
         }
 
         return drives;
+    }
+
+    private async findFiles(volume: beebfs.Volume, driveRegExp: RegExp | undefined, dirRegExp: RegExp | undefined, nameRegExp: RegExp | undefined, log: utils.Log | undefined): Promise<beebfs.File[]> {
+        const drives = await this.findDrivesForVolume(volume, driveRegExp);
+
+        const beebFiles: beebfs.File[] = [];
+
+        for (const drive of drives) {
+            const drivePath = path.join(volume.path, drive.hostFolder);
+            const infos = await inf.getINFsForFolder(drivePath, log);
+
+            for (const info of infos) {
+                if (!this.isValidBeebFileName(info.name)) {
+                    continue;
+                }
+
+                const dir = info.name[0];
+                if (!utils.matchesOptionalRegExp(dir, dirRegExp)) {
+                    continue;
+                }
+
+                const name = info.name.slice(2);
+                if (!utils.matchesOptionalRegExp(name, nameRegExp)) {
+                    continue;
+                }
+
+                const dfsFQN = new DFSFQN(drive.beebName, true, dir, true, name);
+                const fqn = new beebfs.FQN(volume, true, dfsFQN);
+                const file = new beebfs.File(info.hostPath, fqn, info.load, info.exec, info.attr | beebfs.DEFAULT_ATTR, false);
+                log?.pn(`${file}`);
+
+                beebFiles.push(file);
+            }
+        }
+
+        return beebFiles;
     }
 
     private getCommonInfoText(file: beebfs.File, fileSize: number): string {
