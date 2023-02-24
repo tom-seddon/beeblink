@@ -194,7 +194,7 @@ export async function getINFsForFolder(hostFolderPath: string, log: utils.Log | 
 
     const beebFileInfos: IINF[] = [];
 
-    log?.pn('getBeebFileInfosForFolder:');
+    log?.pn('getINFsForFolder:');
     log?.in(`    `);
     log?.pn(`folder path: ${hostFolderPath}`);
     log?.pn(`.inf regexp: ${extRegExp.source}`);
