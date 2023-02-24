@@ -29,9 +29,6 @@ import * as utils from './utils';
 import * as gitattributes from './gitattributes';
 import * as errors from './errors';
 import CommandLine from './CommandLine';
-import dfsType from './dfsType';
-//import pcType from './pcType';
-//import tubeHostType from './tubeHostType';
 import * as server from './server';
 
 /////////////////////////////////////////////////////////////////////////
@@ -56,6 +53,30 @@ const IGNORE_DIR_FILE_NAME = '.beeblink-ignore';
 const VOLUME_FILE_NAME = '.volume';
 
 const HOST_NAME_ESCAPE_CHAR = '#';
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// Slightly ugly, but the various FS types depend on this file for base classes.
+// TS doesn't support circular dependencies, so this file can't depend on them.
+
+let gDFSType: IFSType | undefined;
+
+export function setDFSType(dfsType: IFSType): void {
+    if (gDFSType !== undefined) {
+        throw new Error('DFSType already set');
+    }
+
+    gDFSType = dfsType;
+}
+
+function getDFSType(): IFSType {
+    if (gDFSType === undefined) {
+        throw new Error('DFSType not set');
+    }
+
+    return gDFSType;
+}
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -137,30 +158,34 @@ export function getHostChars(str: string): string {
 // are as supplied on command line, or filled in from defaults, as appropriate.
 //
 // This was a slightly late addition and isn't used everywhere it should be...
-export class FQN {
+export abstract class FQN {
     // Volume this FQN refers to. If this.volumeExplicit, the volume was
     // explicitly set (e.g., by being provided as part of the name on the
     // command line); otherwise, it was filled in from the current state.
     public readonly volume: Volume;
     public readonly volumeExplicit: boolean;
 
-    // FS-specific name portion of this FQN.
-    public fsFQN: IFSFQN;
-
-    public constructor(volume: Volume, volumeExplicit: boolean, fsFQN: IFSFQN) {
+    public constructor(volume: Volume, volumeExplicit: boolean) {
         this.volume = volume;
         this.volumeExplicit = volumeExplicit;
-        this.fsFQN = fsFQN;
     }
 
     public toString() {
-        return `::${this.volume.name}${this.fsFQN}`;
+        return `::${this.volume.name}`;//${this.fsFQN}`;
     }
 
     public equals(other: FQN): boolean {
-        return this.volume.equals(other.volume) && this.fsFQN.equals(other.fsFQN);
+        return this.volume.equals(other.volume);// && this.fsFQN.equals(other.fsFQN);
     }
+
+    public abstract isWildcard(): boolean;
 }
+
+// export interface IFSFQN {
+//     equals(other: IFSFQN): boolean;
+//     toString(): string;
+//     isWildcard(): boolean;
+// }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -436,16 +461,14 @@ export interface IFSType {
     findBeebFilesMatching(fqn: FQN, recurse: boolean, log: utils.Log | undefined): Promise<File[]>;
 
     // parse file/dir string, starting at index i. 
-    parseFileOrDirString(str: string, i: number, state: IFSState | undefined, parseAsDir: boolean): IFSFQN;
+    parseFileOrDirString(str: string, i: number, state: IFSState | undefined, parseAsDir: boolean, volume: Volume, volumeExplicit: boolean): FQN;
 
     // create appropriate FSFQN from FSFSP, filling in defaults from the given State as appropriate.
     //createFQN(fsp: IFSFSP, state: IFSState | undefined): IFSFQN;
 
     // get ideal host path for FQN, relative to whichever volume it's in. Used
     // when creating a new file.
-    //
-    // (Only the IFSFQN is supplied; the caller handles the volume.)
-    getIdealVolumeRelativeHostPath(fqn: IFSFQN): string;
+    getIdealVolumeRelativeHostPath(fqn: FQN): string;
 
     // get *CAT text.
     getCAT(fqn: FQN, state: IFSState | undefined, log: utils.Log | undefined): Promise<string>;
@@ -458,10 +481,7 @@ export interface IFSType {
     renameFile(file: File, newName: FQN): Promise<void>;
 
     // write the metadata for the given file.
-    //
-    // (Only the IFSFQN is supplied. It presumably contains all the info the FS
-    // needs to work out what Beeb name to record.)
-    writeBeebMetadata(hostPath: string, fqn: IFSFQN, load: number, exec: number, attr: number): Promise<void>;
+    writeBeebMetadata(hostPath: string, fqn: FQN, load: number, exec: number, attr: number): Promise<void>;
 
     // get new attributes from attribute string. Return undefined if invalid.
     getNewAttributes(oldAttr: number, attrString: string): number | undefined;
@@ -496,11 +516,11 @@ export interface IFSType {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export interface IFSFQN {
-    equals(other: IFSFQN): boolean;
-    toString(): string;
-    isWildcard(): boolean;
-}
+// export interface IFSFQN {
+//     equals(other: IFSFQN): boolean;
+//     toString(): string;
+//     isWildcard(): boolean;
+// }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -516,7 +536,7 @@ export async function getBeebFile(fqn: FQN, wildcardsOK: boolean, throwIfNotFoun
     log?.pn(`getBeebFile: ${fqn}; wildCardsOK=${wildcardsOK} throwIfNotFound=${throwIfNotFound}`);
 
     if (!wildcardsOK) {
-        if (fqn.fsFQN.isWildcard()) {
+        if (fqn.isWildcard()) {
             return errors.badName();
         }
     }
@@ -676,7 +696,7 @@ export class FS {
             return false;
         }
 
-        async function findBeebLinkVolumesMatchingRecursive(folderPath: string, indent: string): Promise<boolean> {
+        const findBeebLinkVolumesMatchingRecursive = async (folderPath: string, indent: string): Promise<boolean> => {
             log?.pn(indent + 'Looking in: ' + folderPath + '...');
 
             let names: string[];
@@ -721,7 +741,7 @@ export class FS {
                                 volumeName = name;
                             }
 
-                            if (addVolume(volumePath, volumeName, dfsType)) {
+                            if (addVolume(volumePath, volumeName, getDFSType())) {
                                 return true;
                             }
                         }
@@ -736,7 +756,7 @@ export class FS {
             }
 
             return false;
-        }
+        };
 
         for (const folder of searchFolders.beebLinkSearchFolders) {
             if (await findBeebLinkVolumesMatchingRecursive(folder, '')) {
@@ -815,7 +835,11 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public constructor(searchFolders: IFSSearchFolders, gaManipulator: gitattributes.Manipulator | undefined, log: utils.Log | undefined, locateVerbose: boolean) {
+    public constructor(
+        searchFolders: IFSSearchFolders,
+        gaManipulator: gitattributes.Manipulator | undefined,
+        log: utils.Log | undefined,
+        locateVerbose: boolean) {
         this.log = log;
 
         this.searchFolders = searchFolders;
@@ -1035,7 +1059,7 @@ export class FS {
             errors.nodeError(error);
         }
 
-        const newVolume = new Volume(volumePath, name, dfsType);
+        const newVolume = new Volume(volumePath, name, getDFSType());
         return newVolume;
     }
 
@@ -1099,16 +1123,14 @@ export class FS {
                     this.log?.in('  ');
                 }
 
-                let fsFQN: IFSFQN;
+                let fqn: FQN;
                 try {
-                    fsFQN = volume.type.parseFileOrDirString(arg, 0, undefined, false);
+                    fqn = volume.type.parseFileOrDirString(arg, 0, undefined, false, volume, true);
                 } catch (error) {
                     // if the arg wasn't even parseable by this volume's type, it
                     // presumably won't match any file...
                     continue;
                 }
-
-                const fqn = new FQN(volume, true, fsFQN);
 
                 const files = await volume.type.findBeebFilesMatching(fqn, true, this.locateVerbose ? this.log : undefined);
 
@@ -1576,7 +1598,7 @@ export class FS {
         if (this.gaManipulator !== undefined) {
             if (!newFQN.volume.isReadOnly()) {
                 // could be cleverer than this.
-                this.gaManipulator.renameFile(oldFile.hostPath, newFQN.volume.type.getIdealVolumeRelativeHostPath(newFQN.fsFQN));
+                this.gaManipulator.renameFile(oldFile.hostPath, newFQN.volume.type.getIdealVolumeRelativeHostPath(newFQN));
             }
         }
     }
@@ -1638,7 +1660,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private getHostPath(fqn: FQN): string {
-        return path.join(fqn.volume.path, fqn.volume.type.getIdealVolumeRelativeHostPath(fqn.fsFQN));
+        return path.join(fqn.volume.path, fqn.volume.type.getIdealVolumeRelativeHostPath(fqn));
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1727,7 +1749,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async writeBeebMetadata(hostPath: string, fqn: FQN, load: number, exec: number, attr: number): Promise<void> {
-        await fqn.volume.type.writeBeebMetadata(hostPath, fqn.fsFQN, load, exec, attr);
+        await fqn.volume.type.writeBeebMetadata(hostPath, fqn, load, exec, attr);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2196,13 +2218,8 @@ export class FS {
             volumeExplicit = false;
         }
 
-        const fsFQN = volume.type.parseFileOrDirString(str, i, state, parseAsDir);
-        return new FQN(volume, volumeExplicit, fsFQN);
-
-        // const fsp = volume.type.parseFileOrDirString(str, i, parseAsDir);
-
-
-        // return new FSP(volume, state, fsp);
+        const fqn = volume.type.parseFileOrDirString(str, i, state, parseAsDir, volume, volumeExplicit);
+        return fqn;
     }
 
     /////////////////////////////////////////////////////////////////////////

@@ -636,6 +636,16 @@ export function strieq(a: string, b: string): boolean {
     return a.toLowerCase() === b.toLowerCase();
 }
 
+export function struieq(a: string | undefined, b: string | undefined): boolean {
+    if (a === undefined && b === undefined) {
+        return true;
+    } else if (a !== undefined && b !== undefined) {
+        return strieq(a, b);
+    } else {
+        return false;
+    }
+}
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
