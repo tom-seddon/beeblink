@@ -449,11 +449,6 @@ export interface IFSType {
     // whether this FS supports writing.
     canWrite(): boolean;
 
-    // check if given string is a valid BBC file name. Used to check that a .INF
-    // file is valid, or whether a .INF/0-byte .INF PC file has a valid BBC
-    // name.
-    isValidBeebFileName(str: string): boolean;
-
     // get list of all Beeb files in volume.
     findBeebFilesInVolume(volume: Volume, log: utils.Log | undefined): Promise<File[]>;
 
