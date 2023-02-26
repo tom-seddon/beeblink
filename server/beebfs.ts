@@ -59,23 +59,39 @@ const HOST_NAME_ESCAPE_CHAR = '#';
 
 // Slightly ugly, but the various FS types depend on this file for base classes.
 // TS doesn't support circular dependencies, so this file can't depend on them.
+//
+// Random tidier-looking idea from google:
+// https://medium.com/visual-development/how-to-fix-nasty-circular-dependency-issues-once-and-for-all-in-javascript-typescript-a04c987cf0de
+//
+// But maybe there's some tidier data-driven mechanism hiding here.
 
-let gDFSType: IFSType | undefined;
-
-export function setDFSType(dfsType: IFSType): void {
-    if (gDFSType !== undefined) {
-        throw new Error('DFSType already set');
-    }
-
-    gDFSType = dfsType;
+interface IFSTypeRef {
+    type: IFSType | undefined;
+    name: string;
 }
 
-function getDFSType(): IFSType {
-    if (gDFSType === undefined) {
-        throw new Error('DFSType not set');
+const gDFSType: IFSTypeRef = { type: undefined, name: 'DFSType' };
+const gPCType: IFSTypeRef = { type: undefined, name: 'PCType' };
+
+function getFSType(typeRef: IFSTypeRef): IFSType {
+    if (typeRef.type === undefined) {
+        throw new Error(`${typeRef.name} not set`);
     }
 
-    return gDFSType;
+    return typeRef.type;
+}
+
+function setFSType(typeRef: IFSTypeRef, type: IFSType): void {
+    if (typeRef.type !== undefined) {
+        throw new Error(`${typeRef.name} already set`);
+    }
+
+    typeRef.type = type;
+}
+
+export function setFSTypes(dfsType: IFSType, pcType: IFSType): void {
+    setFSType(gDFSType, dfsType);
+    setFSType(gPCType, pcType);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -736,7 +752,7 @@ export class FS {
                                 volumeName = name;
                             }
 
-                            if (addVolume(volumePath, volumeName, getDFSType())) {
+                            if (addVolume(volumePath, volumeName, getFSType(gDFSType))) {
                                 return true;
                             }
                         }
@@ -770,9 +786,9 @@ export class FS {
             return false;
         }
 
-        // if (addFolders(searchFolders.pcFolders, pcType)) {
-        //     return volumes;
-        // }
+        if (addFolders(searchFolders.pcFolders, getFSType(gPCType))) {
+            return volumes;
+        }
 
         // if (addFolders(searchFolders.tubeHostFolders, tubeHostType)) {
         //     return volumes;
@@ -1054,7 +1070,7 @@ export class FS {
             errors.nodeError(error);
         }
 
-        const newVolume = new Volume(volumePath, name, getDFSType());
+        const newVolume = new Volume(volumePath, name, getFSType(gDFSType));
         return newVolume;
     }
 
