@@ -1407,7 +1407,7 @@ export class FS {
             await utils.mustNotExist(hostPath);
 
             // Create file.
-            await this.OSFILECreate(fqn, 0, 0, 0);
+            await this.OSFILECreate(fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, 0);
         }
 
         const contents: number[] = [];
