@@ -222,7 +222,7 @@ export class Server {
             new Command('DIR', '(<dir>)', this, this.dirCommand),
             new Command('DRIVE', '(<drive>)', this, this.driveCommand),
             new Command('DUMP', '<fsp>', this, this.dumpCommand),
-            new Command('HSTATUS', '([HF])', this, this.hstatusCommand),
+            new Command('HSTATUS', '([HFD])', this, this.hstatusCommand),
             new Command('INFO', '<afsp>', this, this.infoCommand),
             new Command('LIB', '(<dir>)', this, this.libCommand),
             new Command('LIST', '<fsp>', this, this.listCommand),
