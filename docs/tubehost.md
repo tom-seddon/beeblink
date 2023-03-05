@@ -36,13 +36,10 @@ and so on.
 
   Relatedly, while `*LOCATE` will find files in TubeHost volumes, the
   output is not a valid BBC name: the drive number is invalid (as the
-  drive is unknown), and the server path is printed separately(so you
+  drive is unknown), and the server path is printed separately (so you
   can guess with host folder/disk it's on).
   
 - `*DIN` assignments are only retained while the volume is selected,
   and will be lost if you switch volume
 
-- looks like TubeHost has no specific file name limited, but the
-  BeebLink 10 char limit currently still applies
-  
 - the library drive L is not yet supported
