@@ -265,8 +265,12 @@ class PCType implements beebfs.IFSType {
         return pcFQN.name;
     }
 
-    public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        return await this.findFiles(volume, undefined, log);
+    public async findBeebFilesInVolume(volumeOrFQN: beebfs.Volume | beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
+        if (volumeOrFQN instanceof beebfs.Volume) {
+            return await this.findFiles(volumeOrFQN, undefined, log);
+        } else {
+            return this.findBeebFilesMatching(volumeOrFQN, true, log);
+        }
     }
 
     public async findBeebFilesMatching(fqn: beebfs.FQN, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {

@@ -979,10 +979,31 @@ class TubeHostType implements beebfs.IFSType {
         return path.join(tubeHostFQN.hostFolder, beebfs.getHostChars(tubeHostFQN.dir) + '.' + beebfs.getHostChars(tubeHostFQN.name)) as VolRelPath;
     }
 
-    public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    public async findBeebFilesInVolume(volumeOrFQN: beebfs.Volume | beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
         const files: beebfs.File[] = [];
 
-        await this.findBeebFilesInVolumeRecurse(volume, log, files, '' as VolRelPath);
+        let volume: beebfs.Volume;
+        let dirRegExp: RegExp | undefined;
+        let nameRegExp: RegExp | undefined;
+        if (volumeOrFQN instanceof beebfs.FQN) {
+            const tubeHostFQN = mustBeTubeHostFQN(volumeOrFQN);
+
+            // TubeHost volume files have unknowable drives, but that will still
+            // match an explicit '#' or '*'.
+            if (tubeHostFQN.driveExplicit &&
+                tubeHostFQN.drive !== utils.MATCH_N_CHAR &&
+                tubeHostFQN.drive !== utils.MATCH_ONE_CHAR) {
+                return files;
+            }
+
+            volume = tubeHostFQN.volume;
+            dirRegExp = utils.getRegExpFromAFSP(tubeHostFQN.dir);
+            nameRegExp = tubeHostFQN.name !== undefined ? utils.getRegExpFromAFSP(tubeHostFQN.name) : undefined;
+        } else {
+            volume = volumeOrFQN;
+        }
+
+        await this.findBeebFilesInVolumeRecurse(volume, log, files, dirRegExp, nameRegExp, '' as VolRelPath);
 
         return files;
     }
@@ -1193,16 +1214,22 @@ class TubeHostType implements beebfs.IFSType {
 
     // }
 
-    private async findBeebFilesInVolumeRecurse(volume: beebfs.Volume, log: utils.Log | undefined, files: beebfs.File[], volRelPath: VolRelPath): Promise<void> {
+    private async findBeebFilesInVolumeRecurse(
+        volume: beebfs.Volume,
+        log: utils.Log | undefined,
+        files: beebfs.File[],
+        dirRegExp: RegExp | undefined,
+        nameRegExp: RegExp | undefined,
+        volRelPath: VolRelPath): Promise<void> {
         const tubeHostFolder = await scanTubeHostFolder(getAbsPath(volume, volRelPath), log);
         for (const disk of tubeHostFolder.disks) {
             const diskPath = path.join(volRelPath, disk.name) as VolRelPath;
-            await this.addBeebFilesInFolder(files, volume, diskPath, '*', true, undefined, undefined, log);
+            await this.addBeebFilesInFolder(files, volume, diskPath, '*', true, dirRegExp, nameRegExp, log);
         }
 
         for (const folder of tubeHostFolder.folders) {
             const folderPath = path.join(volRelPath, folder) as VolRelPath;
-            await this.findBeebFilesInVolumeRecurse(volume, log, files, folderPath);
+            await this.findBeebFilesInVolumeRecurse(volume, log, files, dirRegExp, nameRegExp, folderPath);
         }
     }
 

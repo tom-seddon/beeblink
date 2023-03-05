@@ -537,8 +537,12 @@ class DFSType implements beebfs.IFSType {
         return path.join(dfsFQN.drive.toUpperCase(), beebfs.getHostChars(dfsFQN.dir) + '.' + beebfs.getHostChars(dfsFQN.name!));
     }
 
-    public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        return await this.findFiles(volume, undefined, undefined, undefined, log);
+    public async findBeebFilesInVolume(volumeOrFQN: beebfs.Volume | beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
+        if (volumeOrFQN instanceof beebfs.Volume) {
+            return await this.findFiles(volumeOrFQN, undefined, undefined, undefined, log);
+        } else {
+            return await this.findBeebFilesMatching(volumeOrFQN, false, log);
+        }
     }
 
     public async findBeebFilesMatching(fqn: beebfs.FQN, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {

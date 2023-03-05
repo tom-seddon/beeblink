@@ -199,12 +199,6 @@ export abstract class FQN {
     public abstract isWildcard(): boolean;
 }
 
-// export interface IFSFQN {
-//     equals(other: IFSFQN): boolean;
-//     toString(): string;
-//     isWildcard(): boolean;
-// }
-
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -468,7 +462,14 @@ export interface IFSType {
     canWrite(): boolean;
 
     // get list of all Beeb files in volume.
-    findBeebFilesInVolume(volume: Volume, log: utils.Log | undefined): Promise<File[]>;
+    //
+    // If volumeOrFQN is a Volume, find all files in the volume; if volumeOrFQN
+    // is a FQN, find all files matching that FQN.
+    //
+    // When called with a FQN, this entry point differs from
+    // findBeebFilesMatching in that it may discover files that aren't directly
+    // accessible via a Beeb path, but could become so by arrangement.
+    findBeebFilesInVolume(volumeOrFQN: Volume | FQN, log: utils.Log | undefined): Promise<File[]>;
 
     // get list of Beeb files matching FQN. The volume will be of the right type.
     findBeebFilesMatching(fqn: FQN, recurse: boolean, log: utils.Log | undefined): Promise<File[]>;
@@ -513,27 +514,6 @@ export interface IFSType {
     // the current FS. (What's the value of distinguishing this from ''? TBC...)
     getAttrString(file: File): string | undefined;
 }
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-// Name as supplied by caller. Properties may be undefined if they weren't
-// provided.
-//
-// explicitly mentioning toString avoids the no-empty-interface tslint warning
-// (that I haven't decided what to do about yet).
-// export interface IFSFSP {
-//     toString(): string;
-// }
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-// export interface IFSFQN {
-//     equals(other: IFSFQN): boolean;
-//     toString(): string;
-//     isWildcard(): boolean;
-// }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -1145,7 +1125,7 @@ export class FS {
                     continue;
                 }
 
-                const files = await volume.type.findBeebFilesMatching(fqn, true, this.locateVerbose ? this.log : undefined);
+                const files = await volume.type.findBeebFilesInVolume(fqn, this.locateVerbose ? this.log : undefined);
 
                 for (const file of files) {
                     foundFiles.push(file);
