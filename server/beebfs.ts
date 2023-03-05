@@ -1133,7 +1133,7 @@ export class FS {
 
             try {
                 if (this.locateVerbose) {
-                    this.log?.in('  ');
+                    this.log?.inN(2);
                 }
 
                 let fqn: FQN;

@@ -307,6 +307,10 @@ export class Log {
         this.pushAbsoluteIndent(this.column);
     }
 
+    public inN(n: number): void {
+        this.pushAbsoluteIndent(this.column + n);
+    }
+
     public out() {
         if (this.indentStack.length > 0) {
             const newIndent = this.indentStack.pop();
