@@ -472,20 +472,20 @@ export class Server {
                 abbrevUC += '.';
                 if (part0UC === abbrevUC) {
                     return true;
-                } else if (part0UC.substr(0, abbrevUC.length) === abbrevUC) {
+                } else if (part0UC.substring(0, abbrevUC.length) === abbrevUC) {
                     // The '.' is a part separator, so split into two.
-                    commandLine.parts.splice(0, 1, part0UC.substr(0, abbrevUC.length), part0UC.substr(abbrevUC.length));
+                    commandLine.parts.splice(0, 1, part0UC.substring(0, abbrevUC.length), part0UC.substring(abbrevUC.length));
                     return true;
                 }
             } else {
                 if (part0UC === abbrevUC) {
                     return true;
-                } else if (part0UC.length > abbrevUC.length && part0UC.substr(0, abbrevUC.length) === abbrevUC) {
+                } else if (part0UC.length > abbrevUC.length && part0UC.substring(0, abbrevUC.length) === abbrevUC) {
                     // Not quite sure what the DFS rules are here exactly,
                     // but *DRIVEX tries to *RUN DRIVEX, *DRIVE0 selects
                     // drive 0, and *DRIVE- gives Bad Drive...
                     if (!utils.isalpha(part0UC[abbrevUC.length])) {
-                        commandLine.parts.splice(0, 1, part0UC.substr(0, abbrevUC.length), part0UC.substr(abbrevUC.length));
+                        commandLine.parts.splice(0, 1, part0UC.substring(0, abbrevUC.length), part0UC.substring(abbrevUC.length));
                         return true;
                     }
                 }
@@ -1540,7 +1540,7 @@ export class Server {
                 for (; ;) {
                     set = new Set();
                     for (const foundFileHash of foundFileHashes) {
-                        set.add(foundFileHash.substr(0, foundFileHashWidth));
+                        set.add(foundFileHash.substring(0, foundFileHashWidth));
                     }
 
                     if (set.size === numUniqueHashes) {
@@ -1596,7 +1596,7 @@ export class Server {
                             break;
 
                         case 'h':
-                            line += ` ${foundFileHashes[foundFileIdx].substr(0, foundFileHashWidth)}`;
+                            line += ` ${foundFileHashes[foundFileIdx].substring(0, foundFileHashWidth)}`;
                             break;
 
                         case 'c':

@@ -250,7 +250,7 @@ class PCType implements beebfs.IFSType {
             // every dir is a bad dir for a PC volume...
             return errors.badDir();
         } else {
-            const name = str.substr(i);
+            const name = str.substring(i);
             if (!this.isValidBeebFileName(name)) {
                 return errors.badName();
             }

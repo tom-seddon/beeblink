@@ -351,7 +351,7 @@ class DFSState implements beebfs.IFSState {
     }
 
     public async setTitle(title: string): Promise<void> {
-        const buffer = Buffer.from(title.substr(0, MAX_TITLE_LENGTH) + os.EOL, 'binary');
+        const buffer = Buffer.from(title.substring(0, MAX_TITLE_LENGTH) + os.EOL, 'binary');
         await beebfs.writeFile(path.join(this.volume.path, this.current.drive, TITLE_FILE_NAME), buffer);
     }
 
@@ -692,7 +692,7 @@ class DFSType implements beebfs.IFSType {
             return DEFAULT_TITLE;
         }
 
-        return utils.getFirstLine(buffer).substr(0, MAX_TITLE_LENGTH);
+        return utils.getFirstLine(buffer).substring(0, MAX_TITLE_LENGTH);
     }
 
     public async loadBootOption(volume: beebfs.Volume, drive: string): Promise<number> {

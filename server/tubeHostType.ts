@@ -106,7 +106,7 @@ async function loadFolderTitle(folderPath: AbsPath): Promise<string> {
         return DEFAULT_TITLE;
     }
 
-    return utils.getFirstLine(buffer).substr(0, MAX_TITLE_LENGTH);
+    return utils.getFirstLine(buffer).substring(0, MAX_TITLE_LENGTH);
 }
 
 async function saveFolderTitle(folderPath: AbsPath, title: string): Promise<void> {

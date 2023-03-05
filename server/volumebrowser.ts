@@ -351,7 +351,7 @@ export class Browser {
                 this.mode = BrowserMode.Browse;
                 this.printBrowser();
             } else {
-                this.filter = this.filter.substr(0, this.filter.length - 1);
+                this.filter = this.filter.substring(0, this.filter.length - 1);
                 this.printFilter();
             }
         } else if (key === 27) {
@@ -394,7 +394,7 @@ export class Browser {
         this.print(blank);
 
         const titleLength = Math.min(title.length, this.width - 6);
-        this.print(' ' + this.boxTL + this.boxTitleL + title.substr(0, titleLength) + this.boxTitleR + ''.padEnd(this.width - 6 - titleLength, this.boxH) + this.boxTR + ' ');
+        this.print(' ' + this.boxTL + this.boxTitleL + title.substring(0, titleLength) + this.boxTitleR + ''.padEnd(this.width - 6 - titleLength, this.boxH) + this.boxTR + ' ');
         for (let i = 0; i < numInnerLines; ++i) {
             this.print(' ' + this.boxV + ''.padEnd(this.width - 4, ' ') + this.boxV + ' ');
         }
@@ -410,7 +410,7 @@ export class Browser {
         const width = this.width - 4;
         const lines = [];
         for (let i = 0; i < volumePath.length; i += width) {
-            lines.push(volumePath.substr(i, width));
+            lines.push(volumePath.substring(i, i + width));
         }
 
         const y = this.printBox('Full path', lines.length);
@@ -470,12 +470,12 @@ export class Browser {
 
         let x = column.x - this.x;
         if (x < 0) {
-            text = text.substr(-x);
+            text = text.substring(-x);
             x = 0;
         }
 
         if (x + offset + text.length > this.width) {
-            text = text.substr(0, this.width - (x + this.offset));
+            text = text.substring(0, this.width - (x + this.offset));
         }
 
         if (text.length > 0) {
