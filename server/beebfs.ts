@@ -30,6 +30,7 @@ import * as gitattributes from './gitattributes';
 import * as errors from './errors';
 import CommandLine from './CommandLine';
 import * as server from './server';
+import * as inf from './inf';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -1404,7 +1405,7 @@ export class FS {
             }
 
             hostPath = this.getHostPath(fqn);
-            await utils.mustNotExist(hostPath);
+            await inf.mustNotExist(hostPath);
 
             // Create file.
             await this.OSFILECreate(fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, 0);
@@ -1714,7 +1715,7 @@ export class FS {
         } else {
             hostPath = this.getHostPath(fqn);
 
-            await utils.mustNotExist(hostPath);
+            await inf.mustNotExist(hostPath);
         }
 
         const attr = DEFAULT_ATTR;

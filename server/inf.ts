@@ -26,6 +26,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as utils from './utils';
 import * as beebfs from './beebfs';
+import * as errors from './errors';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -73,6 +74,22 @@ function tryParseAddress(addressString: string): number | undefined {
     }
 
     return address;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// Causes a 'Exists on server' error if the given host file or metadata
+// counterpart exists.
+//
+// This is to cater for trying to create a new file that would have the same
+// PC name as an existing file. Could be due to mismatches between BBC names
+// in the .inf files and the actual names on disk, could be due to loose
+// non-BBC files on disk...
+export async function mustNotExist(hostPath: string): Promise<void> {
+    if (await utils.tryStat(hostPath) !== undefined || await utils.tryStat(hostPath + ext) !== undefined) {
+        return errors.exists('Exists on server');
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////

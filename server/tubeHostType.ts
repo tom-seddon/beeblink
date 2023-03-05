@@ -1230,7 +1230,7 @@ class TubeHostType implements beebfs.IFSType {
         const newFQNTubeHostName = mustBeTubeHostFQN(newFQN);
 
         const newHostPath = getAbsPath(newFQN.volume, this.getIdealVolumeRelativeHostPath(newFQNTubeHostName));
-        await utils.mustNotExist(newHostPath);
+        await inf.mustNotExist(newHostPath);
 
         const newFile = new beebfs.File(newHostPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr, false);
 

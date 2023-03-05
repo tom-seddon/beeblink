@@ -543,7 +543,7 @@ async function getAllSerialDevices(options: ICommandLineOptions): Promise<ISeria
             shouldOpen = false;
             reason = 'explicitly excluded';
         }
-        
+
         // By default, exclude devices that appear multiple times in the list.
         if (shouldOpen === undefined) {
             for (const otherPort of ports) {
@@ -883,15 +883,15 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         options.upurs_rom = DEFAULT_BEEBLINK_UPURS_ROM;
     }
 
-    if (!await utils.fsExists(options.avr_rom)) {
+    if (!await utils.isFile(options.avr_rom)) {
         process.stderr.write(`AVR ROM image not found for update tool/bootstrap: ${options.avr_rom} \n`);
     }
 
-    if (!await utils.fsExists(options.tube_serial_rom)) {
+    if (!await utils.isFile(options.tube_serial_rom)) {
         process.stderr.write(`Tube Serial ROM image not found for update tool/bootstrap: ${options.tube_serial_rom} \n`);
     }
 
-    if (!await utils.fsExists(options.upurs_rom)) {
+    if (!await utils.isFile(options.upurs_rom)) {
         process.stderr.write(`UPURS ROM image not found for update tool/bootstrap: ${options.upurs_rom} \n`);
     }
 

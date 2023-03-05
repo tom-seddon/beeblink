@@ -29,7 +29,6 @@ import * as path from 'path';
 import { Chalk } from 'chalk';
 import * as beeblink from './beeblink';
 import * as errors from './errors';
-import * as inf from './inf';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -49,7 +48,6 @@ export const fsClose = util.promisify(fs.close);
 export const fsRead = util.promisify(fs.read);
 export const fsRename = util.promisify(fs.rename);
 export const fsMkdir = util.promisify(fs.mkdir);
-export const fsExists = util.promisify(fs.exists);
 export const fsWriteFile = util.promisify(fs.writeFile);
 
 /////////////////////////////////////////////////////////////////////////
@@ -691,6 +689,22 @@ export async function tryStat(filePath: string): Promise<fs.Stats | undefined> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+export async function isFile(filePath: string): Promise<boolean> {
+    const stat = await tryStat(filePath);
+    if (stat === undefined) {
+        return false;
+    }
+
+    if (!stat.isFile()) {
+        return false;
+    }
+
+    return true;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 export async function isFolder(folderPath: string): Promise<boolean> {
     const stat = await tryStat(folderPath);
     if (stat === undefined) {
@@ -946,22 +960,6 @@ export function getFirstLine(b: Buffer): string {
     }
 
     return b.toString('binary', 0, i).trim();
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-// Causes a 'Exists on server' error if the given host file or metadata
-// counterpart exists.
-//
-// This is to cater for trying to create a new file that would have the same
-// PC name as an existing file. Could be due to mismatches between BBC names
-// in the .inf files and the actual names on disk, could be due to loose
-// non-BBC files on disk...
-export async function mustNotExist(hostPath: string): Promise<void> {
-    if (await fsExists(hostPath) || await fsExists(hostPath + inf.ext)) {
-        return errors.exists('Exists on server');
-    }
 }
 
 /////////////////////////////////////////////////////////////////////////

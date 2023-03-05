@@ -655,7 +655,7 @@ class DFSType implements beebfs.IFSType {
         const newDFSFQN = mustBeDFSFQN(newFQN);
 
         const newHostPath = path.join(newFQN.volume.path, this.getIdealVolumeRelativeHostPath(newDFSFQN));
-        await utils.mustNotExist(newHostPath);
+        await inf.mustNotExist(newHostPath);
 
         const newFile = new beebfs.File(newHostPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr, false);
 
