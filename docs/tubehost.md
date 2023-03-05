@@ -9,14 +9,14 @@ point the BeebLink server at your TubeHost files, and access them via
 BeebLink on your BBC.
 
 To do this, use the `--tube-host` command line option, and point it at
-your disk base folder, which will be `~/Beeb_Disks` by default (unless
-you've changed it). For example:
+your disk base folder, which will probably be `~/Beeb_Disks`, as
+that's where the TubeHost server expects to find it. For example:
 
     ./beeblink_server --tube-host ~/Beeb_Disks ./volumes
 	
-This will add an additional volume, named after the folder (here,
-`Beeb_Disks`), containing all your TubeHost disks. To access them, use
-`*VOL`, e.g.:
+This will add an additional volume, named after the folder (in this
+case, `Beeb_Disks`), containing all your TubeHost disks. To access
+them, use `*VOL`, e.g.:
 
 	*VOL BEEB_DISKS
 	
@@ -37,9 +37,7 @@ and so on.
   Relatedly, while `*LOCATE` will find files in TubeHost volumes, the
   output is not a valid BBC name: the drive number is invalid (as the
   drive is unknown), and the server path is printed separately (so you
-  can guess with host folder/disk it's on).
+  can figure out host folder/disk contains it)
   
 - `*DIN` assignments are only retained while the volume is selected,
   and will be lost if you switch volume
-
-- the library drive L is not yet supported
