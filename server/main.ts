@@ -37,7 +37,7 @@ import * as SerialPort from 'serialport';
 import * as os from 'os';
 import dfsType from './dfsType';
 import pcType from './pcType';
-//import tubeHostType from './tubeHostType';
+import tubeHostType from './tubeHostType';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -1745,7 +1745,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
 /////////////////////////////////////////////////////////////////////////
 
 async function main(options: ICommandLineOptions) {
-    beebfs.setFSTypes(dfsType, pcType);
+    beebfs.setFSTypes(dfsType, pcType, tubeHostType);
 
     const log = utils.Log.create('', process.stderr, options.verbose);
 

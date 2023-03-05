@@ -72,6 +72,7 @@ interface IFSTypeRef {
 
 const gDFSType: IFSTypeRef = { type: undefined, name: 'DFSType' };
 const gPCType: IFSTypeRef = { type: undefined, name: 'PCType' };
+const gTubeHostType: IFSTypeRef = { type: undefined, name: 'TubeHostType' };
 
 function getFSType(typeRef: IFSTypeRef): IFSType {
     if (typeRef.type === undefined) {
@@ -89,9 +90,10 @@ function setFSType(typeRef: IFSTypeRef, type: IFSType): void {
     typeRef.type = type;
 }
 
-export function setFSTypes(dfsType: IFSType, pcType: IFSType): void {
+export function setFSTypes(dfsType: IFSType, pcType: IFSType, tubeHostType: IFSType): void {
     setFSType(gDFSType, dfsType);
     setFSType(gPCType, pcType);
+    setFSType(gTubeHostType, tubeHostType);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -790,9 +792,9 @@ export class FS {
             return volumes;
         }
 
-        // if (addFolders(searchFolders.tubeHostFolders, tubeHostType)) {
-        //     return volumes;
-        // }
+        if (addFolders(searchFolders.tubeHostFolders, getFSType(gTubeHostType))) {
+            return volumes;
+        }
 
         return volumes;
     }
