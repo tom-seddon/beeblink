@@ -68,6 +68,10 @@ const HTTP_LISTEN_PORT = 48875;//0xbeeb;
 
 const BEEBLINK_SENDER_ID = 'beeblink-sender-id';
 
+const SERIAL_EXCLUDE_ALL_OPTION_NAME = `--serial-exclude-all`;
+const SERIAL_EXCLUDE_OPTION_NAME = `--serial-exclude`;
+const SERIAL_INCLUDE_OPTION_NAME = `--serial-include`;
+
 interface IUSBSerialDevice {
     description: string;
     vid: number;
@@ -115,6 +119,7 @@ interface IConfigFile {
     git: boolean | undefined;
     serial_include: string[] | undefined;
     serial_exclude: string[] | undefined;
+    serial_exclude_all: boolean | undefined;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -142,7 +147,7 @@ interface ICommandLineOptions {
     serial_verbose: string[] | null;
     serial_sync_verbose: string[] | null;
     serial_data_verbose: string[] | null;
-    list_serial_devices: boolean;
+    serial_list_devices: boolean;
     serial_exclude: string[] | null;
     pcFolders: string[];
     tubeHostFolders: string[];
@@ -152,6 +157,7 @@ interface ICommandLineOptions {
     serial_include: string[] | null;
     serial_test_send_file: string | null;
     excludeVolumeRegExps: string[];
+    serial_exclude_all: boolean;
 }
 
 // don't shift to do this!
@@ -299,6 +305,10 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
         for (const e of config.serial_exclude) {
             options.serial_exclude.push(e);
         }
+    }
+
+    if (config.serial_exclude_all !== undefined) {
+        options.serial_exclude_all = config.serial_exclude_all;
     }
 
     if (options.avr_rom === null) {
@@ -476,6 +486,7 @@ function getOSXLocationId(d: usb.Device): string {
 
 interface ISerialDevice {
     portInfo: SerialPort.PortInfo;
+    autoDetected: boolean;
     shouldOpen: boolean;
     shouldOpenReason: string;
 }
@@ -519,16 +530,20 @@ async function getAllSerialDevices(options: ICommandLineOptions): Promise<ISeria
     for (const portInfo of portInfos) {
         let shouldOpen: boolean | undefined;
         let reason = '';
+        let autoDetected = false;
 
         // Explicit include/exclude takes priority over anything else.
-        if (isSerialPortPathInList(portInfo, options.serial_exclude)) {
-            shouldOpen = false;
-            reason = 'explicitly excluded';
-        } else if (isSerialPortPathInList(portInfo, options.serial_include)) {
+        if (isSerialPortPathInList(portInfo, options.serial_include)) {
             shouldOpen = true;
             reason = 'explicitly included';
+        } else if (options.serial_exclude_all) {
+            shouldOpen = false;
+            reason = `excluded by ${SERIAL_EXCLUDE_ALL_OPTION_NAME}`;
+        } else if (isSerialPortPathInList(portInfo, options.serial_exclude)) {
+            shouldOpen = false;
+            reason = 'explicitly excluded';
         }
-
+        
         // By default, exclude devices that appear multiple times in the list.
         if (shouldOpen === undefined) {
             for (const otherPort of ports) {
@@ -557,12 +572,13 @@ async function getAllSerialDevices(options: ICommandLineOptions): Promise<ISeria
             }
         }
 
-        // By default, include supported devices.
+        // Auto-detect supported devices, if not disabled.
         if (shouldOpen === undefined) {
             for (const supportedDevice of SUPPORTED_USB_SERIAL_DEVICES) {
                 if (isSerialPortUSBDevice(portInfo, supportedDevice)) {
+                    autoDetected = true;
+                    reason = `auto-detected device: ${supportedDevice.description}`;
                     shouldOpen = true;
-                    reason = `auto-detected device as: ${supportedDevice.description}`;
                 }
             }
         }
@@ -574,7 +590,7 @@ async function getAllSerialDevices(options: ICommandLineOptions): Promise<ISeria
             reason = 'unknown device';
         }
 
-        ports.push({ portInfo, shouldOpen, shouldOpenReason: reason });
+        ports.push({ portInfo, autoDetected, shouldOpen, shouldOpenReason: reason });
     }
 
     return ports;
@@ -821,7 +837,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         await loadConfig(options, options.load_config, true);
     }
 
-    if (options.list_serial_devices) {
+    if (options.serial_list_devices) {
         await listSerialDevices(options);
         return false;
     }
@@ -849,6 +865,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
             git: options.git,
             serial_include: options.serial_include !== null ? options.serial_include : undefined,
             serial_exclude: options.serial_exclude !== null ? options.serial_exclude : undefined,
+            serial_exclude_all: options.serial_exclude_all,
         };
 
         await utils.fsMkdirAndWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
@@ -867,15 +884,15 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     }
 
     if (!await utils.fsExists(options.avr_rom)) {
-        process.stderr.write(`AVR ROM image not found for *BLSELFUPDATE/bootstrap: ${options.avr_rom} \n`);
+        process.stderr.write(`AVR ROM image not found for update tool/bootstrap: ${options.avr_rom} \n`);
     }
 
     if (!await utils.fsExists(options.tube_serial_rom)) {
-        process.stderr.write(`Tube Serial ROM image not found for *BLSELFUPDATE/bootstrap: ${options.tube_serial_rom} \n`);
+        process.stderr.write(`Tube Serial ROM image not found for update tool/bootstrap: ${options.tube_serial_rom} \n`);
     }
 
     if (!await utils.fsExists(options.upurs_rom)) {
-        process.stderr.write(`UPURS ROM image not found for *BLSELFUPDATE/bootstrap: ${options.upurs_rom} \n`);
+        process.stderr.write(`UPURS ROM image not found for update tool/bootstrap: ${options.upurs_rom} \n`);
     }
 
     return true;
@@ -918,7 +935,7 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
 
     volumes = volumes.filter((volume) => !volume.isReadOnly());
     volumes = volumes.filter(async (volume) => !(await isGit(volume.path)));
-    process.stderr.write(`Found ${volumes.length}/${oldNumVolumes} writeable git-controlled volumes.\n`);
+    process.stderr.write(`gitattributes: found ${volumes.length}/${oldNumVolumes} writeable git-controlled volumes.\n`);
 
     for (const volume of volumes) {
         gaManipulator.makeVolumeNotText(volume);
@@ -926,7 +943,7 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
     }
 
     gaManipulator.whenQuiescent(() => {
-        process.stderr.write('Finished scanning for BASIC files.\n');
+        process.stderr.write('gitattributes: finished scanning for BASIC files.\n');
     });
 
     return gaManipulator;
@@ -1132,11 +1149,11 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
         // manually, and the setting is persistent.
     } else if (process.platform === 'darwin') {
         if (portInfo.locationId === undefined) {
-            process.stderr.write(`Not setting FTDI latency timer for ${getSerialPortPath(portInfo)} - no locationId.\n`);
+            process.stderr.write(`${getSerialPortPath(portInfo)}: not setting FTDI latency timer - no locationId.\n`);
         } else if (portInfo.productId === undefined) {
-            process.stderr.write(`Not setting FTDI latency timer for ${getSerialPortPath(portInfo)} - no productId.\n`);
+            process.stderr.write(`${getSerialPortPath(portInfo)}: not setting FTDI latency timer - no productId.\n`);
         } else if (portInfo.vendorId === undefined) {
-            process.stderr.write(`Not setting FTDI latency timer for ${getSerialPortPath(portInfo)} - no vendorId.\n`);
+            process.stderr.write(`${getSerialPortPath(portInfo)}: not setting FTDI latency timer - no vendorId.\n`);
         } else {
             // Send USB control request to set the latency timer.
 
@@ -1157,12 +1174,12 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
             }
 
             if (usbDevice === undefined) {
-                process.stderr.write(`Not setting FTDI latency timer for ${getSerialPortPath(portInfo)} - didn't find corresponding USB device after ${numAttempts} attempt(s)\n`);
+                process.stderr.write(`${getSerialPortPath(portInfo)}: not setting FTDI latency timer - didn't find corresponding USB device after ${numAttempts} attempt(s)\n`);
                 return;
             }
 
             try {
-                process.stderr.write(`Setting FTDI latency timer for ${getSerialPortPath(portInfo)} to ${ms}ms.\n`);
+                process.stderr.write(`${getSerialPortPath(portInfo)}: setting FTDI latency timer to ${ms}ms.\n`);
 
                 usbDevice.open();
 
@@ -1208,14 +1225,14 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
 
                 serialLog?.pn(`Done... hopefully.`);
             } catch (error) {
-                process.stderr.write(`Error setting FTDI latency timer for ${getSerialPortPath(portInfo)}: ${error}\n`);
+                process.stderr.write(`${getSerialPortPath(portInfo)}: error setting FTDI latency timer: ${error}\n`);
             } finally {
                 usbDevice.close();
             }
         }
     } else if (process.platform === 'linux') {
         if (ioctl === undefined) {
-            process.stderr.write(`Not setting low latency mode for ${getSerialPortPath(portInfo)} - ioctl module not available.\n`);
+            process.stderr.write(`${getSerialPortPath(portInfo)}: not setting low latency - ioctl module not available.\n`);
         } else {
             // The latency timer value can be found in the file
             // /sys/bus/usb-serial/devices/<<DEVICE>>/latency_timer, only
@@ -1263,7 +1280,7 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
 
                 ioctl(fd, TIOCSSERIAL, buf);
             } catch (error) {
-                process.stderr.write(`Error setting low latency mode for ${getSerialPortPath(portInfo)}: ${error}\n`);
+                process.stderr.write(`${getSerialPortPath(portInfo)}: error setting low latency mode: ${error}\n`);
             } finally {
                 if (fd >= 0) {
                     await utils.fsClose(fd);
@@ -1702,8 +1719,15 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
 
     const portStateByPortPath = new Map<string, IPortState>();
 
+    let autoDetectMessageShown = false;
+
     for (; ;) {
+        let numAutoDetected = 0;
         for (const device of await getOpenableSerialDevices(options)) {
+            if (device.autoDetected) {
+                ++numAutoDetected;
+            }
+
             const portPath = getSerialPortPath(device.portInfo);
 
             let value = portStateByPortPath.get(portPath);
@@ -1735,6 +1759,12 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
                     portState.active = false;
                 });
             }
+        }
+
+        if (numAutoDetected > 0 && !autoDetectMessageShown) {
+            process.stdout.write(`Note: using ${numAutoDetected} auto-detected serial devices.\n`);
+            process.stdout.write(`Note: to control which devices get opened, see --verbose --help output for these options: ${SERIAL_EXCLUDE_OPTION_NAME}, ${SERIAL_EXCLUDE_ALL_OPTION_NAME}, ${SERIAL_INCLUDE_OPTION_NAME}\n`);
+            autoDetectMessageShown = true;
         }
 
         await delayMS(DEVICE_RETRY_DELAY_MS);
@@ -1861,8 +1891,9 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     fullHelpOnly(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output' });
 
     // Serial devices
-    fullHelpOnly(['--serial-include'], { action: 'append', metavar: 'DEVICE', help: 'listen on serial port DEVICE' });
-    fullHelpOnly(['--serial-exclude'], { action: 'append', metavar: 'DEVICE', help: 'don\'t listen on serial port DEVICE' });
+    fullHelpOnly([SERIAL_INCLUDE_OPTION_NAME], { action: 'append', metavar: 'DEVICE', help: 'listen on serial port DEVICE' });
+    fullHelpOnly([SERIAL_EXCLUDE_OPTION_NAME], { action: 'append', metavar: 'DEVICE', help: 'don\'t listen on serial port DEVICE' });
+    fullHelpOnly([SERIAL_EXCLUDE_ALL_OPTION_NAME], { action: 'storeTrue', help: `don't listen on any serial port (must explicitly specify ports to use using ${SERIAL_INCLUDE_OPTION_NAME})` });
     fullHelpOnly(['--serial-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial-related output (specify devices individually to be verbose for just those, or just --serial-verbose on its own for all devices)' });
     fullHelpOnly(['--serial-sync-verbose'], { action: 'append', nargs: '?', constant: '', help: 'extra serial sync-related output (specify devices same as --serial-verbose)' });
     fullHelpOnly(['--serial-data-verbose'], { action: 'append', nargs: '?', constant: '', help: 'dump raw serial data sent/received (specify devices same as --serial-verbose)' });
@@ -1870,7 +1901,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     fullHelpOnly(['--serial-test-bbc-to-pc'], { action: 'storeTrue', help: 'run BBC->PC test (goes with T.BBC-TO-PC on the BBC)' });
     fullHelpOnly(['--serial-test-send-file'], { metavar: 'FILE', defaultValue: null, help: 'send file, PC->BBC' });
     fullHelpOnly(['--serial-full-size-messages'], { action: 'storeTrue', help: 'always send full-size messages, and never use any shortened syntax (affects all devices) (may reveal bug(s) in pre-Nov 2021 ROM versions...)' });
-    always(['--list-serial-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
+    always(['--serial-list-devices'], { action: 'storeTrue', help: 'list available serial devices, then exit' });
 
     // HTTP server (for b2)
     always(['--http'], { action: 'storeTrue', help: 'enable HTTP server' });

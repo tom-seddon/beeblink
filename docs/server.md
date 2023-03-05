@@ -1,5 +1,8 @@
 # Useful server command line options
 
+(You can get a list of the basic command line options with `--help`; a
+full list is available with `--verbose --help`.)
+
 The server searches for volumes in the folders you specify on the
 command line. You can specify multiple folders, and they'll be
 searched for volumes in that order.
@@ -18,18 +21,24 @@ Use `--default-volume` to get the server to load a specific volume on
 startup (following the same rules in case of ambiguity). The default
 is `65boot`.
 
-Use `--serial-rom` to tell the server where to find the BLFS ROM
-image. It will then try to load it from this location, not the current
-folder, when using the bootstrap program or `*BLSELFUPDATE`.
+## Serial device autodetect
 
 The server will autodetect and open any FTDI devices thet look like
-they might be a Tube serial board. If it's opening any such devices
-that you aren't using for BeebLink, use `--serial-exclude` to have
-them excluded. The exclusion is by device name, so watch out for
-changes in COM port assignment.
+they might be a Tube serial board, or the specific type of FTDI USB
+serial adapter I've tested the UPURS cable with (vendor id 0403,
+product id 6001).
 
-You can get a list of the basic command line options with `npm start
--- -h`. A full list is available with `npm start -- -v -h`.
+To see a list of the serial devices the server is finding, run with
+`--serial-list-devices`. It will show all the serial devices it can
+find, and some info for each about why it's going to use (or not) that
+device.
+
+To exclude a device, use `--serial-exclude`, passing the path from the
+serial devices list.
+
+To exclude all devices, use `--serial-exclude-all`. Use
+`--serial-include` to specify which devices to use - again, passing
+the path from the serial devices list for each one.
 
 # Using a config file
 
