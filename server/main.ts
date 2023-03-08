@@ -1009,7 +1009,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 
     const serverBySenderId = new Map<string, Server>();
 
-    const httpServer = http.createServer(async (httpRequest, httpResponse): Promise<void> => {
+    async function handleHTTPRequest(httpRequest: http.IncomingMessage, httpResponse: http.ServerResponse): Promise<void> {
         async function endResponse(): Promise<void> {
             await new Promise<void>((resolve, _reject) => {
                 httpResponse.end(() => resolve());
@@ -1108,6 +1108,10 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
         } else {
             return await errorResponse(404, undefined);
         }
+    }
+
+    const httpServer = http.createServer((httpRequest, httpResponse): void => {
+        void handleHTTPRequest(httpRequest,httpResponse);
     });
 
     let listenHost: string | undefined = '127.0.0.1';
