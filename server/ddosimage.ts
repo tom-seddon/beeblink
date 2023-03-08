@@ -45,7 +45,7 @@ function getNumTracks(image: Buffer, track0Offset: number): number {
 }
 
 // Maybe one day I'll fill this in properly... 
-function getUsedTracks(image: Buffer, track0Offset: number, log: utils.Log | undefined): number[] {
+function getUsedTracks(image: Buffer, track0Offset: number, _log: utils.Log | undefined): number[] {
     const numTracks = getNumTracks(image, track0Offset);
     //     log?.pn(`${numTracks} tracks`);
 
@@ -263,7 +263,7 @@ export class WriteFlow extends diskimage.Flow {
         };
     }
 
-    public setLastOSWORDResult(data: Buffer): void {
+    public setLastOSWORDResult(_data: Buffer): void {
         ++this.partIdx;
     }
 

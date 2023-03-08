@@ -290,7 +290,7 @@ export class WriteFlow extends diskimage.Flow {
         };
     }
 
-    public setCat(p: Buffer): void {
+    public setCat(_: Buffer): void {
         // ...
     }
 
@@ -327,7 +327,7 @@ export class WriteFlow extends diskimage.Flow {
         };
     }
 
-    public setLastOSWORDResult(data: Buffer): void {
+    public setLastOSWORDResult(_data: Buffer): void {
         ++this.partIdx;
     }
 
@@ -383,7 +383,7 @@ export class ReadFlow extends diskimage.Flow {
         }
 
         this.log?.withIndent('cat: ', () => {
-            this.log!.dumpBuffer(p);
+            this.log?.dumpBuffer(p);
         });
 
         this.tracks = [];

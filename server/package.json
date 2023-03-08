@@ -8,7 +8,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "tslint": "./node_modules/.bin/tslint",
     "compile": "tsc -p ./tsconfig.json",
-    "lint": "tslint --project ./tsconfig.json",
+    "lint": "eslint -f unix -c .eslintrc.js --ext .ts .",
     "start": "npm run compile && node ./.build/main.js"
   },
   "author": "",
@@ -27,6 +27,13 @@
     "@types/node": "^16",
     "@types/serialport": "^8",
     "@types/usb": "^1.5.2",
+    "@typescript-eslint/eslint-plugin": "^5.54.0",
+    "@typescript-eslint/eslint-plugin-tslint": "^5.54.0",
+    "@typescript-eslint/parser": "^5.54.0",
+    "eslint": "^8.35.0",
+    "eslint-plugin-import": "^2.27.5",
+    "eslint-plugin-jsdoc": "^40.0.1",
+    "eslint-plugin-prefer-arrow": "^1.2.3",
     "pkg": "^5",
     "tslint": "^5.20.1",
     "typescript": "^3.9.7"

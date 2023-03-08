@@ -54,8 +54,8 @@ const DEFAULT_BOOT_OPTION = 0;
 // https://github.com/Microsoft/TypeScript/wiki/FAQ#can-i-make-a-type-alias-nominal
 
 // Had more than one bug stem from mixing these up...
-type AbsPath = string & { 'absPath': {} };
-type VolRelPath = string & { 'volRelPath': {} };
+type AbsPath = string & { 'absPath': object };
+type VolRelPath = string & { 'volRelPath': object };
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -345,30 +345,6 @@ const gDefaultPersistentSettings = new TubeHostPersistentSettings(undefined, [])
 /////////////////////////////////////////////////////////////////////////
 
 class TubeHostState implements beebfs.IFSState {
-    private static getTubeHostTransientSettings(settings: any | undefined): TubeHostTransientSettings {
-        if (settings === undefined) {
-            return gDefaultTransientSettings;
-        }
-
-        if (!(settings instanceof TubeHostTransientSettings)) {
-            return gDefaultTransientSettings;
-        }
-
-        return settings;
-    }
-
-    private static getTubeHostPersistentSettings(settings: any | undefined): TubeHostPersistentSettings {
-        if (settings === undefined) {
-            return gDefaultPersistentSettings;
-        }
-
-        if (!(settings instanceof TubeHostPersistentSettings)) {
-            return gDefaultPersistentSettings;
-        }
-
-        return settings;
-    }
-
     public readonly volume: beebfs.Volume;
 
     private current: TubeHostPath;
@@ -382,7 +358,7 @@ class TubeHostState implements beebfs.IFSState {
 
     private persistentSettings: TubeHostPersistentSettings | undefined;
 
-    public constructor(volume: beebfs.Volume, transientSettingsAny: any | undefined, persistentSettingsAny: any | undefined, log: utils.Log | undefined) {
+    public constructor(volume: beebfs.Volume, transientSettingsAny: unknown | undefined, persistentSettingsAny: unknown | undefined, log: utils.Log | undefined) {
         this.volume = volume;
         this.log = log;
 
@@ -425,6 +401,30 @@ class TubeHostState implements beebfs.IFSState {
         }
 
         this.log?.pn(`TubeHostState created`);
+    }
+
+    private static getTubeHostTransientSettings(settings: any | undefined): TubeHostTransientSettings {
+        if (settings === undefined) {
+            return gDefaultTransientSettings;
+        }
+
+        if (!(settings instanceof TubeHostTransientSettings)) {
+            return gDefaultTransientSettings;
+        }
+
+        return settings;
+    }
+
+    private static getTubeHostPersistentSettings(settings: unknown | undefined): TubeHostPersistentSettings {
+        if (settings === undefined) {
+            return gDefaultPersistentSettings;
+        }
+
+        if (!(settings instanceof TubeHostPersistentSettings)) {
+            return gDefaultPersistentSettings;
+        }
+
+        return settings;
     }
 
     public getDriveStateByName(maybeDrive: string): ITubeHostDriveState | undefined {
@@ -512,7 +512,7 @@ class TubeHostState implements beebfs.IFSState {
         return new TubeHostPersistentSettings(this.folderPath, drives);
     }
 
-    public getPersistentSettingsString(settingsAny: any | undefined): string {
+    public getPersistentSettingsString(settingsAny: unknown | undefined): string {
         const settings = TubeHostState.getTubeHostPersistentSettings(settingsAny);
 
         let text = '';
@@ -836,7 +836,7 @@ class TubeHostState implements beebfs.IFSState {
         return scanTubeHostFolder(getAbsPath(this.volume, this.folderPath), this.log);
     }
 
-    private async hfoldersCommand(commandLine: CommandLine): Promise<string> {
+    private async hfoldersCommand(_commandLine: CommandLine): Promise<string> {
         const folder = await this.scanCurrentFolder();
 
         let text = '';
@@ -931,6 +931,8 @@ class TubeHostState implements beebfs.IFSState {
 /////////////////////////////////////////////////////////////////////////
 
 class TubeHostType implements beebfs.IFSType {
+    public readonly name = 'TubeHost';
+
     private static isValidFileNameChar(char: string): boolean {
         const c = char.charCodeAt(0);
         return c >= 32 && c < 127;
@@ -945,8 +947,6 @@ class TubeHostType implements beebfs.IFSType {
 
         return true;
     }
-
-    public readonly name = 'TubeHost';
 
     public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log | undefined): Promise<beebfs.IFSState> {
         const state = new TubeHostState(volume, transientSettings, persistentSettings, log);

@@ -53,7 +53,7 @@ export const fsWriteFile = util.promisify(fs.writeFile);
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export async function fsMkdirAndWriteFile(name: string, data: any): Promise<void> {
+export async function fsMkdirAndWriteFile(name: string, data: string | NodeJS.ArrayBufferView): Promise<void> {
     try {
         await fsMkdir(path.dirname(name), { recursive: true });
     } catch (error) {
@@ -252,9 +252,33 @@ export class BufferReader {
 /////////////////////////////////////////////////////////////////////////
 
 export class Log {
+    public enabled: boolean;
+    public f: { write(buffer: Buffer | string, cb?: () => void): boolean } | undefined;
+    public colours: Chalk | undefined;
+
+    private prefix: string;
+    private indent: number;
+    private indentStack: number[];
+    //private bol: boolean;
+    private column: number;
+    private blankPrefix: boolean;
+    private buffer: string;
+
+    public constructor(prefix: string, f: { write(buffer: Buffer | string, cb?: () => void): boolean } | undefined, enabled = true) {
+        this.f = f;
+        this.prefix = prefix;
+        this.indentStack = [];
+        this.indent = 0;
+        //this.bol = true;
+        this.column = 0;
+        this.enabled = enabled;
+        this.buffer = '';
+        this.blankPrefix = false;
+    }
+
     // In general, logs can't be enabled or disabled at runtime. So if the log
     // isn't enabled, it's simply not created.
-    public static create(prefix: string, f: { write(buffer: Buffer | string, cb?: () => void): boolean } | undefined, enabled: boolean = true) {
+    public static create(prefix: string, f: { write(buffer: Buffer | string, cb?: () => void): boolean } | undefined, enabled = true) {
         if (enabled) {
             return new Log(prefix, f, enabled);
         } else {
@@ -274,30 +298,6 @@ export class Log {
         if (log !== undefined) {
             log.enabled = enabled;
         }
-    }
-
-    public enabled: boolean;
-    public f: { write(buffer: Buffer | string, cb?: () => void): boolean } | undefined;
-    public colours: Chalk | undefined;
-
-    private prefix: string;
-    private indent: number;
-    private indentStack: number[];
-    //private bol: boolean;
-    private column: number;
-    private blankPrefix: boolean;
-    private buffer: string;
-
-    public constructor(prefix: string, f: { write(buffer: Buffer | string, cb?: () => void): boolean } | undefined, enabled: boolean = true) {
-        this.f = f;
-        this.prefix = prefix;
-        this.indentStack = [];
-        this.indent = 0;
-        //this.bol = true;
-        this.column = 0;
-        this.enabled = enabled;
-        this.buffer = '';
-        this.blankPrefix = false;
     }
 
     public in(x: string) {

@@ -83,7 +83,7 @@ export function getDiskOSWORDErrorOffset(o: IDiskOSWORD): number {
 //////////////////////////////////////////////////////////////////////////
 
 // Get parameter block address dword offset for disk OSWORD.
-export function getDiskOSWORDAddressOffset(o: IDiskOSWORD): number {
+export function getDiskOSWORDAddressOffset(_o: IDiskOSWORD): number {
     return 1;
 }
 
@@ -141,22 +141,6 @@ export interface IFinishFlow {
 export abstract class Flow {
     private bufferAddress: number | undefined;
 
-    // Start the flow. Determine buffer address, size and overall feasibility
-    // based on supplied OSHWM and HIMEM values, and produce data for response.
-    public abstract start(bufferAddress: number, bufferSize: number): IStartFlow;
-
-    // Set catalogue, if reading, as returned by BBC.
-    public abstract setCat(cat: Buffer): void;
-
-    // Get next part.
-    public abstract getNextPart(): IPart | undefined;
-
-    // Set result of last OSWORD, or just an empty buffer if writing.
-    public abstract setLastOSWORDResult(data: Buffer): void;
-
-    // Finish the operation.
-    public abstract finish(): Promise<IFinishFlow>;
-
     public getBufferAddress(): number {
         if (this.bufferAddress === undefined) {
             return errors.generic(`Flow error`);
@@ -175,6 +159,23 @@ export abstract class Flow {
 
         this.bufferAddress = bufferAddress;
     }
+    
+    // Start the flow. Determine buffer address, size and overall feasibility
+    // based on supplied OSHWM and HIMEM values, and produce data for response.
+    public abstract start(bufferAddress: number, bufferSize: number): IStartFlow;
+
+    // Set catalogue, if reading, as returned by BBC.
+    public abstract setCat(cat: Buffer): void;
+
+    // Get next part.
+    public abstract getNextPart(): IPart | undefined;
+
+    // Set result of last OSWORD, or just an empty buffer if writing.
+    public abstract setLastOSWORDResult(data: Buffer): void;
+
+    // Finish the operation.
+    public abstract finish(): Promise<IFinishFlow>;
+
 }
 
 //////////////////////////////////////////////////////////////////////////

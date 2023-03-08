@@ -108,7 +108,7 @@ export function nodeError(error: unknown): never {
 // Check if the error matches the given errno.
 export function getErrno(error: unknown): string | undefined {
     if (typeof error === 'object' && error !== null && 'code' in error) {
-        return (error as any).code;
+        return (error as { code: string }).code;
     } else {
         return undefined;
     }

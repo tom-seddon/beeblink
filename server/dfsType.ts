@@ -188,18 +188,6 @@ const gDefaultTransientSettings = new DFSTransientSettings(new DFSPath('0', '$')
 /////////////////////////////////////////////////////////////////////////
 
 class DFSState implements beebfs.IFSState {
-    private static getDFSTransientSettings(settings: any | undefined): DFSTransientSettings {
-        if (settings === undefined) {
-            return gDefaultTransientSettings;
-        }
-
-        if (!(settings instanceof DFSTransientSettings)) {
-            return gDefaultTransientSettings;
-        }
-
-        return settings;
-    }
-
     public readonly volume: beebfs.Volume;
 
     private current: DFSPath;
@@ -215,6 +203,18 @@ class DFSState implements beebfs.IFSState {
 
         this.current = transientSettings.current;
         this.library = transientSettings.library;
+    }
+
+    private static getDFSTransientSettings(settings: any | undefined): DFSTransientSettings {
+        if (settings === undefined) {
+            return gDefaultTransientSettings;
+        }
+
+        if (!(settings instanceof DFSTransientSettings)) {
+            return gDefaultTransientSettings;
+        }
+
+        return settings;
     }
 
     public getCurrentDrive(): string {
@@ -247,7 +247,7 @@ class DFSState implements beebfs.IFSState {
         return undefined;
     }
 
-    public getPersistentSettingsString(settings: undefined): string {
+    public getPersistentSettingsString(_settings: undefined): string {
         return '';
     }
 
@@ -398,6 +398,8 @@ class DFSState implements beebfs.IFSState {
 /////////////////////////////////////////////////////////////////////////
 
 class DFSType implements beebfs.IFSType {
+    public readonly name = 'BeebLink/DFS';
+
     public static isValidDrive(maybeDrive: string): boolean {
         return maybeDrive.length === 1 && utils.isalnum(maybeDrive);
     }
@@ -406,8 +408,6 @@ class DFSType implements beebfs.IFSType {
         const c = char.charCodeAt(0);
         return c >= 32 && c < 127;
     }
-
-    public readonly name = 'BeebLink/DFS';
 
     public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log | undefined): Promise<beebfs.IFSState> {
         return new DFSState(volume, transientSettings, log);
@@ -557,7 +557,7 @@ class DFSType implements beebfs.IFSType {
         return await this.findFiles(fqn.volume, driveRegExp, dirRegExp, nameRegExp, log);
     }
 
-    public async getCAT(fqn: beebfs.FQN, state: beebfs.IFSState | undefined, log: utils.Log | undefined): Promise<string> {
+    public async getCAT(fqn: beebfs.FQN, state: beebfs.IFSState | undefined, _log: utils.Log | undefined): Promise<string> {
         const dfsFQN = mustBeDFSFQN(fqn);
         const dfsState = mustBeDFSState(state);
 

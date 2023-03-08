@@ -189,7 +189,7 @@ export abstract class FQN {
         this.volumeExplicit = volumeExplicit;
     }
 
-    public toString() {
+    public toString(): string {
         return `::${this.volume.name}`;//${this.fsFQN}`;
     }
 
@@ -384,21 +384,21 @@ export interface IFSState {
     // state, to restore the current settings.
     //
     // The naming is crappy because 'state' was already taken.
-    getTransientSettings(): any | undefined;
+    getTransientSettings(): unknown | undefined;
 
     // turns transient settings into a human-readable string for printing on the
     // Beeb. This isn't a toString on an interface type, so the FS state has the
     // option of printing something useful out when there's no state.
-    getTransientSettingsString(transientSettings: any | undefined): string;
+    getTransientSettingsString(transientSettings: unknown | undefined): string;
 
     // get object holding current persistent settings, that would not be reset
     // on Ctrl+Break - drive assignments, and so on. Use when recreating the
     // state, to restore the current settings.
-    getPersistentSettings(): any | undefined;
+    getPersistentSettings(): unknown | undefined;
 
     // turns persistent settings into a human-readable string for printing on
     // the Beeb.
-    getPersistentSettingsString(persistentSettings: any | undefined): string;
+    getPersistentSettingsString(persistentSettings: unknown | undefined): string;
 
     // get file to use for *RUN. If tryLibDir is false, definitely don't try lib
     // drive/directory.
@@ -574,6 +574,50 @@ export interface IFSSearchFolders {
 /////////////////////////////////////////////////////////////////////////
 
 export class FS {
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private searchFolders: IFSSearchFolders;
+
+    //private currentVolume: BeebVolume | undefined;
+
+    private firstFileHandle: number;
+    private openFiles: (OpenFile | undefined)[];
+
+    private log: utils.Log | undefined;
+
+    private state: IFSState | undefined;
+    private stateCommands: undefined | server.Command[];
+    private defaultTransientSettings: unknown | undefined;
+
+    private gaManipulator: gitattributes.Manipulator | undefined;
+
+    private locateVerbose: boolean;
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public constructor(
+        searchFolders: IFSSearchFolders,
+        gaManipulator: gitattributes.Manipulator | undefined,
+        log: utils.Log | undefined,
+        locateVerbose: boolean) {
+        this.log = log;
+
+        this.searchFolders = searchFolders;
+
+        //this.resetDirs();
+
+        this.openFiles = [];
+        this.firstFileHandle = DEFAULT_FIRST_FILE_HANDLE;
+        for (let i = 0; i < DEFAULT_NUM_FILE_HANDLES; ++i) {
+            this.openFiles.push(undefined);
+        }
+
+        this.gaManipulator = gaManipulator;
+        this.locateVerbose = locateVerbose;
+    }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
@@ -804,50 +848,6 @@ export class FS {
         }
 
         return true;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    private searchFolders: IFSSearchFolders;
-
-    //private currentVolume: BeebVolume | undefined;
-
-    private firstFileHandle: number;
-    private openFiles: (OpenFile | undefined)[];
-
-    private log: utils.Log | undefined;
-
-    private state: IFSState | undefined;
-    private stateCommands: undefined | server.Command[];
-    private defaultTransientSettings: any | undefined;
-
-    private gaManipulator: gitattributes.Manipulator | undefined;
-
-    private locateVerbose: boolean;
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public constructor(
-        searchFolders: IFSSearchFolders,
-        gaManipulator: gitattributes.Manipulator | undefined,
-        log: utils.Log | undefined,
-        locateVerbose: boolean) {
-        this.log = log;
-
-        this.searchFolders = searchFolders;
-
-        //this.resetDirs();
-
-        this.openFiles = [];
-        this.firstFileHandle = DEFAULT_FIRST_FILE_HANDLE;
-        for (let i = 0; i < DEFAULT_NUM_FILE_HANDLES; ++i) {
-            this.openFiles.push(undefined);
-        }
-
-        this.gaManipulator = gaManipulator;
-        this.locateVerbose = locateVerbose;
     }
 
     /////////////////////////////////////////////////////////////////////////

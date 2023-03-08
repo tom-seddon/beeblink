@@ -70,9 +70,9 @@ export class Command {
     //
     // Return Response to respond with that response.
     private readonly fun: (commandLine: CommandLine) => Promise<void | string | Buffer | Response>;
-    private readonly thisAny: any;
+    private readonly thisAny: unknown;
 
-    public constructor(name: string, syntax: string | undefined, thisAny: any, fun: (commandLine: CommandLine) => Promise<void | string | Response>) {
+    public constructor(name: string, syntax: string | undefined, thisAny: unknown, fun: (commandLine: CommandLine) => Promise<void | string | Response>) {
         this.nameUC = name.toUpperCase();
         this.syntax = syntax;
         this.fun = fun;
@@ -101,13 +101,13 @@ export class Command {
 class Handler {
     public readonly name: string;
     private readonly fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>;
-    private thisAny: any;
+    private thisAny: unknown;
     private quiet: boolean;
-    private fullRequestDump: boolean = false;
-    private fullResponseDump: boolean = false;
+    private fullRequestDump = false;
+    private fullResponseDump = false;
     private resetLastOSBPUTHandle: boolean;
 
-    public constructor(name: string, thisAny: any, fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>) {
+    public constructor(name: string, thisAny: unknown, fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>) {
         this.name = name;
         this.fun = fun;
         this.thisAny = thisAny;
@@ -310,14 +310,15 @@ export class Server {
             }
 
             this.log?.withIndent(`${typeName}: `, () => {
-                this.log!.p(`Type: ${packet.c} (0x${utils.hex2(packet.c)})`);
+                // (the ?. is all wasted checks, but it shuts eslint up.)
+                this.log?.p(`Type: ${packet.c} (0x${utils.hex2(packet.c)})`);
                 if (desc !== undefined) {
-                    this.log!.p(` (${desc})`);
+                    this.log?.p(` (${desc})`);
                 }
-                this.log!.p(` (${packet.p.length} (0x${utils.hex8(packet.p.length)}) byte(s)`);
-                this.log!.pn('');
+                this.log?.p(` (${packet.p.length} (0x${utils.hex8(packet.p.length)}) byte(s)`);
+                this.log?.pn('');
 
-                this.log!.dumpBuffer(packet.p, fullDump ? undefined : 10);
+                this.log?.dumpBuffer(packet.p, fullDump ? undefined : 10);
             });
         }
     }
@@ -374,7 +375,7 @@ export class Server {
         }
     }
 
-    private async handleGetROM(handler: Handler, p: Buffer): Promise<Response> {
+    private async handleGetROM(_handler: Handler, _p: Buffer): Promise<Response> {
         if (this.romPathByLinkSubtype.size === 0) {
             return errors.generic('No ROM available');
         } else if (this.linkSubtype === undefined) {
@@ -395,7 +396,7 @@ export class Server {
         }
     }
 
-    private async handleReset(handler: Handler, p: Buffer): Promise<void> {
+    private async handleReset(_handler: Handler, p: Buffer): Promise<void> {
         this.log?.pn('reset type=' + p[0]);
         if (p[0] === 1 || p[0] === 2) {
             // Power-on reset or CTRL+BREAK
@@ -419,7 +420,7 @@ export class Server {
         }
     }
 
-    private async handleEchoData(handler: Handler, p: Buffer): Promise<Response> {
+    private async handleEchoData(_handler: Handler, p: Buffer): Promise<Response> {
         this.log?.pn('Sending ' + p.length + ' byte(s) back...');
         return newResponse(beeblink.RESPONSE_DATA, p);
     }
@@ -455,7 +456,7 @@ export class Server {
         }
     }
 
-    private async handleStarCat(handler: Handler, p: Buffer): Promise<string> {
+    private async handleStarCat(_handler: Handler, p: Buffer): Promise<string> {
         // the command line in this case does not include the *CAT itself...
         const commandLine = this.initCommandLine(p.toString('binary'));
 
@@ -571,7 +572,7 @@ export class Server {
         return await this.handleRun(commandLine, false);//false = don't check library directory
     }
 
-    private async handleHelpBLFS(handler: Handler, p: Buffer): Promise<string> {
+    private async handleHelpBLFS(_handler: Handler, _p: Buffer): Promise<string> {
         let help = '';
 
         for (const command of this.commonCommands) {
@@ -638,8 +639,8 @@ export class Server {
         if (osfileResult.block !== undefined) {
             this.log?.p(', ' + this.getOSFILEBlockString(osfileResult.block));
         }
-        if (osfileResult.data !== undefined) {
-            this.log?.p(', ' + osfileResult.data.length + ' data byte(s), load address 0x' + utils.hex8(osfileResult.dataLoad!));
+        if (osfileResult.data !== undefined && osfileResult.dataLoad !== undefined) {
+            this.log?.p(', ' + osfileResult.data.length + ' data byte(s), load address 0x' + utils.hex8(osfileResult.dataLoad));
         }
         this.log?.p('\n');
 
@@ -649,8 +650,8 @@ export class Server {
 
         builder.writeBuffer(osfileResult.block !== undefined ? osfileResult.block : block);
 
-        if (osfileResult.data !== undefined) {
-            builder.writeUInt32LE(osfileResult.dataLoad!);
+        if (osfileResult.data !== undefined && osfileResult.dataLoad !== undefined) {
+            builder.writeUInt32LE(osfileResult.dataLoad);
             builder.writeBuffer(osfileResult.data);
         }
 
@@ -830,17 +831,17 @@ export class Server {
         const result = await this.bfs.OSGBPB(a, handle, numBytes, newPtr, data);
 
         this.log?.withIndent('Output: ', () => {
-            this.log!.p('Output: C=' + result.c + ', addr=0x' + utils.hex8(addr) + ', bytes left=' + result.numBytesLeft + ', PTR#=' + result.ptr);
+            this.log?.p('Output: C=' + result.c + ', addr=0x' + utils.hex8(addr) + ', bytes left=' + result.numBytesLeft + ', PTR#=' + result.ptr);
             if (result.data !== undefined) {
-                this.log!.p(', ' + result.data.length + ' data bytes');
+                this.log?.p(', ' + result.data.length + ' data bytes');
             }
-            this.log!.p('\n');
+            this.log?.p('\n');
 
             if (a >= 1 && a <= 4) {
                 // Probably not actually all that interesting.
             } else {
                 if (result.data !== undefined) {
-                    this.log!.dumpBuffer(result.data);
+                    this.log?.dumpBuffer(result.data);
                 }
             }
         });
@@ -880,7 +881,7 @@ export class Server {
         await this.bfs.OPT(x, y);
     }
 
-    private async handleGetBootOption(handler: Handler, p: Buffer): Promise<Response> {
+    private async handleGetBootOption(_handler: Handler, _p: Buffer): Promise<Response> {
         // const option = await beebfs.BeebFS.loadBootOption(this.bfs.getVolume(), this.bfs.getDrive());
         const option = await this.bfs.getBootOption();
 
@@ -1011,20 +1012,16 @@ export class Server {
         await this.bfs.setFileHandleRange(p[0], p[1]);
     }
 
-    private writeOSWORDBlock(osword: diskimage.IDiskOSWORD | undefined, builder: utils.BufferBuilder, blockAddressOffset: number | undefined, errorAddressOffset: number | undefined): number | undefined {
-        if (osword !== undefined) {
-            const offset = builder.getLength();
+    private writeOSWORDBlock(osword: diskimage.IDiskOSWORD, builder: utils.BufferBuilder, blockAddressOffset: number, errorAddressOffset: number): number {
+        const offset = builder.getLength();
 
-            builder.setUInt32LE(builder.getNextAddress(), blockAddressOffset!);
+        builder.setUInt32LE(builder.getNextAddress(), blockAddressOffset);
 
-            builder.setUInt32LE(builder.getNextAddress() + diskimage.getDiskOSWORDErrorOffset(osword), errorAddressOffset!);
+        builder.setUInt32LE(builder.getNextAddress() + diskimage.getDiskOSWORDErrorOffset(osword), errorAddressOffset);
 
-            builder.writeBuffer(osword.block);
+        builder.writeBuffer(osword.block);
 
-            return offset + diskimage.getDiskOSWORDAddressOffset(osword);
-        } else {
-            return undefined;
-        }
+        return offset + diskimage.getDiskOSWORDAddressOffset(osword);
     }
 
     private writeCRTerminatedString(str: string, builder: utils.BufferBuilder, stringAddressOffset: number): void {
@@ -1061,8 +1058,8 @@ export class Server {
         this.writeCRTerminatedString(start.fsStarCommand, builder, fsStarCommandAddressOffset);
         this.writeCRTerminatedString(start.starCommand, builder, starCommandAddressOffset);
 
-        const osword1DataAddressOffset = this.writeOSWORDBlock(start.osword1, builder, osword1BlockAddressOffset, osword1ErrorAddressOffset);
-        const osword2DataAddressOffset = this.writeOSWORDBlock(start.osword2, builder, osword2BlockAddressOffset, osword2ErrorAddressOffset);
+        const osword1DataAddressOffset = start.osword1 !== undefined ? this.writeOSWORDBlock(start.osword1, builder, osword1BlockAddressOffset, osword1ErrorAddressOffset) : undefined;
+        const osword2DataAddressOffset = start.osword2 !== undefined ? this.writeOSWORDBlock(start.osword2, builder, osword2BlockAddressOffset, osword2ErrorAddressOffset) : undefined;
 
         builder.setUInt32LE(builder.getNextAddress(), catPayloadAddressOffset);
         builder.maybeSetUInt32LE(builder.getNextAddress(), osword1DataAddressOffset);
@@ -1071,7 +1068,7 @@ export class Server {
         return newResponse(beeblink.RESPONSE_DATA, builder.createBuffer());
     }
 
-    private async handleSetDiskImageCat(handler: Handler, p: Buffer): Promise<void> {
+    private async handleSetDiskImageCat(_handler: Handler, p: Buffer): Promise<void> {
         if (this.diskImageFlow === undefined) {
             return errors.generic(`No disk image flow`);
         }
@@ -1079,7 +1076,7 @@ export class Server {
         this.diskImageFlow.setCat(p);
     }
 
-    private async handleNextDiskImagePart(handler: Handler, p: Buffer): Promise<Response> {
+    private async handleNextDiskImagePart(_handler: Handler, _p: Buffer): Promise<Response> {
         if (this.diskImageFlow === undefined) {
             return errors.generic(`No disk image flow`);
         }
@@ -1101,7 +1098,7 @@ export class Server {
             this.writeCRTerminatedString(part.message, builder, messageAddressOffset);
 
             // Add OSWORD parameter block.
-            const dataAddressOffset = this.writeOSWORDBlock(part.osword, builder, oswordBlockAddressOffset, oswordBlockErrorAddressOffset)!;
+            const dataAddressOffset = this.writeOSWORDBlock(part.osword, builder, oswordBlockAddressOffset, oswordBlockErrorAddressOffset);
 
             // Add buffer.
             builder.setUInt32LE(builder.getNextAddress(), dataAddressOffset); //oswordBlockOffset + diskimage.getDiskOSWORDAddressOffset(part.osword));
@@ -1119,7 +1116,7 @@ export class Server {
         }
     }
 
-    private async handleSetLastDiskImageOSWORDResult(handler: Handler, p: Buffer): Promise<void> {
+    private async handleSetLastDiskImageOSWORDResult(_handler: Handler, p: Buffer): Promise<void> {
         if (this.diskImageFlow === undefined) {
             return errors.generic(`No disk image flow`);
         }
@@ -1127,7 +1124,7 @@ export class Server {
         this.diskImageFlow.setLastOSWORDResult(p);
     }
 
-    private async handleFinishDiskImageFlow(handler: Handler, p: Buffer): Promise<Response> {
+    private async handleFinishDiskImageFlow(_handler: Handler, _p: Buffer): Promise<Response> {
         if (this.diskImageFlow === undefined) {
             return errors.generic(`No disk image flow`);
         }
@@ -1174,7 +1171,7 @@ export class Server {
         return new Response(beeblink.RESPONSE_DATA, wrappedResponsePayload);
     }
 
-    private async handleReadDiskImage(handler: Handler, p: Buffer): Promise<Response> {
+    private async handleReadDiskImage(_handler: Handler, p: Buffer): Promise<Response> {
         const details = this.getDiskImageFlowDetailsFromRequestPayload(p);
 
         const flow = await this.createDiskImageReadFlow(details);
@@ -1182,7 +1179,7 @@ export class Server {
         return await this.startDiskImageFlow(flow, details.bufferAddress, details.bufferSize);
     }
 
-    private async handleWriteDiskImage(handler: Handler, p: Buffer): Promise<Response> {
+    private async handleWriteDiskImage(_handler: Handler, p: Buffer): Promise<Response> {
         const details = this.getDiskImageFlowDetailsFromRequestPayload(p);
 
         const flow = await this.createDiskImageWriteFlow(details);
@@ -1749,7 +1746,7 @@ export class Server {
         await this.bfs.setTitle(commandLine.parts[1]);
     }
 
-    private async volbrowserCommand(commandLine: CommandLine): Promise<Response> {
+    private async volbrowserCommand(_commandLine: CommandLine): Promise<Response> {
         return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_VOLUME_BROWSER);
     }
 
@@ -1828,12 +1825,13 @@ export class Server {
 
         this.log?.pn(`Got disk image flow details from payload: `);
         this.log?.withIndent('    ', () => {
-            this.log!.pn(`Buffer address: 0x${utils.hex8(bufferAddress)} `);
-            this.log!.pn(`Buffer size: ${bufferSize} (0x${utils.hex8(bufferSize)})`);
-            this.log!.pn(`Drive: "${driveStr}"`);
-            this.log!.pn(`Type: ${type} ("${typeStr}")`);
-            this.log!.pn(`Read all sectors: ${readAllSectors} `);
-            this.log!.pn(`File name: "${fileName}"`);
+            // (pointless ?. silence eslint)
+            this.log?.pn(`Buffer address: 0x${utils.hex8(bufferAddress)} `);
+            this.log?.pn(`Buffer size: ${bufferSize} (0x${utils.hex8(bufferSize)})`);
+            this.log?.pn(`Drive: "${driveStr}"`);
+            this.log?.pn(`Type: ${type} ("${typeStr}")`);
+            this.log?.pn(`Read all sectors: ${readAllSectors} `);
+            this.log?.pn(`File name: "${fileName}"`);
         });
 
         return {

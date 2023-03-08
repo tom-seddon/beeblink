@@ -155,7 +155,7 @@ export default class CommandLine {
             this.parts.push(this.part);
 
             if (this.parts.length === 2) {
-                this.y = this.partOffset!;
+                this.y = this.partOffset!;// eslint-disable-line @typescript-eslint/no-non-null-assertion
             }
 
             this.part = undefined;

@@ -126,19 +126,19 @@ class PCState implements beebfs.IFSState {
         return undefined;
     }
 
-    public getTransientSettingsString(settings: any | undefined): string {
+    public getTransientSettingsString(_settings: unknown | undefined): string {
         return ``;
     }
 
-    public getPersistentSettings(): any | undefined {
+    public getPersistentSettings(): unknown | undefined {
         return undefined;
     }
 
-    public getPersistentSettingsString(settings: any | undefined): string {
+    public getPersistentSettingsString(_settings: unknown | undefined): string {
         return '';
     }
 
-    public async getFileForRUN(fqn: beebfs.FQN, tryLibDir: boolean): Promise<beebfs.File | undefined> {
+    public async getFileForRUN(_fqn: beebfs.FQN, _tryLibDir: boolean): Promise<beebfs.File | undefined> {
         // PC files don't have BBC-style attributes, so *RUN is impossible.
         return undefined;
     }
@@ -151,15 +151,15 @@ class PCState implements beebfs.IFSState {
         }
     }
 
-    public starDrive(arg: string | undefined): boolean {
+    public starDrive(_arg: string | undefined): boolean {
         return errors.badDrive();
     }
 
-    public starDir(fqn: beebfs.FQN): void {
+    public starDir(_fqn: beebfs.FQN): void {
         return notSupported();
     }
 
-    public starLib(fqn: beebfs.FQN): void {
+    public starLib(_fqn: beebfs.FQN): void {
         return notSupported();
     }
 
@@ -171,11 +171,11 @@ class PCState implements beebfs.IFSState {
         return 0;
     }
 
-    public async setBootOption(option: number): Promise<void> {
+    public async setBootOption(_option: number): Promise<void> {
         return notSupported();
     }
 
-    public async setTitle(title: string): Promise<void> {
+    public async setTitle(_title: string): Promise<void> {
         return notSupported();
     }
 
@@ -312,19 +312,19 @@ class PCType implements beebfs.IFSType {
         return text;
     }
 
-    public async deleteFile(file: beebfs.File): Promise<void> {
+    public async deleteFile(_file: beebfs.File): Promise<void> {
         return notSupported();
     }
 
-    public async renameFile(oldFile: beebfs.File, newFQN: beebfs.FQN): Promise<void> {
+    public async renameFile(_oldFile: beebfs.File, _newFQN: beebfs.FQN): Promise<void> {
         return notSupported();
     }
 
-    public async writeBeebMetadata(hostPath: string, fqn: beebfs.FQN, load: number, exec: number, attr: number): Promise<void> {
+    public async writeBeebMetadata(_hostPath: string, _fqn: beebfs.FQN, _load: number, _exec: number, _attr: number): Promise<void> {
         return notSupported();
     }
 
-    public getNewAttributes(oldAttr: number, attrString: string): number | undefined {
+    public getNewAttributes(_oldAttr: number, _attrString: string): number | undefined {
         return notSupported();
     }
 
@@ -336,7 +336,7 @@ class PCType implements beebfs.IFSType {
         return `${this.getCommonInfoText(file, stats.size)} ${utils.getDateString(stats.mtime)}`;
     }
 
-    public getAttrString(file: beebfs.File): string | undefined {
+    public getAttrString(_file: beebfs.File): string | undefined {
         return undefined;
     }
 
@@ -346,7 +346,7 @@ class PCType implements beebfs.IFSType {
         return `${pcFQN.name.padEnd(MAX_NAME_LENGTH)}  ${utils.hex(fileSize, 6)}`;
     }
 
-    private async findFiles(volume: beebfs.Volume, nameRegExp: RegExp | undefined, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    private async findFiles(volume: beebfs.Volume, nameRegExp: RegExp | undefined, _log: utils.Log | undefined): Promise<beebfs.File[]> {
         let hostNames: string[];
         try {
             hostNames = await utils.fsReaddir(volume.path);

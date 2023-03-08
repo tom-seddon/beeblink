@@ -32,7 +32,7 @@ import * as beebfs from './beebfs';
 export class Manipulator {
     private queue: (() => Promise<void>)[];
     private log: utils.Log | undefined;
-    private extraVerbose: boolean = false;
+    private extraVerbose = false;
     private quiescentCallbacks: (() => void)[];
 
     public constructor(verbose: boolean) {
@@ -58,11 +58,11 @@ export class Manipulator {
         this.change(path.join(volume.path, '*'), undefined, '-text');
     }
 
-    public deleteFile(filePath: string): void {
+    public deleteFile(_filePath: string): void {
         // TODO - actually write this.
     }
 
-    public renameFile(oldFilePath: string, newFilePath: string): void {
+    public renameFile(_oldFilePath: string, _newFilePath: string): void {
         // TODO - actually write this.
     }
 
@@ -147,7 +147,7 @@ export class Manipulator {
             const spacesRE = new RegExp('\\s+');
 
             let added = false;
-            let removed = false;// tslint:disable-line no-unused-variable
+            let removed = false;
             let fileChanged = false;
 
             let lineIdx = 0;
@@ -165,7 +165,7 @@ export class Manipulator {
                                 if (parts[i] === remove) {
                                     parts.splice(i, 1);
                                     lineChanged = true;
-                                    removed = true;
+                                    removed = true;// eslint-disable-line @typescript-eslint/no-unused-vars
                                 } else {
                                     ++i;
                                 }
@@ -220,17 +220,17 @@ export class Manipulator {
                 try {
                     await utils.forceFsUnlink(gaPath);
                 } catch (error) {
-                    this.log?.pn('Failed to delete ``' + gaPath + '\'\': ' + error);
+                    this.log?.pn(`Failed to delete \`\`${gaPath}'': ${error}`);
                 }
             } else if (fileChanged) {
-                this.log?.pn('Updating: ' + gaPath);
+                this.log?.pn(`Updating: ${gaPath}`);
 
                 if (remove !== undefined) {
-                    this.log?.pn('    (Removing: ' + basename + ' ' + remove + ')');
+                    this.log?.pn(`    (Removing: ${basename} ${remove})`);
                 }
 
                 if (add !== undefined && added) {
-                    this.log?.pn('    (Adding: ' + basename + ' ' + add + ')');
+                    this.log?.pn(`    (Adding: ${basename} ${add})`);
                 }
 
                 try {

@@ -28,8 +28,8 @@ import * as beebfs from './beebfs';
 
 class Column {
     public rows: beebfs.Volume[] = [];
-    public width: number = 0;
-    public x: number = 0;
+    public width = 0;
+    public x = 0;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -206,7 +206,7 @@ export class Browser {
         } else if (this.mode === BrowserMode.EditFilter) {
             this.handleEditFilterKey(key);
         } else if (this.mode === BrowserMode.ShowInfo) {
-            this.handleShowInfoKey(key);
+            this.handleShowInfoKey();
         }
 
         return new Result(this.done, this.createPrintsBuffer(), this.selectedVolume, this.boot, this.flushKeyboardBuffer);
@@ -376,7 +376,7 @@ export class Browser {
         }
     }
 
-    private handleShowInfoKey(key: number): void {
+    private handleShowInfoKey(): void {
         this.mode = BrowserMode.Browse;
         this.printBrowser();
     }

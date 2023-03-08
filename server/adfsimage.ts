@@ -287,7 +287,7 @@ export class WriteFlow extends diskimage.Flow {
         };
     }
 
-    public setLastOSWORDResult(data: Buffer): void {
+    public setLastOSWORDResult(_data: Buffer): void {
         ++this.partIdx;
     }
 

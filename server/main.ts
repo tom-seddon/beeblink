@@ -45,7 +45,9 @@ import tubeHostType from './tubeHostType';
 function getIOCTL(): ((fd: number, request: number, data?: Buffer | number) => void) | undefined {
     if (process.platform === 'linux') {
         // work around lack of type definitions.
-        return require('ioctl');
+
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        return require('ioctl') as ((fd: number, request: number, data?: Buffer | number) => void);
     } else {
         return undefined;
     }
@@ -126,6 +128,7 @@ interface IConfigFile {
 /////////////////////////////////////////////////////////////////////////
 
 interface ICommandLineOptions {
+    help: boolean;
     verbose: boolean;
     avr_rom: string | null;
     tube_serial_rom: string | null;
@@ -181,7 +184,7 @@ function UInt32(b0: number, b1: number, b2: number, b3: number): number {
 /////////////////////////////////////////////////////////////////////////
 
 async function delayMS(ms: number): Promise<void> {
-    await new Promise<void>((resolve, reject) => setTimeout(() => resolve(), ms));
+    await new Promise<void>((resolve, _reject) => setTimeout(() => resolve(), ms));
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -256,11 +259,6 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
     if (options.default_volume === null) {
         if (config.default_volume !== undefined) {
             options.default_volume = config.default_volume;
-        } else {
-            // Handle inconsistent spelling that didn't get fixed for a while.
-            if ((config as any).defaultVolume !== undefined) {
-                options.default_volume = (config as any).defaultVolume;
-            }
         }
     }
 
@@ -496,7 +494,7 @@ interface ISerialDevice {
 //
 // I still have no idea how to update TypeScript typings, so... this.
 function getSerialPortPath(portInfo: SerialPort.PortInfo): string {
-    return (portInfo as any).path;
+    return (portInfo as { path: string }).path;// eslint-disable-line @typescript-eslint/no-unsafe-member-access
 }
 
 function isSameDevice(a: SerialPort.PortInfo, b: SerialPort.PortInfo): boolean {
@@ -1013,7 +1011,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 
     const httpServer = http.createServer(async (httpRequest, httpResponse): Promise<void> => {
         async function endResponse(): Promise<void> {
-            await new Promise<void>((resolve, reject) => {
+            await new Promise<void>((resolve, _reject) => {
                 httpResponse.end(() => resolve());
             });
         }
@@ -1210,7 +1208,7 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
                 try {
                     // 1 = INTERFACE_A.
                     serialLog?.pn(`Claiming USB device interface...`);
-                    usbDevice.__claimInterface(ftdiInterface);
+                    usbDevice.__claimInterface(ftdiInterface);//eslint-disable-line no-underscore-dangle
                 } catch (error) {
                     serialLog?.pn(`Ignoring claimInterface error: ${error}`);
                 }
@@ -1480,7 +1478,6 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: Serial
     // where it left off, allowing it to survive a server restart. If not, it
     // will embark on the sync process from its end and enter the sync loop that
     // way.
-    server_loop:
     for (; ;) {
         // Request/response loop.
         //
@@ -1754,7 +1751,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
                     process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed.\n`);
                     portState.active = false;
                 }).catch((error) => {
-                    process.stderr.write(`${error.stack}`);
+                    process.stderr.write(`${(error as { stack: string }).stack}`);
                     process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed due to error: ${error}\n`);
                     portState.active = false;
                 });
@@ -1835,7 +1832,7 @@ async function main(options: ICommandLineOptions) {
 
 // argparse calls parseInt with a radix of 10.
 function integer(s: string): number {
-    const x = parseInt(s, undefined);
+    const x = parseInt(s);
     if (Number.isNaN(x)) {
         throw new Error('invalid number provided: "' + s + '"');
     }
@@ -1928,7 +1925,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
 {
     let parser = createArgumentParser(true);
 
-    const options = parser.parseArgs();
+    const options = parser.parseArgs() as ICommandLineOptions;
 
     if (options.help) {
         if (!options.verbose) {
@@ -1944,7 +1941,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     }).catch((error) => {
         if (options.fatal_verbose) {
             process.stderr.write('Stack trace:\n');
-            process.stderr.write(error.stack + '\n');
+            process.stderr.write((error as { stack: string }).stack + '\n');
         }
         process.stderr.write('FATAL: ' + error + '\n');
         process.exit(1);
