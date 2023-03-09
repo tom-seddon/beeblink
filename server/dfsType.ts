@@ -263,14 +263,14 @@ class DFSState implements beebfs.IFSState {
             tryLibDir = false;
         }
 
-        const curFile = await beebfs.getBeebFile(fqn, true, false);
+        const curFile = await beebfs.getBeebFile(fqn, true);
         if (curFile !== undefined) {
             return curFile;
         }
 
         if (tryLibDir) {
             const libFQN = new DFSFQN(fqn.volume, fqn.volumeExplicit, this.library.drive, true, this.library.dir, true, dfsFQN.name);
-            const libFile = await beebfs.getBeebFile(libFQN, true, false);
+            const libFile = await beebfs.getBeebFile(libFQN, true);
             if (libFile !== undefined) {
                 return libFile;
             }

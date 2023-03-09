@@ -1111,7 +1111,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
     }
 
     const httpServer = http.createServer((httpRequest, httpResponse): void => {
-        void handleHTTPRequest(httpRequest,httpResponse);
+        void handleHTTPRequest(httpRequest, httpResponse);
     });
 
     let listenHost: string | undefined = '127.0.0.1';
@@ -1127,13 +1127,15 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 /////////////////////////////////////////////////////////////////////////
 
 function findUSBDeviceForSerialPort(portInfo: SerialPort.PortInfo): usb.Device | undefined {
-    const idProduct = Number.parseInt(portInfo.productId!, 16);//why not a number?
-    const idVendor = Number.parseInt(portInfo.vendorId!, 16);//why not a number?
-    const usbDevices = usb.getDeviceList();
-    for (const usbDevice of usbDevices) {
-        if (usbDevice.deviceDescriptor.idProduct === idProduct && usbDevice.deviceDescriptor.idVendor === idVendor) {
-            if (getOSXLocationId(usbDevice).toLowerCase() === portInfo.locationId!.toLowerCase()) {
-                return usbDevice;
+    if (portInfo.productId !== undefined && portInfo.vendorId !== undefined && portInfo.locationId !== undefined) {
+        const idProduct = Number.parseInt(portInfo.productId, 16);//why not a number?
+        const idVendor = Number.parseInt(portInfo.vendorId, 16);//why not a number?
+        const usbDevices = usb.getDeviceList();
+        for (const usbDevice of usbDevices) {
+            if (usbDevice.deviceDescriptor.idProduct === idProduct && usbDevice.deviceDescriptor.idVendor === idVendor) {
+                if (getOSXLocationId(usbDevice).toLowerCase() === portInfo.locationId.toLowerCase()) {
+                    return usbDevice;
+                }
             }
         }
     }
@@ -1164,21 +1166,23 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
             // The serial numbers for the FTDI devices aren't necessarily
             // unique, so search by OS X location id rather than serial number.
 
-            let usbDevice: usb.Device | undefined;
+            let maybeUSBDevice: usb.Device | undefined;
             let numAttempts = 0;
             while (numAttempts++ < 5) {
-                usbDevice = findUSBDeviceForSerialPort(portInfo);
-                if (usbDevice !== undefined) {
+                maybeUSBDevice = findUSBDeviceForSerialPort(portInfo);
+                if (maybeUSBDevice !== undefined) {
                     break;
                 }
 
                 await delayMS(500);
             }
 
-            if (usbDevice === undefined) {
+            if (maybeUSBDevice === undefined) {
                 process.stderr.write(`${getSerialPortPath(portInfo)}: not setting FTDI latency timer - didn't find corresponding USB device after ${numAttempts} attempt(s)\n`);
                 return;
             }
+
+            const usbDevice: usb.Device = maybeUSBDevice;
 
             try {
                 process.stderr.write(`${getSerialPortPath(portInfo)}: setting FTDI latency timer to ${ms}ms.\n`);
@@ -1189,7 +1193,7 @@ async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, se
                 serialLog?.pn(`Setting USB device configuration...`);
                 if (usbDevice.configDescriptor.bConfigurationValue !== usbDevice.allConfigDescriptors[0].bConfigurationValue) {
                     await new Promise<void>((resolve, reject) => {
-                        usbDevice!.setConfiguration(usbDevice!.allConfigDescriptors[0].bConfigurationValue, (err) => {
+                        usbDevice.setConfiguration(usbDevice.allConfigDescriptors[0].bConfigurationValue, (err) => {
                             if (err !== undefined) {
                                 reject(err);
                             } else {

@@ -551,7 +551,7 @@ class TubeHostState implements beebfs.IFSState {
             tryLibDir = false;
         }
 
-        const curFile = await beebfs.getBeebFile(fqn, true, false);
+        const curFile = await beebfs.getBeebFile(fqn, true);
         if (curFile !== undefined) {
             this.log?.pn(` - found`);
             return curFile;
@@ -917,7 +917,7 @@ class TubeHostState implements beebfs.IFSState {
         }
 
         const fqn = new TubeHostFQN(volume, true, drive.folder, libDriveName, true, libDir, true, name);
-        const file = await beebfs.getBeebFile(fqn, true, false);
+        const file = await beebfs.getBeebFile(fqn, true);
         this.log?.pn(`FQN: ${fqn}: exists=${file !== undefined}`);
         if (file === undefined) {
             return undefined;
