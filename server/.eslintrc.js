@@ -154,7 +154,6 @@ module.exports = {
         "@typescript-eslint/type-annotation-spacing": "error",
         "@typescript-eslint/typedef": "off",
         "@typescript-eslint/unified-signatures": "error",
-        "arrow-body-style": "error",
         "arrow-parens": [
             "error",
             "always"
@@ -329,6 +328,9 @@ module.exports = {
         // WTF. How do you even use this? Can't omit radix parameter to allow it
         // to parse hex values - but can't supply 0 to allow it to parse hex
         // values either!
-        "radix": "off"
+        "radix": "off",
+
+        // Doesn't seem worth enforcing.
+        "arrow-body-style": "off"
     }
 };

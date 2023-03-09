@@ -63,25 +63,17 @@ function newResponse(c: number, p?: number | Buffer | utils.BufferBuilder) {
 
 export class Command {
     public readonly nameUC: string;
-    public readonly syntax: string | undefined;
-    // Return undefined to respond with a YES response.
-    //
-    // Return string or Buffer to set up a text response with that as the text.
-    //
-    // Return Response to respond with that response.
+    private readonly syntax: string | undefined;
     private readonly fun: (commandLine: CommandLine) => Promise<void | string | Buffer | Response>;
-    private readonly thisAny: unknown;
 
-    public constructor(name: string, syntax: string | undefined, thisAny: unknown, fun: (commandLine: CommandLine) => Promise<void | string | Response>) {
+    public constructor(name: string, syntax: string | undefined, fun: (commandLine: CommandLine) => Promise<void | string | Buffer | Response>) {
         this.nameUC = name.toUpperCase();
         this.syntax = syntax;
         this.fun = fun;
-        this.thisAny = thisAny;
     }
 
     public async call(commandLine: CommandLine): Promise<void | string | Buffer | Response> {
-        // JS crap that's seemingly impossible to deal with in any non-annoying way.
-        return await this.fun.apply(this.thisAny, [commandLine]);
+        return this.fun(commandLine);
     }
 
     public getSyntaxString(): string {
@@ -101,23 +93,20 @@ export class Command {
 class Handler {
     public readonly name: string;
     private readonly fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>;
-    private thisAny: unknown;
     private quiet: boolean;
     private fullRequestDump = false;
     private fullResponseDump = false;
     private resetLastOSBPUTHandle: boolean;
 
-    public constructor(name: string, thisAny: unknown, fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>) {
+    public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>) {
         this.name = name;
         this.fun = fun;
-        this.thisAny = thisAny;
         this.quiet = false;
         this.resetLastOSBPUTHandle = true;
     }
 
     public async call(p: Buffer): Promise<void | string | Buffer | Response> {
-        // JS crap that's seemingly impossible to deal with in any non-annoying way.
-        return await this.fun.apply(this.thisAny, [this, p]);
+        return this.fun(this, p);
     }
 
     public shouldResetLastOSBPUTHandle(): boolean {
@@ -216,64 +205,64 @@ export class Server {
         this.linkSupportsFireAndForgetRequests = linkSupportsFireAndForgetRequests;
 
         this.commonCommands = [
-            new Command('ACCESS', '<afsp> (<mode>)', this, this.accessCommand),
-            new Command('DEFAULTS', '([SRP])', this, this.defaultsCommand),
-            new Command('DELETE', '<fsp>', this, this.deleteCommand),
-            new Command('DIR', '(<dir>)', this, this.dirCommand),
-            new Command('DRIVE', '(<drive>)', this, this.driveCommand),
-            new Command('DUMP', '<fsp>', this, this.dumpCommand),
-            new Command('HSTATUS', '([HFD])', this, this.hstatusCommand),
-            new Command('INFO', '<afsp>', this, this.infoCommand),
-            new Command('LIB', '(<dir>)', this, this.libCommand),
-            new Command('LIST', '<fsp>', this, this.listCommand),
-            new Command('LOCATE', '<afsp> (<format>)', this, this.locateCommand),
-            new Command('NEWVOL', '<vsp>', this, this.newvolCommand),
-            new Command('RENAME', '<old fsp> <new fsp>', this, this.renameCommand),
-            new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this, this.srloadCommand),
-            new Command('TITLE', '<title>', this, this.titleCommand),
-            new Command('TYPE', '<fsp>', this, this.typeCommand),
-            new Command('VOLBROWSER', undefined, this, this.volbrowserCommand),
-            new Command('VOL', '(<avsp>) (R)', this, this.volCommand),
-            new Command('VOLS', '(<avsp>)', this, this.volsCommand),
-            new Command('WDUMP', '<fsp>', this, this.wdumpCommand),
-            new Command('WINFO', '<afsp>', this, this.winfoCommand),
+            new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
+            new Command('DEFAULTS', '([SRP])', this.defaultsCommand),
+            new Command('DELETE', '<fsp>', this.deleteCommand),
+            new Command('DIR', '(<dir>)', this.dirCommand),
+            new Command('DRIVE', '(<drive>)', this.driveCommand),
+            new Command('DUMP', '<fsp>', this.dumpCommand),
+            new Command('HSTATUS', '([HFD])', this.hstatusCommand),
+            new Command('INFO', '<afsp>', this.infoCommand),
+            new Command('LIB', '(<dir>)', this.libCommand),
+            new Command('LIST', '<fsp>', this.listCommand),
+            new Command('LOCATE', '<afsp> (<format>)', this.locateCommand),
+            new Command('NEWVOL', '<vsp>', this.newvolCommand),
+            new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
+            new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand),
+            new Command('TITLE', '<title>', this.titleCommand),
+            new Command('TYPE', '<fsp>', this.typeCommand),
+            new Command('VOLBROWSER', undefined, this.volbrowserCommand),
+            new Command('VOL', '(<avsp>) (R)', this.volCommand),
+            new Command('VOLS', '(<avsp>)', this.volsCommand),
+            new Command('WDUMP', '<fsp>', this.wdumpCommand),
+            new Command('WINFO', '<afsp>', this.winfoCommand),
         ];
 
         this.handlers = [];
-        this.handlers[beeblink.REQUEST_GET_ROM] = new Handler('GET_ROM', this, this.handleGetROM);
-        this.handlers[beeblink.REQUEST_RESET] = new Handler('RESET', this, this.handleReset);
-        this.handlers[beeblink.REQUEST_ECHO_DATA] = new Handler('ECHO_DATA', this, this.handleEchoData);
-        this.handlers[beeblink.REQUEST_READ_STRING] = new Handler('READ_STRING', this, this.handleReadString).withNoLogging();
-        this.handlers[beeblink.REQUEST_READ_STRING_VERBOSE] = new Handler('READ_STRING_VERBOSE', this, this.handleReadString);
-        this.handlers[beeblink.REQUEST_STAR_CAT] = new Handler('STAR_CAT', this, this.handleStarCat);
-        this.handlers[beeblink.REQUEST_STAR_COMMAND] = new Handler('STAR_COMMAND', this, this.handleStarCommand);
-        this.handlers[beeblink.REQUEST_STAR_RUN] = new Handler('STAR_RUN', this, this.handleStarRun);
-        this.handlers[beeblink.REQUEST_HELP_BLFS] = new Handler('HELP_BLFS', this, this.handleHelpBLFS);
-        this.handlers[beeblink.REQUEST_OSFILE] = new Handler('OSFILE', this, this.handleOSFILE);
-        this.handlers[beeblink.REQUEST_OSFIND_OPEN] = new Handler('OSFIND_OPEN', this, this.handleOSFINDOpen);
-        this.handlers[beeblink.REQUEST_OSFIND_CLOSE] = new Handler('OSFIND_CLOSE', this, this.handleOSFINDClose);
-        this.handlers[beeblink.REQUEST_OSARGS] = new Handler('OSARGS', this, this.handleOSARGS);
-        this.handlers[beeblink.REQUEST_EOF] = new Handler('EOF', this, this.handleEOF);
-        this.handlers[beeblink.REQUEST_OSBGET] = new Handler('OSBGET', this, this.handleOSBGET);//.withNoLogging();
-        this.handlers[beeblink.REQUEST_OSBPUT] = new Handler('OSBPUT', this, this.handleOSBPUT).withoutResetLastOSBPUTHandle();//.withNoLogging();
-        this.handlers[beeblink.REQUEST_STAR_INFO] = new Handler('STAR_INFO', this, this.handleStarInfo);
-        this.handlers[beeblink.REQUEST_STAR_EX] = new Handler('STAR_EX', this, this.handleStarEx);
-        this.handlers[beeblink.REQUEST_OSGBPB] = new Handler('OSGBPB', this, this.handleOSGBPB);
-        this.handlers[beeblink.REQUEST_OPT] = new Handler('OPT', this, this.handleOPT);
-        this.handlers[beeblink.REQUEST_BOOT_OPTION] = new Handler('REQUEST_BOOT_OPTION', this, this.handleGetBootOption);
-        this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('VOLUME_BROWSER', this, this.handleVolumeBrowser);
-        this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('SPEED_TEST', this, this.handleSpeedTest);
-        this.handlers[beeblink.REQUEST_SET_FILE_HANDLE_RANGE] = new Handler('SET_FILE_HANDLE_RANGE', this, this.handleSetFileHandleRange);
-        this.handlers[beeblink.REQUEST_SET_DISK_IMAGE_CAT] = new Handler('SET_DISK_IMAGE_CAT', this, this.handleSetDiskImageCat).withFullRequestDump();
-        this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('NEXT_DISK_IMAGE_part', this, this.handleNextDiskImagePart);
-        this.handlers[beeblink.REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT] = new Handler('SET_LAST_DISK_IMAGE_OSWORD_RESULT', this, this.handleSetLastDiskImageOSWORDResult);
-        this.handlers[beeblink.REQUEST_FINISH_DISK_IMAGE_FLOW] = new Handler('FINISH_DISK_IMAGE_FLOW', this, this.handleFinishDiskImageFlow);
-        this.handlers[beeblink.REQUEST_WRAPPED] = new Handler('REQUEST_WRAPPED', this, this.handleWrapped);
-        this.handlers[beeblink.REQUEST_READ_DISK_IMAGE] = new Handler('REQUEST_READ_DISK_IMAGE', this, this.handleReadDiskImage);
-        this.handlers[beeblink.REQUEST_WRITE_DISK_IMAGE] = new Handler('REQUEST_WRITE_DISK_IMAGE', this, this.handleWriteDiskImage);
+        this.handlers[beeblink.REQUEST_GET_ROM] = new Handler('GET_ROM', this.handleGetROM);
+        this.handlers[beeblink.REQUEST_RESET] = new Handler('RESET', this.handleReset);
+        this.handlers[beeblink.REQUEST_ECHO_DATA] = new Handler('ECHO_DATA', this.handleEchoData);
+        this.handlers[beeblink.REQUEST_READ_STRING] = new Handler('READ_STRING', this.handleReadString).withNoLogging();
+        this.handlers[beeblink.REQUEST_READ_STRING_VERBOSE] = new Handler('READ_STRING_VERBOSE', this.handleReadString);
+        this.handlers[beeblink.REQUEST_STAR_CAT] = new Handler('STAR_CAT', this.handleStarCat);
+        this.handlers[beeblink.REQUEST_STAR_COMMAND] = new Handler('STAR_COMMAND', this.handleStarCommand);
+        this.handlers[beeblink.REQUEST_STAR_RUN] = new Handler('STAR_RUN', this.handleStarRun);
+        this.handlers[beeblink.REQUEST_HELP_BLFS] = new Handler('HELP_BLFS', this.handleHelpBLFS);
+        this.handlers[beeblink.REQUEST_OSFILE] = new Handler('OSFILE', this.handleOSFILE);
+        this.handlers[beeblink.REQUEST_OSFIND_OPEN] = new Handler('OSFIND_OPEN', this.handleOSFINDOpen);
+        this.handlers[beeblink.REQUEST_OSFIND_CLOSE] = new Handler('OSFIND_CLOSE', this.handleOSFINDClose);
+        this.handlers[beeblink.REQUEST_OSARGS] = new Handler('OSARGS', this.handleOSARGS);
+        this.handlers[beeblink.REQUEST_EOF] = new Handler('EOF', this.handleEOF);
+        this.handlers[beeblink.REQUEST_OSBGET] = new Handler('OSBGET', this.handleOSBGET);//.withNoLogging();
+        this.handlers[beeblink.REQUEST_OSBPUT] = new Handler('OSBPUT', this.handleOSBPUT).withoutResetLastOSBPUTHandle();//.withNoLogging();
+        this.handlers[beeblink.REQUEST_STAR_INFO] = new Handler('STAR_INFO', this.handleStarInfo);
+        this.handlers[beeblink.REQUEST_STAR_EX] = new Handler('STAR_EX', this.handleStarEx);
+        this.handlers[beeblink.REQUEST_OSGBPB] = new Handler('OSGBPB', this.handleOSGBPB);
+        this.handlers[beeblink.REQUEST_OPT] = new Handler('OPT', this.handleOPT);
+        this.handlers[beeblink.REQUEST_BOOT_OPTION] = new Handler('REQUEST_BOOT_OPTION', this.handleGetBootOption);
+        this.handlers[beeblink.REQUEST_VOLUME_BROWSER] = new Handler('VOLUME_BROWSER', this.handleVolumeBrowser);
+        this.handlers[beeblink.REQUEST_SPEED_TEST] = new Handler('SPEED_TEST', this.handleSpeedTest);
+        this.handlers[beeblink.REQUEST_SET_FILE_HANDLE_RANGE] = new Handler('SET_FILE_HANDLE_RANGE', this.handleSetFileHandleRange);
+        this.handlers[beeblink.REQUEST_SET_DISK_IMAGE_CAT] = new Handler('SET_DISK_IMAGE_CAT', this.handleSetDiskImageCat).withFullRequestDump();
+        this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('NEXT_DISK_IMAGE_part', this.handleNextDiskImagePart);
+        this.handlers[beeblink.REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT] = new Handler('SET_LAST_DISK_IMAGE_OSWORD_RESULT', this.handleSetLastDiskImageOSWORDResult);
+        this.handlers[beeblink.REQUEST_FINISH_DISK_IMAGE_FLOW] = new Handler('FINISH_DISK_IMAGE_FLOW', this.handleFinishDiskImageFlow);
+        this.handlers[beeblink.REQUEST_WRAPPED] = new Handler('REQUEST_WRAPPED', this.handleWrapped);
+        this.handlers[beeblink.REQUEST_READ_DISK_IMAGE] = new Handler('REQUEST_READ_DISK_IMAGE', this.handleReadDiskImage);
+        this.handlers[beeblink.REQUEST_WRITE_DISK_IMAGE] = new Handler('REQUEST_WRITE_DISK_IMAGE', this.handleWriteDiskImage);
 
         if (this.linkSupportsFireAndForgetRequests) {
-            this.handlers[beeblink.REQUEST_OSBPUT_FNF] = new Handler('OSBPUT_FNF', this, this.handleOSBPUTFireAndForget).withoutResetLastOSBPUTHandle();//.withNoLogging();
+            this.handlers[beeblink.REQUEST_OSBPUT_FNF] = new Handler('OSBPUT_FNF', this.handleOSBPUTFireAndForget).withoutResetLastOSBPUTHandle();//.withNoLogging();
         }
 
         this.log = log;
@@ -375,7 +364,7 @@ export class Server {
         }
     }
 
-    private async handleGetROM(_handler: Handler, _p: Buffer): Promise<Response> {
+    private readonly handleGetROM = async (_handler: Handler, _p: Buffer): Promise<Response> => {
         if (this.romPathByLinkSubtype.size === 0) {
             return errors.generic('No ROM available');
         } else if (this.linkSubtype === undefined) {
@@ -394,9 +383,9 @@ export class Server {
                 }
             }
         }
-    }
+    };
 
-    private async handleReset(_handler: Handler, p: Buffer): Promise<void> {
+    private readonly handleReset = async (_handler: Handler, p: Buffer): Promise<void> => {
         this.log?.pn('reset type=' + p[0]);
         if (p[0] === 1 || p[0] === 2) {
             // Power-on reset or CTRL+BREAK
@@ -418,14 +407,14 @@ export class Server {
             this.linkSubtype = 0;
             this.log?.pn(`link subtype=${this.linkSubtype} (inferred)`);
         }
-    }
+    };
 
-    private async handleEchoData(_handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleEchoData = async (_handler: Handler, p: Buffer): Promise<Response> => {
         this.log?.pn('Sending ' + p.length + ' byte(s) back...');
         return newResponse(beeblink.RESPONSE_DATA, p);
-    }
+    };
 
-    private async handleReadString(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleReadString = async (handler: Handler, p: Buffer): Promise<Response> => {
         this.payloadMustBe(handler, p, 1);
 
         if (this.stringBuffer === undefined) {
@@ -454,14 +443,14 @@ export class Server {
 
             return newResponse(beeblink.RESPONSE_DATA, result);
         }
-    }
+    };
 
-    private async handleStarCat(_handler: Handler, p: Buffer): Promise<string> {
+    private readonly handleStarCat = async (_handler: Handler, p: Buffer): Promise<string> => {
         // the command line in this case does not include the *CAT itself...
         const commandLine = this.initCommandLine(p.toString('binary'));
 
         return this.bfs.getCAT(commandLine.parts.length >= 1 ? commandLine.parts[0] : undefined);
-    }
+    };
 
     private matchStarCommand(nameUC: string, commandLine: CommandLine): boolean {
         const part0UC = commandLine.parts[0].toUpperCase();
@@ -519,7 +508,7 @@ export class Server {
     //     return commands;
     // }
 
-    private async handleStarCommand(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleStarCommand = async (handler: Handler, p: Buffer): Promise<Response> => {
         const commandLine = this.initCommandLine(p.toString('binary'));
 
         if (commandLine.parts.length < 1) {
@@ -565,14 +554,14 @@ export class Server {
         } else {
             return await this.handleRun(commandLine, true);//true = check library directory
         }
-    }
+    };
 
-    private async handleStarRun(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleStarRun = async (handler: Handler, p: Buffer): Promise<Response> => {
         const commandLine = this.initCommandLine(p.toString('binary'));
         return await this.handleRun(commandLine, false);//false = don't check library directory
-    }
+    };
 
-    private async handleHelpBLFS(_handler: Handler, _p: Buffer): Promise<string> {
+    private readonly handleHelpBLFS = async (_handler: Handler, _p: Buffer): Promise<string> => {
         let help = '';
 
         for (const command of this.commonCommands) {
@@ -589,7 +578,7 @@ export class Server {
         }
 
         return help;
-    }
+    };
 
     private getOSFILEBlockString(b: Buffer) {
         return '[' +
@@ -600,7 +589,7 @@ export class Server {
             ']';
     }
 
-    private async handleOSFILE(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleOSFILE = async (handler: Handler, p: Buffer): Promise<Response> => {
         this.payloadMustBeAtLeast(handler, p, 17);
 
         let i = 0;
@@ -656,9 +645,9 @@ export class Server {
         }
 
         return newResponse(beeblink.RESPONSE_OSFILE, builder);
-    }
+    };
 
-    private async handleOSFINDOpen(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleOSFINDOpen = async (handler: Handler, p: Buffer): Promise<Response> => {
         this.payloadMustBeAtLeast(handler, p, 1);
 
         const mode = p[0];
@@ -672,9 +661,9 @@ export class Server {
         this.log?.pn('Output: handle=' + utils.hexdec(handle));
 
         return newResponse(beeblink.RESPONSE_OSFIND, handle);
-    }
+    };
 
-    private async handleOSFINDClose(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleOSFINDClose = async (handler: Handler, p: Buffer): Promise<Response> => {
         this.payloadMustBe(handler, p, 1);
 
         const handle = p[0];
@@ -684,9 +673,9 @@ export class Server {
         await this.bfs.OSFINDClose(handle);
 
         return newResponse(beeblink.RESPONSE_OSFIND, 0);
-    }
+    };
 
-    private async handleOSARGS(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleOSARGS = async (handler: Handler, p: Buffer): Promise<Response> => {
         this.payloadMustBe(handler, p, 6);
 
         const a = p[0];
@@ -703,9 +692,9 @@ export class Server {
         responseData.writeUInt32LE(newValue, 0);
 
         return newResponse(beeblink.RESPONSE_OSARGS, responseData);
-    }
+    };
 
-    private async handleEOF(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleEOF = async (handler: Handler, p: Buffer): Promise<Response> => {
         this.payloadMustBe(handler, p, 1);
 
         const handle = p[0];
@@ -713,9 +702,9 @@ export class Server {
         const eof = this.bfs.eof(handle);
 
         return newResponse(beeblink.RESPONSE_EOF, eof ? 0xff : 0x00);
-    }
+    };
 
-    private async handleOSBGET(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleOSBGET = async (handler: Handler, p: Buffer): Promise<Response> => {
         this.payloadMustBe(handler, p, 1);
 
         const handle = p[0];
@@ -730,9 +719,9 @@ export class Server {
         } else {
             return newResponse(beeblink.RESPONSE_OSBGET, byte);
         }
-    }
+    };
 
-    private async handleOSBPUTFireAndForget(handler: Handler, p: Buffer): Promise<void> {
+    private readonly handleOSBPUTFireAndForget = async (handler: Handler, p: Buffer): Promise<void> => {
         let byte: number;
         let handle: number;
         if (p.length === 1) {
@@ -752,9 +741,9 @@ export class Server {
         this.log?.pn('Input: handle=' + utils.hexdec(handle) + ', value=' + utils.hexdecch(byte));
         this.bfs.OSBPUT(handle, byte);
         this.lastOSBPUTHandle = handle;
-    }
+    };
 
-    private async handleOSBPUT(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleOSBPUT = async (handler: Handler, p: Buffer): Promise<Response> => {
         this.payloadMustBe(handler, p, 2);
 
         const handle = p[0];
@@ -775,9 +764,9 @@ export class Server {
         } else {
             return newResponse(beeblink.RESPONSE_YES, 0);
         }
-    }
+    };
 
-    private async handleStarInfo(handler: Handler, p: Buffer): Promise<string> {
+    private readonly handleStarInfo = async (handler: Handler, p: Buffer): Promise<string> => {
         const commandLine = this.initCommandLine(p.toString('binary'));
 
         if (commandLine.parts.length === 0) {
@@ -787,9 +776,9 @@ export class Server {
         const fqn = await this.bfs.parseFileString(commandLine.parts[0]);
 
         return await this.filesInfoResponse(fqn);
-    }
+    };
 
-    private async handleStarEx(handler: Handler, p: Buffer): Promise<string> {
+    private readonly handleStarEx = async (handler: Handler, p: Buffer): Promise<string> => {
         const commandLine = this.initCommandLine(p.toString('binary'));
 
         let fqn;
@@ -800,9 +789,9 @@ export class Server {
         }
 
         return await this.filesInfoResponse(fqn);
-    }
+    };
 
-    private async handleOSGBPB(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleOSGBPB = async (handler: Handler, p: Buffer): Promise<Response> => {
         this.payloadMustBeAtLeast(handler, p, 14);
 
         let i = 0;
@@ -868,9 +857,9 @@ export class Server {
         }
 
         return newResponse(beeblink.RESPONSE_OSGBPB, builder);
-    }
+    };
 
-    private async handleOPT(handler: Handler, p: Buffer): Promise<void> {
+    private readonly handleOPT = async (handler: Handler, p: Buffer): Promise<void> => {
         this.payloadMustBe(handler, p, 2);
 
         const x = p[0];
@@ -879,18 +868,18 @@ export class Server {
         this.log?.pn('*OPT ' + x + ',' + y);
 
         await this.bfs.OPT(x, y);
-    }
+    };
 
-    private async handleGetBootOption(_handler: Handler, _p: Buffer): Promise<Response> {
+    private readonly handleGetBootOption = async (_handler: Handler, _p: Buffer): Promise<Response> => {
         // const option = await beebfs.BeebFS.loadBootOption(this.bfs.getVolume(), this.bfs.getDrive());
         const option = await this.bfs.getBootOption();
 
         this.log?.pn(`Boot option: ${option}`);
 
         return newResponse(beeblink.RESPONSE_BOOT_OPTION, option);
-    }
+    };
 
-    private async handleVolumeBrowser(handler: Handler, p: Buffer): Promise<Buffer | Response> {
+    private readonly handleVolumeBrowser = async (handler: Handler, p: Buffer): Promise<Buffer | Response> => {
         this.payloadMustBeAtLeast(handler, p, 1);
 
         if (p[0] === beeblink.REQUEST_VOLUME_BROWSER_RESET) {
@@ -959,9 +948,9 @@ export class Server {
         } else {
             return this.internalError('Bad ' + handler.name + ' request');
         }
-    }
+    };
 
-    private async handleSpeedTest(handler: Handler, p: Buffer): Promise<string | Response> {
+    private readonly handleSpeedTest = async (handler: Handler, p: Buffer): Promise<string | Response> => {
         this.payloadMustBeAtLeast(handler, p, 1);
 
         if (p[0] === beeblink.REQUEST_SPEED_TEST_RESET) {
@@ -1006,11 +995,11 @@ export class Server {
         } else {
             return this.internalError('Bad ' + handler.name + ' request');
         }
-    }
+    };
 
-    private async handleSetFileHandleRange(handler: Handler, p: Buffer): Promise<void> {
+    private readonly handleSetFileHandleRange = async (handler: Handler, p: Buffer): Promise<void> => {
         await this.bfs.setFileHandleRange(p[0], p[1]);
-    }
+    };
 
     private writeOSWORDBlock(osword: diskimage.IDiskOSWORD, builder: utils.BufferBuilder, blockAddressOffset: number, errorAddressOffset: number): number {
         const offset = builder.getLength();
@@ -1068,15 +1057,15 @@ export class Server {
         return newResponse(beeblink.RESPONSE_DATA, builder.createBuffer());
     }
 
-    private async handleSetDiskImageCat(_handler: Handler, p: Buffer): Promise<void> {
+    private readonly handleSetDiskImageCat = async (_handler: Handler, p: Buffer): Promise<void> => {
         if (this.diskImageFlow === undefined) {
             return errors.generic(`No disk image flow`);
         }
 
         this.diskImageFlow.setCat(p);
-    }
+    };
 
-    private async handleNextDiskImagePart(_handler: Handler, _p: Buffer): Promise<Response> {
+    private readonly handleNextDiskImagePart = async (_handler: Handler, _p: Buffer): Promise<Response> => {
         if (this.diskImageFlow === undefined) {
             return errors.generic(`No disk image flow`);
         }
@@ -1114,17 +1103,17 @@ export class Server {
 
             return newResponse(beeblink.RESPONSE_DATA, builder.createBuffer());
         }
-    }
+    };
 
-    private async handleSetLastDiskImageOSWORDResult(_handler: Handler, p: Buffer): Promise<void> {
+    private readonly handleSetLastDiskImageOSWORDResult = async (_handler: Handler, p: Buffer): Promise<void> => {
         if (this.diskImageFlow === undefined) {
             return errors.generic(`No disk image flow`);
         }
 
         this.diskImageFlow.setLastOSWORDResult(p);
-    }
+    };
 
-    private async handleFinishDiskImageFlow(_handler: Handler, _p: Buffer): Promise<Response> {
+    private readonly handleFinishDiskImageFlow = async (_handler: Handler, _p: Buffer): Promise<Response> => {
         if (this.diskImageFlow === undefined) {
             return errors.generic(`No disk image flow`);
         }
@@ -1146,9 +1135,9 @@ export class Server {
         this.diskImageFlow = undefined;
 
         return newResponse(beeblink.RESPONSE_DATA, builder.createBuffer());
-    }
+    };
 
-    private async handleWrapped(handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleWrapped = async (handler: Handler, p: Buffer): Promise<Response> => {
         this.payloadMustBeAtLeast(handler, p, 5);
 
         const maxResponsePayloadSize = p.readUInt32LE(1);
@@ -1169,23 +1158,23 @@ export class Server {
         response.p.copy(wrappedResponsePayload, 5);
 
         return new Response(beeblink.RESPONSE_DATA, wrappedResponsePayload);
-    }
+    };
 
-    private async handleReadDiskImage(_handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleReadDiskImage = async (_handler: Handler, p: Buffer): Promise<Response> => {
         const details = this.getDiskImageFlowDetailsFromRequestPayload(p);
 
         const flow = await this.createDiskImageReadFlow(details);
 
         return await this.startDiskImageFlow(flow, details.bufferAddress, details.bufferSize);
-    }
+    };
 
-    private async handleWriteDiskImage(_handler: Handler, p: Buffer): Promise<Response> {
+    private readonly handleWriteDiskImage = async (_handler: Handler, p: Buffer): Promise<Response> => {
         const details = this.getDiskImageFlowDetailsFromRequestPayload(p);
 
         const flow = await this.createDiskImageWriteFlow(details);
 
         return await this.startDiskImageFlow(flow, details.bufferAddress, details.bufferSize);
-    }
+    };
 
     private internalError(text: string): never {
         return errors.generic(text);
@@ -1279,7 +1268,7 @@ export class Server {
         return commandLine;
     }
 
-    private async handleRun(commandLine: CommandLine, tryLibDir: boolean): Promise<Response> {
+    private readonly handleRun = async (commandLine: CommandLine, tryLibDir: boolean): Promise<Response> => {
         if (commandLine.parts.length === 0) {
             return errors.badName();
         }
@@ -1303,9 +1292,9 @@ export class Server {
         builder.writeBuffer(data);
 
         return newResponse(beeblink.RESPONSE_RUN, builder);
-    }
+    };
 
-    private async volsCommand(commandLine: CommandLine): Promise<string> {
+    private readonly volsCommand = async (commandLine: CommandLine): Promise<string> => {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : '*';
 
         const volumes = await this.bfs.findAllVolumesMatching(arg);
@@ -1325,9 +1314,9 @@ export class Server {
         text += BNL;
 
         return text;
-    }
+    };
 
-    private async hstatusCommand(commandLine: CommandLine): Promise<string> {
+    private readonly hstatusCommand = async (commandLine: CommandLine): Promise<string> => {
         let text = '';
 
         const begin = (title: string) => {
@@ -1377,18 +1366,18 @@ export class Server {
         }
 
         return text;
-    }
+    };
 
-    private async infoCommand(commandLine: CommandLine): Promise<string> {
+    private readonly infoCommand = async (commandLine: CommandLine): Promise<string> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
 
         const fqn = await this.bfs.parseFileString(commandLine.parts[1]);
         return await this.filesInfoResponse(fqn);
-    }
+    };
 
-    private async winfoCommand(commandLine: CommandLine): Promise<string> {
+    private readonly winfoCommand = async (commandLine: CommandLine): Promise<string> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1407,9 +1396,9 @@ export class Server {
         }
 
         return text;
-    }
+    };
 
-    private async accessCommand(commandLine: CommandLine): Promise<void> {
+    private readonly accessCommand = async (commandLine: CommandLine): Promise<void> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1428,9 +1417,9 @@ export class Server {
 
             await this.bfs.writeBeebFileMetadata(newFile);
         }
-    }
+    };
 
-    private async deleteCommand(commandLine: CommandLine): Promise<void> {
+    private readonly deleteCommand = async (commandLine: CommandLine): Promise<void> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1438,24 +1427,24 @@ export class Server {
         const fqn = await this.bfs.parseFileString(commandLine.parts[1]);
 
         await this.bfs.delete(fqn);
-    }
+    };
 
-    private async dirCommand(commandLine: CommandLine): Promise<void> {
+    private readonly dirCommand = async (commandLine: CommandLine): Promise<void> => {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starDir(arg);
-    }
+    };
 
-    private async driveCommand(commandLine: CommandLine): Promise<void> {
+    private readonly driveCommand = async (commandLine: CommandLine): Promise<void> => {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starDrive(arg);
-    }
+    };
 
-    private async libCommand(commandLine: CommandLine): Promise<void> {
+    private readonly libCommand = async (commandLine: CommandLine): Promise<void> => {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starLib(arg);
-    }
+    };
 
-    private async typeCommand(commandLine: CommandLine): Promise<string> {
+    private readonly typeCommand = async (commandLine: CommandLine): Promise<string> => {
         if (commandLine.parts.length !== 2) {
             return errors.syntax();
         }
@@ -1463,9 +1452,9 @@ export class Server {
         const lines = await this.bfs.readTextFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFileString(commandLine.parts[1])));
 
         return lines.join(BNL) + BNL;
-    }
+    };
 
-    private async listCommand(commandLine: CommandLine): Promise<string> {
+    private readonly listCommand = async (commandLine: CommandLine): Promise<string> => {
         if (commandLine.parts.length !== 2) {
             return errors.syntax();
         }
@@ -1479,9 +1468,9 @@ export class Server {
         }
 
         return text;
-    }
+    };
 
-    private async locateCommand(commandLine: CommandLine): Promise<string> {
+    private readonly locateCommand = async (commandLine: CommandLine): Promise<string> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1628,15 +1617,15 @@ export class Server {
         }
 
         return text;
-    }
+    };
 
-    private async dumpCommand(commandLine: CommandLine): Promise<string> {
-        return await this.dumpCommandInternal(commandLine, false);
-    }
+    private readonly dumpCommand = async (commandLine: CommandLine): Promise<string> => {
+        return this.dumpCommandInternal(commandLine, false);
+    };
 
-    private async wdumpCommand(commandLine: CommandLine): Promise<string> {
-        return await this.dumpCommandInternal(commandLine, true);
-    }
+    private readonly wdumpCommand = async (commandLine: CommandLine): Promise<string> => {
+        return this.dumpCommandInternal(commandLine, true);
+    };
 
     private async dumpCommandInternal(commandLine: CommandLine, wide: boolean): Promise<string> {
         if (commandLine.parts.length !== 2) {
@@ -1686,7 +1675,7 @@ export class Server {
         return text;
     }
 
-    private async renameCommand(commandLine: CommandLine): Promise<void> {
+    private readonly renameCommand = async (commandLine: CommandLine): Promise<void> => {
         if (commandLine.parts.length < 3) {
             return errors.syntax();
         }
@@ -1695,9 +1684,9 @@ export class Server {
         const newFQN = await this.bfs.parseFileString(commandLine.parts[2]);
 
         await this.bfs.rename(oldFQN, newFQN);
-    }
+    };
 
-    private async srloadCommand(commandLine: CommandLine): Promise<Response> {
+    private readonly srloadCommand = async (commandLine: CommandLine): Promise<Response> => {
         if (commandLine.parts.length !== 4 && commandLine.parts.length !== 5) {
             return errors.syntax();
         }
@@ -1736,19 +1725,19 @@ export class Server {
         builder.writeBuffer(rom);
 
         return newResponse(beeblink.RESPONSE_SPECIAL, builder);
-    }
+    };
 
-    private async titleCommand(commandLine: CommandLine): Promise<void> {
+    private readonly titleCommand = async (commandLine: CommandLine): Promise<void> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
 
         await this.bfs.setTitle(commandLine.parts[1]);
-    }
+    };
 
-    private async volbrowserCommand(_commandLine: CommandLine): Promise<Response> {
+    private readonly volbrowserCommand = async (_commandLine: CommandLine): Promise<Response> => {
         return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_VOLUME_BROWSER);
-    }
+    };
 
     private getVolumeInfoString(volume: beebfs.Volume): string {
         let str = '';
@@ -1760,7 +1749,7 @@ export class Server {
         return str;
     }
 
-    private async newvolCommand(commandLine: CommandLine): Promise<string> {
+    private readonly newvolCommand = async (commandLine: CommandLine): Promise<string> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1770,9 +1759,9 @@ export class Server {
         await this.bfs.mount(volume);
 
         return this.getVolumeInfoString(volume);
-    }
+    };
 
-    private async volCommand(commandLine: CommandLine): Promise<string> {
+    private readonly volCommand = async (commandLine: CommandLine): Promise<string> => {
         let volume: beebfs.Volume;
         if (commandLine.parts.length >= 2) {
             const volumes = await this.bfs.findFirstVolumeMatching(commandLine.parts[1]);
@@ -1794,7 +1783,7 @@ export class Server {
         }
 
         return this.getVolumeInfoString(volume);
-    }
+    };
 
     private getDiskImageFlowDetailsFromRequestPayload(p: Buffer): IDiskImageFlowDetails {
         this.log?.pn(`getDiskImageFlowDetailsFromRequestPayload`);
@@ -1909,7 +1898,7 @@ export class Server {
         }
     }
 
-    private async defaultsCommand(commandLine: CommandLine): Promise<string> {
+    private readonly defaultsCommand = async (commandLine: CommandLine): Promise<string> => {
         const modeLC = commandLine.parts.length >= 2 ? commandLine.parts[1].toLowerCase() : undefined;
 
         if (modeLC === undefined || modeLC === 's') {
@@ -1921,5 +1910,5 @@ export class Server {
         }
 
         return this.bfs.getDefaultsString();
-    }
+    };
 }

@@ -664,14 +664,14 @@ class TubeHostState implements beebfs.IFSState {
 
     public getCommands(): server.Command[] {
         return [
-            new server.Command('DCAT', '(<ahsp>)', this, this.dcatCommand),
-            new server.Command('DCREATE', '<hsp>', this, this.dcreateCommand),
-            new server.Command('DDIR', '(<hsp>)', this, this.hcfCommand),
-            new server.Command('DIN', '<drive> <hsp>|<index>', this, this.dinCommand),
-            new server.Command('DOUT', '<drive>', this, this.doutCommand),
-            new server.Command('HFOLDERS', undefined, this, this.hfoldersCommand),
-            new server.Command('HCF', '(<hsp>)', this, this.hcfCommand),
-            new server.Command('HMKF', '<hsp>', this, this.hmkfCommand),
+            new server.Command('DCAT', '(<ahsp>)', this.dcatCommand),
+            new server.Command('DCREATE', '<hsp>', this.dcreateCommand),
+            new server.Command('DDIR', '(<hsp>)', this.hcfCommand),
+            new server.Command('DIN', '<drive> <hsp>|<index>', this.dinCommand),
+            new server.Command('DOUT', '<drive>', this.doutCommand),
+            new server.Command('HFOLDERS', undefined, this.hfoldersCommand),
+            new server.Command('HCF', '(<hsp>)', this.hcfCommand),
+            new server.Command('HMKF', '<hsp>', this.hmkfCommand),
         ];
     }
 
@@ -698,7 +698,7 @@ class TubeHostState implements beebfs.IFSState {
     //     return this.drives[index];
     // }
 
-    private async dcreateCommand(commandLine: CommandLine): Promise<void> {
+    private readonly dcreateCommand = async (commandLine: CommandLine): Promise<void> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -719,9 +719,9 @@ class TubeHostState implements beebfs.IFSState {
         if (index !== undefined) {
             this.drives[index].folder = driveFolder;
         }
-    }
+    };
 
-    private async dinCommand(commandLine: CommandLine): Promise<void> {
+    private readonly dinCommand = async (commandLine: CommandLine): Promise<void> => {
         if (commandLine.parts.length < 3) {
             return errors.syntax();
         }
@@ -751,20 +751,20 @@ class TubeHostState implements beebfs.IFSState {
         }
 
         this.din(drive, diskName);
-    }
+    };
 
     private din(drive: ITubeHostDriveState, diskName: string): void {
         drive.folder = path.join(this.folderPath, diskName) as VolRelPath;
     }
 
-    private async doutCommand(commandLine: CommandLine): Promise<void> {
+    private readonly doutCommand = async (commandLine: CommandLine): Promise<void> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
 
         const drive = this.mustGetDriveStateByName(commandLine.parts[1]);
         drive.folder = undefined;
-    }
+    };
 
     private checkDiskName(name: string): void {
         for (const c of name) {
@@ -792,7 +792,7 @@ class TubeHostState implements beebfs.IFSState {
         }
     }
 
-    private async hcfCommand(commandLine: CommandLine): Promise<string> {
+    private readonly hcfCommand = async (commandLine: CommandLine): Promise<string> => {
         if (commandLine.parts.length >= 2) {
             const f = commandLine.parts[1];
 
@@ -818,9 +818,9 @@ class TubeHostState implements beebfs.IFSState {
         }
 
         return `Current folder is: ${this.folderPath}${utils.BNL}`;
-    }
+    };
 
-    private async hmkfCommand(commandLine: CommandLine): Promise<void> {
+    private readonly hmkfCommand = async (commandLine: CommandLine): Promise<void> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -830,13 +830,13 @@ class TubeHostState implements beebfs.IFSState {
         this.checkHostFolderName(f);
 
         await utils.fsMkdir(getAbsPath(this.volume, path.join(this.folderPath, f) as VolRelPath));
-    }
+    };
 
     private async scanCurrentFolder(): Promise<ITubeHostFolder> {
         return scanTubeHostFolder(getAbsPath(this.volume, this.folderPath), this.log);
     }
 
-    private async hfoldersCommand(_commandLine: CommandLine): Promise<string> {
+    private readonly hfoldersCommand = async (_commandLine: CommandLine): Promise<string> => {
         const folder = await this.scanCurrentFolder();
 
         let text = '';
@@ -853,9 +853,9 @@ class TubeHostState implements beebfs.IFSState {
         }
 
         return text;
-    }
+    };
 
-    private async dcatCommand(commandLine: CommandLine): Promise<string> {
+    private readonly dcatCommand = async (commandLine: CommandLine): Promise<string> => {
         // this.log.pn(`hello from *DCAT\n`);
         // this.log.pn(`this.folderPath=\`\`${this.folderPath}''`);
 
@@ -887,7 +887,7 @@ class TubeHostState implements beebfs.IFSState {
         }
 
         return text;
-    }
+    };
 
     private getPathFromFQN(fqn: beebfs.FQN): TubeHostPath {
         const tubeHostFQN = mustBeTubeHostFQN(fqn);
