@@ -229,7 +229,7 @@ class PCType implements beebfs.IFSType {
         return true;
     }
 
-    public parseFileOrDirString(str: string, i: number, state: beebfs.IFSState | undefined, parseAsDir: boolean, volume: beebfs.Volume, volumeExplicit: boolean): PCFQN {
+    public parseFileString(str: string, i: number, state: beebfs.IFSState | undefined, volume: beebfs.Volume, volumeExplicit: boolean): beebfs.FQN {
         // See note in FS.parseFileOrDirString.
         //
         // The i!==0 check is supposed to make sure this only comes in to play
@@ -246,9 +246,6 @@ class PCType implements beebfs.IFSType {
 
         if (i === str.length) {
             return errors.badName();
-        } else if (parseAsDir) {
-            // every dir is a bad dir for a PC volume...
-            return errors.badDir();
         } else {
             const name = str.substring(i);
             if (!this.isValidBeebFileName(name)) {
@@ -257,6 +254,11 @@ class PCType implements beebfs.IFSType {
 
             return new PCFQN(volume, volumeExplicit, name);
         }
+    }
+
+    public parseDirString(_str: string, _i: number, _state: beebfs.IFSState | undefined, _volume: beebfs.Volume, _volumeExplicit: boolean): beebfs.FQN {
+        // Sorry, no dirs for PC volumes.
+        return errors.badDir();
     }
 
     public getIdealVolumeRelativeHostPath(fqn: beebfs.FQN): string {

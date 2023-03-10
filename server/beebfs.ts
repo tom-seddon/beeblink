@@ -476,7 +476,8 @@ export interface IFSType {
     findBeebFilesMatching(fqn: FQN, recurse: boolean, log: utils.Log | undefined): Promise<File[]>;
 
     // parse file/dir string, starting at index i. 
-    parseFileOrDirString(str: string, i: number, state: IFSState | undefined, parseAsDir: boolean, volume: Volume, volumeExplicit: boolean): FQN;
+    parseFileString(str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean): FQN;
+    parseDirString(str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean): FQN;
 
     // create appropriate FSFQN from FSFSP, filling in defaults from the given State as appropriate.
     //createFQN(fsp: IFSFSP, state: IFSState | undefined): IFSFQN;
@@ -1128,7 +1129,7 @@ export class FS {
 
                 let fqn: FQN;
                 try {
-                    fqn = volume.type.parseFileOrDirString(arg, 0, undefined, false, volume, true);
+                    fqn = volume.type.parseFileString(arg, 0, undefined, volume, true);
                 } catch (error) {
                     // if the arg wasn't even parseable by this volume's type, it
                     // presumably won't match any file...
@@ -2218,7 +2219,13 @@ export class FS {
             volumeExplicit = false;
         }
 
-        const fqn = volume.type.parseFileOrDirString(str, i, state, parseAsDir, volume, volumeExplicit);
+        let fqn: FQN;
+        if (parseAsDir) {
+            fqn = volume.type.parseDirString(str, i, state, volume, volumeExplicit);
+        } else {
+            fqn = volume.type.parseFileString(str, i, state, volume, volumeExplicit);
+        }
+
         return fqn;
     }
 

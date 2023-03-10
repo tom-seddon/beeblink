@@ -598,7 +598,7 @@ class TubeHostState implements beebfs.IFSState {
         if (this.getDriveStateByName(arg) !== undefined) {
             this.current = new TubeHostPath(arg, this.current.dir);
         } else {
-            const fqn = mustBeTubeHostFQN(this.volume.type.parseFileOrDirString(arg, 0, this, true, this.volume, false));
+            const fqn = mustBeTubeHostFQN(this.volume.type.parseDirString(arg, 0, this, this.volume, false));
             if (!fqn.driveExplicit || fqn.dirExplicit) {
                 return errors.badDrive();
             }
@@ -930,6 +930,15 @@ class TubeHostState implements beebfs.IFSState {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+interface IParseResult {
+    drive: string;
+    driveExplicit: boolean;
+    dir: string;
+    dirExplicit: boolean;
+    name: string | undefined;
+    hostFolder: VolRelPath | undefined;
+}
+
 class TubeHostType implements beebfs.IFSType {
     public readonly name = 'TubeHost';
 
@@ -960,99 +969,14 @@ class TubeHostType implements beebfs.IFSType {
         return true;
     }
 
-    public parseFileOrDirString(str: string, i: number, state: beebfs.IFSState | undefined, parseAsDir: boolean, volume: beebfs.Volume, volumeExplicit: boolean): TubeHostFQN {
-        const tubeHostState = mustBeTubeHostState(state);
+    public parseFileString(str: string, i: number, state: beebfs.IFSState | undefined, volume: beebfs.Volume, volumeExplicit: boolean): beebfs.FQN {
+        const parseResult = this.parseFileOrDirString(str, i, state, false);
+        return new TubeHostFQN(volume, volumeExplicit, parseResult.hostFolder, parseResult.drive, parseResult.driveExplicit, parseResult.dir, parseResult.dirExplicit, parseResult.name);
+    }
 
-        let drive: string | undefined;
-        let dir: string | undefined;
-        let name: string | undefined;
-
-        if (i === str.length) {
-            if (tubeHostState === undefined) {
-                return errors.badName();
-            }
-
-            return new TubeHostFQN(volume, volumeExplicit, undefined, tubeHostState.getCurrentDrive(), false, tubeHostState.getCurrentDir(), false, undefined);
-        }
-
-        if (str[i] === ':' && i + 1 < str.length) {
-            // The drive isn't checked for validity until the name is actually used.
-
-            // if (!TubeHostType.isValidDrive(str[i + 1])) {
-            //     return errors.badDrive();
-            // }
-
-            drive = str[i + 1];
-            i += 2;
-
-            if (str[i] === '.') {
-                ++i;
-            }
-        }
-
-        if (str[i + 1] === '.') {
-            if (!TubeHostType.isValidFileNameChar(str[i])) {
-                return errors.badDir();
-            }
-
-            dir = str[i];
-            i += 2;
-        }
-
-        if (parseAsDir) {
-            if (i < str.length && dir !== undefined || i === str.length - 1 && !TubeHostType.isValidFileNameChar(str[i])) {
-                return errors.badDir();
-            }
-
-            dir = str[i];
-        } else {
-            if (i < str.length) {
-                for (let j = i; j < str.length; ++j) {
-                    if (!TubeHostType.isValidFileNameChar(str[j])) {
-                        return errors.badName();
-                    }
-                }
-
-                name = str.slice(i);
-
-                if (name.length > MAX_NAME_LENGTH) {
-                    return errors.badName();
-                }
-            }
-        }
-
-        let driveExplicit: boolean;
-        if (drive === undefined) {
-            if (tubeHostState !== undefined) {
-                drive = tubeHostState.getCurrentDrive();
-            } else {
-                drive = gDefaultTransientSettings.current.drive;
-            }
-
-            driveExplicit = false;
-        } else {
-            driveExplicit = true;
-        }
-
-        let hostFolder: VolRelPath | undefined;
-        if (tubeHostState !== undefined) {
-            hostFolder = tubeHostState.mustGetDriveStateByName(drive).folder;
-        }
-
-        let dirExplicit: boolean;
-        if (dir === undefined) {
-            if (tubeHostState !== undefined) {
-                dir = tubeHostState.getCurrentDir();
-            } else {
-                dir = gDefaultTransientSettings.current.dir;
-            }
-
-            dirExplicit = false;
-        } else {
-            dirExplicit = true;
-        }
-
-        return new TubeHostFQN(volume, volumeExplicit, hostFolder, drive, driveExplicit, dir, dirExplicit, name);
+    public parseDirString(str: string, i: number, state: beebfs.IFSState | undefined, volume: beebfs.Volume, volumeExplicit: boolean): beebfs.FQN {
+        const parseResult = this.parseFileOrDirString(str, i, state, false);
+        return new TubeHostFQN(volume, volumeExplicit, parseResult.hostFolder, parseResult.drive, parseResult.driveExplicit, parseResult.dir, parseResult.dirExplicit, undefined);
     }
 
     public getIdealVolumeRelativeHostPath(fqn: beebfs.FQN): VolRelPath {
@@ -1372,6 +1296,115 @@ class TubeHostType implements beebfs.IFSType {
             const file = new beebfs.File(info.hostPath, fqn, info.load, info.exec, info.attr | beebfs.DEFAULT_ATTR, false);
             files.push(file);
         }
+    }
+
+    private parseFileOrDirString(str: string, i: number, state: beebfs.IFSState | undefined, parseAsDir: boolean): IParseResult {
+        const tubeHostState = mustBeTubeHostState(state);
+
+        let drive: string | undefined;
+        let dir: string | undefined;
+        let name: string | undefined;
+
+        if (i === str.length) {
+            if (tubeHostState === undefined) {
+                return errors.badName();
+            }
+
+            return {
+                drive: tubeHostState.getCurrentDrive(),
+                driveExplicit: false,
+                dir: tubeHostState.getCurrentDir(),
+                dirExplicit: false,
+                name: undefined,
+                hostFolder: undefined,
+            };
+        }
+
+        if (str[i] === ':' && i + 1 < str.length) {
+            // The drive isn't checked for validity until the name is actually used.
+
+            // if (!TubeHostType.isValidDrive(str[i + 1])) {
+            //     return errors.badDrive();
+            // }
+
+            drive = str[i + 1];
+            i += 2;
+
+            if (str[i] === '.') {
+                ++i;
+            }
+        }
+
+        if (str[i + 1] === '.') {
+            if (!TubeHostType.isValidFileNameChar(str[i])) {
+                return errors.badDir();
+            }
+
+            dir = str[i];
+            i += 2;
+        }
+
+        if (parseAsDir) {
+            if (i < str.length && dir !== undefined || i === str.length - 1 && !TubeHostType.isValidFileNameChar(str[i])) {
+                return errors.badDir();
+            }
+
+            dir = str[i];
+        } else {
+            if (i < str.length) {
+                for (let j = i; j < str.length; ++j) {
+                    if (!TubeHostType.isValidFileNameChar(str[j])) {
+                        return errors.badName();
+                    }
+                }
+
+                name = str.slice(i);
+
+                if (name.length > MAX_NAME_LENGTH) {
+                    return errors.badName();
+                }
+            }
+        }
+
+        let driveExplicit: boolean;
+        if (drive === undefined) {
+            if (tubeHostState !== undefined) {
+                drive = tubeHostState.getCurrentDrive();
+            } else {
+                drive = gDefaultTransientSettings.current.drive;
+            }
+
+            driveExplicit = false;
+        } else {
+            driveExplicit = true;
+        }
+
+        let hostFolder: VolRelPath | undefined;
+        if (tubeHostState !== undefined) {
+            hostFolder = tubeHostState.mustGetDriveStateByName(drive).folder;
+        }
+
+        let dirExplicit: boolean;
+        if (dir === undefined) {
+            if (tubeHostState !== undefined) {
+                dir = tubeHostState.getCurrentDir();
+            } else {
+                dir = gDefaultTransientSettings.current.dir;
+            }
+
+            dirExplicit = false;
+        } else {
+            dirExplicit = true;
+        }
+
+        return {
+            drive,
+            driveExplicit,
+            dir,
+            dirExplicit,
+            hostFolder,
+            name,
+        };
     }
 }
 

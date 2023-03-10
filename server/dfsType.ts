@@ -301,7 +301,7 @@ class DFSState implements beebfs.IFSState {
         if (DFSType.isValidDrive(arg)) {
             this.current = new DFSPath(arg, this.current.dir);
         } else {
-            const fqn = mustBeDFSFQN(this.volume.type.parseFileOrDirString(arg, 0, this, true, this.volume, false));
+            const fqn = mustBeDFSFQN(this.volume.type.parseDirString(arg, 0, this, this.volume, false));
             if (!fqn.driveExplicit || fqn.dirExplicit) {
                 return errors.badDrive();
             }
@@ -397,6 +397,14 @@ class DFSState implements beebfs.IFSState {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+interface IParseResult {
+    drive: string;
+    driveExplicit: boolean;
+    dir: string;
+    dirExplicit: boolean;
+    name: string | undefined;
+}
+
 class DFSType implements beebfs.IFSType {
     public readonly name = 'BeebLink/DFS';
 
@@ -443,92 +451,14 @@ class DFSType implements beebfs.IFSType {
         return true;
     }
 
-    public parseFileOrDirString(str: string, i: number, state: beebfs.IFSState | undefined, parseAsDir: boolean, volume: beebfs.Volume, volumeExplicit: boolean): DFSFQN {
-        const dfsState = mustBeDFSState(state);
+    public parseFileString(str: string, i: number, state: beebfs.IFSState | undefined, volume: beebfs.Volume, volumeExplicit: boolean): beebfs.FQN {
+        const parseResult = this.parseFileOrDirString(str, i, state, false);
+        return new DFSFQN(volume, volumeExplicit, parseResult.drive, parseResult.driveExplicit, parseResult.dir, parseResult.dirExplicit, parseResult.name);
+    }
 
-        let drive: string | undefined;
-        let dir: string | undefined;
-        let name: string | undefined;
-
-        if (i === str.length) {
-            if (dfsState === undefined) {
-                return errors.badName();
-            }
-
-            return new DFSFQN(volume, volumeExplicit, dfsState.getCurrentDrive(), false, dfsState.getCurrentDir(), false, undefined);
-        }
-
-        if (str[i] === ':' && i + 1 < str.length) {
-            if (!DFSType.isValidDrive(str[i + 1])) {
-                return errors.badDrive();
-            }
-
-            drive = str[i + 1];
-            i += 2;
-
-            if (str[i] === '.') {
-                ++i;
-            }
-        }
-
-        if (str[i + 1] === '.') {
-            if (!DFSType.isValidFileNameChar(str[i])) {
-                return errors.badDir();
-            }
-
-            dir = str[i];
-            i += 2;
-        }
-
-        if (parseAsDir) {
-            if (i < str.length && dir !== undefined || i === str.length - 1 && !DFSType.isValidFileNameChar(str[i])) {
-                return errors.badDir();
-            }
-
-            dir = str[i];
-        } else {
-            if (i < str.length) {
-                for (let j = i; j < str.length; ++j) {
-                    if (!DFSType.isValidFileNameChar(str[j])) {
-                        return errors.badName();
-                    }
-                }
-
-                name = str.slice(i);
-
-                if (name.length > MAX_NAME_LENGTH) {
-                    return errors.badName();
-                }
-            }
-        }
-
-        let driveExplicit: boolean;
-        if (drive === undefined) {
-            if (dfsState !== undefined) {
-                drive = dfsState.getCurrentDrive();
-            } else {
-                drive = gDefaultTransientSettings.current.drive;
-            }
-
-            driveExplicit = false;
-        } else {
-            driveExplicit = true;
-        }
-
-        let dirExplicit: boolean;
-        if (dir === undefined) {
-            if (dfsState !== undefined) {
-                dir = dfsState.getCurrentDir();
-            } else {
-                dir = gDefaultTransientSettings.current.dir;
-            }
-
-            dirExplicit = false;
-        } else {
-            dirExplicit = true;
-        }
-
-        return new DFSFQN(volume, volumeExplicit, drive, driveExplicit, dir, dirExplicit, name);
+    public parseDirString(str: string, i: number, state: beebfs.IFSState | undefined, volume: beebfs.Volume, volumeExplicit: boolean): beebfs.FQN {
+        const parseResult = this.parseFileOrDirString(str, i, state, true);
+        return new DFSFQN(volume, volumeExplicit, parseResult.drive, parseResult.driveExplicit, parseResult.dir, parseResult.dirExplicit, undefined);
     }
 
     public getIdealVolumeRelativeHostPath(fqn: beebfs.FQN): string {
@@ -801,6 +731,106 @@ class DFSType implements beebfs.IFSType {
         // 0123456789012345678901234567890123456789
         // _.__________ L 12345678 12345678 123456
         return `${dfsFQN.dir}.${dfsFQN.name!.padEnd(10)} ${attr} ${load} ${exec} ${size}`;
+    }
+
+    private parseFileOrDirString(str: string, i: number, state: beebfs.IFSState | undefined, parseAsDir: boolean): IParseResult {
+        const dfsState = mustBeDFSState(state);
+
+        let drive: string | undefined;
+        let dir: string | undefined;
+        let name: string | undefined;
+
+        if (i === str.length) {
+            if (dfsState === undefined) {
+                return errors.badName();
+            }
+
+            return {
+                drive: dfsState.getCurrentDrive(),
+                driveExplicit: false,
+                dir: dfsState.getCurrentDir(),
+                dirExplicit: false,
+                name: undefined
+            };
+        }
+
+        if (str[i] === ':' && i + 1 < str.length) {
+            if (!DFSType.isValidDrive(str[i + 1])) {
+                return errors.badDrive();
+            }
+
+            drive = str[i + 1];
+            i += 2;
+
+            if (str[i] === '.') {
+                ++i;
+            }
+        }
+
+        if (str[i + 1] === '.') {
+            if (!DFSType.isValidFileNameChar(str[i])) {
+                return errors.badDir();
+            }
+
+            dir = str[i];
+            i += 2;
+        }
+
+        if (parseAsDir) {
+            if (i < str.length && dir !== undefined || i === str.length - 1 && !DFSType.isValidFileNameChar(str[i])) {
+                return errors.badDir();
+            }
+
+            dir = str[i];
+        } else {
+            if (i < str.length) {
+                for (let j = i; j < str.length; ++j) {
+                    if (!DFSType.isValidFileNameChar(str[j])) {
+                        return errors.badName();
+                    }
+                }
+
+                name = str.slice(i);
+
+                if (name.length > MAX_NAME_LENGTH) {
+                    return errors.badName();
+                }
+            }
+        }
+
+        let driveExplicit: boolean;
+        if (drive === undefined) {
+            if (dfsState !== undefined) {
+                drive = dfsState.getCurrentDrive();
+            } else {
+                drive = gDefaultTransientSettings.current.drive;
+            }
+
+            driveExplicit = false;
+        } else {
+            driveExplicit = true;
+        }
+
+        let dirExplicit: boolean;
+        if (dir === undefined) {
+            if (dfsState !== undefined) {
+                dir = dfsState.getCurrentDir();
+            } else {
+                dir = gDefaultTransientSettings.current.dir;
+            }
+
+            dirExplicit = false;
+        } else {
+            dirExplicit = true;
+        }
+
+        return {
+            drive,
+            driveExplicit,
+            dir,
+            dirExplicit,
+            name
+        };
     }
 }
 
