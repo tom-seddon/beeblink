@@ -106,7 +106,7 @@ class DFSFQN extends beebfs.FQN {
         this.name = name;
     }
 
-    public equals(other: beebfs.FQN): boolean {
+    public override equals(other: beebfs.FQN): boolean {
         if (!(other instanceof DFSFQN)) {
             return false;
         }
@@ -130,7 +130,7 @@ class DFSFQN extends beebfs.FQN {
         return true;
     }
 
-    public toString(): string {
+    public override toString(): string {
         let str = `${super.toString()}:${this.drive}.${this.dir}`;
         if (this.name !== undefined) {
             str += `.${this.name}`;

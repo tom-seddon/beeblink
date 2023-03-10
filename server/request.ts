@@ -31,7 +31,7 @@ export default class Request extends Message {
         super(c, p);
     }
 
-    public toString(): string {
+    public override toString(): string {
         return this.toStringHelper(utils.getRequestTypeName(this.c));
     }
 

@@ -54,7 +54,7 @@ class PCFQN extends beebfs.FQN {
         this.name = name;
     }
 
-    public equals(other: beebfs.FQN): boolean {
+    public override equals(other: beebfs.FQN): boolean {
         if (!(other instanceof PCFQN)) {
             return false;
         }
@@ -70,7 +70,7 @@ class PCFQN extends beebfs.FQN {
         return true;
     }
 
-    public toString(): string {
+    public override toString(): string {
         return `${super.toString()}:${this.name}`;
     }
 

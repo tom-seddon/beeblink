@@ -30,7 +30,7 @@ export default class Response extends Message {
         super(c, p);
     }
 
-    public toString(): string {
+    public override toString(): string {
         return this.toStringHelper(utils.getResponseTypeName(this.c));
     }
 }

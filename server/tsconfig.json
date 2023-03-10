@@ -12,7 +12,13 @@
         "noImplicitReturns": true,
         "noImplicitThis": true,
         "strict": true,
-        "strictNullChecks": true
+        "strictNullChecks": true,
+        "noImplicitOverride": true,
+        "strictFunctionTypes": true,
+        "strictPropertyInitialization": true,
+        "useUnknownInCatchVariables": true,
+        "noEmitOnError": true,
+        "exactOptionalPropertyTypes": true
     },
     "include": [
         "./adfsimage.ts",

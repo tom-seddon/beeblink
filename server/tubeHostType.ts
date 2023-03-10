@@ -250,7 +250,7 @@ class TubeHostFQN extends beebfs.FQN {
         this.name = name;
     }
 
-    public equals(other: beebfs.FQN): boolean {
+    public override equals(other: beebfs.FQN): boolean {
         if (!(other instanceof TubeHostFQN)) {
             return false;
         }
@@ -278,7 +278,7 @@ class TubeHostFQN extends beebfs.FQN {
         return true;
     }
 
-    public toString(): string {
+    public override toString(): string {
         // 2026 = HORIZONTAL ELLIPSIS
         return `${super.toString()}:${this.drive}.${this.dir}.${(this.name !== undefined ? this.name : '\u2026')} (${this.hostFolder})`;
     }

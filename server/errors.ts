@@ -33,7 +33,7 @@ export class BeebError extends Error {
         this.text = text;
     }
 
-    public toString() {
+    public override toString() {
         return this.message;
     }
 }
