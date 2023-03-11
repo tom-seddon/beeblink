@@ -173,31 +173,87 @@ export function getHostChars(str: string): string {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// Fully-qualified name of a Beeb file that may or may not exist. Drive and dir
-// are as supplied on command line, or filled in from defaults, as appropriate.
-//
-// This was a slightly late addition and isn't used everywhere it should be...
-export abstract class FQN {
+// While this is not an abstract class, volume types may extend it.
+export class FilePath {
     // Volume this FQN refers to. If this.volumeExplicit, the volume was
     // explicitly set (e.g., by being provided as part of the name on the
     // command line); otherwise, it was filled in from the current state.
     public readonly volume: Volume;
     public readonly volumeExplicit: boolean;
 
-    public constructor(volume: Volume, volumeExplicit: boolean) {
+    // Not all volume types actually support drives and dirs, but the concept is
+    // baked enough into the Beeb way of doing things that they might as well be
+    // permanently present.
+    public readonly drive: string;
+    public readonly driveExplicit: boolean;
+
+    public readonly dir: string;
+    public readonly dirExplicit: boolean;
+
+    public constructor(volume: Volume, volumeExplicit: boolean, drive: string, driveExplicit: boolean, dir: string, dirExplicit: boolean) {
         this.volume = volume;
         this.volumeExplicit = volumeExplicit;
+        this.drive = drive;
+        this.driveExplicit = driveExplicit;
+        this.dir = dir;
+        this.dirExplicit = dirExplicit;
+    }
+
+    public getFQNPrefix(): string {
+        let str = `::${this.volume.name}`;
+
+        if (this.drive !== '') {
+            str += `:${this.drive}`;
+        }
+
+        if (this.dir !== '') {
+            str += `.${this.dir}`;
+        }
+
+        return str;
+    }
+
+    // If not undefined, appended as a parenthetical to the result of
+    // FilePath.toString or FQN.toString.
+    public getFQNSuffix(): string | undefined {
+        return undefined;
     }
 
     public toString(): string {
-        return `::${this.volume.name}`;//${this.fsFQN}`;
+        let str = this.getFQNPrefix();
+
+        const suffix = this.getFQNSuffix();
+        if (suffix !== undefined) {
+            str += ` (${suffix})`;
+        }
+
+        return str;
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// Fully-qualified name of a Beeb file that may or may not exist. 
+export class FQN {
+    public readonly filePath: FilePath;
+    public name: string;
+
+    public constructor(filePath: FilePath, name: string) {
+        this.filePath = filePath;
+        this.name = name;
     }
 
-    public equals(other: FQN): boolean {
-        return this.volume.equals(other.volume);// && this.fsFQN.equals(other.fsFQN);
-    }
+    public toString(): string {
+        let str = `${this.filePath.getFQNPrefix()}.${this.name}`;
 
-    public abstract isWildcard(): boolean;
+        const suffix = this.filePath.getFQNSuffix();
+        if (suffix !== undefined) {
+            str += ` (${suffix})`;
+        }
+
+        return str;
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -418,10 +474,10 @@ export interface IFSState {
     starDrive(arg: string | undefined): void;
 
     // handle *DIR.
-    starDir(fqn: FQN | undefined): void;
+    starDir(filePath: FilePath | undefined): void;
 
     // handle *LIB.
-    starLib(fqn: FQN | undefined): void;
+    starLib(filePath: FilePath | undefined): void;
 
     // handle *HSTATUS drives output.
     getDrivesOutput(): Promise<string>;
@@ -477,7 +533,7 @@ export interface IFSType {
 
     // parse file/dir string, starting at index i. 
     parseFileString(str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean): FQN;
-    parseDirString(str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean): FQN;
+    parseDirString(str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean): FilePath;
 
     // create appropriate FSFQN from FSFSP, filling in defaults from the given State as appropriate.
     //createFQN(fsp: IFSFSP, state: IFSState | undefined): IFSFQN;
@@ -487,7 +543,7 @@ export interface IFSType {
     getIdealVolumeRelativeHostPath(fqn: FQN): string;
 
     // get *CAT text.
-    getCAT(fqn: FQN, state: IFSState | undefined, log: utils.Log | undefined): Promise<string>;
+    getCAT(filePath: FilePath, state: IFSState | undefined, log: utils.Log | undefined): Promise<string>;
 
     // delete the given file.
     deleteFile(file: File): Promise<void>;
@@ -522,12 +578,14 @@ export interface IFSType {
 
 async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log?: utils.Log | undefined): Promise<File | undefined> {
     if (!wildcardsOK) {
-        if (fqn.isWildcard()) {
+        if (utils.isAmbiguousAFSP(fqn.filePath.drive) ||
+            utils.isAmbiguousAFSP(fqn.filePath.dir) ||
+            utils.isAmbiguousAFSP(fqn.name)) {
             return errors.badName();
         }
     }
 
-    const files = await fqn.volume.type.findBeebFilesMatching(fqn, false, log);
+    const files = await fqn.filePath.volume.type.findBeebFilesMatching(fqn, false, log);
     log?.pn(`found ${files.length} file(s)`);
 
     if (files.length === 0) {
@@ -547,12 +605,12 @@ async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log?: utils.L
 // If file not found: getBeebFile returns undefined, mustGetBeebFile raises a
 // File not found error.
 export async function getBeebFile(fqn: FQN, wildcardsOK: boolean, log?: utils.Log | undefined): Promise<File | undefined> {
-    log?.pn(`getBeebFile: ${fqn}; wildCardsOK=${wildcardsOK}`);
+    log?.pn(`getBeebFile: ${fqn}; wildCardsOK = ${wildcardsOK} `);
     return getBeebFileInternal(fqn, wildcardsOK, log);
 }
 
 export async function mustGetBeebFile(fqn: FQN, wildcardsOK: boolean, log?: utils.Log | undefined): Promise<File> {
-    log?.pn(`mustGetBeebFile: ${fqn}; wildCardsOK=${wildcardsOK}`);
+    log?.pn(`mustGetBeebFile: ${fqn}; wildCardsOK = ${wildcardsOK} `);
     const file = await getBeebFileInternal(fqn, wildcardsOK, log);
     if (file === undefined) {
         return errors.fileNotFound();
@@ -878,15 +936,19 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async parseDirString(dirString: string): Promise<FQN> {
-        return await this.parseFileOrDirString(dirString, true);
+    public async parseDirString(dirString: string): Promise<FilePath> {
+        const parseVolumeResult = await this.parseVolumeString(dirString);
+
+        return parseVolumeResult.volume.type.parseDirString(dirString, parseVolumeResult.i, this.getState(), parseVolumeResult.volume, parseVolumeResult.volumeExplicit);
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
     public async parseFileString(fileString: string): Promise<FQN> {
-        return await this.parseFileOrDirString(fileString, false);
+        const parseVolumeResult = await this.parseVolumeString(fileString);
+
+        return parseVolumeResult.volume.type.parseFileString(fileString, parseVolumeResult.i, this.getState(), parseVolumeResult.volume, parseVolumeResult.volumeExplicit);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -974,34 +1036,34 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async starDir(arg: string | undefined): Promise<void> {
-        let fqn: FQN | undefined;
+        let filePath: FilePath | undefined;
 
         if (arg !== undefined) {
-            fqn = await this.parseDirString(arg);
+            filePath = await this.parseDirString(arg);
 
-            if (fqn.volumeExplicit) {
-                await this.mount(fqn.volume);
+            if (filePath.volumeExplicit) {
+                await this.mount(filePath.volume);
             }
         }
 
-        this.getState().starDir(fqn);
+        this.getState().starDir(filePath);
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
     public async starLib(arg: string | undefined): Promise<void> {
-        let fqn: FQN | undefined;
+        let filePath: FilePath | undefined;
 
         if (arg !== undefined) {
-            fqn = await this.parseDirString(arg);
+            filePath = await this.parseDirString(arg);
 
-            if (fqn.volumeExplicit) {
+            if (filePath.volumeExplicit) {
                 return errors.badDir();
             }
         }
 
-        this.getState().starLib(fqn);
+        this.getState().starLib(filePath);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1071,7 +1133,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async findFilesMatching(fqn: FQN): Promise<File[]> {
-        return await fqn.volume.type.findBeebFilesMatching(fqn, false, this.log);
+        return await fqn.filePath.volume.type.findBeebFilesMatching(fqn, false, this.log);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1080,7 +1142,7 @@ export class FS {
     public async getInfoText(file: File): Promise<string> {
         const fileSize = await this.tryGetFileSize(file);
 
-        return file.fqn.volume.type.getInfoText(file, fileSize);
+        return file.fqn.filePath.volume.type.getInfoText(file, fileSize);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1090,9 +1152,9 @@ export class FS {
         const stats = await this.tryGetFileStats(file);
 
         if (stats === undefined) {
-            return file.fqn.volume.type.getInfoText(file, 0);
+            return file.fqn.filePath.volume.type.getInfoText(file, 0);
         } else {
-            return file.fqn.volume.type.getWideInfoText(file, stats);
+            return file.fqn.filePath.volume.type.getWideInfoText(file, stats);
         }
     }
 
@@ -1100,7 +1162,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public getAttrString(file: File): string | undefined {
-        return file.fqn.volume.type.getAttrString(file);
+        return file.fqn.filePath.volume.type.getAttrString(file);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1381,7 +1443,7 @@ export class FS {
             hostPath = file.hostPath;
 
             if (write) {
-                FS.mustBeWriteableVolume(fqn.volume);
+                FS.mustBeWriteableVolume(fqn.filePath.volume);
                 FS.mustBeWriteableFile(file);
             }
 
@@ -1507,7 +1569,7 @@ export class FS {
 
     // get File matching FQN, that must be writeable.
     public async getBeebFileForWrite(fqn: FQN): Promise<File> {
-        FS.mustBeWriteableVolume(fqn.volume);
+        FS.mustBeWriteableVolume(fqn.filePath.volume);
 
         let file = await getBeebFile(fqn, false);
         if (file !== undefined) {
@@ -1560,7 +1622,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public getFileWithModifiedAttributes(file: File, attributeString: string): File {
-        const newAttr = file.fqn.volume.type.getNewAttributes(file.attr, attributeString);
+        const newAttr = file.fqn.filePath.volume.type.getNewAttributes(file.attr, attributeString);
         if (newAttr === undefined) {
             return errors.badAttribute();
         }
@@ -1584,7 +1646,7 @@ export class FS {
         this.log?.pn('oldFQN: ' + oldFQN);
         this.log?.pn('newFQN: ' + newFQN);
 
-        if (!oldFQN.volume.equals(newFQN.volume)) {
+        if (!oldFQN.filePath.volume.equals(newFQN.filePath.volume)) {
             return errors.badDrive();
         }
 
@@ -1594,12 +1656,12 @@ export class FS {
 
         const oldFile = await mustGetBeebFile(oldFQN, false);
 
-        await oldFQN.volume.type.renameFile(oldFile, newFQN);
+        await oldFQN.filePath.volume.type.renameFile(oldFile, newFQN);
 
         if (this.gaManipulator !== undefined) {
-            if (!newFQN.volume.isReadOnly()) {
+            if (!newFQN.filePath.volume.isReadOnly()) {
                 // could be cleverer than this.
-                this.gaManipulator.renameFile(oldFile.hostPath, newFQN.volume.type.getIdealVolumeRelativeHostPath(newFQN));
+                this.gaManipulator.renameFile(oldFile.hostPath, newFQN.filePath.volume.type.getIdealVolumeRelativeHostPath(newFQN));
             }
         }
     }
@@ -1608,7 +1670,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async getFileForRUN(fqn: FQN, tryLibDir: boolean): Promise<File> {
-        if (fqn.volumeExplicit) {
+        if (fqn.filePath.volumeExplicit) {
             // Definitely don't try lib drive/dir if volume was specified.
             tryLibDir = false;
         }
@@ -1661,7 +1723,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private getHostPath(fqn: FQN): string {
-        return path.join(fqn.volume.path, fqn.volume.type.getIdealVolumeRelativeHostPath(fqn));
+        return path.join(fqn.filePath.volume.path, fqn.filePath.volume.type.getIdealVolumeRelativeHostPath(fqn));
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1708,7 +1770,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILESave(fqn: FQN, load: number, exec: number, data: Buffer): Promise<OSFILEResult> {
-        FS.mustBeWriteableVolume(fqn.volume);
+        FS.mustBeWriteableVolume(fqn.filePath.volume);
         FS.mustNotBeTooBig(data.length);
 
         let hostPath: string;
@@ -1739,8 +1801,8 @@ export class FS {
         await writeFile(hostPath, data);
 
         if (this.gaManipulator !== undefined) {
-            if (!fqn.volume.isReadOnly()) {
-                this.gaManipulator.makeVolumeNotText(fqn.volume);
+            if (!fqn.filePath.volume.isReadOnly()) {
+                this.gaManipulator.makeVolumeNotText(fqn.filePath.volume);
                 this.gaManipulator.makeFileBASIC(hostPath, utils.isBASIC(data));
             }
         }
@@ -1750,7 +1812,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async writeBeebMetadata(hostPath: string, fqn: FQN, load: number, exec: number, attr: number): Promise<void> {
-        await fqn.volume.type.writeBeebMetadata(hostPath, fqn, load, exec, attr);
+        await fqn.filePath.volume.type.writeBeebMetadata(hostPath, fqn, load, exec, attr);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1761,7 +1823,7 @@ export class FS {
         load: number | undefined,
         exec: number | undefined,
         attr: number | undefined): Promise<OSFILEResult> {
-        FS.mustBeWriteableVolume(fqn.volume);
+        FS.mustBeWriteableVolume(fqn.filePath.volume);
 
         const file = await getBeebFile(fqn, false);
         if (file === undefined) {
@@ -1821,11 +1883,11 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async deleteFile(file: File): Promise<void> {
-        FS.mustBeWriteableVolume(file.fqn.volume);
+        FS.mustBeWriteableVolume(file.fqn.filePath.volume);
         this.mustNotBeOpen(file);
         FS.mustBeWriteableFile(file);
 
-        await file.fqn.volume.type.deleteFile(file);
+        await file.fqn.filePath.volume.type.deleteFile(file);
 
         if (this.gaManipulator !== undefined) {
             this.gaManipulator.deleteFile(file.hostPath);
@@ -1836,7 +1898,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILECreate(fqn: FQN, load: number, exec: number, size: number): Promise<OSFILEResult> {
-        FS.mustBeWriteableVolume(fqn.volume);
+        FS.mustBeWriteableVolume(fqn.filePath.volume);
         FS.mustNotBeTooBig(size);//block.attr - block.size);
 
         // Cheat.
@@ -2166,17 +2228,12 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async parseFileOrDirString(str: string, parseAsDir: boolean): Promise<FQN> {
+    private async parseVolumeString(str: string): Promise<{ volume: Volume; volumeExplicit: boolean; i: number; }> {
         if (str === '') {
             return errors.badName();
         }
 
-        let i = 0;
-        let volume: Volume;
-        let volumeExplicit: boolean;
-        let state: IFSState | undefined;
-
-        if (str[i] === ':' && str[i + 1] === ':' && str.length > 3) {
+        if (str.length > 3 && str[0] === ':' && str[1] === ':') {
             // ::x:whatever
             //
             // The : is doing double duty here: it's the terminator of the
@@ -2190,14 +2247,14 @@ export class FS {
             // the : prefix is sent through just the same, and it has to be
             // stripped off. 
 
-            let end = str.indexOf(':', i + 2);
+            let end = str.indexOf(':', 2);
             if (end < 0) {
                 // "::fred" or similar.
                 end = str.length;
                 //return errors.badName();
             }
 
-            const volumeName = str.substring(i + 2, end);
+            const volumeName = str.substring(2, end);
 
             const volumes = await this.findFirstVolumeMatching(volumeName);
 
@@ -2207,26 +2264,20 @@ export class FS {
                 return errors.badName('Ambiguous volume');
             }
 
-            volume = volumes[0];
-            volumeExplicit = true;
-
-            i = end;
+            return {
+                volume: volumes[0],
+                volumeExplicit: true,
+                i: end
+            };
         } else {
             // This might produce a 'No volume' error, which feels a bit ugly at
             // the parsing step, but I don't think it matters in practice...
-            state = this.getState();
-            volume = state.volume;
-            volumeExplicit = false;
+            return {
+                volume: this.getState().volume,
+                volumeExplicit: false,
+                i: 0,
+            };
         }
-
-        let fqn: FQN;
-        if (parseAsDir) {
-            fqn = volume.type.parseDirString(str, i, state, volume, volumeExplicit);
-        } else {
-            fqn = volume.type.parseFileString(str, i, state, volume, volumeExplicit);
-        }
-
-        return fqn;
     }
 
     /////////////////////////////////////////////////////////////////////////

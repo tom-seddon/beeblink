@@ -54,8 +54,8 @@ const DEFAULT_BOOT_OPTION = 0;
 // https://github.com/Microsoft/TypeScript/wiki/FAQ#can-i-make-a-type-alias-nominal
 
 // Had more than one bug stem from mixing these up...
-type AbsPath = string & { 'absPath': object };
-type VolRelPath = string & { 'volRelPath': object };
+type AbsPath = string & { 'absPath': object; };
+type VolRelPath = string & { 'volRelPath': object; };
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -76,14 +76,6 @@ function mustBeTubeHostState(state: beebfs.IFSState | undefined): TubeHostState 
     }
 
     return state;
-}
-
-function mustBeTubeHostFQN(fqn: beebfs.FQN): TubeHostFQN {
-    if (!(fqn instanceof TubeHostFQN)) {
-        throw new Error('not TubeHostFQN');
-    }
-
-    return fqn;
 }
 
 function driveEmptyError(message?: string): never {
@@ -230,74 +222,27 @@ interface ITubeHostFolder {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-class TubeHostFQN extends beebfs.FQN {
+class TubeHostFilePath extends beebfs.FilePath {
     public readonly hostFolder: VolRelPath | undefined;
-    public readonly drive: string;
-    public readonly driveExplicit: boolean;
-    public readonly dir: string;
-    public readonly dirExplicit: boolean;
-    public readonly name: string | undefined;
 
-    public constructor(volume: beebfs.Volume, volumeExplicit: boolean, hostFolder: VolRelPath | undefined, drive: string, driveExplicit: boolean, dir: string, dirExplicit: boolean, name: string | undefined) {
-        super(volume, volumeExplicit);
+    public constructor(volume: beebfs.Volume, volumeExplicit: boolean, drive: string, driveExplicit: boolean, dir: string, dirExplicit: boolean, hostFolder: VolRelPath | undefined) {
+        super(volume, volumeExplicit, drive, driveExplicit, dir, dirExplicit);
         if (hostFolder !== undefined) {
             this.hostFolder = utils.getSeparatorAndCaseNormalizedPath(hostFolder) as VolRelPath;
         }
-        this.drive = drive;
-        this.driveExplicit = driveExplicit;
-        this.dir = dir;
-        this.dirExplicit = dirExplicit;
-        this.name = name;
     }
 
-    public override equals(other: beebfs.FQN): boolean {
-        if (!(other instanceof TubeHostFQN)) {
-            return false;
-        }
+    public override getFQNSuffix(): string | undefined {
+        return this.hostFolder;
+    }
+}
 
-        if (!super.equals(other)) {
-            return false;
-        }
-
-        if (!utils.struieq(this.drive, other.drive)) {
-            return false;
-        }
-
-        if (!utils.struieq(this.dir, other.dir)) {
-            return false;
-        }
-
-        if (!utils.struieq(this.name, other.name)) {
-            return false;
-        }
-
-        if (this.hostFolder !== other.hostFolder) {
-            return false;
-        }
-
-        return true;
+function mustBeTubeHostFilePath(filePath: beebfs.FilePath): TubeHostFilePath {
+    if (!(filePath instanceof TubeHostFilePath)) {
+        throw new Error('not TubeHostFilePath');
     }
 
-    public override toString(): string {
-        // 2026 = HORIZONTAL ELLIPSIS
-        return `${super.toString()}:${this.drive}.${this.dir}.${(this.name !== undefined ? this.name : '\u2026')} (${this.hostFolder})`;
-    }
-
-    public isWildcard(): boolean {
-        if (this.dir === utils.MATCH_N_CHAR || this.dir === utils.MATCH_ONE_CHAR) {
-            return true;
-        }
-
-        if (this.name !== undefined) {
-            for (const c of this.name) {
-                if (c === utils.MATCH_N_CHAR || c === utils.MATCH_ONE_CHAR) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
+    return filePath;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -531,22 +476,15 @@ class TubeHostState implements beebfs.IFSState {
     }
 
     public async getFileForRUN(fqn: beebfs.FQN, tryLibDir: boolean): Promise<beebfs.File | undefined> {
-        const tubeHostFQN = mustBeTubeHostFQN(fqn);
-
         this.log?.p(`getFileForRUN: ${fqn} -`);
 
-        if (tubeHostFQN.name === undefined) {
-            this.log?.pn(` no name`);
-            return undefined;
-        }
-
         // Additional TubeHost rules for tryLibDir.
-        if (tubeHostFQN.driveExplicit) {
+        if (fqn.filePath.driveExplicit) {
             this.log?.pn(` (explicit drive, ignoring lib)`);
             tryLibDir = false;
         }
 
-        if (tubeHostFQN.dirExplicit) {
+        if (fqn.filePath.dirExplicit) {
             this.log?.pn(` (explicit dir, ignoring lib)`);
             tryLibDir = false;
         }
@@ -560,12 +498,12 @@ class TubeHostState implements beebfs.IFSState {
         this.log?.pn(` - not found`);
 
         if (tryLibDir) {
-            const libFile = await this.findLibFile(fqn.volume, this.library.drive, this.library.dir, tubeHostFQN.name);
+            const libFile = await this.findLibFile(fqn.filePath.volume, this.library.drive, this.library.dir, fqn.name);
             if (libFile !== undefined) {
                 return libFile;
             }
 
-            const libFile2 = await this.findLibFile(fqn.volume, LIBRARY_DRIVE_NAME, '$', tubeHostFQN.name);
+            const libFile2 = await this.findLibFile(fqn.filePath.volume, LIBRARY_DRIVE_NAME, '$', fqn.name);
             if (libFile2 !== undefined) {
                 return libFile2;
             }
@@ -585,9 +523,9 @@ class TubeHostState implements beebfs.IFSState {
         }
 
         const drive = this.mustGetDriveStateByName(driveName);
-        const fqn = new TubeHostFQN(this.volume, false, drive.folder, driveName, true, this.current.dir, false, undefined);
-        this.log?.pn(`THs getCAT: fqn=${fqn}`);
-        return await this.volume.type.getCAT(fqn, this, this.log);
+        const filePath = new TubeHostFilePath(this.volume, false, driveName, true, this.current.dir, false, drive.folder);
+        this.log?.pn(`THs getCAT: filePath=${filePath}`);
+        return await this.volume.type.getCAT(filePath, this, this.log);
     }
 
     public starDrive(arg: string | undefined): boolean {
@@ -598,23 +536,23 @@ class TubeHostState implements beebfs.IFSState {
         if (this.getDriveStateByName(arg) !== undefined) {
             this.current = new TubeHostPath(arg, this.current.dir);
         } else {
-            const fqn = mustBeTubeHostFQN(this.volume.type.parseDirString(arg, 0, this, this.volume, false));
-            if (!fqn.driveExplicit || fqn.dirExplicit) {
+            const filePath = this.volume.type.parseDirString(arg, 0, this, this.volume, false);
+            if (!filePath.driveExplicit || filePath.dirExplicit) {
                 return errors.badDrive();
             }
 
-            this.current = new TubeHostPath(fqn.drive, this.current.dir);
+            this.current = new TubeHostPath(filePath.drive, this.current.dir);
         }
 
         return true;
     }
 
-    public starDir(fqn: beebfs.FQN): void {
-        this.current = this.getPathFromFQN(fqn);
+    public starDir(filePath: beebfs.FilePath): void {
+        this.current = this.getTubeHostPathFromFilePath(filePath);
     }
 
-    public starLib(fqn: beebfs.FQN): void {
-        this.library = this.getPathFromFQN(fqn);
+    public starLib(filePath: beebfs.FilePath): void {
+        this.library = this.getTubeHostPathFromFilePath(filePath);
     }
 
     public async getDrivesOutput(): Promise<string> {
@@ -650,13 +588,13 @@ class TubeHostState implements beebfs.IFSState {
     }
 
     public async readNames(): Promise<string[]> {
-        const fqn = new TubeHostFQN(this.volume, false, this.mustGetDriveFolder(this.current.drive), this.current.drive, true, this.current.dir, true, undefined);
+        const filePath = new TubeHostFilePath(this.volume, false, this.current.drive, true, this.current.dir, true, this.mustGetDriveFolder(this.current.drive));
+        const fqn = new beebfs.FQN(filePath, '*');
         const files = await this.volume.type.findBeebFilesMatching(fqn, false, undefined);
 
         const names: string[] = [];
         for (const file of files) {
-            const tubeHostFQN = mustBeTubeHostFQN(file.fqn);
-            names.push(tubeHostFQN.name!);
+            names.push(file.fqn.name);
         }
 
         return names;
@@ -889,18 +827,16 @@ class TubeHostState implements beebfs.IFSState {
         return text;
     };
 
-    private getPathFromFQN(fqn: beebfs.FQN): TubeHostPath {
-        const tubeHostFQN = mustBeTubeHostFQN(fqn);
-
-        if (tubeHostFQN.volumeExplicit || tubeHostFQN.name !== undefined) {
+    private getTubeHostPathFromFilePath(filePath: beebfs.FilePath): TubeHostPath {
+        if (filePath.volumeExplicit) {
             return errors.badDir();
         }
 
-        if (this.getDriveStateByName(tubeHostFQN.drive) === undefined) {
+        if (this.getDriveStateByName(filePath.drive) === undefined) {
             return errors.badDrive();
         }
 
-        return new TubeHostPath(tubeHostFQN.drive, tubeHostFQN.dir);
+        return new TubeHostPath(filePath.drive, filePath.dir);
     }
 
     private async findLibFile(volume: beebfs.Volume, libDriveName: string, libDir: string, name: string): Promise<beebfs.File | undefined> {
@@ -916,7 +852,7 @@ class TubeHostState implements beebfs.IFSState {
             return undefined;
         }
 
-        const fqn = new TubeHostFQN(volume, true, drive.folder, libDriveName, true, libDir, true, name);
+        const fqn = new beebfs.FQN(new TubeHostFilePath(volume, true, libDriveName, true, libDir, true, drive.folder), name);
         const file = await beebfs.getBeebFile(fqn, true);
         this.log?.pn(`FQN: ${fqn}: exists=${file !== undefined}`);
         if (file === undefined) {
@@ -930,14 +866,14 @@ class TubeHostState implements beebfs.IFSState {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-interface IParseResult {
-    drive: string;
-    driveExplicit: boolean;
-    dir: string;
-    dirExplicit: boolean;
-    name: string | undefined;
-    hostFolder: VolRelPath | undefined;
-}
+// interface IParseResult {
+//     drive: string;
+//     driveExplicit: boolean;
+//     dir: string;
+//     dirExplicit: boolean;
+//     name: string | undefined;
+//     hostFolder: VolRelPath | undefined;
+// }
 
 class TubeHostType implements beebfs.IFSType {
     public readonly name = 'TubeHost';
@@ -970,28 +906,27 @@ class TubeHostType implements beebfs.IFSType {
     }
 
     public parseFileString(str: string, i: number, state: beebfs.IFSState | undefined, volume: beebfs.Volume, volumeExplicit: boolean): beebfs.FQN {
-        const parseResult = this.parseFileOrDirString(str, i, state, false);
-        return new TubeHostFQN(volume, volumeExplicit, parseResult.hostFolder, parseResult.drive, parseResult.driveExplicit, parseResult.dir, parseResult.dirExplicit, parseResult.name);
+        const parseResult = this.parseFileOrDirString(str, i, state, false, volume, volumeExplicit);
+        if (parseResult.name === undefined) {
+            return errors.badName();
+        }
+        return new beebfs.FQN(parseResult.filePath, parseResult.name);
     }
 
-    public parseDirString(str: string, i: number, state: beebfs.IFSState | undefined, volume: beebfs.Volume, volumeExplicit: boolean): beebfs.FQN {
-        const parseResult = this.parseFileOrDirString(str, i, state, false);
-        return new TubeHostFQN(volume, volumeExplicit, parseResult.hostFolder, parseResult.drive, parseResult.driveExplicit, parseResult.dir, parseResult.dirExplicit, undefined);
+    public parseDirString(str: string, i: number, state: beebfs.IFSState | undefined, volume: beebfs.Volume, volumeExplicit: boolean): TubeHostFilePath {
+        const parseResult = this.parseFileOrDirString(str, i, state, false, volume, volumeExplicit);
+        return parseResult.filePath;
     }
 
     public getIdealVolumeRelativeHostPath(fqn: beebfs.FQN): VolRelPath {
-        const tubeHostFQN = mustBeTubeHostFQN(fqn);
+        const tubeHostFilePath = mustBeTubeHostFilePath(fqn.filePath);
 
-        if (tubeHostFQN.name === undefined) {
-            return errors.badName();
-        }
-
-        if (tubeHostFQN.hostFolder === undefined) {
+        if (tubeHostFilePath.hostFolder === undefined) {
             // Not certain this is the right logic...
             return driveEmptyError('Drive empty (?)');
         }
 
-        return path.join(tubeHostFQN.hostFolder, beebfs.getHostChars(tubeHostFQN.dir) + '.' + beebfs.getHostChars(tubeHostFQN.name)) as VolRelPath;
+        return path.join(tubeHostFilePath.hostFolder, beebfs.getHostChars(fqn.filePath.dir) + '.' + beebfs.getHostChars(fqn.name)) as VolRelPath;
     }
 
     public async findBeebFilesInVolume(volumeOrFQN: beebfs.Volume | beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
@@ -1001,19 +936,17 @@ class TubeHostType implements beebfs.IFSType {
         let dirRegExp: RegExp | undefined;
         let nameRegExp: RegExp | undefined;
         if (volumeOrFQN instanceof beebfs.FQN) {
-            const tubeHostFQN = mustBeTubeHostFQN(volumeOrFQN);
-
             // TubeHost volume files have unknowable drives, but that will still
             // match an explicit '#' or '*'.
-            if (tubeHostFQN.driveExplicit &&
-                tubeHostFQN.drive !== utils.MATCH_N_CHAR &&
-                tubeHostFQN.drive !== utils.MATCH_ONE_CHAR) {
+            if (volumeOrFQN.filePath.driveExplicit &&
+                volumeOrFQN.filePath.drive !== utils.MATCH_N_CHAR &&
+                volumeOrFQN.filePath.drive !== utils.MATCH_ONE_CHAR) {
                 return files;
             }
 
-            volume = tubeHostFQN.volume;
-            dirRegExp = utils.getRegExpFromAFSP(tubeHostFQN.dir);
-            nameRegExp = tubeHostFQN.name !== undefined ? utils.getRegExpFromAFSP(tubeHostFQN.name) : undefined;
+            volume = volumeOrFQN.filePath.volume;
+            dirRegExp = utils.getRegExpFromAFSP(volumeOrFQN.filePath.dir);
+            nameRegExp = utils.getRegExpFromAFSP(volumeOrFQN.name);
         } else {
             volume = volumeOrFQN;
         }
@@ -1026,54 +959,57 @@ class TubeHostType implements beebfs.IFSType {
     public async findBeebFilesMatching(fqn: beebfs.FQN, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {
         // The recurse flag is ignored. TubeHost disks don't nest.
 
-        const tubeHostFQN = mustBeTubeHostFQN(fqn);
+        const tubeHostFilePath = mustBeTubeHostFilePath(fqn.filePath);
 
-        if (tubeHostFQN.hostFolder === undefined) {
+        if (tubeHostFilePath.hostFolder === undefined) {
             // *sigh*
             return errors.generic('Unknown host folder');
         }
 
         //const driveRegExp = utils.getRegExpFromAFSP(tubeHostFQN.drive);
-        const dirRegExp = utils.getRegExpFromAFSP(tubeHostFQN.dir);
-        const nameRegExp = tubeHostFQN.name !== undefined ? utils.getRegExpFromAFSP(tubeHostFQN.name) : undefined;
+        const dirRegExp = utils.getRegExpFromAFSP(tubeHostFilePath.dir);
+        const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
         const files: beebfs.File[] = [];
 
-        await this.addBeebFilesInFolder(files, tubeHostFQN.volume, tubeHostFQN.hostFolder, tubeHostFQN.drive, tubeHostFQN.driveExplicit, dirRegExp, nameRegExp, log);
+        await this.addBeebFilesInFolder(files, tubeHostFilePath.volume, tubeHostFilePath.hostFolder, tubeHostFilePath.drive, tubeHostFilePath.driveExplicit, dirRegExp, nameRegExp, log);
 
         return files;
     }
 
-    public async getCAT(catFQN: beebfs.FQN, state: beebfs.IFSState | undefined, log: utils.Log | undefined): Promise<string> {
-        const tubeHostCatFQN = mustBeTubeHostFQN(catFQN);
+    public async getCAT(catFilePath: beebfs.FilePath, state: beebfs.IFSState | undefined, log: utils.Log | undefined): Promise<string> {
+        const tubeHostCatFilePath = mustBeTubeHostFilePath(catFilePath);
         const tubeHostState = mustBeTubeHostState(state);
 
-        if (!tubeHostCatFQN.driveExplicit || tubeHostCatFQN.dirExplicit) {
+        if (!catFilePath.driveExplicit || catFilePath.dirExplicit) {
             return errors.badDrive();
         }
 
-        const beebFiles = await this.findBeebFilesMatching(new TubeHostFQN(tubeHostCatFQN.volume, true, tubeHostCatFQN.hostFolder, tubeHostCatFQN.drive, true, '*', false, undefined), false, undefined);
+        const catFQN = new beebfs.FQN(new TubeHostFilePath(tubeHostCatFilePath.volume, tubeHostCatFilePath.volumeExplicit, tubeHostCatFilePath.drive, tubeHostCatFilePath.driveExplicit, '*', false, tubeHostCatFilePath.hostFolder), '*');
+        log?.pn(`Tht: getCAT: catFQN=${catFQN}`);
 
-        log?.pn(`THt: getCAT: got ${beebFiles.length} files in ${tubeHostCatFQN}`);
+        const beebFiles = await this.findBeebFilesMatching(catFQN, false, undefined);
+
+        log?.pn(`THt: getCAT: got ${beebFiles.length} files matching ${catFQN}`);
 
         let text = '';
 
-        if (tubeHostCatFQN.hostFolder !== undefined) {
-            const title = await loadFolderTitle(getAbsPath(tubeHostCatFQN.volume, tubeHostCatFQN.hostFolder));
+        if (tubeHostCatFilePath.hostFolder !== undefined) {
+            const title = await loadFolderTitle(getAbsPath(tubeHostCatFilePath.volume, tubeHostCatFilePath.hostFolder));
             if (title !== '') {
                 text += title + utils.BNL;
             }
         }
 
-        text += 'Volume: ' + tubeHostCatFQN.volume.name + utils.BNL;
+        text += 'Volume: ' + tubeHostCatFilePath.volume.name + utils.BNL;
 
-        if (tubeHostCatFQN.hostFolder !== undefined) {
-            const boot = await loadFolderBootOption(getAbsPath(tubeHostCatFQN.volume, tubeHostCatFQN.hostFolder));
+        if (tubeHostCatFilePath.hostFolder !== undefined) {
+            const boot = await loadFolderBootOption(getAbsPath(tubeHostCatFilePath.volume, tubeHostCatFilePath.hostFolder));
             if (tubeHostState === undefined) {
                 // It's impossible for this to have a meaingful drive number.
                 text += `Option ${boot} - ${beebfs.getBootOptionDescription(boot)}`.padEnd(20);
             } else {
-                text += ('Drive ' + tubeHostCatFQN.drive + ' (' + boot + ' - ' + beebfs.getBootOptionDescription(boot) + ')').padEnd(20);
+                text += ('Drive ' + tubeHostCatFilePath.drive + ' (' + boot + ' - ' + beebfs.getBootOptionDescription(boot) + ')').padEnd(20);
             }
         }
 
@@ -1085,36 +1021,27 @@ class TubeHostType implements beebfs.IFSType {
 
         text += utils.BNL + utils.BNL;
 
-        for (const beebFile of beebFiles) {
-            mustBeTubeHostFQN(beebFile.fqn);
-        }
-
         beebFiles.sort((a, b) => {
-            const tubeHostFQNA = a.fqn as TubeHostFQN;
-            const tubeHostFQNB = b.fqn as TubeHostFQN;
-
-            if (tubeHostFQNA.dir === tubeHostCatFQN.dir && tubeHostFQNB.dir !== tubeHostCatFQN.dir) {
+            if (a.fqn.filePath.dir === tubeHostCatFilePath.dir && b.fqn.filePath.dir !== tubeHostCatFilePath.dir) {
                 return -1;
-            } else if (tubeHostFQNA.dir !== tubeHostCatFQN.dir && tubeHostFQNB.dir === tubeHostCatFQN.dir) {
+            } else if (a.fqn.filePath.dir !== tubeHostCatFilePath.dir && b.fqn.filePath.dir === tubeHostCatFilePath.dir) {
                 return 1;
             } else {
-                const cmpDirs = utils.stricmp(tubeHostFQNA.dir, tubeHostFQNB.dir);
+                const cmpDirs = utils.stricmp(a.fqn.filePath.dir, b.fqn.filePath.dir);
                 if (cmpDirs !== 0) {
                     return cmpDirs;
                 }
 
-                return utils.stricmp(tubeHostFQNA.name!, tubeHostFQNB.name!);
+                return utils.stricmp(a.fqn.name, b.fqn.name);
             }
         });
 
         for (const beebFile of beebFiles) {
-            const tubeHostFQN = beebFile.fqn as TubeHostFQN;
-
             let name;
-            if (tubeHostFQN.dir === tubeHostCatFQN.dir) {
-                name = `  ${tubeHostFQN.name}`;
+            if (beebFile.fqn.filePath.dir === tubeHostCatFilePath.dir) {
+                name = `  ${beebFile.fqn.name}`;
             } else {
-                name = `${tubeHostFQN.dir}.${tubeHostFQN.name}`;
+                name = `${beebFile.fqn.filePath.dir}.${beebFile.fqn.name}`;
             }
 
             while (name.length % 20 !== 14) {
@@ -1151,14 +1078,12 @@ class TubeHostType implements beebfs.IFSType {
     }
 
     public async renameFile(oldFile: beebfs.File, newFQN: beebfs.FQN): Promise<void> {
-        const newFQNTubeHostName = mustBeTubeHostFQN(newFQN);
-
-        const newHostPath = getAbsPath(newFQN.volume, this.getIdealVolumeRelativeHostPath(newFQNTubeHostName));
+        const newHostPath = getAbsPath(newFQN.filePath.volume, this.getIdealVolumeRelativeHostPath(newFQN));
         await inf.mustNotExist(newHostPath);
 
         const newFile = new beebfs.File(newHostPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr, false);
 
-        await this.writeBeebMetadata(newFile.hostPath, newFQNTubeHostName, newFile.load, newFile.exec, newFile.attr);
+        await this.writeBeebMetadata(newFile.hostPath, newFQN, newFile.load, newFile.exec, newFile.attr);
 
         try {
             await utils.fsRename(oldFile.hostPath, newFile.hostPath);
@@ -1170,9 +1095,7 @@ class TubeHostType implements beebfs.IFSType {
     }
 
     public async writeBeebMetadata(hostPath: string, fqn: beebfs.FQN, load: number, exec: number, attr: number): Promise<void> {
-        const tubeHostFQN = mustBeTubeHostFQN(fqn);
-
-        await inf.writeFile(hostPath, `${tubeHostFQN.dir}.${tubeHostFQN.name}`, load, exec, (attr & beebfs.L_ATTR) !== 0 ? 'L' : '');
+        await inf.writeFile(hostPath, `${fqn.filePath.dir}.${fqn.name}`, load, exec, (attr & beebfs.L_ATTR) !== 0 ? 'L' : '');
     }
 
     public getNewAttributes(oldAttr: number, attrString: string): number | undefined {
@@ -1202,8 +1125,6 @@ class TubeHostType implements beebfs.IFSType {
     }
 
     private getCommonInfoText(file: beebfs.File, fileSize: number): string {
-        const tubeHostFQN = mustBeTubeHostFQN(file.fqn);
-
         const attr = this.getAttrString(file);
         const load = utils.hex8(file.load).toUpperCase();
         const exec = utils.hex8(file.exec).toUpperCase();
@@ -1211,7 +1132,7 @@ class TubeHostType implements beebfs.IFSType {
 
         // 0123456789012345678901234567890123456789
         // _.__________ L 12345678 12345678 123456
-        return `${tubeHostFQN.dir}.${tubeHostFQN.name!.padEnd(10)} ${attr} ${load} ${exec} ${size}`;
+        return `${file.fqn.filePath.dir}.${file.fqn.name.padEnd(10)} ${attr} ${load} ${exec} ${size}`;
     }
 
     // private async findBeebFilesRecurse(files: beebfs.File[], volume: beeebfs.Volume, folderPath: VolRelPath, log: utils.Log | undefined): Promise<void> {
@@ -1292,13 +1213,19 @@ class TubeHostType implements beebfs.IFSType {
                 continue;
             }
 
-            const fqn = new TubeHostFQN(volume, true, folderPath, drive, driveExplicit, dir, true, name);
+            const fqn = new beebfs.FQN(new TubeHostFilePath(volume, true, drive, driveExplicit, dir, true, folderPath), name);
             const file = new beebfs.File(info.hostPath, fqn, info.load, info.exec, info.attr | beebfs.DEFAULT_ATTR, false);
             files.push(file);
         }
     }
 
-    private parseFileOrDirString(str: string, i: number, state: beebfs.IFSState | undefined, parseAsDir: boolean): IParseResult {
+    private parseFileOrDirString(
+        str: string,
+        i: number,
+        state: beebfs.IFSState | undefined,
+        parseAsDir: boolean,
+        volume: beebfs.Volume,
+        volumeExplicit: boolean): { filePath: TubeHostFilePath; name: string | undefined; i: number; } {
         const tubeHostState = mustBeTubeHostState(state);
 
         let drive: string | undefined;
@@ -1311,12 +1238,13 @@ class TubeHostType implements beebfs.IFSType {
             }
 
             return {
-                drive: tubeHostState.getCurrentDrive(),
-                driveExplicit: false,
-                dir: tubeHostState.getCurrentDir(),
-                dirExplicit: false,
+                filePath: new TubeHostFilePath(
+                    volume, volumeExplicit,
+                    tubeHostState.getCurrentDrive(), false,
+                    tubeHostState.getCurrentDir(), false,
+                    undefined),
                 name: undefined,
-                hostFolder: undefined,
+                i: 0,
             };
         }
 
@@ -1398,11 +1326,12 @@ class TubeHostType implements beebfs.IFSType {
         }
 
         return {
-            drive,
-            driveExplicit,
-            dir,
-            dirExplicit,
-            hostFolder,
+            filePath: new TubeHostFilePath(
+                volume, volumeExplicit,
+                drive, driveExplicit,
+                dir, dirExplicit,
+                hostFolder),
+            i,
             name,
         };
     }

@@ -46,56 +46,6 @@ function notSupported(): never {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-class PCFQN extends beebfs.FQN {
-    public readonly name: string;
-
-    public constructor(volume: beebfs.Volume, volumeExplicit: boolean, name: string) {
-        super(volume, volumeExplicit);
-        this.name = name;
-    }
-
-    public override equals(other: beebfs.FQN): boolean {
-        if (!(other instanceof PCFQN)) {
-            return false;
-        }
-
-        if (!super.equals(other)) {
-            return false;
-        }
-
-        if (utils.getCaseNormalizedPath(other.name) !== utils.getCaseNormalizedPath(this.name)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    public override toString(): string {
-        return `${super.toString()}:${this.name}`;
-    }
-
-    public isWildcard(): boolean {
-        for (const c of this.name) {
-            if (c === utils.MATCH_N_CHAR || c === utils.MATCH_ONE_CHAR) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-}
-
-function mustBePCFQN(fqn: beebfs.FQN): PCFQN {
-    if (!(fqn instanceof PCFQN)) {
-        throw new Error('not PCFQN');
-    }
-
-    return fqn;
-}
-
-//////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////
-
 class PCState implements beebfs.IFSState {
     public readonly volume: beebfs.Volume;
 
@@ -145,7 +95,7 @@ class PCState implements beebfs.IFSState {
 
     public async getCAT(commandLine: string | undefined): Promise<string | undefined> {
         if (commandLine === undefined) {
-            return await this.volume.type.getCAT(new PCFQN(this.volume, true, ''), this, this.log);
+            return await this.volume.type.getCAT(new beebfs.FilePath(this.volume, true, '', true, '', true), this, this.log);
         } else {
             return undefined;
         }
@@ -155,11 +105,11 @@ class PCState implements beebfs.IFSState {
         return errors.badDrive();
     }
 
-    public starDir(_fqn: beebfs.FQN): void {
+    public starDir(_filePath: beebfs.FilePath): void {
         return notSupported();
     }
 
-    public starLib(_fqn: beebfs.FQN): void {
+    public starLib(_filePath: beebfs.FilePath): void {
         return notSupported();
     }
 
@@ -184,12 +134,11 @@ class PCState implements beebfs.IFSState {
     }
 
     public async readNames(): Promise<string[]> {
-        const files = await this.volume.type.findBeebFilesMatching(new PCFQN(this.volume, true, '*'), false, undefined);
+        const files = await this.volume.type.findBeebFilesMatching(new beebfs.FQN(new beebfs.FilePath(this.volume, true, '', true, '', true), '*'), false, undefined);
 
         const names: string[] = [];
         for (const file of files) {
-            const pcFQN = mustBePCFQN(file.fqn);
-            names.push(pcFQN.name);
+            names.push(file.fqn.name);
         }
 
         return names;
@@ -252,19 +201,17 @@ class PCType implements beebfs.IFSType {
                 return errors.badName();
             }
 
-            return new PCFQN(volume, volumeExplicit, name);
+            return new beebfs.FQN(new beebfs.FilePath(volume, volumeExplicit, '', false, '', false), name);
         }
     }
 
-    public parseDirString(_str: string, _i: number, _state: beebfs.IFSState | undefined, _volume: beebfs.Volume, _volumeExplicit: boolean): beebfs.FQN {
+    public parseDirString(_str: string, _i: number, _state: beebfs.IFSState | undefined, _volume: beebfs.Volume, _volumeExplicit: boolean): beebfs.FilePath {
         // Sorry, no dirs for PC volumes.
         return errors.badDir();
     }
 
     public getIdealVolumeRelativeHostPath(fqn: beebfs.FQN): string {
-        const pcFQN = mustBePCFQN(fqn);
-
-        return pcFQN.name;
+        return fqn.name;
     }
 
     public async findBeebFilesInVolume(volumeOrFQN: beebfs.Volume | beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
@@ -278,35 +225,24 @@ class PCType implements beebfs.IFSType {
     public async findBeebFilesMatching(fqn: beebfs.FQN, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {
         // The recurse flag is ignored. PC folders are not currently
         // hierarchical.
+        const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
-        const pcFQN = mustBePCFQN(fqn);
-
-        const nameRegExp = utils.getRegExpFromAFSP(pcFQN.name);
-
-        return await this.findFiles(fqn.volume, nameRegExp, log);
+        return await this.findFiles(fqn.filePath.volume, nameRegExp, log);
     }
 
-    public async getCAT(fqn: beebfs.FQN, state: beebfs.IFSState | undefined, log: utils.Log | undefined): Promise<string> {
+    public async getCAT(filePath: beebfs.FilePath, state: beebfs.IFSState | undefined, log: utils.Log | undefined): Promise<string> {
         let text = '';
 
-        text += `Volume: ${fqn.volume.path}${utils.BNL}${utils.BNL}`;
+        text += `Volume: ${filePath.volume.path}${utils.BNL}${utils.BNL}`;
 
-        const beebFiles = await this.findBeebFilesMatching(new PCFQN(fqn.volume, true, '*'), false, log);
-        for (const beebFile of beebFiles) {
-            mustBePCFQN(beebFile.fqn);
-        }
+        const beebFiles = await this.findBeebFilesMatching(new beebfs.FQN(filePath, '*'), false, log);
 
         beebFiles.sort((a, b) => {
-            const aPCFQN = a.fqn as PCFQN;
-            const bPCFQN = b.fqn as PCFQN;
-
-            return utils.stricmp(aPCFQN.name, bPCFQN.name);
+            return utils.stricmp(a.fqn.name, b.fqn.name);
         });
 
         for (const beebFile of beebFiles) {
-            const pcFQN = beebFile.fqn as PCFQN;
-
-            text += pcFQN.name.padEnd(40);
+            text += beebFile.fqn.name.padEnd(40);
         }
 
         text += utils.BNL;
@@ -343,9 +279,7 @@ class PCType implements beebfs.IFSType {
     }
 
     private getCommonInfoText(file: beebfs.File, fileSize: number): string {
-        const pcFQN = mustBePCFQN(file.fqn);
-
-        return `${pcFQN.name.padEnd(MAX_NAME_LENGTH)}  ${utils.hex(fileSize, 6)}`;
+        return `${file.fqn.name.padEnd(MAX_NAME_LENGTH)}  ${utils.hex(fileSize, 6)}`;
     }
 
     private async findFiles(volume: beebfs.Volume, nameRegExp: RegExp | undefined, _log: utils.Log | undefined): Promise<beebfs.File[]> {
@@ -388,8 +322,8 @@ class PCType implements beebfs.IFSType {
                 text = true;
             }
 
-            const pcFQN = new PCFQN(volume, true, hostName);
-            const file = new beebfs.File(path.join(volume.path, hostName), pcFQN, beebfs.DEFAULT_LOAD, beebfs.DEFAULT_EXEC, beebfs.R_ATTR, text);
+            const fqn = new beebfs.FQN(new beebfs.FilePath(volume, true, '', false, '', false), hostName);
+            const file = new beebfs.File(path.join(volume.path, hostName), fqn, beebfs.DEFAULT_LOAD, beebfs.DEFAULT_EXEC, beebfs.R_ATTR, text);
             beebFiles.push(file);
         }
 

@@ -494,7 +494,7 @@ interface ISerialDevice {
 //
 // I still have no idea how to update TypeScript typings, so... this.
 function getSerialPortPath(portInfo: SerialPort.PortInfo): string {
-    return (portInfo as { path: string }).path;// eslint-disable-line @typescript-eslint/no-unsafe-member-access
+    return (portInfo as { path: string; }).path;// eslint-disable-line @typescript-eslint/no-unsafe-member-access
 }
 
 function isSameDevice(a: SerialPort.PortInfo, b: SerialPort.PortInfo): boolean {
@@ -1759,7 +1759,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
                     process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed.\n`);
                     portState.active = false;
                 }).catch((error) => {
-                    process.stderr.write(`${(error as { stack: string }).stack}`);
+                    process.stderr.write(`${(error as { stack: string; }).stack}`);
                     process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed due to error: ${error}\n`);
                     portState.active = false;
                 });
@@ -1949,7 +1949,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     }).catch((error) => {
         if (options.fatal_verbose) {
             process.stderr.write('Stack trace:\n');
-            process.stderr.write((error as { stack: string }).stack + '\n');
+            process.stderr.write((error as { stack: string; }).stack + '\n');
         }
         process.stderr.write('FATAL: ' + error + '\n');
         process.exit(1);
