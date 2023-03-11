@@ -6,7 +6,6 @@
   "main": ".build/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "tslint": "./node_modules/.bin/tslint",
     "compile": "tsc -p ./tsconfig.json",
     "lint": "eslint -f unix -c .eslintrc.js --ext .ts .",
     "start": "npm run compile && node ./.build/main.js"
@@ -35,7 +34,6 @@
     "eslint-plugin-jsdoc": "^40.0.1",
     "eslint-plugin-prefer-arrow": "^1.2.3",
     "pkg": "^5",
-    "tslint": "^5.20.1",
     "typescript": "^4.9"
   },
   "engines": {
