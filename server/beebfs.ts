@@ -199,7 +199,13 @@ export class FilePath {
         this.dirExplicit = dirExplicit;
     }
 
-    public getFQNPrefix(): string {
+    // If not undefined, appended as a parenthetical to the result of
+    // FilePath.toString or FQN.toString.
+    public getFQNSuffix(): string | undefined {
+        return undefined;
+    }
+
+    public toString(): string {
         let str = `::${this.volume.name}`;
 
         if (this.drive !== '') {
@@ -209,18 +215,6 @@ export class FilePath {
         if (this.dir !== '') {
             str += `.${this.dir}`;
         }
-
-        return str;
-    }
-
-    // If not undefined, appended as a parenthetical to the result of
-    // FilePath.toString or FQN.toString.
-    public getFQNSuffix(): string | undefined {
-        return undefined;
-    }
-
-    public toString(): string {
-        let str = this.getFQNPrefix();
 
         const suffix = this.getFQNSuffix();
         if (suffix !== undefined) {
@@ -245,7 +239,20 @@ export class FQN {
     }
 
     public toString(): string {
-        let str = `${this.filePath.getFQNPrefix()}.${this.name}`;
+        let str = `::${this.filePath.volume.name}`;
+        let sep = `:`;
+
+        if (this.filePath.drive !== '') {
+            str += `${sep}${this.filePath.drive}`;
+            sep = '.';
+        }
+
+        if (this.filePath.dir !== '') {
+            str += `${sep}${this.filePath.dir}`;
+            sep = '.';
+        }
+
+        str += `${sep}${this.name}`;
 
         const suffix = this.filePath.getFQNSuffix();
         if (suffix !== undefined) {
@@ -895,7 +902,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    // Valid volume names are 7-bit ASCII, no spaces. If you want £, use `.
+    // Valid volume names are 7-bit ASCII, no spaces, no '/' or ':'. If you want
+    // £, use `.
     private static isValidVolumeName(name: string): boolean {
         // Ignore empty string, as might be found in a .volume file.
         if (name.length === 0) {
@@ -911,6 +919,8 @@ export class FS {
             const c = name.charCodeAt(i);
 
             if (!(c >= 33 && c < 127)) {
+                return false;
+            } else if (name[i] === ':' || name[i] === '/') {
                 return false;
             }
         }
@@ -2233,28 +2243,27 @@ export class FS {
             return errors.badName();
         }
 
-        if (str.length > 3 && str[0] === ':' && str[1] === ':') {
-            // ::x:whatever
-            //
-            // The : is doing double duty here: it's the terminator of the
-            // volume name, but (with the DFS syntax that I had in mind when
-            // adding this stuff originally) it's also the prefix for the drive
-            // name. So it has to get passed through to the FS type handler.
-            //
-            // This is good for FS types with drives, because then the volume
-            // name is just a ::WHATEVER prefix, followed by a fully-specified
-            // path, drive and all. Not so good for the PC type, though, because
-            // the : prefix is sent through just the same, and it has to be
-            // stripped off. 
+        this.log?.p(`FS: parseVolumeString: \`\`${str}'': `);
 
-            let end = str.indexOf(':', 2);
-            if (end < 0) {
-                // "::fred" or similar.
-                end = str.length;
-                //return errors.badName();
+        if (str.length > 3 && str[0] === ':' && str[1] === ':') {
+            // Valid cross-volume syntaxes:
+            //
+            // - ::x:whatever
+            // - ::x/whatever
+            //
+            // The separator is passed to the volume handler, in case it makes a
+            // difference.
+
+            let end: number;
+            for (end = 2; end < str.length; ++end) {
+                if (str[end] === ':' || str[end] === '/') {
+                    break;
+                }
             }
 
             const volumeName = str.substring(2, end);
+
+            this.log?.pn(`volume name: ${volumeName}`);
 
             const volumes = await this.findFirstVolumeMatching(volumeName);
 
@@ -2270,6 +2279,8 @@ export class FS {
                 i: end
             };
         } else {
+            this.log?.pn(`(current volume)`);
+
             // This might produce a 'No volume' error, which feels a bit ugly at
             // the parsing step, but I don't think it matters in practice...
             return {

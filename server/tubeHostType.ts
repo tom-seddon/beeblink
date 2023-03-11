@@ -517,9 +517,11 @@ class TubeHostState implements beebfs.IFSState {
         if (commandLine === undefined) {
             driveName = this.current.drive;
             this.log?.pn(`THs getCAT: drive (from default)=\`\`${driveName}''`);
-        } else {
+        } else if (commandLine.length === 1) {
             driveName = commandLine;
             this.log?.pn(`THs getCAT: drive (from command line)=\`\`${driveName}''`);
+        } else {
+            return undefined;
         }
 
         const drive = this.mustGetDriveStateByName(driveName);

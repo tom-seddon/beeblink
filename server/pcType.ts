@@ -188,7 +188,7 @@ class PCType implements beebfs.IFSType {
         //
         // This isn't very nice, but it'll probably be OK...
         if (i !== 0) {
-            if (str.charAt(i) === ':') {
+            if (str.charAt(i) === ':' || str.charAt(i) === '/') {
                 ++i;
             }
         }
@@ -205,9 +205,13 @@ class PCType implements beebfs.IFSType {
         }
     }
 
-    public parseDirString(_str: string, _i: number, _state: beebfs.IFSState | undefined, _volume: beebfs.Volume, _volumeExplicit: boolean): beebfs.FilePath {
-        // Sorry, no dirs for PC volumes.
-        return errors.badDir();
+    public parseDirString(str: string, i: number, _state: beebfs.IFSState | undefined, volume: beebfs.Volume, volumeExplicit: boolean): beebfs.FilePath {
+        if (i === str.length) {
+            return new beebfs.FilePath(volume, volumeExplicit, '', true, '', true);
+        } else {
+            // Sorry, no dirs for PC volumes.
+            return errors.badDir();
+        }
     }
 
     public getIdealVolumeRelativeHostPath(fqn: beebfs.FQN): string {
