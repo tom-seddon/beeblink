@@ -475,7 +475,7 @@ class DFSType implements beebfs.IFSType {
     }
 
     public async writeBeebMetadata(hostPath: string, fqn: beebfs.FQN, load: number, exec: number, attr: number): Promise<void> {
-        await inf.writeFile(hostPath, `${fqn.filePath.dir}.${fqn.name}`, load, exec, (attr & beebfs.L_ATTR) !== 0 ? 'L' : '');
+        await inf.writeNonStandardINFFile(hostPath, `${fqn.filePath.dir}.${fqn.name}`, load, exec, (attr & beebfs.L_ATTR) !== 0);
     }
 
     public getNewAttributes(oldAttr: number, attrString: string): number | undefined {

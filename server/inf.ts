@@ -38,14 +38,13 @@ export const extRegExp = new RegExp(`\\${ext}$$`, 'i');
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// Write INF file to disk. 'name' will be written as-is (since it's
-// FS-specific), as will 'attr' (so DFS-type .inf files can have attributes
-// written as 'L').
-export async function writeFile(hostPath: string, name: string, load: number, exec: number, attr: string): Promise<void> {
+// Write non-standard BeebLink-/TubeHost-style .inf file. No length field, and
+// attributes always "Locked" or absent.
+export async function writeNonStandardINFFile(hostPath: string, name: string, load: number, exec: number, locked: boolean): Promise<void> {
     let inf = `${name} ${utils.hex8(load)} ${utils.hex8(exec)}`;
 
-    if (attr !== '') {
-        inf += ` ${attr}`;
+    if (locked) {
+        inf += ' Locked';
     }
 
     inf += os.EOL;//stop git moaning.
