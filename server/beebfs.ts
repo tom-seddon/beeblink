@@ -774,6 +774,15 @@ export class FS {
         const volumeNameRegExp = utils.getRegExpFromAFSP(afsp);
         const ambiguous = utils.isAmbiguousAFSP(afsp);
 
+        const beebLinkIgnoreFolders = new Set<string>();
+        const addIgnoreFolders = (folders: string[]) => {
+            for (const folder of folders) {
+                beebLinkIgnoreFolders.add(utils.getSeparatorAndCaseNormalizedPath(folder));
+            }
+        };
+        addIgnoreFolders(searchFolders.pcFolders);
+        addIgnoreFolders(searchFolders.tubeHostFolders);
+
         // Adds volume with given properties, if it looks valid and fulfils the criteria.
         //
         // Returns true if the find process should finish early.
@@ -838,6 +847,11 @@ export class FS {
                     }
 
                     const volumePath = path.join(folderPath, name);
+
+                    if (beebLinkIgnoreFolders.has(utils.getSeparatorAndCaseNormalizedPath(volumePath))) {
+                        // Folder explicitly added as some other type - don't look inside.
+                        continue;
+                    }
 
                     const stat = await utils.tryStat(volumePath);
                     if (stat !== undefined && stat.isDirectory()) {
