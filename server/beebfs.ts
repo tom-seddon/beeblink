@@ -47,7 +47,12 @@ export const L_ATTR = 8;
 
 export const DEFAULT_LOAD = SHOULDNT_LOAD;
 export const DEFAULT_EXEC = SHOULDNT_EXEC;
-export const DEFAULT_ATTR = R_ATTR | W_ATTR;
+
+// Attributes used in the absence of any other info.
+export const DEFAULT_ATTR = R_ATTR | W_ATTR | E_ATTR;
+
+// Attributes used for DFS-style L access.
+export const DFS_LOCKED_ATTR = R_ATTR | E_ATTR | L_ATTR;
 
 const IGNORE_DIR_FILE_NAME = '.beeblink-ignore';
 

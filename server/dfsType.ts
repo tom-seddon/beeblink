@@ -482,7 +482,7 @@ class DFSType implements beebfs.IFSType {
         if (attrString === '') {
             return beebfs.DEFAULT_ATTR;
         } else if (attrString.toLowerCase() === 'l') {
-            return beebfs.DEFAULT_ATTR | beebfs.L_ATTR;
+            return beebfs.DFS_LOCKED_ATTR;
         } else {
             return undefined;
         }
@@ -582,7 +582,7 @@ class DFSType implements beebfs.IFSType {
                 }
 
                 const fqn = new beebfs.FQN(new beebfs.FilePath(volume, true, drive.beebName, true, dir, true), name);
-                const file = new beebfs.File(info.hostPath, fqn, info.load, info.exec, info.attr | beebfs.DEFAULT_ATTR, false);
+                const file = new beebfs.File(info.hostPath, fqn, info.load, info.exec, info.attr, false);
                 log?.pn(`${file}`);
 
                 beebFiles.push(file);

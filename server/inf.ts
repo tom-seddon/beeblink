@@ -169,12 +169,12 @@ export async function tryParse(
             return undefined;
         }
 
-        attr = 0;
+        attr = beebfs.DEFAULT_ATTR;
         if (i < infParts.length) {
             if (infParts[i].startsWith('CRC=')) {
                 // Ignore the CRC entry.
             } else if (['l', 'locked'].indexOf(infParts[i].toLowerCase()) >= 0) {
-                attr = beebfs.L_ATTR;
+                attr = beebfs.DFS_LOCKED_ATTR;
             } else {
                 attr = Number('0x' + infParts[i]);
                 if (Number.isNaN(attr)) {

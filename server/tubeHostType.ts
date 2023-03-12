@@ -1104,7 +1104,7 @@ class TubeHostType implements beebfs.IFSType {
         if (attrString === '') {
             return beebfs.DEFAULT_ATTR;
         } else if (attrString.toLowerCase() === 'l') {
-            return beebfs.DEFAULT_ATTR | beebfs.L_ATTR;
+            return beebfs.DFS_LOCKED_ATTR;
         } else {
             return undefined;
         }
@@ -1216,7 +1216,7 @@ class TubeHostType implements beebfs.IFSType {
             }
 
             const fqn = new beebfs.FQN(new TubeHostFilePath(volume, true, drive, driveExplicit, dir, true, folderPath), name);
-            const file = new beebfs.File(info.hostPath, fqn, info.load, info.exec, info.attr | beebfs.DEFAULT_ATTR, false);
+            const file = new beebfs.File(info.hostPath, fqn, info.load, info.exec, info.attr, false);
             files.push(file);
         }
     }
