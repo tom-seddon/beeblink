@@ -15,7 +15,7 @@
   "dependencies": {
     "argparse": "^1",
     "chalk": "^2.4.2",
-    "serialport": "^9",
+    "serialport": "^10",
     "usb": "^1.6.3"
   },
   "optionalDependencies": {
@@ -24,7 +24,6 @@
   "devDependencies": {
     "@types/argparse": "^1",
     "@types/node": "^16",
-    "@types/serialport": "^8",
     "@types/usb": "^1.5.2",
     "@typescript-eslint/eslint-plugin": "^5.54.0",
     "@typescript-eslint/eslint-plugin-tslint": "^5.54.0",

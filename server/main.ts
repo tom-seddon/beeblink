@@ -33,7 +33,8 @@ import chalk from 'chalk';
 import * as gitattributes from './gitattributes';
 import * as http from 'http';
 import Request from './Request';
-import * as SerialPort from 'serialport';
+import { SerialPort } from 'serialport';
+import { PortInfo } from '@serialport/bindings-interface';
 import * as os from 'os';
 import dfsType from './dfsType';
 import pcType from './pcType';
@@ -80,7 +81,7 @@ interface IUSBSerialDevice {
     pid: number;
 }
 
-function isSerialPortUSBDevice(portInfo: SerialPort.PortInfo, usbDevice: IUSBSerialDevice): boolean {
+function isSerialPortUSBDevice(portInfo: PortInfo, usbDevice: IUSBSerialDevice): boolean {
     if (portInfo.vendorId !== undefined && utils.strieq(portInfo.vendorId, utils.hex4(usbDevice.vid))) {
         if (portInfo.productId !== undefined && utils.strieq(portInfo.productId, utils.hex4(usbDevice.pid))) {
             return true;
@@ -483,7 +484,7 @@ function getOSXLocationId(d: usb.Device): string {
 /////////////////////////////////////////////////////////////////////////
 
 interface ISerialDevice {
-    portInfo: SerialPort.PortInfo;
+    portInfo: PortInfo;
     autoDetected: boolean;
     shouldOpen: boolean;
     shouldOpenReason: string;
@@ -493,11 +494,11 @@ interface ISerialDevice {
 // way that there's a deprecation warning each time `comName' is used.
 //
 // I still have no idea how to update TypeScript typings, so... this.
-function getSerialPortPath(portInfo: SerialPort.PortInfo): string {
+function getSerialPortPath(portInfo: PortInfo): string {
     return (portInfo as { path: string; }).path;// eslint-disable-line @typescript-eslint/no-unsafe-member-access
 }
 
-function isSameDevice(a: SerialPort.PortInfo, b: SerialPort.PortInfo): boolean {
+function isSameDevice(a: PortInfo, b: PortInfo): boolean {
     if (a.locationId !== undefined && b.locationId !== undefined) {
         if (a.locationId === b.locationId) {
             return true;
@@ -509,7 +510,7 @@ function isSameDevice(a: SerialPort.PortInfo, b: SerialPort.PortInfo): boolean {
     return false;
 }
 
-function isSerialPortPathInList(portInfo: SerialPort.PortInfo, paths: string[] | null): boolean {
+function isSerialPortPathInList(portInfo: PortInfo, paths: string[] | null): boolean {
     if (paths !== null) {
         for (const p of paths) {
             if (utils.getSeparatorAndCaseNormalizedPath(getSerialPortPath(portInfo)) === utils.getSeparatorAndCaseNormalizedPath(p)) {
@@ -603,11 +604,12 @@ async function getOpenableSerialDevices(options: ICommandLineOptions): Promise<I
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function openSerialPort(portInfo: SerialPort.PortInfo): Promise<SerialPort> {
+async function openSerialPort(portInfo: PortInfo): Promise<SerialPort> {
     // The baud rate is a fixed 115,200. That's the fixed rate supported by the
     // UPURS code, and for the Tube Serial device the baud rate doesn't seem to
     // matter.
-    const port = new SerialPort(getSerialPortPath(portInfo), {
+    const port = new SerialPort({
+        path: getSerialPortPath(portInfo),
         autoOpen: false,
         baudRate: 115200,
         dataBits: 8,
@@ -1125,7 +1127,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function findUSBDeviceForSerialPort(portInfo: SerialPort.PortInfo): usb.Device | undefined {
+function findUSBDeviceForSerialPort(portInfo: PortInfo): usb.Device | undefined {
     if (portInfo.productId !== undefined && portInfo.vendorId !== undefined && portInfo.locationId !== undefined) {
         const idProduct = Number.parseInt(portInfo.productId, 16);//why not a number?
         const idVendor = Number.parseInt(portInfo.vendorId, 16);//why not a number?
@@ -1142,7 +1144,7 @@ function findUSBDeviceForSerialPort(portInfo: SerialPort.PortInfo): usb.Device |
     return undefined;
 }
 
-async function setFTDILatencyTimer(portInfo: SerialPort.PortInfo, ms: number, serialLog: utils.Log | undefined): Promise<void> {
+async function setFTDILatencyTimer(portInfo: PortInfo, ms: number, serialLog: utils.Log | undefined): Promise<void> {
     if (process.platform === 'win32') {
         // When trying to open the device with libusb, the device open
         // fails with LIBUSB_ERROR_UNSUPPORTED. See, e.g.,
@@ -1307,7 +1309,7 @@ interface IReadWaiter {
 //     return `Device ${getSerialPortPath(portInfo)}`;
 // }
 
-function isSerialDeviceVerbose(portInfo: SerialPort.PortInfo, verboseOptions: string[] | null): boolean {
+function isSerialDeviceVerbose(portInfo: PortInfo, verboseOptions: string[] | null): boolean {
     if (verboseOptions !== null) {
         if (verboseOptions.includes('')) {
             // --whatever, applying to all devices was provided on its own at some
@@ -1347,7 +1349,7 @@ async function drainPort(port: SerialPort): Promise<void> {
     });
 }
 
-async function handleSerialDevice(options: ICommandLineOptions, portInfo: SerialPort.PortInfo, server: Server): Promise<void> {
+async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortInfo, server: Server): Promise<void> {
     const f = process.stdout;
 
     const serialLog = utils.Log.create(getSerialPortPath(portInfo), f, isSerialDeviceVerbose(portInfo, options.serial_verbose));
