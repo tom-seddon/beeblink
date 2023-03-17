@@ -347,7 +347,7 @@ Set current drive's title.
 
 Show contents of text file.
 
-### `VOL (<avsp>) (R)`
+### `VOL (<avsp>) ([QR]+)`
 
 With no argument, prints the name and path of the current volume.
 
@@ -356,6 +356,10 @@ names that match more than one volume - the first matching volume
 found will be selected.
 
 Specify `R` to mount the volume read-only.
+
+Specify `Q` to mount quickly, by assuming the name refers to the last
+volume mounted by that name. Wildcards are not acceptable in this
+mode.
 
 ### `VOLS (<avsp>)`
 

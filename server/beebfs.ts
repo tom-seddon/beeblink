@@ -605,7 +605,7 @@ async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log?: utils.L
     } else if (files.length === 1) {
         return files[0];
     } else {
-        return errors.badName('Ambiguous name');
+        return errors.ambiguousName();
     }
 }
 
@@ -625,7 +625,7 @@ export async function mustGetBeebFile(fqn: FQN, wildcardsOK: boolean, log?: util
     log?.pn(`mustGetBeebFile: ${fqn}; wildCardsOK = ${wildcardsOK} `);
     const file = await getBeebFileInternal(fqn, wildcardsOK, log);
     if (file === undefined) {
-        return errors.fileNotFound();
+        return errors.notFound();
     }
 
     return file;
@@ -2287,9 +2287,9 @@ export class FS {
             const volumes = await this.findFirstVolumeMatching(volumeName);
 
             if (volumes.length === 0) {
-                return errors.fileNotFound('Volume not found');
+                return errors.notFound();
             } else if (volumes.length > 1) {
-                return errors.badName('Ambiguous volume');
+                return errors.ambiguousName();
             }
 
             return {

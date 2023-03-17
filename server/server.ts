@@ -196,6 +196,7 @@ export class Server {
     private diskImageFlow: diskimage.Flow | undefined;
     private linkSupportsFireAndForgetRequests: boolean;
     private lastOSBPUTHandle: number | undefined;
+    private recentVolumes: beebfs.Volume[];
 
     public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, log: utils.Log | undefined, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
         this.romPathByLinkSubtype = romPathByLinkSubtype;
@@ -222,7 +223,7 @@ export class Server {
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
             new Command('VOLBROWSER', undefined, this.volbrowserCommand),
-            new Command('VOL', '(<avsp>) (R)', this.volCommand),
+            new Command('VOL', '(<avsp>) ([QR]+)', this.volCommand),
             new Command('VOLS', '(<avsp>)', this.volsCommand),
             new Command('WDUMP', '<fsp>', this.wdumpCommand),
             new Command('WINFO', '<afsp>', this.winfoCommand),
@@ -267,6 +268,8 @@ export class Server {
 
         this.log = log;
         this.dumpPackets = dumpPackets;
+
+        this.recentVolumes = [];
     }
 
     public async handleRequest(request: Request): Promise<Response> {
@@ -921,7 +924,7 @@ export class Server {
                 }
 
                 if (result.volume !== undefined) {
-                    await this.bfs.mount(result.volume);
+                    await this.mountVolume(result.volume, false);
                     builder.writeString('New volume: ' + result.volume.name + BNL);
 
                     if (result.boot) {
@@ -1200,7 +1203,7 @@ export class Server {
         const files = await this.bfs.findFilesMatching(afsp);
 
         if (files.length === 0) {
-            return errors.fileNotFound();
+            return errors.notFound();
         }
 
         let text = '';
@@ -1386,7 +1389,7 @@ export class Server {
         const files = await this.bfs.findFilesMatching(afsp);
 
         if (files.length === 0) {
-            return errors.fileNotFound();
+            return errors.notFound();
         }
 
         let text = '';
@@ -1756,33 +1759,74 @@ export class Server {
 
         const volume = await this.bfs.createVolume(commandLine.parts[1]);
 
-        await this.bfs.mount(volume);
+        await this.mountVolume(volume, false);
 
         return this.getVolumeInfoString(volume);
     };
 
     private readonly volCommand = async (commandLine: CommandLine): Promise<string> => {
-        let volume: beebfs.Volume;
+        let volume: beebfs.Volume | undefined;
         if (commandLine.parts.length >= 2) {
-            const volumes = await this.bfs.findFirstVolumeMatching(commandLine.parts[1]);
-            if (volumes.length === 0) {
-                return errors.fileNotFound('Volume not found');
-            }
-
-            volume = volumes[0];
-
+            let readOnly = false;
+            let quick = false;
             if (commandLine.parts.length >= 3) {
-                if (commandLine.parts[2].toLowerCase() === 'r') {
-                    volume = volume.asReadOnly();
-                }
+                const flags = commandLine.parts[2].toLowerCase();
+                readOnly = flags.indexOf('r') >= 0;
+                quick = flags.indexOf('q') >= 0;
             }
 
-            await this.bfs.mount(volume);
+            if (quick) {
+                if (utils.isAmbiguousAFSP(commandLine.parts[1])) {
+                    return errors.ambiguousName();
+                }
+
+                volume = this.findRecentVolume(commandLine.parts[1], readOnly);
+            }
+
+            if (volume === undefined) {
+                const volumes = await this.bfs.findFirstVolumeMatching(commandLine.parts[1]);
+                if (volumes.length === 0) {
+                    return errors.notFound();
+                }
+
+                volume = volumes[0];
+            }
+
+            await this.mountVolume(volume, readOnly);
         } else {
             volume = this.bfs.getVolume();
         }
 
         return this.getVolumeInfoString(volume);
+    };
+
+    private findRecentVolume = (name: string, readOnly: boolean): beebfs.Volume | undefined => {
+        const nameLC = name.toLowerCase();
+        for (const volume of this.recentVolumes) {
+            if (volume.name.toLowerCase() === nameLC) {
+                if (volume.isReadOnly() === readOnly) {
+                    return volume;
+                }
+            }
+        }
+
+        return undefined;
+    };
+
+    private readonly mountVolume = async (volume: beebfs.Volume, readOnly: boolean): Promise<void> => {
+        if (readOnly) {
+            volume = volume.asReadOnly();
+        }
+
+        await this.bfs.mount(volume);
+
+        if (this.findRecentVolume(volume.name, volume.isReadOnly()) === undefined) {
+            this.recentVolumes.push(volume);
+
+            if (this.recentVolumes.length > 20) {
+                this.recentVolumes.slice(0, 1);
+            }
+        }
     };
 
     private getDiskImageFlowDetailsFromRequestPayload(p: Buffer): IDiskImageFlowDetails {
