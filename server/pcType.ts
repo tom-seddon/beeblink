@@ -262,11 +262,11 @@ class PCType implements beebfs.IFSType {
         return notSupported();
     }
 
-    public async writeBeebMetadata(_hostPath: string, _fqn: beebfs.FQN, _load: number, _exec: number, _attr: number): Promise<void> {
+    public async writeBeebMetadata(_hostPath: string, _fqn: beebfs.FQN, _load: beebfs.FileAddress, _exec: beebfs.FileAddress, _attr: beebfs.FileAttributes): Promise<void> {
         return notSupported();
     }
 
-    public getNewAttributes(_oldAttr: number, _attrString: string): number | undefined {
+    public getNewAttributes(_oldAttr: beebfs.FileAttributes, _attrString: string): beebfs.FileAttributes | undefined {
         return notSupported();
     }
 

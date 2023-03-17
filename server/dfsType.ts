@@ -474,11 +474,11 @@ class DFSType implements beebfs.IFSType {
         await utils.forceFsUnlink(oldFile.hostPath + inf.ext);
     }
 
-    public async writeBeebMetadata(hostPath: string, fqn: beebfs.FQN, load: number, exec: number, attr: number): Promise<void> {
+    public async writeBeebMetadata(hostPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, attr: beebfs.FileAttributes): Promise<void> {
         await inf.writeNonStandardINFFile(hostPath, `${fqn.filePath.dir}.${fqn.name}`, load, exec, (attr & beebfs.L_ATTR) !== 0);
     }
 
-    public getNewAttributes(oldAttr: number, attrString: string): number | undefined {
+    public getNewAttributes(oldAttr: beebfs.FileAttributes, attrString: string): beebfs.FileAttributes | undefined {
         if (attrString === '') {
             return beebfs.DEFAULT_ATTR;
         } else if (attrString.toLowerCase() === 'l') {

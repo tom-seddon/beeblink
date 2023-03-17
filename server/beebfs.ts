@@ -37,22 +37,25 @@ import * as inf from './inf';
 
 export const MAX_FILE_SIZE = 0xffffff;
 
-export const SHOULDNT_LOAD = 0xffffffff;
-export const SHOULDNT_EXEC = 0xffffffff;
+export type FileAddress = number & { 'FileAddress': unknown; };
+export type FileAttributes = number & { 'FileAttributes': unknown; };
 
-export const R_ATTR = 1;
-export const W_ATTR = 2;
-export const E_ATTR = 4;
-export const L_ATTR = 8;
+export const SHOULDNT_LOAD = 0xffffffff as FileAddress;
+export const SHOULDNT_EXEC = 0xffffffff as FileAddress;
+
+export const R_ATTR = 1 as FileAttributes;
+export const W_ATTR = 2 as FileAttributes;
+export const E_ATTR = 4 as FileAttributes;
+export const L_ATTR = 8 as FileAttributes;
 
 export const DEFAULT_LOAD = SHOULDNT_LOAD;
 export const DEFAULT_EXEC = SHOULDNT_EXEC;
 
 // Attributes used in the absence of any other info.
-export const DEFAULT_ATTR = R_ATTR | W_ATTR | E_ATTR;
+export const DEFAULT_ATTR = (R_ATTR | W_ATTR | E_ATTR) as FileAttributes;
 
 // Attributes used for DFS-style L access.
-export const DFS_LOCKED_ATTR = R_ATTR | E_ATTR | L_ATTR;
+export const DFS_LOCKED_ATTR = (R_ATTR | E_ATTR | L_ATTR) as FileAttributes;
 
 const IGNORE_DIR_FILE_NAME = '.beeblink-ignore';
 
@@ -279,15 +282,15 @@ export class File {
     public readonly fqn: FQN;
 
     // BBC-style attributes.
-    public readonly load: number;
-    public readonly exec: number;
-    public readonly attr: number;
+    public readonly load: FileAddress;
+    public readonly exec: FileAddress;
+    public readonly attr: FileAttributes;
 
     // could perhaps be part of the attr field, but I'm a bit reluctant to
     // fiddle around with that.
     public readonly text: boolean;
 
-    public constructor(hostPath: string, fqn: FQN, load: number, exec: number, attr: number, text: boolean) {
+    public constructor(hostPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes, text: boolean) {
         this.hostPath = hostPath;
         this.fqn = fqn;
         this.load = load;
@@ -397,9 +400,9 @@ export class OSFILEResult {
     public readonly fileType: number;
     public readonly block: Buffer | undefined;//if undefined, no change
     public readonly data: Buffer | undefined;
-    public readonly dataLoad: number | undefined;
+    public readonly dataLoad: FileAddress | undefined;
 
-    public constructor(fileType: number, block: Buffer | undefined, data: Buffer | undefined, dataLoad: number | undefined) {
+    public constructor(fileType: number, block: Buffer | undefined, data: Buffer | undefined, dataLoad: FileAddress | undefined) {
         this.fileType = fileType;
         this.block = block;
         this.data = data;
@@ -565,10 +568,10 @@ export interface IFSType {
     renameFile(file: File, newName: FQN): Promise<void>;
 
     // write the metadata for the given file.
-    writeBeebMetadata(hostPath: string, fqn: FQN, load: number, exec: number, attr: number): Promise<void>;
+    writeBeebMetadata(hostPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes): Promise<void>;
 
     // get new attributes from attribute string. Return undefined if invalid.
-    getNewAttributes(oldAttr: number, attrString: string): number | undefined;
+    getNewAttributes(oldAttr: FileAttributes, attrString: string): FileAttributes | undefined;
 
     // get *INFO/*EX text for the given file. Show name, attributes and
     // metadata. Don't append newline - that will be added automatically.
@@ -1403,20 +1406,25 @@ export class FS {
         const fqn = await this.parseFileString(commandLine.parts[0]);
 
         if (a === 0) {
-            return await this.OSFILESave(fqn, block.readUInt32LE(0), block.readUInt32LE(4), data);
+            return await this.OSFILESave(fqn, block.readUInt32LE(0) as FileAddress, block.readUInt32LE(4) as FileAddress, data);
         } else if (a >= 1 && a <= 4) {
             return await this.OSFILEWriteMetadata(fqn,
-                a === 1 || a === 2 ? block.readUInt32LE(0) : undefined,
-                a === 1 || a === 3 ? block.readUInt32LE(4) : undefined,
-                a === 1 || a === 4 ? block.readUInt32LE(12) : undefined);
+                a === 1 || a === 2 ? block.readUInt32LE(0) as FileAddress : undefined,
+                a === 1 || a === 3 ? block.readUInt32LE(4) as FileAddress : undefined,
+                a === 1 || a === 4 ? block.readUInt32LE(12) as FileAttributes : undefined);
         } else if (a === 5) {
             return await this.OSFILEReadMetadata(fqn);
         } else if (a === 6) {
             return await this.OSFILEDelete(fqn);
         } else if (a === 7) {
-            return await this.OSFILECreate(fqn, block.readUInt32LE(0), block.readUInt32LE(4), block.readUInt32LE(12) - block.readUInt32LE(8));
+            return await this.OSFILECreate(fqn,
+                block.readUInt32LE(0) as FileAddress,
+                block.readUInt32LE(4) as FileAddress,
+                block.readUInt32LE(12) - block.readUInt32LE(8));
         } else if (a === 255) {
-            return await this.OSFILELoad(fqn, block.readUInt32LE(0), block.readUInt32LE(4));
+            return await this.OSFILELoad(fqn,
+                block.readUInt32LE(0) as FileAddress,
+                block.readUInt8(4) !== 0);
         } else {
             throw new errors.BeebError(255, 'Unhandled OSFILE: &' + utils.hex2(a));
         }
@@ -1604,7 +1612,7 @@ export class FS {
         if (file !== undefined) {
             this.mustNotBeOpen(file);
         } else {
-            file = new File(this.getHostPath(fqn), fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, 0, false);
+            file = new File(this.getHostPath(fqn), fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, DEFAULT_ATTR, false);
         }
 
         FS.mustBeWriteableFile(file);
@@ -1758,7 +1766,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private createOSFILEBlock(load: number, exec: number, size: number, attr: number): Buffer {
+    private createOSFILEBlock(load: FileAddress, exec: FileAddress, size: number, attr: FileAttributes): Buffer {
         const b = Buffer.alloc(16);
 
         b.writeUInt32LE(load, 0);
@@ -1772,7 +1780,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async OSFILELoad(fqn: FQN, load: number, exec: number): Promise<OSFILEResult> {
+    private async OSFILELoad(fqn: FQN, load: FileAddress, useFileLoadAddress: boolean): Promise<OSFILEResult> {
         const file = await this.getExistingBeebFileForRead(fqn);
 
         this.mustNotBeOpen(file);
@@ -1782,14 +1790,14 @@ export class FS {
         FS.mustNotBeTooBig(data.length);
 
         let dataLoadAddress;
-        if ((exec & 0xff) === 0) {
-            dataLoadAddress = load;
-        } else {
+        if (useFileLoadAddress) {
             dataLoadAddress = file.load;
 
             if (file.load === SHOULDNT_LOAD) {
                 return errors.wont();
             }
+        } else {
+            dataLoadAddress = load;
         }
 
         return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, data.length, file.attr), data, dataLoadAddress);
@@ -1798,7 +1806,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async OSFILESave(fqn: FQN, load: number, exec: number, data: Buffer): Promise<OSFILEResult> {
+    private async OSFILESave(fqn: FQN, load: FileAddress, exec: FileAddress, data: Buffer): Promise<OSFILEResult> {
         FS.mustBeWriteableVolume(fqn.filePath.volume);
         FS.mustNotBeTooBig(data.length);
 
@@ -1840,7 +1848,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async writeBeebMetadata(hostPath: string, fqn: FQN, load: number, exec: number, attr: number): Promise<void> {
+    private async writeBeebMetadata(hostPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes): Promise<void> {
         await fqn.filePath.volume.type.writeBeebMetadata(hostPath, fqn, load, exec, attr);
     }
 
@@ -1849,9 +1857,9 @@ export class FS {
 
     private async OSFILEWriteMetadata(
         fqn: FQN,
-        load: number | undefined,
-        exec: number | undefined,
-        attr: number | undefined): Promise<OSFILEResult> {
+        load: FileAddress | undefined,
+        exec: FileAddress | undefined,
+        attr: FileAttributes | undefined): Promise<OSFILEResult> {
         FS.mustBeWriteableVolume(fqn.filePath.volume);
 
         const file = await getBeebFile(fqn, false);
@@ -1926,7 +1934,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async OSFILECreate(fqn: FQN, load: number, exec: number, size: number): Promise<OSFILEResult> {
+    private async OSFILECreate(fqn: FQN, load: FileAddress, exec: FileAddress, size: number): Promise<OSFILEResult> {
         FS.mustBeWriteableVolume(fqn.filePath.volume);
         FS.mustNotBeTooBig(size);//block.attr - block.size);
 

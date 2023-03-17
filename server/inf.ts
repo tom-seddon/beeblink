@@ -40,7 +40,7 @@ export const extRegExp = new RegExp(`\\${ext}$$`, 'i');
 
 // Write non-standard BeebLink-/TubeHost-style .inf file. No length field, and
 // attributes always "Locked" or absent.
-export async function writeNonStandardINFFile(hostPath: string, name: string, load: number, exec: number, locked: boolean): Promise<void> {
+export async function writeNonStandardINFFile(hostPath: string, name: string, load: beebfs.FileAddress, exec: beebfs.FileAddress, locked: boolean): Promise<void> {
     let inf = `${name} ${utils.hex8(load)} ${utils.hex8(exec)}`;
 
     if (locked) {
@@ -57,7 +57,7 @@ export async function writeNonStandardINFFile(hostPath: string, name: string, lo
 
 // Convert a hex address from a .inf file into a number, or undefined if it
 // isn't valid. Sign-extend 6-digit DFS *INFO output if necessary.
-function tryParseAddress(addressString: string): number | undefined {
+function tryParseAddress(addressString: string): beebfs.FileAddress | undefined {
     let address = Number('0x' + addressString);
     if (Number.isNaN(address)) {
         return undefined;
@@ -72,7 +72,7 @@ function tryParseAddress(addressString: string): number | undefined {
         }
     }
 
-    return address;
+    return address as beebfs.FileAddress;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -102,13 +102,13 @@ export interface IINF {
     name: string;
 
     // Load address.
-    load: number;
+    load: beebfs.FileAddress;
 
     // Execution address.
-    exec: number;
+    exec: beebfs.FileAddress;
 
     // Attributes. "L" is translated to L_ATTR.
-    attr: number;
+    attr: beebfs.FileAttributes;
 
     // true if the .inf file is non-existent or 0 bytes.
     noINF: boolean;
@@ -128,9 +128,9 @@ export async function tryParse(
     hostName: string,
     log: utils.Log | undefined): Promise<IINF | undefined> {
     let name: string;
-    let load: number | undefined;
-    let exec: number | undefined;
-    let attr: number;
+    let load: beebfs.FileAddress | undefined;
+    let exec: beebfs.FileAddress | undefined;
+    let attr: beebfs.FileAttributes;
     let noINF: boolean;
 
     if (infBuffer === undefined || infBuffer.length === 0) {
@@ -176,7 +176,7 @@ export async function tryParse(
             } else if (['l', 'locked'].indexOf(infParts[i].toLowerCase()) >= 0) {
                 attr = beebfs.DFS_LOCKED_ATTR;
             } else {
-                attr = Number('0x' + infParts[i]);
+                attr = Number('0x' + infParts[i]) as beebfs.FileAttributes;
                 if (Number.isNaN(attr)) {
                     log?.pn(' - invalid attributes');
 
