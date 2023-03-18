@@ -1190,11 +1190,6 @@ class TubeHostType implements beebfs.IFSType {
                 dir = info.name[0];
                 name = info.name.slice(2);
             } else {
-                if (info.name[0] === '.') {
-                    // Ignore dot files.
-                    continue;
-                }
-
                 dir = gDefaultTransientSettings.current.dir;
                 name = info.name;
             }
