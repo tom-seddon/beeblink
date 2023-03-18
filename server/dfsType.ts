@@ -169,7 +169,7 @@ class DFSState implements beebfs.IFSState {
             tryLibDir = false;
         }
 
-        const curFile = await beebfs.getBeebFile(fqn, true);
+        const curFile = await beebfs.getBeebFile(fqn, true,this.log);
         if (curFile !== undefined) {
             return curFile;
         }
@@ -177,7 +177,7 @@ class DFSState implements beebfs.IFSState {
         if (tryLibDir) {
             const libPath = new beebfs.FilePath(fqn.filePath.volume, fqn.filePath.volumeExplicit, this.library.drive, true, this.library.dir, true);
             const libFQN = new beebfs.FQN(libPath, fqn.name);
-            const libFile = await beebfs.getBeebFile(libFQN, true);
+            const libFile = await beebfs.getBeebFile(libFQN, true,this.log);
             if (libFile !== undefined) {
                 return libFile;
             }

@@ -591,7 +591,7 @@ export interface IFSType {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log?: utils.Log | undefined): Promise<File | undefined> {
+async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log: utils.Log | undefined): Promise<File | undefined> {
     if (!wildcardsOK) {
         if (utils.isAmbiguousAFSP(fqn.filePath.drive) ||
             utils.isAmbiguousAFSP(fqn.filePath.dir) ||
@@ -619,12 +619,12 @@ async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log?: utils.L
 //
 // If file not found: getBeebFile returns undefined, mustGetBeebFile raises a
 // File not found error.
-export async function getBeebFile(fqn: FQN, wildcardsOK: boolean, log?: utils.Log | undefined): Promise<File | undefined> {
+export async function getBeebFile(fqn: FQN, wildcardsOK: boolean, log: utils.Log | undefined): Promise<File | undefined> {
     log?.pn(`getBeebFile: ${fqn}; wildCardsOK = ${wildcardsOK} `);
     return getBeebFileInternal(fqn, wildcardsOK, log);
 }
 
-export async function mustGetBeebFile(fqn: FQN, wildcardsOK: boolean, log?: utils.Log | undefined): Promise<File> {
+export async function mustGetBeebFile(fqn: FQN, wildcardsOK: boolean, log: utils.Log | undefined): Promise<File> {
     log?.pn(`mustGetBeebFile: ${fqn}; wildCardsOK = ${wildcardsOK} `);
     const file = await getBeebFileInternal(fqn, wildcardsOK, log);
     if (file === undefined) {
@@ -1456,7 +1456,7 @@ export class FS {
         let hostPath: string;
 
         let contentsBuffer: Buffer | undefined;
-        const file = await getBeebFile(fqn, read && !write);
+        const file = await getBeebFile(fqn, read && !write, this.log);
         if (file !== undefined) {
             // Files can be opened once for write, or multiple times for read.
             {
@@ -1598,7 +1598,7 @@ export class FS {
     // that's fine, but it's a BadName/'Ambiguous name' if multiple files are
     // matched.
     public async getExistingBeebFileForRead(fqn: FQN): Promise<File> {
-        return mustGetBeebFile(fqn, true);
+        return mustGetBeebFile(fqn, true, this.log);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1608,7 +1608,7 @@ export class FS {
     public async getBeebFileForWrite(fqn: FQN): Promise<File> {
         FS.mustBeWriteableVolume(fqn.filePath.volume);
 
-        let file = await getBeebFile(fqn, false);
+        let file = await getBeebFile(fqn, false, this.log);
         if (file !== undefined) {
             this.mustNotBeOpen(file);
         } else {
@@ -1671,7 +1671,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async delete(fqn: FQN): Promise<void> {
-        const file = await mustGetBeebFile(fqn, false);
+        const file = await mustGetBeebFile(fqn, false,this.log);
 
         await this.deleteFile(file);
     }
@@ -1687,11 +1687,11 @@ export class FS {
             return errors.badDrive();
         }
 
-        if (await getBeebFile(newFQN, false) !== undefined) {
+        if (await getBeebFile(newFQN, false, this.log) !== undefined) {
             return errors.exists();
         }
 
-        const oldFile = await mustGetBeebFile(oldFQN, false);
+        const oldFile = await mustGetBeebFile(oldFQN, false, this.log);
 
         await oldFQN.filePath.volume.type.renameFile(oldFile, newFQN);
 
@@ -1862,7 +1862,7 @@ export class FS {
         attr: FileAttributes | undefined): Promise<OSFILEResult> {
         FS.mustBeWriteableVolume(fqn.filePath.volume);
 
-        const file = await getBeebFile(fqn, false);
+        const file = await getBeebFile(fqn, false,this.log);
         if (file === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         }
@@ -1890,7 +1890,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILEReadMetadata(fqn: FQN): Promise<OSFILEResult> {
-        const file = await getBeebFile(fqn, true);
+        const file = await getBeebFile(fqn, true, this.log);
         if (file === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         } else {
@@ -1904,7 +1904,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILEDelete(fqn: FQN): Promise<OSFILEResult> {
-        const file = await getBeebFile(fqn, true);
+        const file = await getBeebFile(fqn, true, this.log);
         if (file === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         } else {
