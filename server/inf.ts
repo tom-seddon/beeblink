@@ -43,8 +43,8 @@ const TITLE_KEY = 'TITLE';
 /////////////////////////////////////////////////////////////////////////
 
 export interface IINF {
-    // Host path for this file.
-    hostPath: string;
+    // Server path for this file.
+    serverPath: string;
 
     // Name, verbatim.
     name: string;
@@ -85,7 +85,7 @@ export interface IExtraData {
 
 // Write non-standard BeebLink-/TubeHost-style .inf file. No length field, and
 // attributes always "Locked" or absent.
-export async function writeNonStandardINFFile(hostPath: string, name: string, load: beebfs.FileAddress, exec: beebfs.FileAddress, locked: boolean): Promise<void> {
+export async function writeNonStandardINFFile(serverPath: string, name: string, load: beebfs.FileAddress, exec: beebfs.FileAddress, locked: boolean): Promise<void> {
     let inf = `${name} ${utils.hex8(load)} ${utils.hex8(exec)}`;
 
     if (locked) {
@@ -94,14 +94,14 @@ export async function writeNonStandardINFFile(hostPath: string, name: string, lo
 
     inf += os.EOL;//stop git moaning.
 
-    await utils.fsMkdirAndWriteFile(hostPath + ext, Buffer.from(inf, 'binary'));
+    await utils.fsMkdirAndWriteFile(serverPath + ext, Buffer.from(inf, 'binary'));
 }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
 // Write standard .inf file. If attr is a string, it will be written verbatim.
-export async function writeStandardINFFile(hostPath: string, name: string, load: beebfs.FileAddress, exec: beebfs.FileAddress, length: number, attr: beebfs.FileAttributes | string, extra: IExtraData | undefined): Promise<void> {
+export async function writeStandardINFFile(servorPath: string, name: string, load: beebfs.FileAddress, exec: beebfs.FileAddress, length: number, attr: beebfs.FileAttributes | string, extra: IExtraData | undefined): Promise<void> {
     let inf = `${name} ${utils.hex8(load)} ${utils.hex8(exec)} ${utils.hex8(length)} `;
     if (typeof (attr) === 'string') {
         inf += attr;
@@ -125,7 +125,7 @@ export async function writeStandardINFFile(hostPath: string, name: string, load:
 
     inf += os.EOL;//stop git moaning
 
-    await utils.fsMkdirAndWriteFile(hostPath + ext, Buffer.from(inf, 'binary'));
+    await utils.fsMkdirAndWriteFile(servorPath + ext, Buffer.from(inf, 'binary'));
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -166,15 +166,15 @@ function tryParseAddress(addressString: string): beebfs.FileAddress | undefined 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// Causes a 'Exists on server' error if the given host file or metadata
+// Causes a 'Exists on server' error if the given server file or metadata
 // counterpart exists.
 //
-// This is to cater for trying to create a new file that would have the same
-// PC name as an existing file. Could be due to mismatches between BBC names
-// in the .inf files and the actual names on disk, could be due to loose
-// non-BBC files on disk...
-export async function mustNotExist(hostPath: string): Promise<void> {
-    if (await utils.tryStat(hostPath) !== undefined || await utils.tryStat(hostPath + ext) !== undefined) {
+// This is to cater for trying to create a new file that would have the same PC
+// name as an existing file. Could be due to mismatches between BBC names in the
+// .inf files and the actual names on disk, could be due to loose non-BBC files
+// on disk...
+export async function mustNotExist(serverPath: string): Promise<void> {
+    if (await utils.tryStat(serverPath) !== undefined || await utils.tryStat(serverPath + ext) !== undefined) {
         return errors.exists('Exists on server');
     }
 }
@@ -204,20 +204,20 @@ const DFS_LOCKED_ATTRS_LC = ['l', 'locked'];
 const ATTR_CHARS_MAP = makeAttrCharsMap();
 
 // Try to parse a .inf file. infBuffer is the contents, or undefined if no .inf
-// file; hostName is the basename of the host file.
+// file; serverName is the basename of the server file.
 //
-// hostName should be path.basename(hostPath); this could be computed, but since
-// the caller will already have it, might as well have it supply it.
+// serverName should be path.basename(serverPath); this could be computed, but
+// since the caller will already have it, might as well have it supply it.
 function tryParse2(
     infBuffer: Buffer | undefined,
-    hostPath: string,
-    hostName: string,
+    serverPath: string,
+    serverName: string,
     log: utils.Log | undefined): IINF | undefined {
 
     if (infBuffer === undefined || infBuffer.length === 0) {
         return {
-            name: hostName,
-            hostPath,
+            name: serverName,
+            serverPath,
             load: beebfs.DEFAULT_LOAD,
             exec: beebfs.DEFAULT_EXEC,
             attr: beebfs.DEFAULT_ATTR,
@@ -346,7 +346,7 @@ function tryParse2(
         // BeebLink/TubeHost-style non-standard .INF file with no
         // attributes.
         log?.p(` (non-std)`);
-        return { name, hostPath, load, exec, attr: beebfs.DEFAULT_ATTR, noINF, extra };
+        return { name, serverPath, load, exec, attr: beebfs.DEFAULT_ATTR, noINF, extra };
     }
 
     const attrsOrLengthBegin = i;
@@ -357,7 +357,7 @@ function tryParse2(
         // BeebLink/TubeHost-style non-standard .INF file with locked
         // attributes.
         log?.p(` (non-std+locked)`);
-        return { name, hostPath, load, exec, attr: beebfs.DFS_LOCKED_ATTR, noINF, extra };
+        return { name, serverPath, load, exec, attr: beebfs.DFS_LOCKED_ATTR, noINF, extra };
     }
 
     // The length is ignored, but it does have to be valid.
@@ -369,7 +369,7 @@ function tryParse2(
     if (!consume(SPACE_CHAR)) {
         // No attributes or extra info.
         log?.p(` (std)`);
-        return { name, hostPath, load, exec, attr: beebfs.DEFAULT_ATTR, noINF, extra };
+        return { name, serverPath, load, exec, attr: beebfs.DEFAULT_ATTR, noINF, extra };
     }
 
     const attrsBegin = i;
@@ -442,16 +442,16 @@ function tryParse2(
         }
     }
 
-    return { hostPath, name, load, exec, attr, noINF, extra };
+    return { serverPath, name, load, exec, attr, noINF, extra };
 }
 
 function tryParse(
     infBuffer: Buffer | undefined,
-    hostPath: string,
-    hostName: string,
+    serverPath: string,
+    serverName: string,
     log: utils.Log | undefined): IINF | undefined {
 
-    const inf = tryParse2(infBuffer, hostPath, hostName, log);
+    const inf = tryParse2(infBuffer, serverPath, serverName, log);
     if (inf !== undefined && log !== undefined) {
 
         log.p(` - name=\`\`${inf.name}'' load=0x${inf.load.toString(16)} exec=0x${inf.exec.toString(16)} attr=0x${inf.attr.toString(16)}`);
@@ -485,10 +485,10 @@ function tryParse(
 
 // Find all .inf files in the given folder, call tryParse as
 // appropriate, and return an array of the results.
-export async function getINFsForFolder(hostFolderPath: string, log: utils.Log | undefined): Promise<IINF[]> {
-    let hostNames: string[];
+export async function getINFsForFolder(serverFolderPath: string, log: utils.Log | undefined): Promise<IINF[]> {
+    let serverNames: string[];
     try {
-        hostNames = await utils.fsReaddir(hostFolderPath);
+        serverNames = await utils.fsReaddir(serverFolderPath);
     } catch (error) {
         return [];
     }
@@ -497,26 +497,26 @@ export async function getINFsForFolder(hostFolderPath: string, log: utils.Log | 
 
     log?.pn('getINFsForFolder:');
     log?.in(`    `);
-    log?.pn(`folder path: ${hostFolderPath}`);
+    log?.pn(`folder path: ${serverFolderPath}`);
     log?.pn(`.inf regexp: ${extRegExp.source}`);
 
-    for (const hostName of hostNames) {
-        if (extRegExp.exec(hostName) !== null) {
+    for (const serverName of serverNames) {
+        if (extRegExp.exec(serverName) !== null) {
             // skip .inf files.
             continue;
         }
 
-        const hostPath = path.join(hostFolderPath, hostName);
+        const serverPath = path.join(serverFolderPath, serverName);
 
-        const infBuffer = await utils.tryReadFile(`${hostPath}${ext}`);
-        if (hostName[0] === '.' && infBuffer === undefined) {
+        const infBuffer = await utils.tryReadFile(`${serverPath}${ext}`);
+        if (serverName[0] === '.' && infBuffer === undefined) {
             // skip server dotfiles that aren't obviously intended to be Beeb
             // files.
             continue;
         }
 
-        log?.p(`${hostName}: `);
-        const beebFileInfo = tryParse(infBuffer, hostPath, hostName, log);
+        log?.p(`${serverName}: `);
+        const beebFileInfo = tryParse(infBuffer, serverPath, serverName, log);
         if (beebFileInfo === undefined) {
             continue;
         }

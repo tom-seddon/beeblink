@@ -72,7 +72,7 @@ function mustBeDFSState(state: beebfs.IFSState | undefined): DFSState | undefine
 /////////////////////////////////////////////////////////////////////////
 
 interface IDFSDrive {
-    readonly hostFolder: string;
+    readonly serverFolder: string;
     readonly beebName: string;
     readonly option: number;
     readonly title: string;
@@ -360,8 +360,8 @@ class DFSType implements beebfs.IFSType {
         return this.parseFileOrDirString(str, i, state, true, volume, volumeExplicit).filePath;
     }
 
-    public getIdealVolumeRelativeHostPath(fqn: beebfs.FQN): string {
-        return path.join(fqn.filePath.drive.toUpperCase(), beebfs.getHostChars(fqn.filePath.dir) + '.' + beebfs.getHostChars(fqn.name));
+    public getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): string {
+        return path.join(fqn.filePath.drive.toUpperCase(), beebfs.getServerChars(fqn.filePath.dir) + '.' + beebfs.getServerChars(fqn.name));
     }
 
     public async findBeebFilesInVolume(volumeOrFQN: beebfs.Volume | beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
@@ -450,32 +450,32 @@ class DFSType implements beebfs.IFSType {
 
     public async deleteFile(file: beebfs.File): Promise<void> {
         try {
-            await utils.forceFsUnlink(file.hostPath + inf.ext);
-            await utils.forceFsUnlink(file.hostPath);
+            await utils.forceFsUnlink(file.serverPath + inf.ext);
+            await utils.forceFsUnlink(file.serverPath);
         } catch (error) {
             errors.nodeError(error as NodeJS.ErrnoException);
         }
     }
 
     public async renameFile(oldFile: beebfs.File, newFQN: beebfs.FQN): Promise<void> {
-        const newHostPath = path.join(newFQN.filePath.volume.path, this.getIdealVolumeRelativeHostPath(newFQN));
-        await inf.mustNotExist(newHostPath);
+        const newServerPath = path.join(newFQN.filePath.volume.path, this.getIdealVolumeRelativeServerPath(newFQN));
+        await inf.mustNotExist(newServerPath);
 
-        const newFile = new beebfs.File(newHostPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr, false);
+        const newFile = new beebfs.File(newServerPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr, false);
 
-        await this.writeBeebMetadata(newFile.hostPath, newFQN, newFile.load, newFile.exec, newFile.attr);
+        await this.writeBeebMetadata(newFile.serverPath, newFQN, newFile.load, newFile.exec, newFile.attr);
 
         try {
-            await utils.fsRename(oldFile.hostPath, newFile.hostPath);
+            await utils.fsRename(oldFile.serverPath, newFile.serverPath);
         } catch (error) {
             return errors.nodeError(error);
         }
 
-        await utils.forceFsUnlink(oldFile.hostPath + inf.ext);
+        await utils.forceFsUnlink(oldFile.serverPath + inf.ext);
     }
 
-    public async writeBeebMetadata(hostPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, attr: beebfs.FileAttributes): Promise<void> {
-        await inf.writeNonStandardINFFile(hostPath, `${fqn.filePath.dir}.${fqn.name}`, load, exec, (attr & beebfs.L_ATTR) !== 0);
+    public async writeBeebMetadata(serverPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, attr: beebfs.FileAttributes): Promise<void> {
+        await inf.writeNonStandardINFFile(serverPath, `${fqn.filePath.dir}.${fqn.name}`, load, exec, (attr & beebfs.L_ATTR) !== 0);
     }
 
     public getNewAttributes(oldAttr: beebfs.FileAttributes, attrString: string): beebfs.FileAttributes | undefined {
@@ -542,7 +542,7 @@ class DFSType implements beebfs.IFSType {
                         const title = await this.loadTitle(volume, name);
 
                         drives.push({
-                            hostFolder: name,
+                            serverFolder: name,
                             beebName: name.toUpperCase(),
                             option,
                             title
@@ -563,7 +563,7 @@ class DFSType implements beebfs.IFSType {
         const beebFiles: beebfs.File[] = [];
 
         for (const drive of drives) {
-            const drivePath = path.join(volume.path, drive.hostFolder);
+            const drivePath = path.join(volume.path, drive.serverFolder);
             const infos = await inf.getINFsForFolder(drivePath, log);
 
             for (const info of infos) {
@@ -582,7 +582,7 @@ class DFSType implements beebfs.IFSType {
                 }
 
                 const fqn = new beebfs.FQN(new beebfs.FilePath(volume, true, drive.beebName, true, dir, true), name);
-                const file = new beebfs.File(info.hostPath, fqn, info.load, info.exec, info.attr, false);
+                const file = new beebfs.File(info.serverPath, fqn, info.load, info.exec, info.attr, false);
                 log?.pn(`${file}`);
 
                 beebFiles.push(file);

@@ -87,7 +87,7 @@ export class Manipulator {
             //this.log?.pn(path.join(drive.volumePath, drive.name) + ': ' + beebFiles.length + ' Beeb file(s)\n');
 
             for (const beebFile of beebFiles) {
-                const data = await utils.tryReadFile(beebFile.hostPath);
+                const data = await utils.tryReadFile(beebFile.serverPath);
                 if (data === undefined) {
                     continue;
                 }
@@ -96,7 +96,7 @@ export class Manipulator {
 
                 //this.log?.pn(beebFile.hostPath + ': is BASIC: ' + (isBASIC ? 'yes' : 'no'));
 
-                this.makeFileBASIC(beebFile.hostPath, isBASIC);
+                this.makeFileBASIC(beebFile.serverPath, isBASIC);
             }
         });
     }

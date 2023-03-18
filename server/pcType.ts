@@ -214,7 +214,7 @@ class PCType implements beebfs.IFSType {
         }
     }
 
-    public getIdealVolumeRelativeHostPath(fqn: beebfs.FQN): string {
+    public getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): string {
         return fqn.name;
     }
 
@@ -262,7 +262,7 @@ class PCType implements beebfs.IFSType {
         return notSupported();
     }
 
-    public async writeBeebMetadata(_hostPath: string, _fqn: beebfs.FQN, _load: beebfs.FileAddress, _exec: beebfs.FileAddress, _attr: beebfs.FileAttributes): Promise<void> {
+    public async writeBeebMetadata(_serverPath: string, _fqn: beebfs.FQN, _load: beebfs.FileAddress, _exec: beebfs.FileAddress, _attr: beebfs.FileAttributes): Promise<void> {
         return notSupported();
     }
 
@@ -287,28 +287,28 @@ class PCType implements beebfs.IFSType {
     }
 
     private async findFiles(volume: beebfs.Volume, nameRegExp: RegExp | undefined, _log: utils.Log | undefined): Promise<beebfs.File[]> {
-        let hostNames: string[];
+        let serverNames: string[];
         try {
-            hostNames = await utils.fsReaddir(volume.path);
+            serverNames = await utils.fsReaddir(volume.path);
         } catch (error) {
             return [];
         }
 
         const beebFiles: beebfs.File[] = [];
-        for (const hostName of hostNames) {
-            if (!this.isValidBeebFileName(hostName)) {
+        for (const serverName of serverNames) {
+            if (!this.isValidBeebFileName(serverName)) {
                 continue;
             }
 
             if (nameRegExp !== undefined) {
-                if (nameRegExp.exec(hostName) === null) {
+                if (nameRegExp.exec(serverName) === null) {
                     continue;
                 }
             }
 
-            const hostPath = path.join(volume.path, hostName);
+            const serverPath = path.join(volume.path, serverName);
 
-            const st = await utils.tryStat(hostPath);
+            const st = await utils.tryStat(serverPath);
             if (st === undefined) {
                 continue;
             }
@@ -322,12 +322,12 @@ class PCType implements beebfs.IFSType {
             }
 
             let text = false;
-            if (utils.getCaseNormalizedPath(path.extname(hostName)) === '.txt') {
+            if (utils.getCaseNormalizedPath(path.extname(serverName)) === '.txt') {
                 text = true;
             }
 
-            const fqn = new beebfs.FQN(new beebfs.FilePath(volume, true, '', false, '', false), hostName);
-            const file = new beebfs.File(path.join(volume.path, hostName), fqn, beebfs.DEFAULT_LOAD, beebfs.DEFAULT_EXEC, beebfs.R_ATTR, text);
+            const fqn = new beebfs.FQN(new beebfs.FilePath(volume, true, '', false, '', false), serverName);
+            const file = new beebfs.File(path.join(volume.path, serverName), fqn, beebfs.DEFAULT_LOAD, beebfs.DEFAULT_EXEC, beebfs.R_ATTR, text);
             beebFiles.push(file);
         }
 

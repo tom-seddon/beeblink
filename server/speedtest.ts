@@ -23,18 +23,18 @@ class Stats {
 /////////////////////////////////////////////////////////////////////////
 
 export class SpeedTest {
-    private hostStats: Stats;
+    private serverStats: Stats;
     private parasiteStats: Stats;
     private lastHRTime: [number, number];
 
     public constructor() {
-        this.hostStats = new Stats();
+        this.serverStats = new Stats();
         this.parasiteStats = new Stats();
         this.lastHRTime = process.hrtime();
     }
 
     public gotTestData(parasite: boolean, data: Buffer, log: utils.Log | undefined): Buffer {
-        const stats = parasite ? this.parasiteStats : this.hostStats;
+        const stats = parasite ? this.parasiteStats : this.serverStats;
 
         if (stats.originalData === undefined) {
             stats.originalData = data;
@@ -99,7 +99,7 @@ export class SpeedTest {
     }
 
     public addStats(parasite: boolean, sizeBytes: number) {
-        const stats = parasite ? this.parasiteStats : this.hostStats;
+        const stats = parasite ? this.parasiteStats : this.serverStats;
 
         stats.numBytes += sizeBytes;
 
@@ -111,7 +111,7 @@ export class SpeedTest {
     public getString(): string {
         let s = '';
 
-        s += this.getStatsString(this.hostStats, 'Host');
+        s += this.getStatsString(this.serverStats, 'Host');
         s += this.getStatsString(this.parasiteStats, 'Parasite');
 
         if (s.length === 0) {

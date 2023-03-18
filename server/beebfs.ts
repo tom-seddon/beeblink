@@ -61,7 +61,7 @@ const IGNORE_DIR_FILE_NAME = '.beeblink-ignore';
 
 const VOLUME_FILE_NAME = '.volume';
 
-const HOST_NAME_ESCAPE_CHAR = '#';
+const SERVER_NAME_ESCAPE_CHAR = '#';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -129,10 +129,10 @@ export function getBootOptionDescription(option: number): string {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-const HOST_NAME_CHARS: string[] = [];
+const SERVER_NAME_CHARS: string[] = [];
 
-export function getHostChars(str: string): string {
-    if (HOST_NAME_CHARS.length === 0) {
+export function getServerChars(str: string): string {
+    if (SERVER_NAME_CHARS.length === 0) {
         for (let c = 0; c < 256; ++c) {
             let escape = false;
 
@@ -150,15 +150,15 @@ export function getHostChars(str: string): string {
                 // It's worth escaping '.', because it makes it impossible to create a
                 // BBC file that ends with '.inf'...
                 escape = true;
-            } else if (String.fromCharCode(c) === HOST_NAME_ESCAPE_CHAR) {
+            } else if (String.fromCharCode(c) === SERVER_NAME_ESCAPE_CHAR) {
                 // the escape char itself.
                 escape = true;
             }
 
             if (escape) {
-                HOST_NAME_CHARS.push('#' + utils.hex2(c));
+                SERVER_NAME_CHARS.push('#' + utils.hex2(c));
             } else {
-                HOST_NAME_CHARS.push(String.fromCharCode(c));
+                SERVER_NAME_CHARS.push(String.fromCharCode(c));
             }
         }
     }
@@ -167,11 +167,11 @@ export function getHostChars(str: string): string {
 
     for (let i = 0; i < str.length; ++i) {
         const c = str.charCodeAt(i);
-        if (c < 0 || c >= HOST_NAME_CHARS.length) {
+        if (c < 0 || c >= SERVER_NAME_CHARS.length) {
             // Answers on postcard please.
             result += '_';
         } else {
-            result += HOST_NAME_CHARS[c];
+            result += SERVER_NAME_CHARS[c];
         }
     }
 
@@ -276,7 +276,7 @@ export class FQN {
 
 export class File {
     // Path of this file on the PC filing system.
-    public readonly hostPath: string;
+    public readonly serverPath: string;
 
     // Actual BBC file name. 
     public readonly fqn: FQN;
@@ -290,8 +290,8 @@ export class File {
     // fiddle around with that.
     public readonly text: boolean;
 
-    public constructor(hostPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes, text: boolean) {
-        this.hostPath = hostPath;
+    public constructor(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes, text: boolean) {
+        this.serverPath = serverPath;
         this.fqn = fqn;
         this.load = load;
         this.exec = exec;
@@ -300,7 +300,7 @@ export class File {
     }
 
     public toString(): string {
-        return 'File(hostPath=``' + this.hostPath + '\'\' name=``' + this.fqn + '\'\' load=0x' + utils.hex8(this.load) + ' exec=0x' + utils.hex8(this.exec) + ' attr=0x' + utils.hex8(this.attr);
+        return 'File(serverPath=``' + this.serverPath + '\'\' name=``' + this.fqn + '\'\' load=0x' + utils.hex8(this.load) + ' exec=0x' + utils.hex8(this.exec) + ' attr=0x' + utils.hex8(this.attr);
     }
 }
 
@@ -309,7 +309,7 @@ export class File {
 
 class OpenFile {
     public readonly handle: number;
-    public readonly hostPath: string;
+    public readonly serverPath: string;
     public readonly fqn: FQN;
     public readonly read: boolean;
     public readonly write: boolean;
@@ -321,9 +321,9 @@ class OpenFile {
     // massively simplifies the error handling.
     public readonly contents: number[];
 
-    public constructor(handle: number, hostPath: string, fqn: FQN, read: boolean, write: boolean, contents: number[]) {
+    public constructor(handle: number, serverPath: string, fqn: FQN, read: boolean, write: boolean, contents: number[]) {
         this.handle = handle;
-        this.hostPath = hostPath;
+        this.serverPath = serverPath;
         this.fqn = fqn;
         this.read = read;
         this.write = write;
@@ -553,9 +553,9 @@ export interface IFSType {
     // create appropriate FSFQN from FSFSP, filling in defaults from the given State as appropriate.
     //createFQN(fsp: IFSFSP, state: IFSState | undefined): IFSFQN;
 
-    // get ideal host path for FQN, relative to whichever volume it's in. Used
+    // get ideal server path for FQN, relative to whichever volume it's in. Used
     // when creating a new file.
-    getIdealVolumeRelativeHostPath(fqn: FQN): string;
+    getIdealVolumeRelativeServerPath(fqn: FQN): string;
 
     // get *CAT text.
     getCAT(filePath: FilePath, state: IFSState | undefined, log: utils.Log | undefined): Promise<string>;
@@ -568,7 +568,7 @@ export interface IFSType {
     renameFile(file: File, newName: FQN): Promise<void>;
 
     // write the metadata for the given file.
-    writeBeebMetadata(hostPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes): Promise<void>;
+    writeBeebMetadata(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes): Promise<void>;
 
     // get new attributes from attribute string. Return undefined if invalid.
     getNewAttributes(oldAttr: FileAttributes, attrString: string): FileAttributes | undefined;
@@ -714,7 +714,7 @@ export class FS {
 
     public static async readFile(file: File): Promise<Buffer> {
         try {
-            return await utils.fsReadFile(file.hostPath);
+            return await utils.fsReadFile(file.serverPath);
         } catch (error) {
             return errors.nodeError(error);
         }
@@ -728,7 +728,7 @@ export class FS {
             FS.mustBeWriteableFile(file);
             FS.mustNotBeTooBig(data.length);
 
-            await writeFile(file.hostPath, data);
+            await writeFile(file.serverPath, data);
         } catch (error) {
             return errors.nodeError(error);
         }
@@ -1249,7 +1249,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async tryGetFileStats(file: File): Promise<fs.Stats | undefined> {
-        return await utils.tryStat(file.hostPath);
+        return await utils.tryStat(file.serverPath);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1260,12 +1260,12 @@ export class FS {
     //
     // TODO: should this info be part of the File type?
     public async tryGetFileSize(file: File): Promise<number> {
-        const hostStat = await this.tryGetFileStats(file);
-        if (hostStat === undefined) {
+        const fileStat = await this.tryGetFileStats(file);
+        if (fileStat === undefined) {
             return 0;
         }
 
-        return hostStat.size;
+        return fileStat.size;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1295,7 +1295,7 @@ export class FS {
                 text += 'out';
             }
 
-            text += ' PTR#=&' + utils.hex8(openFile.ptr) + ' EXT#=&' + utils.hex8(openFile.contents.length) + ' - ' + openFile.hostPath + utils.BNL;
+            text += ' PTR#=&' + utils.hex8(openFile.ptr) + ' EXT#=&' + utils.hex8(openFile.contents.length) + ' - ' + openFile.serverPath + utils.BNL;
         }
 
         if (!anyOpen) {
@@ -1453,7 +1453,7 @@ export class FS {
         const read = (mode & 0x40) !== 0;
 
         const fqn = await this.parseFileString(commandLine.parts[0]);
-        let hostPath: string;
+        let serverPath: string;
 
         let contentsBuffer: Buffer | undefined;
         const file = await getBeebFile(fqn, read && !write, this.log);
@@ -1463,7 +1463,7 @@ export class FS {
                 for (let otherIndex = 0; otherIndex < this.openFiles.length; ++otherIndex) {
                     const otherOpenFile = this.openFiles[otherIndex];
                     if (otherOpenFile !== undefined) {
-                        if (otherOpenFile.hostPath === file.hostPath) {
+                        if (otherOpenFile.serverPath === file.serverPath) {
                             if (otherOpenFile.write || write) {
                                 this.log?.pn(`        already open: handle=0x${this.firstFileHandle + otherIndex}`);
                                 return errors.open();
@@ -1473,11 +1473,11 @@ export class FS {
                 }
             }
 
-            this.log?.pn('        hostPath=``' + file.hostPath + '\'\'');
+            this.log?.pn('        serverPath=``' + file.serverPath + '\'\'');
             this.log?.pn('        text=' + file.text);
 
             // File exists.
-            hostPath = file.hostPath;
+            serverPath = file.serverPath;
 
             if (write) {
                 FS.mustBeWriteableVolume(fqn.filePath.volume);
@@ -1487,7 +1487,7 @@ export class FS {
             if (write && !read) {
                 // OPENOUT of file that exists. Zap the contents first.
                 try {
-                    await utils.fsTruncate(file.hostPath);
+                    await utils.fsTruncate(file.serverPath);
                 } catch (error) {
                     return errors.nodeError(error as NodeJS.ErrnoException);
                 }
@@ -1513,8 +1513,8 @@ export class FS {
                 return 0;
             }
 
-            hostPath = this.getHostPath(fqn);
-            await inf.mustNotExist(hostPath);
+            serverPath = this.getServerPath(fqn);
+            await inf.mustNotExist(serverPath);
 
             // Create file.
             await this.OSFILECreate(fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, 0);
@@ -1527,7 +1527,7 @@ export class FS {
             }
         }
 
-        const openFile = new OpenFile(this.firstFileHandle + index, hostPath, fqn, read, write, contents);
+        const openFile = new OpenFile(this.firstFileHandle + index, serverPath, fqn, read, write, contents);
         this.openFiles[index] = openFile;
         this.log?.pn(`        handle=0x${openFile.handle}`);
         return openFile.handle;
@@ -1612,7 +1612,7 @@ export class FS {
         if (file !== undefined) {
             this.mustNotBeOpen(file);
         } else {
-            file = new File(this.getHostPath(fqn), fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, DEFAULT_ATTR, false);
+            file = new File(this.getServerPath(fqn), fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, DEFAULT_ATTR, false);
         }
 
         FS.mustBeWriteableFile(file);
@@ -1649,7 +1649,7 @@ export class FS {
 
     public async writeBeebFileMetadata(file: File): Promise<void> {
         try {
-            await this.writeBeebMetadata(file.hostPath, file.fqn, file.load, file.exec, file.attr);
+            await this.writeBeebMetadata(file.serverPath, file.fqn, file.load, file.exec, file.attr);
         } catch (error) {
             errors.nodeError(error);
         }
@@ -1664,7 +1664,7 @@ export class FS {
             return errors.badAttribute();
         }
 
-        return new File(file.hostPath, file.fqn, file.load, file.exec, newAttr, file.text);
+        return new File(file.serverPath, file.fqn, file.load, file.exec, newAttr, file.text);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1698,7 +1698,7 @@ export class FS {
         if (this.gaManipulator !== undefined) {
             if (!newFQN.filePath.volume.isReadOnly()) {
                 // could be cleverer than this.
-                this.gaManipulator.renameFile(oldFile.hostPath, newFQN.filePath.volume.type.getIdealVolumeRelativeHostPath(newFQN));
+                this.gaManipulator.renameFile(oldFile.serverPath, newFQN.filePath.volume.type.getIdealVolumeRelativeServerPath(newFQN));
             }
         }
     }
@@ -1759,8 +1759,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private getHostPath(fqn: FQN): string {
-        return path.join(fqn.filePath.volume.path, fqn.filePath.volume.type.getIdealVolumeRelativeHostPath(fqn));
+    private getServerPath(fqn: FQN): string {
+        return path.join(fqn.filePath.volume.path, fqn.filePath.volume.type.getIdealVolumeRelativeServerPath(fqn));
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1810,23 +1810,23 @@ export class FS {
         FS.mustBeWriteableVolume(fqn.filePath.volume);
         FS.mustNotBeTooBig(data.length);
 
-        let hostPath: string;
+        let serverPath: string;
 
         const file = await getBeebFile(fqn, false, this.log);
         if (file !== undefined) {
             this.mustNotBeOpen(file);
             FS.mustBeWriteableFile(file);
 
-            hostPath = file.hostPath;
+            serverPath = file.serverPath;
         } else {
-            hostPath = this.getHostPath(fqn);
+            serverPath = this.getServerPath(fqn);
 
-            await inf.mustNotExist(hostPath);
+            await inf.mustNotExist(serverPath);
         }
 
         const attr = DEFAULT_ATTR;
-        await this.writeBeebData(hostPath, fqn, data);
-        await this.writeBeebMetadata(hostPath, fqn, load, exec, attr);
+        await this.writeBeebData(serverPath, fqn, data);
+        await this.writeBeebMetadata(serverPath, fqn, load, exec, attr);
 
         return new OSFILEResult(1, this.createOSFILEBlock(load, exec, data.length, attr), undefined, undefined);
     }
@@ -1834,13 +1834,13 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async writeBeebData(hostPath: string, fqn: FQN, data: Buffer): Promise<void> {
-        await writeFile(hostPath, data);
+    private async writeBeebData(serverPath: string, fqn: FQN, data: Buffer): Promise<void> {
+        await writeFile(serverPath, data);
 
         if (this.gaManipulator !== undefined) {
             if (!fqn.filePath.volume.isReadOnly()) {
                 this.gaManipulator.makeVolumeNotText(fqn.filePath.volume);
-                this.gaManipulator.makeFileBASIC(hostPath, utils.isBASIC(data));
+                this.gaManipulator.makeFileBASIC(serverPath, utils.isBASIC(data));
             }
         }
     }
@@ -1848,8 +1848,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async writeBeebMetadata(hostPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes): Promise<void> {
-        await fqn.filePath.volume.type.writeBeebMetadata(hostPath, fqn, load, exec, attr);
+    private async writeBeebMetadata(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes): Promise<void> {
+        await fqn.filePath.volume.type.writeBeebMetadata(serverPath, fqn, load, exec, attr);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1881,7 +1881,7 @@ export class FS {
 
         const fileSize = await this.tryGetFileSize(file);
 
-        await this.writeBeebMetadata(file.hostPath, file.fqn, load, exec, attr);
+        await this.writeBeebMetadata(file.serverPath, file.fqn, load, exec, attr);
 
         return new OSFILEResult(1, this.createOSFILEBlock(load, exec, fileSize, attr), undefined, undefined);
     }
@@ -1927,7 +1927,7 @@ export class FS {
         await file.fqn.filePath.volume.type.deleteFile(file);
 
         if (this.gaManipulator !== undefined) {
-            this.gaManipulator.deleteFile(file.hostPath);
+            this.gaManipulator.deleteFile(file.serverPath);
         }
     }
 
@@ -1949,7 +1949,7 @@ export class FS {
     private mustNotBeOpen(file: File): void {
         for (const openFile of this.openFiles) {
             if (openFile !== undefined) {
-                if (openFile.hostPath === file.hostPath) {
+                if (openFile.serverPath === file.serverPath) {
                     return errors.open();
                 }
             }
@@ -2035,7 +2035,7 @@ export class FS {
         if (openFile.dirty) {
             const data = Buffer.from(openFile.contents);
 
-            await this.writeBeebData(openFile.hostPath, openFile.fqn, data);
+            await this.writeBeebData(openFile.serverPath, openFile.fqn, data);
 
             openFile.dirty = false;
         }
