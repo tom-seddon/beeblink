@@ -535,6 +535,13 @@ class TubeHostState implements beebfs.IFSState {
         }
 
         const drive = this.mustGetDriveStateByName(driveName);
+
+        // Generate "Drive empty" if appropriate. *CAT bypasses the parseFQN
+        // handling that normally generates this error.
+        if (drive.folder === undefined) {
+            return driveEmptyError();
+        }
+
         const filePath = new TubeHostFilePath(this.volume, false, driveName, true, this.current.dir, false, drive.folder);
         this.log?.pn(`THs getCAT: filePath=${filePath}`);
         return await this.volume.type.getCAT(filePath, this, this.log);
@@ -1317,6 +1324,10 @@ class TubeHostType implements beebfs.IFSType {
         let serverFolder: VolRelPath | undefined;
         if (tubeHostState !== undefined) {
             serverFolder = tubeHostState.mustGetDriveStateByName(drive).folder;
+            if (serverFolder === undefined) {
+                // Is this the right place to do this?
+                return driveEmptyError();
+            }
         }
 
         let dirExplicit: boolean;
