@@ -167,9 +167,9 @@ async function scanTubeHostFolder(folderPath: AbsPath, log: utils.Log | undefine
             } else {
                 const index = getDiskNameIndex(ent.name);
                 if (index === undefined) {
-                    disks.push({ index: -1, name: ent.name });
+                    disks.push({ index: -1, prefixIndex: undefined, name: ent.name });
                 } else {
-                    disks.push({ index, name: ent.name });
+                    disks.push({ index, prefixIndex: index, name: ent.name });
 
                     if (maxIndex === undefined || index > maxIndex) {
                         maxIndex = index;
@@ -196,7 +196,11 @@ async function scanTubeHostFolder(folderPath: AbsPath, log: utils.Log | undefine
 
             log.pn(`${disks.length} disks(s):`);
             for (let i = 0; i < disks.length; ++i) {
-                log.pn(`  ${i}. Index=${disks[i].index}, name=\`\`${disks[i].name}''`);
+                log.p(`  ${i}. Index=${disks[i].index}`);
+                if (disks[i].prefixIndex !== undefined) {
+                    log.p(` (prefix: ${disks[i].prefixIndex})`);
+                }
+                log.pn(`, name=\`\`${disks[i].name}''`);
             }
         } finally {
             log.out();
@@ -210,7 +214,13 @@ async function scanTubeHostFolder(folderPath: AbsPath, log: utils.Log | undefine
 /////////////////////////////////////////////////////////////////////////
 
 interface ITubeHostDisk {
+    // Index for *DIN shorthand purposes.
     index: number;
+
+    // Index from the file name, if present. Used to auto-insert disks on
+    // startup.
+    prefixIndex: number | undefined;
+
     name: string;
 }
 
@@ -411,8 +421,8 @@ class TubeHostState implements beebfs.IFSState {
             const folder = await this.scanCurrentFolder();
 
             for (const disk of folder.disks) {
-                if (disk.index >= 0 && disk.index < 10) {
-                    this.din(this.drives[disk.index], disk.name);
+                if (disk.prefixIndex !== undefined && disk.prefixIndex >= 0 && disk.prefixIndex < 10) {
+                    this.din(this.drives[disk.prefixIndex], disk.name);
                 }
             }
 
