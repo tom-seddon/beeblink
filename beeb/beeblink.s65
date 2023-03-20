@@ -3796,8 +3796,11 @@ old_escape_mode: .fill 1
                 lda #$77        ;close SPOOL/EXEC files
                 jsr osbyte
 
-                lda #26         ;restore default text + graphics windows
-                jsr oswrch
+                jsr pcprint
+                .text 26        ;restore default text+graphics windows
+                .text 12        ;CLS
+                .text 'Please wait...'
+                .text 255
 
                 lda #5
                 jsr set_payload_counter
