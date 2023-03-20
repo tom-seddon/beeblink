@@ -1,4 +1,11 @@
 #+STARTUP: overview
+
+My favourite command lines:
+
+#+begin_example
+  --tube-host ~/github/beeblink/volumes/beeblink_tubehost_tests --tube-host ~/transfer/tubehost --default-volume beeblink_dfs_tests
+#+end_example
+
 * Random notes
 
 Brain dump that's on GitHub so I have a backup.
@@ -955,3 +962,4 @@ Parasite<->server: 245,760 bytes in 10 tests
 | HRESET   |        |                             |
 | IAM/I AM |        | probably won't add this     |
 | VERSION  |        | covered by *BLVERSION       |
+
