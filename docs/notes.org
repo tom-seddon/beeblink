@@ -127,10 +127,10 @@ Server->BBC:
 
 So 30N+3 for N unrolls, or 2e6/((30*N+3)/N). For 1 page:
 
-1x = 59.19KBytes/sec
-2x = 62.00KBytes/sec
-4x = 63.52KBytes/sec
-8x = 64.30KBytes/sec
+- 1x = 59.19KBytes/sec
+- 2x = 62.00KBytes/sec
+- 4x = 63.52KBytes/sec
+- 8x = 64.30KBytes/sec
 
 Parasite throughput will be a bit faster in each case since there's no
 need for indexing. But it's 10uS/byte so peak throughput is 100,000
@@ -140,12 +140,12 @@ bytes/sec.
 
 as at 3d8d71fef08f9e7c457b5f600f50e98f09ba6fed:
 
-SERVER: Host<->server: 116,736 bytes in 4 tests
-SERVER:   Send: 50.89 KBytes/sec
-SERVER:   Recv: 45.42 KBytes/sec
-SERVER: Parasite<->server: 122,880 bytes in 4 tests
-SERVER:   Send: 54.05 KBytes/sec
-SERVER:   Recv: 47.43 KBytes/sec
+: SERVER: Host<->server: 116,736 bytes in 4 tests
+: SERVER:   Send: 50.89 KBytes/sec
+: SERVER:   Recv: 45.42 KBytes/sec
+: SERVER: Parasite<->server: 122,880 bytes in 4 tests
+: SERVER:   Send: 54.05 KBytes/sec
+: SERVER:   Recv: 47.43 KBytes/sec
 
 ** Parasite pagewise send tweak
 
@@ -154,12 +154,12 @@ There are obvious minor inefficiencies here.
 Store VIA IFR mask in A, use BIT to test IFR, and X to store the byte.
 Save 2 cycles each time.
 
-SERVER: Host<->server: 112,640 bytes in 4 tests
-SERVER:   Send: 50.93 KBytes/sec
-SERVER:   Recv: 45.45 KBytes/sec
-SERVER: Parasite<->server: 122,880 bytes in 4 tests
-SERVER:   Send: 60.30 KBytes/sec
-SERVER:   Recv: 47.24 KBytes/sec
+: SERVER: Host<->server: 112,640 bytes in 4 tests
+: SERVER:   Send: 50.93 KBytes/sec
+: SERVER:   Recv: 45.45 KBytes/sec
+: SERVER: Parasite<->server: 122,880 bytes in 4 tests
+: SERVER:   Send: 60.30 KBytes/sec
+: SERVER:   Recv: 47.24 KBytes/sec
 
 Conclusion: yes.
 
@@ -167,39 +167,39 @@ Conclusion: yes.
 
 Unroll 2x (no branch tweaks required)
 
-SERVER: Host<->server: 116,736 bytes in 4 tests
-SERVER:   Send: 50.89 KBytes/sec
-SERVER:   Recv: 45.24 KBytes/sec
-SERVER: Parasite<->server: 122,880 bytes in 4 tests
-SERVER:   Send: 62.18 KBytes/sec
-SERVER:   Recv: 46.88 KBytes/sec
+: SERVER: Host<->server: 116,736 bytes in 4 tests
+: SERVER:   Send: 50.89 KBytes/sec
+: SERVER:   Recv: 45.24 KBytes/sec
+: SERVER: Parasite<->server: 122,880 bytes in 4 tests
+: SERVER:   Send: 62.18 KBytes/sec
+: SERVER:   Recv: 46.88 KBytes/sec
 
 Unroll 4x (no branch tweaks required)
 
-SERVER: Host<->server: 116,736 bytes in 4 tests
-SERVER:   Send: 50.89 KBytes/sec
-SERVER:   Recv: 45.24 KBytes/sec
-SERVER: Parasite<->server: 122,880 bytes in 4 tests
-SERVER:   Send: 63.83 KBytes/sec
-SERVER:   Recv: 47.43 KBytes/sec
+: SERVER: Host<->server: 116,736 bytes in 4 tests
+: SERVER:   Send: 50.89 KBytes/sec
+: SERVER:   Recv: 45.24 KBytes/sec
+: SERVER: Parasite<->server: 122,880 bytes in 4 tests
+: SERVER:   Send: 63.83 KBytes/sec
+: SERVER:   Recv: 47.43 KBytes/sec
 
 Unroll 8x (with branch tweaks)
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 50.80 KBytes/sec
-SERVER:   Recv: 45.24 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 63.69 KBytes/sec
-SERVER:   Recv: 47.39 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 50.80 KBytes/sec
+: SERVER:   Recv: 45.24 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 63.69 KBytes/sec
+: SERVER:   Recv: 47.39 KBytes/sec
 
 Unroll 16x (with branch tweaks)
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 50.98 KBytes/sec
-SERVER:   Recv: 45.31 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 63.56 KBytes/sec
-SERVER:   Recv: 47.39 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 50.98 KBytes/sec
+: SERVER:   Recv: 45.31 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 63.56 KBytes/sec
+: SERVER:   Recv: 47.39 KBytes/sec
 
 Conclusion: stick with 4x.
 
@@ -211,30 +211,30 @@ call USB_USBTsask.)
 
 Unroll 4x (no branch tweaks required):
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 70.72 KBytes/sec
-SERVER:   Recv: 58.40 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 71.43 KBytes/sec
-SERVER:   Recv: 59.76 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 70.72 KBytes/sec
+: SERVER:   Recv: 58.40 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 71.43 KBytes/sec
+: SERVER:   Recv: 59.76 KBytes/sec
 
 Unroll 8x (with branch tweaks):
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 70.37 KBytes/sec
-SERVER:   Recv: 58.40 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 70.75 KBytes/sec
-SERVER:   Recv: 59.64 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 70.37 KBytes/sec
+: SERVER:   Recv: 58.40 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 70.75 KBytes/sec
+: SERVER:   Recv: 59.64 KBytes/sec
 
 Unroll 16x (with branch tweaks):
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 70.72 KBytes/sec
-SERVER:   Recv: 58.40 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 70.92 KBytes/sec
-SERVER:   Recv: 60.00 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 70.72 KBytes/sec
+: SERVER:   Recv: 58.40 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 70.92 KBytes/sec
+: SERVER:   Recv: 60.00 KBytes/sec
 
 Conclusion: this is a good change.
 
@@ -243,41 +243,41 @@ Conclusion: this is a good change.
 Store VIA IFR mask in A, use BIT to test IFR, and X to store the byte.
 Save 2 cycles each time.
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 70.54 KBytes/sec
-SERVER:   Recv: 58.28 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 71.26 KBytes/sec
-SERVER:   Recv: 63.83 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 70.54 KBytes/sec
+: SERVER:   Recv: 58.28 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 71.26 KBytes/sec
+: SERVER:   Recv: 63.83 KBytes/sec
 
 ** Parasite pagewise recv unroll
 
 Unroll 2x (no branch tweaks required):
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 70.90 KBytes/sec
-SERVER:   Recv: 58.52 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 71.26 KBytes/sec
-SERVER:   Recv: 67.72 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 70.90 KBytes/sec
+: SERVER:   Recv: 58.52 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 71.26 KBytes/sec
+: SERVER:   Recv: 67.72 KBytes/sec
 
 Unroll 4x (no branch tweaks required):
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 70.37 KBytes/sec
-SERVER:   Recv: 58.28 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 70.92 KBytes/sec
-SERVER:   Recv: 66.37 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 70.37 KBytes/sec
+: SERVER:   Recv: 58.28 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 70.92 KBytes/sec
+: SERVER:   Recv: 66.37 KBytes/sec
 
 Unroll 8x (with branch tweaks):
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 70.54 KBytes/sec
-SERVER:   Recv: 58.52 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 70.92 KBytes/sec
-SERVER:   Recv: 67.26 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 70.54 KBytes/sec
+: SERVER:   Recv: 58.52 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 70.92 KBytes/sec
+: SERVER:   Recv: 67.26 KBytes/sec
 
 Unroll 16x not reliably any quicker.
 
@@ -288,41 +288,41 @@ Conclusion: 2x = good.
 Make sure it's exactly 48 cycles in the fastest route through. Result
 appears to be noise.
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 70.54 KBytes/sec
-SERVER:   Recv: 58.40 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 70.92 KBytes/sec
-SERVER:   Recv: 68.03 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 70.54 KBytes/sec
+: SERVER:   Recv: 58.40 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 70.92 KBytes/sec
+: SERVER:   Recv: 68.03 KBytes/sec
 
 ** Tweak parasite stragglers send loop
 
 Ditto. Pretty sure this difference is just noise...
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 70.72 KBytes/sec
-SERVER:   Recv: 58.16 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 71.09 KBytes/sec
-SERVER:   Recv: 67.87 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 70.72 KBytes/sec
+: SERVER:   Recv: 58.16 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 71.09 KBytes/sec
+: SERVER:   Recv: 67.87 KBytes/sec
 
 ** Tweak host send pagewise loop
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 70.90 KBytes/sec
-SERVER:   Recv: 58.40 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 70.90 KBytes/sec
+: SERVER:   Recv: 58.40 KBytes/sec
 
 Unroll 2x
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 76.61 KBytes/sec
-SERVER:   Recv: 58.40 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 76.61 KBytes/sec
+: SERVER:   Recv: 58.40 KBytes/sec
 
 Unroll 4x
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 73.83 KBytes/sec
-SERVER:   Recv: 58.40 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 73.83 KBytes/sec
+: SERVER:   Recv: 58.40 KBytes/sec
 
 Conclusion: 2x = good
 
@@ -330,21 +330,21 @@ Conclusion: 2x = good
 
 Unroll 2x
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 76.82 KBytes/sec
-SERVER:   Recv: 60.25 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 76.82 KBytes/sec
+: SERVER:   Recv: 60.25 KBytes/sec
 
 Unroll 4x
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 76.61 KBytes/sec
-SERVER:   Recv: 61.29 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 76.61 KBytes/sec
+: SERVER:   Recv: 61.29 KBytes/sec
 
 Unroll 8x
 
-SERVER: Host<->server: 291,840 bytes in 10 tests
-SERVER:   Send: 76.82 KBytes/sec
-SERVER:   Recv: 61.29 KBytes/sec
+: SERVER: Host<->server: 291,840 bytes in 10 tests
+: SERVER:   Send: 76.82 KBytes/sec
+: SERVER:   Recv: 61.29 KBytes/sec
 
 Conclusion: 4x = good
 
@@ -355,24 +355,24 @@ fat there.
 
 Before:
 
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 71.09 KBytes/sec
-SERVER:   Recv: 67.87 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 71.09 KBytes/sec
+: SERVER:   Recv: 67.87 KBytes/sec
 
 One pair per iteration:
 
-SERVER: Parasite<->server: 309,750 bytes in 10 tests
-SERVER:   Send: 62.63 KBytes/sec
-SERVER:   Recv: 69.06 KBytes/sec
+: SERVER: Parasite<->server: 309,750 bytes in 10 tests
+: SERVER:   Send: 62.63 KBytes/sec
+: SERVER:   Recv: 69.06 KBytes/sec
 
 Unroll 2x:
 
-SERVER: Host<->server: 294,390 bytes in 10 tests
-SERVER:   Send: 77.28 KBytes/sec
-SERVER:   Recv: 61.69 KBytes/sec
-SERVER: Parasite<->server: 309,750 bytes in 10 tests
-SERVER:   Send: 62.37 KBytes/sec
-SERVER:   Recv: 68.90 KBytes/sec
+: SERVER: Host<->server: 294,390 bytes in 10 tests
+: SERVER:   Send: 77.28 KBytes/sec
+: SERVER:   Recv: 61.69 KBytes/sec
+: SERVER: Parasite<->server: 309,750 bytes in 10 tests
+: SERVER:   Send: 62.37 KBytes/sec
+: SERVER:   Recv: 68.90 KBytes/sec
 
 Not going to bother doing any more with this. The code is still there,
 just toggled out.
@@ -381,38 +381,38 @@ just toggled out.
 
 Before (I think - reconstituted from the above):
 
-SERVER: Host<->server: 294,390 bytes in 10 tests
-SERVER:   Send: 77.28 KBytes/sec
-SERVER:   Recv: 61.69 KBytes/sec
-SERVER: Parasite<->server: 307,200 bytes in 10 tests
-SERVER:   Send: 71.09 KBytes/sec
-SERVER:   Recv: 67.87 KBytes/sec
+: SERVER: Host<->server: 294,390 bytes in 10 tests
+: SERVER:   Send: 77.28 KBytes/sec
+: SERVER:   Recv: 61.69 KBytes/sec
+: SERVER: Parasite<->server: 307,200 bytes in 10 tests
+: SERVER:   Send: 71.09 KBytes/sec
+: SERVER:   Recv: 67.87 KBytes/sec
 
 Macroize various bits.
 
-SERVER: Host<->server: 294,390 bytes in 10 tests
-SERVER:   Send: 74.87 KBytes/sec
-SERVER:   Recv: 61.69 KBytes/sec
-SERVER: Parasite<->server: 309,750 bytes in 10 tests
-SERVER:   Send: 81.31 KBytes/sec
-SERVER:   Recv: 68.90 KBytes/sec
+: SERVER: Host<->server: 294,390 bytes in 10 tests
+: SERVER:   Send: 74.87 KBytes/sec
+: SERVER:   Recv: 61.69 KBytes/sec
+: SERVER: Parasite<->server: 309,750 bytes in 10 tests
+: SERVER:   Send: 81.31 KBytes/sec
+: SERVER:   Recv: 68.90 KBytes/sec
 
 Macroize *everything*. Not sure this does much for the readability,
 but it doesn't hurt the speed...
 
-SERVER: Host<->server: 294,390 bytes in 10 tests
-SERVER:   Send: 78.12 KBytes/sec
-SERVER:   Recv: 61.96 KBytes/sec
-SERVER: Parasite<->server: 309,750 bytes in 10 tests
-SERVER:   Send: 84.26 KBytes/sec
-SERVER:   Recv: 69.22 KBytes/sec
+: SERVER: Host<->server: 294,390 bytes in 10 tests
+: SERVER:   Send: 78.12 KBytes/sec
+: SERVER:   Recv: 61.96 KBytes/sec
+: SERVER: Parasite<->server: 309,750 bytes in 10 tests
+: SERVER:   Send: 84.26 KBytes/sec
+: SERVER:   Recv: 69.22 KBytes/sec
 
 Rough figures:
 
-Host send = 2000000/(78.12*1024) = 25 cycles/bytes
-Host recv = 2000000/(61.96*1024) = 31.5 cycles/byte
-Parasite send = 2000000/(84.26*1024) = 23.2 cycles/byte
-Parasite recv = 2000000/(69.22*1024) = 28.2 cycles/byte
+- Host send = 2000000/(78.12*1024) = 25 cycles/bytes
+- Host recv = 2000000/(61.96*1024) = 31.5 cycles/byte
+- Parasite send = 2000000/(84.26*1024) = 23.2 cycles/byte
+- Parasite recv = 2000000/(69.22*1024) = 28.2 cycles/byte
 
 Since the host recv case hardly improved due to the AVR code tweaks,
 the limit is presumably the 6502 code in that case. (Not sure there's
@@ -429,12 +429,12 @@ suspicious. Is there a bit more to be squeezed out here?
 
 Add fast path for non-verbose large transfers:
 
-SERVER: Host<->server: 294,390 bytes in 10 tests
-SERVER:   Send: 78.55 KBytes/sec
-SERVER:   Recv: 61.83 KBytes/sec
-SERVER: Parasite<->server: 309,750 bytes in 10 tests
-SERVER:   Send: 85.69 KBytes/sec
-SERVER:   Recv: 69.06 KBytes/sec
+: SERVER: Host<->server: 294,390 bytes in 10 tests
+: SERVER:   Send: 78.55 KBytes/sec
+: SERVER:   Recv: 61.83 KBytes/sec
+: SERVER: Parasite<->server: 309,750 bytes in 10 tests
+: SERVER:   Send: 85.69 KBytes/sec
+: SERVER:   Recv: 69.06 KBytes/sec
 
 2000000/(85.69*1024) = 22.8 cycles/byte
 
@@ -480,13 +480,14 @@ Stardot thread: https://stardot.org.uk/forums/viewtopic.php?f=3&t=14398
 
 Int Tube:
 
-H: S 10.78 R 13.10
-P: S 10.97 R 13.50
+: H: S 10.78 R 13.10
+: P: S 10.97 R 13.50
 
 Ext Tube:
 
-H: S 12.75 R 17.20
-P: S 13.03 R 17.87
+: H: S 12.75 R 17.20
+: P: S 13.03 R 17.87
+
 * UPURS
 
 https://stardot.org.uk/forums/viewtopic.php?f=12&t=3114&start=120#p32581 - routines 
@@ -666,7 +667,6 @@ CDx appears to be the data bus? - comes from IC26 (CF30049).
 
 - 5 pin domino DIN plug :: https://cpc.farnell.com/deltron-enclosures/611-0520/5-pin-domino-black-din-plug/dp/CN00054
 - DB9 socket :: https://cpc.farnell.com/multicomp/mc-dppk9-s-sdr-k/d-sub-connector-rcpt-9pos-solder/dp/CN21799
-- 
 
 * Disk image notes
 
