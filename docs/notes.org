@@ -1015,7 +1015,7 @@ Status:
 - UPURS: implemented
 
 Test program is in the repo, ~:1.$.BPUT1~ in the BeebLink volume.
-~1400 BPUTs/sec on Master 128.
+~1,600 BPUTs/sec on Master 128.
 
 *** OSBPUT requests have a 2-byte payload
 

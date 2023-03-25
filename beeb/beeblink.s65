@@ -2073,7 +2073,7 @@ link_ok:
                 jsr set_payload_counter
                 
                 lda #REQUEST_RESET
-                jsr send_request_n_without_restart
+                jsr send_request_n_with_restart
 
                 ; reset type
                 txa
@@ -2092,7 +2092,7 @@ link_ok:
                 jsr set_payload_counter
 
                 lda #REQUEST_SET_FILE_HANDLE_RANGE
-                jsr send_request_n_without_restart
+                jsr send_request_n_with_restart
 
                 lda #blfs_first_handle
                 jsr send_payload_byte

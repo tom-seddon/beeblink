@@ -406,8 +406,13 @@ prepare for sending the given number of payload bytes.
 
 If it's possible to check the link status reasonably quickly
 (milliseconds...), `link_begin_send_with_restart` should do that, and
-re-initialise the link if anything has gone wrong. If the reinitialise
-fails, return with carry set as per `link_startup`.
+re-initialise the link if anything has gone wrong, returning with
+carry clear. If the reinitialise fails, return with carry set as per
+`link_startup`.
+
+`link_begin_send_with_restart` could also initialise values in
+`link_workspace` for subsequent use by
+`link_begin_send_without_restart`.
 
 The FS uses the `_with_restart` entry point for pretty much every
 request, except for a few where throughput is important or the risk of
@@ -415,9 +420,6 @@ programs having trampled on the relevant hardware is low:
 
 - `OSBPUT`/`OSBGET`/`EOF#` (performance in a loop is bad enough as it
   stands, no point making it worse...),
-
-- BLFS init (which immediately follows a `link_startup` - no point
-  redoing it)
 
 - some of the `*` command stuff (if it's happening, it was because the
   server responded to a `REQUEST_STAR_COMMAND`, so the link is good)

@@ -159,7 +159,7 @@ startup_sync_counter: .fill 1
 ;-------------------------------------------------------------------------
 
                 .section link_workspace
-                ; bit 7 set if M128, using internal Tube.
+; bit 7 set if M128, using internal Tube.
 link_itu: .fill 1
 link_old_y: .fill 1
 link_value: .fill 1
@@ -169,7 +169,7 @@ link_transfer_thunk: .fill 3    ;$4C, LSB, MSB
 link_debug_buffer_ptr: .fill 2
                 .endif
                 .endsection link_workspace
-                
+
 ;-------------------------------------------------------------------------
 ; Check if ACCCON ITU needs resetting to access the FTDI device.
 ;
@@ -506,17 +506,31 @@ sync_timed_out_2:
 sync_timed_out_3:
                 .text 'Sync timeout (step 3)',0
                 .endblock
-                
+
 ;-------------------------------------------------------------------------
 ;
-; Begin send.
-; 
-begin_send: .proc
+; Begin send (with restart).
+;
+; The restart process for Tube Serial involves setting up the ITU
+; flag.
+;
+begin_send_with_restart: .proc
                 pha             ;save packet type
 
                 ; sort out ITU flag
                 jsr is_itu
                 sta link_itu
+
+                pla             ;restore packet type
+                jmp begin_send_without_restart
+                .endproc
+                
+;-------------------------------------------------------------------------
+;
+; Begin send (no restart). Assumes link_itu was already set up.
+; 
+begin_send_without_restart: .proc
+                pha             ;save packet type
 
                 .if send_1_byte_messages
                 
@@ -1718,8 +1732,8 @@ link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL
                 
 link_unprepare=tube_serial.unprepare
 
-link_begin_send_without_restart=tube_serial.begin_send
-link_begin_send_with_restart=tube_serial.begin_send
+link_begin_send_without_restart=tube_serial.begin_send_without_restart
+link_begin_send_with_restart=tube_serial.begin_send_with_restart
 
 link_begin_recv=tube_serial.begin_recv
                 
