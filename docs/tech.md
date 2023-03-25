@@ -57,7 +57,7 @@ Non-goals:
 1. Server->client requests. The client is strictly a client, and can
    only accept data in response to a request it's made of the server.
    
-   (For some link types this is just too difficult to arrange.)
+   (For some link types, there's no interrupt option.)
    
 2. Gracefully handling server disconnection.
 
@@ -110,18 +110,45 @@ Request types are 7-bit numbers, divided up as follows:
 - $70...$7e - reserved for additional future expansion
 - $7f - always invalid
 
-Three notes:
+Response types are 7-bit numbers, divided up as follows:
+
+- $00 - reserved
+- $01...$7f - ordinary response, sent in response to an ordinary
+  request
+
+Response type $04 is the error response, indicating that the BBC
+should produce a BRK message containin the supplied text.
+
+Notes:
 
 - text produced by the server is retrieved in parts, one
   request/response per part. Each part is buffered on the stack, then
   printed out, so that there's never a request/response in flight when
   `OSWRCH` is called. This ensures you can spool server output
 
-- any request can always return ERROR. The request/response routine in
-  the ROM looks after this by automatically issuing an appropriate BRK
+- any non-fire-and-forget request can always return ERROR. The
+  request/response routine in the ROM looks after this by
+  automatically issuing an appropriate BRK
   
 - the HTTP link type doesn't support fire-and-forget requests yet
-  
+
+- the request/response type values are entirely arbitrary, and in no
+  particular order. They're just assigned in the order I wrote the
+  code for them
+
+## Versioning
+
+There isn't any versioning mechanism, other than being a bit careful.
+
+## Message sub-types
+
+Some of the earlier message types have 2-layer type mechanism, with
+the first byte of the payload being a kind of message sub-type. The
+idea here was to avoid exhausting the 7-bit message type space.
+
+But it looks like there's little danger of this, and it's a bit more
+hassle to code. So the later message types don't do this.
+
 # Link types
 
 There are two supported link types: HTTP, and serial (which covers
@@ -162,9 +189,6 @@ These serial link types are quite different from the Beeb side (see
 the driver code: [tube_serial.s65](../rom/tube_serial.s65),
 [upurs.s65](../rom/upurs.s65)), but they're treated the same on the
 server as they present themselves as USB COM ports.
-
-The physical message format is broadly the same as the logical message
-format.
 
 The only fiddly part about supporting the serial link is handling
 resets. There's no out-of-band mechanism for closing the connection,

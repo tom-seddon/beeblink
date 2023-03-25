@@ -32,24 +32,6 @@
 // To keep everything in one place, this also includes constants for the
 // AVR-specific bits that don't apply to the server.
 //
-// Notes
-// -----
-//
-// - These constants are not in any rational order. I just added each one as I
-//   found the need for it and/or got round to writing it
-//
-// - Requests don't mention ERROR as a possible response, because the server can
-//   always send it back in response to anything
-//
-// - The upgrade/versioning path is not super awesome: it basically consists of
-//   adding further bytes to payloads, never removing bytes from payloads, or
-//   dropping support for certain request/response types
-//
-// - I started out with this 2-level type/sub-type arrangement in a couple of
-//   places, to try to avoid request/response type exhaustion. But there appears
-//   to be actually no real risk of running out, so I haven't bothered doing
-//   this with later features
-//
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -406,8 +388,7 @@ export const REQUEST_WRITE_DISK_IMAGE = 0x22;
 // (If an error is produced, that's a bug. The server logs the error and
 // discards it.)
 //
-// P = handle; byte
-// or, P = byte (and handle is the same as the previous OSBPUT)
+// P = handle; byte or, P = byte (and handle is the same as the previous OSBPUT)
 export const REQUEST_OSBPUT_FNF = 0x60;
 
 /////////////////////////////////////////////////////////////////////////

@@ -963,3 +963,99 @@ Parasite<->server: 245,760 bytes in 10 tests
 | IAM/I AM |        | probably won't add this     |
 | VERSION  |        | covered by *BLVERSION       |
 
+
+* OSBGET/OSBPUT throughput
+
+There's 1 byte per request/response - link latency is an issue!
+
+So it's absolutely terrible over HTTP, of course.
+
+With the Tube Serial device, the packets are too small to fill the
+FIFO, and there's no way to flush. So nothing gets sent until the
+latency timer expires. 1 ms is the lowest this can be set to, equating
+to a 2 ms round trip time and therefore ~500 bytes/sec. (The default
+is 16 ms! You won't even get 50 bytes/second.)
+
+Haven't done much testing with UPURS, but something similar will apply
+as the FTDI serial widget will probably have its own little buffer.
+
+** Fixing OSBPUT
+
+OSBPUT errors with BeebLink are predictable. Files open for random
+access are buffered in RAM on the server, so the only error possible
+is ~File too big~ when exceeding the 16 MB limit.
+
+So, in response to an OSBPUT request, return a counter indicating how
+many additional OSBPUTs could definitely be performed without
+encountering an error: 0 to 255.
+
+Store this off on the client, along with the file handle in question.
+
+If the next OSBPUT call is for the same handle, and the counter
+indicates that it will definitely succeed, send the request as a
+fire-and-forget OSBPUT type. No need to wait for a response, so the
+latency timer has much less of an effect.
+
+Otherwise, perform a standard OSBPUT, possibly getting an error in
+response (but hopefully just another count), and repeat the process.
+
+To simplify the implementation, the ROM only handles repeated streams
+of OSBPUT requests. Any other type of request resets the handle and
+the counter, so the next OSBPUT will involve a round trip.
+
+This covers the case of doing BPUT in a loop and no other FS requests,
+but there are some cases that don't work as well as they should - on
+the other hand, those would be bottlenecked by the intervening
+requests anyway.
+
+Status:
+
+- HTTP: not implemented (fire-and-forget requests not supported)
+- Tube Serial: implemented 
+- UPURS: implemented
+
+Test program is in the repo, ~:1.$.BPUT1~ in the BeebLink volume.
+~1400 BPUTs/sec on Master 128.
+
+*** OSBPUT requests have a 2-byte payload
+
+Still an issue! A 2-byte payload means transmitting 6 bytes. Could
+book 16 contiguous request codes, corresponding to the 16 handles, so
+then it's 2 bytes.
+
+I haven't done this yet, as eliminating the round trip time provided a
+useful enough speedup to be getting on with.
+
+** Fixing OSBGET
+
+The BeebLink protocol is strictly request-response, so the server
+never sends data in advance. But the Tube Serial device has a 4 KB
+FIFO in the PC->BBC direction, so, if the client were expecting it,
+the server could actually do that.
+
+This suggests a potential approach: 
+
+On the server, in response to OSBGET, send more than one (how many?)
+OSBGET responses, possibly including a terminating OSBGET_EOF,
+covering the byte requested and the bytes coming up. The client will
+consume one and the rest will remain in the FIFO.
+
+On the client, when doing OSBGET, if the last request was OSBGET for
+the requested handle, check the FIFO. If it's empty, send an OSBGET
+request, note the handle, and await response. Otherwise, check the
+buffered-up message. If it's OSBGET/OSBGET_EOF, it's the response,
+immediately! If it's anything else, that's a protocol error.
+
+On the client, when doing non-OSBGET, check the FIFO before sending
+the message. If there's anything in it, drain it before starting,
+checking that it's OSBGET/OSBGET_EOF messages that are being received.
+Anything else encountered is a protocol error.
+
+Status:
+
+- HTTP: not yet implemented - protocol will need extending as
+  currently the BeebLink message payload length is inferred from the
+  HTTP message payload length
+- Tube Serial: not yet implemented
+- UPURS: might actually be possible, as there's a smallish Beeb-side
+  recv buffer? So, with a bit of care...
