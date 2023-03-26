@@ -375,7 +375,7 @@ export class Log {
         this.p('\n');
     }
 
-    public dumpBuffer(data: Buffer, maxNumLines?: number): void {
+    public dumpBuffer(data: Buffer | number[], maxNumLines?: number): void {
         if (!this.enabled) {
             // this function does enough stuff that it's probably worth
             // skipping...
@@ -405,7 +405,7 @@ export class Log {
         }
     }
 
-    private dumpBufferLine(data: Buffer, i: number, numColumns: number): void {
+    private dumpBufferLine(data: Buffer | number[], i: number, numColumns: number): void {
         this.p(hex8(i));
         this.p(':');
 
@@ -535,7 +535,7 @@ export function hex8(n: number): string {
 /////////////////////////////////////////////////////////////////////////
 
 export function hexdec(n: number): string {
-    return n.toString(10) + ' (0x' + n.toString(16) + ')';
+    return `${n.toString(10)} (0x${n.toString(16)})`;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -543,7 +543,7 @@ export function hexdec(n: number): string {
 
 export function hexdecch(n: number): string {
     if (n >= 32 && n < 127) {
-        return hexdec(n) + '(\'' + String.fromCharCode(n) + '\')';
+        return `${ hexdec(n) } ('${String.fromCharCode(n)}')`;
     } else {
         return hexdec(n);
     }
@@ -969,10 +969,10 @@ export function getDateString(d: Date): string {
     const year = d.getFullYear();
 
     function d2(n: number): string {
-        return `${Math.floor(n / 10) % 10}${(n | 0) % 10}`;
+        return `${ Math.floor(n / 10) % 10 }${ (n | 0) % 10 } `;
     }
 
-    return `${d2(year / 100)}${d2(year)}-${d2(1 + d.getMonth())}-${d2(1 + d.getDate())} ${d2(d.getHours())}:${d2(d.getMinutes())}:${d2(d.getSeconds())}`;
+    return `${ d2(year / 100) }${ d2(year) } -${ d2(1 + d.getMonth()) } -${ d2(1 + d.getDate()) } ${ d2(d.getHours()) }:${ d2(d.getMinutes()) }:${ d2(d.getSeconds()) } `;
 }
 
 /////////////////////////////////////////////////////////////////////////

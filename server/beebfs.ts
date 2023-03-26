@@ -1359,6 +1359,45 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    // If EOF, returns [] (exit OSBGET with C=1) or raises an error.
+    //
+    // Otherwise, returns 1 byte, plus the read-ahead bytes. (The read-ahead
+    // bytes are in addition, so when maxNumReadaheadBytes===0, 1 byte in total
+    // is returned.)
+    public OSBGETWithReadahead(handle: number, maxNumReadaheadBytes: number): number[] {
+        // Defer to OSBGET for the first byte. This will also cover the two EOF
+        // cases.
+        const firstResult = this.OSBGET(handle);
+        if (firstResult === undefined) {
+            return [];
+        }
+
+        const openFile = this.mustBeOpen(this.getOpenFileByHandle(handle));
+
+        const bytes = [firstResult];
+        for (let i = openFile.ptr; i < openFile.contents.length && bytes.length < 1 + maxNumReadaheadBytes; ++i) {
+            bytes.push(openFile.contents[i]);
+        }
+
+        return bytes;
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public OSBGETConsumeReadahead(handle: number): void {
+        const openFile = this.mustBeOpen(this.getOpenFileByHandle(handle));
+
+        if (openFile.ptr < openFile.contents.length) {
+            ++openFile.ptr;
+        } else {
+            return errors.generic(`EOF in readahead`);
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     public OSBPUT(handle: number, byte: number): number {
         const openFile = this.mustBeOpen(this.getOpenFileByHandle(handle));
 
@@ -1671,7 +1710,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async delete(fqn: FQN): Promise<void> {
-        const file = await mustGetBeebFile(fqn, false,this.log);
+        const file = await mustGetBeebFile(fqn, false, this.log);
 
         await this.deleteFile(file);
     }
@@ -1862,7 +1901,7 @@ export class FS {
         attr: FileAttributes | undefined): Promise<OSFILEResult> {
         FS.mustBeWriteableVolume(fqn.filePath.volume);
 
-        const file = await getBeebFile(fqn, false,this.log);
+        const file = await getBeebFile(fqn, false, this.log);
         if (file === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         }

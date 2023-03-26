@@ -398,6 +398,24 @@ Produce wide hex dump of file, for use in 80 column modes.
 Produce wide *INFO output showing server modification time of each
 file. Designed for use in 80 column modes, but readable in 40.
 
+# `*OPT` options
+
+## `*OPT 4,x`
+
+Set the drive's boot option to `x`, where 0 means no boot, 1 means
+`*LOAD !BOOT`, 2 means `*RUN !BOOT` and 3 means `*EXEC !BOOT`.
+
+## `*OPT 240,x`
+
+(only relevant for Tube Serial)
+
+Set the number of OSBGET read-ahead bytes to `x`. The read-ahead bytes
+reduce back-and-forth between Beeb and PC when doing runs of OSBGET
+calls, improving the throughput, at the cost of creating more work if
+some other filing system call is made beween OSBGET calls.
+
+The default is 15.
+
 # `BLCONFIG` options
 
 To switch an option on, use `*BLCONFIG X+`, where `X` is that option's

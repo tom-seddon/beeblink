@@ -16,3 +16,4 @@ $.RTOOL diff=bbcbasic
 $.IMAGER diff=bbcbasic
 $.SELFUPDATE diff=bbcbasic
 $.MENU diff=bbcbasic
+$.BGET1 diff=bbcbasic

@@ -42,6 +42,12 @@ import * as ddosimage from './ddosimage';
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+// 254 is what the Master 128 DFS returns, and who am I to argue?
+const OSBGET_EOF_BYTE = 254;
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 function newResponse(c: number, p?: number | Buffer | utils.BufferBuilder) {
     let data: Buffer;
     if (typeof (p) === 'number') {
@@ -56,6 +62,37 @@ function newResponse(c: number, p?: number | Buffer | utils.BufferBuilder) {
     }
 
     return new Response(c, data);
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export function newErrorResponse(error: errors.BeebError): Response {
+    const builder = new utils.BufferBuilder();
+
+    builder.writeUInt8(0);
+    builder.writeUInt8(error.code);
+    builder.writeString(error.text);
+    builder.writeUInt8(0);
+
+    return newResponse(beeblink.RESPONSE_ERROR, builder);
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// TODO: not sure about this. Should perhaps just go with an array? The type
+// system won't enforce the requirement for at least 1 response, but it'll be
+// more convenient aside from that.
+
+export interface IServerResponse {
+    // The mandatory response for the request.
+    response: Response;
+
+    // Any speculative responses that should be buffered if possible.
+    //
+    // These may get thrown away or ignored, and that just has to be dealt with.
+    speculativeResponses?: Response[];
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -92,20 +129,20 @@ export class Command {
 
 class Handler {
     public readonly name: string;
-    private readonly fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>;
+    private readonly fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response | IServerResponse>;
     private quiet: boolean;
     private fullRequestDump = false;
     private fullResponseDump = false;
     private resetLastOSBPUTHandle: boolean;
 
-    public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response>) {
+    public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response | IServerResponse>) {
         this.name = name;
         this.fun = fun;
         this.quiet = false;
         this.resetLastOSBPUTHandle = true;
     }
 
-    public async call(p: Buffer): Promise<void | string | Buffer | Response> {
+    public async call(p: Buffer): Promise<void | string | Buffer | Response | IServerResponse> {
         return this.fun(this, p);
     }
 
@@ -197,6 +234,7 @@ export class Server {
     private linkSupportsFireAndForgetRequests: boolean;
     private lastOSBPUTHandle: number | undefined;
     private recentVolumes: beebfs.Volume[];
+    private numOSBGETReadaheadBytes: number;
 
     public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, log: utils.Log | undefined, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
         this.romPathByLinkSubtype = romPathByLinkSubtype;
@@ -258,28 +296,53 @@ export class Server {
         this.handlers[beeblink.REQUEST_NEXT_DISK_IMAGE_PART] = new Handler('NEXT_DISK_IMAGE_part', this.handleNextDiskImagePart);
         this.handlers[beeblink.REQUEST_SET_LAST_DISK_IMAGE_OSWORD_RESULT] = new Handler('SET_LAST_DISK_IMAGE_OSWORD_RESULT', this.handleSetLastDiskImageOSWORDResult);
         this.handlers[beeblink.REQUEST_FINISH_DISK_IMAGE_FLOW] = new Handler('FINISH_DISK_IMAGE_FLOW', this.handleFinishDiskImageFlow);
-        this.handlers[beeblink.REQUEST_WRAPPED] = new Handler('REQUEST_WRAPPED', this.handleWrapped);
-        this.handlers[beeblink.REQUEST_READ_DISK_IMAGE] = new Handler('REQUEST_READ_DISK_IMAGE', this.handleReadDiskImage);
-        this.handlers[beeblink.REQUEST_WRITE_DISK_IMAGE] = new Handler('REQUEST_WRITE_DISK_IMAGE', this.handleWriteDiskImage);
+        this.handlers[beeblink.REQUEST_WRAPPED] = new Handler('WRAPPED', this.handleWrapped);
+        this.handlers[beeblink.REQUEST_READ_DISK_IMAGE] = new Handler('READ_DISK_IMAGE', this.handleReadDiskImage);
+        this.handlers[beeblink.REQUEST_WRITE_DISK_IMAGE] = new Handler('WRITE_DISK_IMAGE', this.handleWriteDiskImage);
+        this.handlers[beeblink.REQUEST_OSBGET_WITH_READAHEAD] = new Handler('OSBGET_WITH_READAHEAD', this.handleOSBGETWithReadahead);
 
         if (this.linkSupportsFireAndForgetRequests) {
-            this.handlers[beeblink.REQUEST_OSBPUT_FNF] = new Handler('OSBPUT_FNF', this.handleOSBPUTFireAndForget).withoutResetLastOSBPUTHandle();//.withNoLogging();
+            this.handlers[beeblink.REQUEST_OSBPUT_FNF] = new Handler('OSBPUT_FNF', this.handleOSBPUTFNF).withoutResetLastOSBPUTHandle();//.withNoLogging();
+            this.handlers[beeblink.REQUEST_OSBGET_READAHEAD_CONSUMED_FNF] = new Handler('OSBGET_READAHEAD_CONSUMED_FNF', this.handleOSBGETReadaheadConsumedFNF);
         }
 
         this.log = log;
         this.dumpPackets = dumpPackets;
 
         this.recentVolumes = [];
+
+        // Tested a bunch of values on my system, and this looked like a good
+        // tradeoff.
+        //
+        // Looked kind of marginal past 9 bytes though.
+        this.numOSBGETReadaheadBytes = 15;
     }
 
-    public async handleRequest(request: Request): Promise<Response> {
+    public getLinkSubtype(): number | undefined {
+        return this.linkSubtype;
+    }
+
+    public async handleRequest(request: Request): Promise<IServerResponse> {
         const handler = this.handlers[request.c];
 
         this.dumpPacket(request, handler !== undefined && handler.showFullRequestDump());
 
         const response = await this.handleRequestInternal(handler, request);
 
-        this.dumpPacket(response, handler !== undefined && handler.showFullResponseDump());
+        if (this.dumpPackets) {
+            const showFullResponseDump = handler !== undefined && handler.showFullResponseDump();
+            this.dumpPacket(response.response, showFullResponseDump);
+            if (response.speculativeResponses !== undefined && response.speculativeResponses.length > 0) {
+                this.log?.pn(`${response.speculativeResponses.length} speculative responses:`);
+                for (let i = 0; i < response.speculativeResponses.length; ++i) {
+                    this.log?.withIndent(`${i}. `, () => {
+                        if (response.speculativeResponses !== undefined) {
+                            this.dumpPacket(response.speculativeResponses[i], showFullResponseDump);
+                        }
+                    });
+                }
+            }
+        }
 
         if (handler === undefined || handler.shouldResetLastOSBPUTHandle()) {
             this.lastOSBPUTHandle = undefined;
@@ -315,18 +378,20 @@ export class Server {
         }
     }
 
-    private getResponseForResult(result: void | string | Buffer | Response): Response {
+    private getResponseForResult(result: void | string | Buffer | Response | IServerResponse): IServerResponse {
         if (result === undefined) {
-            return newResponse(beeblink.RESPONSE_YES);
+            return { response: newResponse(beeblink.RESPONSE_YES) };
         } else if (typeof (result) === 'string' || result instanceof Buffer) {
             this.prepareForTextResponse(result);
-            return newResponse(beeblink.RESPONSE_TEXT);
+            return { response: newResponse(beeblink.RESPONSE_TEXT) };
+        } else if (result instanceof Response) {
+            return { response: result };
         } else {
             return result;
         }
     }
 
-    private async handleRequestInternal(handler: Handler | undefined, request: Request): Promise<Response> {
+    private async handleRequestInternal(handler: Handler | undefined, request: Request): Promise<IServerResponse> {
         try {
             if (handler === undefined) {
                 return this.internalError('Unsupported request: &' + utils.hex2(request.c));
@@ -353,14 +418,7 @@ export class Server {
             if (error instanceof errors.BeebError) {
                 this.log?.pn('Error response: ' + error.toString());
 
-                const builder = new utils.BufferBuilder();
-
-                builder.writeUInt8(0);
-                builder.writeUInt8(error.code);
-                builder.writeString(error.text);
-                builder.writeUInt8(0);
-
-                return newResponse(beeblink.RESPONSE_ERROR, builder);
+                return { response: newErrorResponse(error) };
             } else {
                 throw error;
             }
@@ -493,24 +551,6 @@ export class Server {
         return false;
     }
 
-    // // it's a bit wasteful having the list regenerated every time... luckily the
-    // // PC is fast, and the BBC is slow...
-    // //
-    // // Should really do a bit better though.
-    // private getCommands(): Command[] {
-    //     const commands = [];
-
-    //     for (const command of this.commonCommands) {
-    //         commands.push(command);
-    //     }
-
-    //     for (const command of this.bfs.getCommands()) {
-    //         commands.push(command);
-    //     }
-
-    //     return commands;
-    // }
-
     private readonly handleStarCommand = async (handler: Handler, p: Buffer): Promise<Response> => {
         const commandLine = this.initCommandLine(p.toString('binary'));
 
@@ -544,7 +584,7 @@ export class Server {
         if (matchedCommand !== undefined) {
             this.log?.pn('Matched command: ' + matchedCommand.getSyntaxString());
             try {
-                return this.getResponseForResult(await matchedCommand.call(commandLine));
+                return this.getResponseForResult(await matchedCommand.call(commandLine)).response;
             } catch (error) {
                 if (error instanceof errors.BeebError) {
                     if (error.code === 220 && error.text === '') {
@@ -577,7 +617,6 @@ export class Server {
             for (const command of extraCommands) {
                 help += `  ${command.getSyntaxString()}${BNL}`;
             }
-
         }
 
         return help;
@@ -717,14 +756,54 @@ export class Server {
         this.log?.p('Input: handle=' + utils.hexdec(handle) + '; Output: ' + (byte === undefined ? 'EOF' : 'value=' + utils.hexdecch(byte)));
 
         if (byte === undefined) {
-            // 254 is what the Master 128 DFS returns, and who am I to argue?
-            return newResponse(beeblink.RESPONSE_OSBGET_EOF, 254);
+            return newResponse(beeblink.RESPONSE_OSBGET_EOF, OSBGET_EOF_BYTE);
         } else {
             return newResponse(beeblink.RESPONSE_OSBGET, byte);
         }
     };
 
-    private readonly handleOSBPUTFireAndForget = async (handler: Handler, p: Buffer): Promise<void> => {
+    private readonly handleOSBGETWithReadahead = async (handler: Handler, p: Buffer): Promise<IServerResponse> => {
+        this.payloadMustBe(handler, p, 1);
+
+        const handle = p[0];
+
+        // For the serial-type links, each byte's response is 3 bytes.
+        const bytes = this.bfs.OSBGETWithReadahead(handle, this.numOSBGETReadaheadBytes);
+
+        if (bytes.length === 0) {
+            this.log?.pn(`Input: handle=${utils.hexdec(handle)}; Output: EOF`);
+            return { response: newResponse(beeblink.RESPONSE_OSBGET_EOF, OSBGET_EOF_BYTE), };
+        } else {
+            for (let i = 0; i < bytes.length; ++i) {
+                this.log?.pn(`bytes[${i}]=${utils.hexdecch(bytes[i])}`);
+            }
+
+            this.log?.withIndent(`Input: handle=${utils.hexdec(handle)}; Output: `, () => {
+                this.log?.dumpBuffer(bytes);
+            });
+
+            const response: IServerResponse = {
+                response: newResponse(beeblink.RESPONSE_OSBGET, bytes[0]),
+            };
+
+            if (bytes.length > 1) {
+                response.speculativeResponses = [];
+                for (let i = 1; i < bytes.length; ++i) {
+                    response.speculativeResponses.push(newResponse(beeblink.RESPONSE_OSBGET_READAHEAD_SPECULATIVE, bytes[i]));
+                }
+            }
+
+            return response;
+        }
+    };
+
+    private readonly handleOSBGETReadaheadConsumedFNF = async (handler: Handler, p: Buffer): Promise<void> => {
+        this.payloadMustBe(handler, p, 1);
+
+        this.bfs.OSBGETConsumeReadahead(p[0]);
+    };
+
+    private readonly handleOSBPUTFNF = async (handler: Handler, p: Buffer): Promise<void> => {
         let byte: number;
         let handle: number;
         if (p.length === 1) {
@@ -870,7 +949,11 @@ export class Server {
 
         this.log?.pn('*OPT ' + x + ',' + y);
 
-        await this.bfs.OPT(x, y);
+        if (x === beeblink.OPT_SET_OSBGET_READAHEAD_SIZE) {
+            this.numOSBGETReadaheadBytes = y;
+        } else {
+            await this.bfs.OPT(x, y);
+        }
     };
 
     private readonly handleGetBootOption = async (_handler: Handler, _p: Buffer): Promise<Response> => {
@@ -1147,11 +1230,11 @@ export class Server {
 
         const request = new Request(p[0], p.subarray(5));
 
-        let response = await this.handleRequest(request);
+        let response = (await this.handleRequest(request)).response;
 
         if (request.isFireAndForget()) {
             // Sneak in and replace the response.
-            response = new Request(0, Buffer.alloc(0));
+            response = new Response(0, Buffer.alloc(0));
         }
 
         const wrappedSize = Math.min(response.p.length, maxResponsePayloadSize);

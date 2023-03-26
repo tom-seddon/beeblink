@@ -28,11 +28,12 @@ import * as path from 'path';
 import * as assert from 'assert';
 import * as beeblink from './beeblink';
 import * as beebfs from './beebfs';
-import { Server } from './server';
+import * as server from './server';
 import chalk from 'chalk';
 import * as gitattributes from './gitattributes';
 import * as http from 'http';
 import Request from './Request';
+import Response from './Response';
 import { SerialPort } from 'serialport';
 import { PortInfo } from '@serialport/bindings-interface';
 import * as os from 'os';
@@ -1003,12 +1004,13 @@ function getRomPathsForSerial(options: ICommandLineOptions): Map<number, string>
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<Server>): void {
+function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<server.Server>): void {
     if (!options.http) {
         return;
     }
 
-    const serverBySenderId = new Map<string, Server>();
+    // "srv" :( - but "server" is taken...
+    const srvBySenderId = new Map<string, server.Server>();
 
     async function handleHTTPRequest(httpRequest: http.IncomingMessage, httpResponse: http.ServerResponse): Promise<void> {
         async function endResponse(): Promise<void> {
@@ -1070,13 +1072,13 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
             }
 
             // Find the Server for this sender id.
-            let server = serverBySenderId.get(senderId);
-            if (server === undefined) {
-                server = await createServer('HTTP', getRomPathsForAVR(options), false);
-                serverBySenderId.set(senderId, server);
+            let srv = srvBySenderId.get(senderId);
+            if (srv === undefined) {
+                srv = await createServer('HTTP', getRomPathsForAVR(options), false);
+                srvBySenderId.set(senderId, srv);
             }
 
-            const response = await server.handleRequest(new Request(body[0] & 0x7f, body.slice(1)));
+            const response = (await srv.handleRequest(new Request(body[0] & 0x7f, body.slice(1)))).response;
 
             httpResponse.setHeader('Content-Type', 'application/binary');
 
@@ -1144,7 +1146,7 @@ function findUSBDeviceForSerialPort(portInfo: PortInfo): usb.Device | undefined 
     return undefined;
 }
 
-async function setFTDILatencyTimer(portInfo: PortInfo, ms: number, serialLog: utils.Log | undefined): Promise<void> {
+async function setFTDILatencyTimer(portInfo: PortInfo, serialLog: utils.Log | undefined): Promise<void> {
     if (process.platform === 'win32') {
         // When trying to open the device with libusb, the device open
         // fails with LIBUSB_ERROR_UNSUPPORTED. See, e.g.,
@@ -1186,6 +1188,7 @@ async function setFTDILatencyTimer(portInfo: PortInfo, ms: number, serialLog: ut
             const usbDevice: usb.Device = maybeUSBDevice;
 
             try {
+                const ms = 1;
                 process.stderr.write(`${getSerialPortPath(portInfo)}: setting FTDI latency timer to ${ms}ms.\n`);
 
                 usbDevice.open();
@@ -1226,7 +1229,7 @@ async function setFTDILatencyTimer(portInfo: PortInfo, ms: number, serialLog: ut
                 await deviceControlTransfer(usbDevice,
                     FTDI_DEVICE_OUT_REQTYPE,
                     SIO_SET_LATENCY_TIMER_REQUEST,
-                    ms,//1 = 1ms
+                    ms,
                     ftdiIndex,
                     undefined);
 
@@ -1303,6 +1306,7 @@ async function setFTDILatencyTimer(portInfo: PortInfo, ms: number, serialLog: ut
 interface IReadWaiter {
     resolve: (() => void) | undefined;
     reject: ((error: any) => void) | undefined;
+    debug?: string;
 }
 
 // function getPortDescription(portInfo: SerialPort.PortInfo): string {
@@ -1349,7 +1353,7 @@ async function drainPort(port: SerialPort): Promise<void> {
     });
 }
 
-async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortInfo, server: Server): Promise<void> {
+async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortInfo, srv: server.Server): Promise<void> {
     const f = process.stdout;
 
     const serialLog = utils.Log.create(getSerialPortPath(portInfo), f, isSerialDeviceVerbose(portInfo, options.serial_verbose));
@@ -1363,7 +1367,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
     }
 
     if (isSerialPortUSBDevice(portInfo, TUBE_SERIAL_DEVICE) || isSerialPortUSBDevice(portInfo, FTDI_USB_SERIAL_DEVICE)) {
-        await setFTDILatencyTimer(portInfo, 1, serialLog);
+        await setFTDILatencyTimer(portInfo, serialLog);
     }
 
     let readWaiter: IReadWaiter | undefined;
@@ -1420,7 +1424,11 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
             //dataInLog?.pn(`readByte: waiting for more data...`);
 
             await new Promise<void>((resolve, reject): void => {
-                readWaiter = { resolve, reject };
+                if (readWaiter !== undefined) {
+                    throw new Error(`agh1: ${readWaiter.debug}`);
+                }
+
+                readWaiter = { resolve, reject, debug: 'readByte' };
             });
 
             //dataInLog?.pn(`readByte: got some data`);
@@ -1547,63 +1555,87 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                 request = new Request(c, p);
             }
 
-            const response = await server.handleRequest(request);
+            const response = await srv.handleRequest(request);
 
             if (request.isFireAndForget()) {
                 // Do nothing.
                 serialLog?.pn('(Fire-and-forget request - no response)');
             } else {
-                serialLog?.pn(`Sending response 0x${utils.hex2(response.c)} (${utils.getResponseTypeName(response.c)})`);
-                let responseData: Buffer;
 
-                // serialLog.withIndent('response: ', () => {
-                //     serialLog?.pn(`c=0x${utils.hex2(response.c)}`);
-                //     serialLog.withIndent(`p=`, () => {
-                //         serialLog.dumpBuffer(response.p, 10);
-                //     });
-                // });
+                const createResponseData = (r: Response): Buffer => {
+                    let data: Buffer;
 
-                let destIdx = 0;
+                    let i = 0;
 
-                if (response.p.length === 1 && !options.serial_full_size_messages) {
-                    responseData = Buffer.alloc(3);
+                    if (r.p.length === 1 && !options.serial_full_size_messages) {
+                        data = Buffer.alloc(3);
 
-                    responseData[destIdx++] = response.c & 0x7f;
-                    responseData[destIdx++] = response.p[0];
-                    responseData[destIdx++] = 1;//confirmation byte
-                } else {
-                    responseData = Buffer.alloc(1 + 4 + response.p.length + ((response.p.length + 255) >> 8));
+                        data[i++] = r.c & 0x7f;
+                        data[i++] = r.p[0];
+                        data[i++] = 1;//confirmation byte
+                    } else {
+                        data = Buffer.alloc(1 + 4 + r.p.length + ((r.p.length + 255) >> 8));
 
-                    responseData[destIdx++] = response.c | 0x80;
+                        data[i++] = r.c | 0x80;
 
-                    responseData.writeUInt32LE(response.p.length, destIdx);
-                    destIdx += 4;
+                        data.writeUInt32LE(r.p.length, i);
+                        i += 4;
 
-                    for (let srcIdx = 0; srcIdx < response.p.length; ++srcIdx) {
-                        responseData[destIdx++] = response.p[srcIdx];
+                        for (let srcIdx = 0; srcIdx < r.p.length; ++srcIdx) {
+                            data[i++] = r.p[srcIdx];
 
-                        if (getNegativeOffsetLSB(srcIdx, response.p) === 0) {
-                            responseData[destIdx++] = 1;//confirmation byte
+                            if (getNegativeOffsetLSB(srcIdx, r.p) === 0) {
+                                data[i++] = 1;//confirmation byte
+                            }
                         }
+                    }
+
+                    assert.strictEqual(i, data.length);
+
+                    return data;
+                };
+
+                const responseBuffers = [createResponseData(response.response)];
+                if (response.speculativeResponses !== undefined) {
+                    for (const r of response.speculativeResponses) {
+                        responseBuffers.push(createResponseData(r));
                     }
                 }
 
-                assert.strictEqual(destIdx, responseData.length);
+                if (serialLog !== undefined) {
+                    let offset = 0;
+
+                    const log = (what: string, r: Response): void => {
+                        serialLog.pn(`Sending ${what} 0x${utils.hex2(r.c)} (${utils.getResponseTypeName(r.c)}) (+0x${offset.toString(16)})`);
+                    };
+
+                    // This is dumb. Should just be an array.
+                    for (let i = 0; i < responseBuffers.length; ++i) {
+                        if (i === 0) {
+                            log('response', response.response);
+                        } else if (response.speculativeResponses !== undefined) {
+                            log('buffered response', response.speculativeResponses[i - 1]);
+                        }
+                        offset += responseBuffers[i].length;
+                    }
+                }
+
+                const responsesData = Buffer.concat(responseBuffers);
 
                 // This doesn't seem to work terribly well! - should probably just
                 // write the whole lot in one big lump and then use the JS analogue
                 // of tcflush, whatever it is (assuming there is one, and it's
                 // Windows-friendly).
                 {
-                    serialLog?.pn(`Sending ${responseData.length} bytes response data...`);
+                    serialLog?.pn(`Sending ${responsesData.length} bytes response data...`);
                     dataOutLog?.withIndent('data out: ', () => {
-                        dataOutLog.dumpBuffer(responseData);
+                        dataOutLog.dumpBuffer(responsesData);
                     });
 
                     const maxChunkSize = 512;//arbitrary.
                     let srcIdx = 0;
-                    while (srcIdx < responseData.length) {
-                        const chunk = responseData.subarray(srcIdx, srcIdx + maxChunkSize);
+                    while (srcIdx < responsesData.length) {
+                        const chunk = responsesData.subarray(srcIdx, srcIdx + maxChunkSize);
 
                         let resolveResult: ((result: boolean) => void) | undefined;
 
@@ -1616,19 +1648,24 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                             }
                         }
 
-                        readWaiter = {
-                            reject: undefined,
-                            resolve: (): void => {
-                                serialLog?.pn(`Received data while sending - returning to sync state`);
-                                callResolveResult(false);
-                            },
-                        };
-
                         const ok = await new Promise<boolean>((resolve, reject) => {
                             resolveResult = resolve;
 
                             function write(): boolean {
+                                if (readWaiter !== undefined) {
+                                    throw new Error(`agh2: ${readWaiter.debug}`);
+                                }
+
+                                readWaiter = {
+                                    reject: undefined,
+                                    resolve: (): void => {
+                                        serialLog?.pn(`Received data while sending - returning to sync state`);
+                                        callResolveResult(false);
+                                    },
+                                };
+
                                 return port.write(chunk, (error: any): void => {
+                                    readWaiter = undefined;
                                     if (error !== null && error !== undefined) {
                                         reject(error);
                                     } else {
@@ -1653,7 +1690,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
 
             await drainPort(port);
 
-            serialLog?.pn(`Done one request/response.`);
+            serialLog?.pn(`Done one request / response.`);
         }
 
         // Sync loop.
@@ -1716,11 +1753,11 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
 }
 
 interface IPortState {
-    server: Server;
+    server: server.Server;
     active: boolean;
 }
 
-async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<Server>): Promise<void> {
+async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<server.Server>): Promise<void> {
     const log = utils.Log.create('SERIAL-DEVICES', process.stdout, options.serial_verbose !== null);
 
     const portStateByPortPath = new Map<string, IPortState>();
@@ -1760,16 +1797,16 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
                     process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed.\n`);
                     portState.active = false;
                 }).catch((error) => {
-                    process.stderr.write(`${(error as { stack: string; }).stack}`);
-                    process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed due to error: ${error}\n`);
+                    process.stderr.write(`${(error as { stack: string; }).stack} `);
+                    process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed due to error: ${error} \n`);
                     portState.active = false;
                 });
             }
         }
 
         if (numAutoDetected > 0 && !autoDetectMessageShown) {
-            process.stdout.write(`Note: using ${numAutoDetected} auto-detected serial devices.\n`);
-            process.stdout.write(`Note: to control which devices get opened, see --verbose --help output for these options: ${SERIAL_EXCLUDE_OPTION_NAME}, ${SERIAL_EXCLUDE_ALL_OPTION_NAME}, ${SERIAL_INCLUDE_OPTION_NAME}\n`);
+            process.stdout.write(`Note: using ${numAutoDetected} auto - detected serial devices.\n`);
+            process.stdout.write(`Note: to control which devices get opened, see--verbose--help output for these options: ${SERIAL_EXCLUDE_OPTION_NAME}, ${SERIAL_EXCLUDE_ALL_OPTION_NAME}, ${SERIAL_INCLUDE_OPTION_NAME} \n`);
             autoDetectMessageShown = true;
         }
 
@@ -1790,14 +1827,14 @@ async function main(options: ICommandLineOptions) {
     }
 
     const searchFolders = createSearchFolders(options);
-    log?.pn(`Search folders:`);
+    log?.pn(`Search folders: `);
     const printSearchFolders = (prefix: string, folders: string[]): void => {
         log?.withIndent(`${prefix}: `, () => {
             if (folders.length === 0) {
                 log?.pn(`None`);
             } else {
                 for (let i = 0; i < folders.length; ++i) {
-                    log?.pn(`${i}. ${folders[i]}`);
+                    log?.pn(`${i}. ${folders[i]} `);
                 }
             }
         });
@@ -1823,7 +1860,7 @@ async function main(options: ICommandLineOptions) {
 
     let nextConnectionId = 1;
 
-    async function createServer(additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean): Promise<Server> {
+    async function createServer(additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean): Promise<server.Server> {
         const connectionId = nextConnectionId++;
         const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
 
@@ -1842,8 +1879,8 @@ async function main(options: ICommandLineOptions) {
             await bfs.mount(defaultVolume);
         }
 
-        const server = new Server(romPathByLinkSubtype, bfs, serverLog, options.server_data_verbose, linkSupportsFireAndForgetRequests);
-        return server;
+        const srv = new server.Server(romPathByLinkSubtype, bfs, serverLog, options.server_data_verbose, linkSupportsFireAndForgetRequests);
+        return srv;
     }
 
     handleHTTP(options, createServer);

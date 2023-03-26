@@ -103,7 +103,7 @@ Request types are 7-bit numbers, divided up as follows:
 - $00 - $01 - link-specific requests with unspecified behaviour
 - $02...$5f - ordinary requests. Beeb sends request and waits for
   server to send expected response back
-- $60...$6f - fire-and-forget requests that produce no server
+- $60...$6f - fire-and-forget requests that produce no ordinary
   response. Beeb sends request, then (when possible for link type)
   continues immediately, under the assumption the server will receive
   the request in due course
@@ -113,11 +113,20 @@ Request types are 7-bit numbers, divided up as follows:
 Response types are 7-bit numbers, divided up as follows:
 
 - $00 - reserved
-- $01...$7f - ordinary response, sent in response to an ordinary
+- $01...$5f - ordinary response, sent in response to an ordinary
   request
+- $70...$7f - speculative responses, sent following on from an
+  ordinary response, sent in advance to be cached or held in a FIFO or
+  something. These responses are not guaranteed to arrive
 
 Response type $04 is the error response, indicating that the BBC
 should produce a BRK message containin the supplied text.
+
+Speculative responses are speculative, so they may just get thrown
+away sight unseen at the client end if the situation changes. Also,
+not all link types support speculative responses, so they may get
+dropped by the server internally. The protocol just has to be
+resistant to their non-arrival.
 
 Notes:
 

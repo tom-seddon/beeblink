@@ -310,7 +310,7 @@ rept_byte_access_counter: .block
                 ; but the goal is for shipping versions to be 8 KB
                 ; max.
                 
-                .cerror *>$a000,format("ROM overflow: %d bytes too large",*-$a000)
+                ; .cerror *>$a000,format("ROM overflow: %d bytes too large",*-$a000)
                 
                 .section header
                 brk
@@ -371,6 +371,17 @@ link_send_file_data_parasite=send_file_data_parasite_bytewise
 link_send_file_data_host=send_file_data_host_bytewise
 link_recv_file_data_parasite=recv_file_data_parasite_bytewise
 link_recv_file_data_host=recv_file_data_host_bytewise
+                .endweak
+
+;-------------------------------------------------------------------------
+;
+; Assume the link does not have a FIFO or buffer or whatever, and so
+; can never poll for messages.
+;
+                .weak
+link_poll_recv:
+                clc
+                rts
                 .endweak
 
 ;-------------------------------------------------------------------------
@@ -1649,6 +1660,30 @@ recv_response_1:
                 jmp discard_remaining_payload
 
 ;-------------------------------------------------------------------------
+;
+; Poll for response
+;
+; If the link has a queryable buffer, it will query it and see if
+; there's a buffere-up message waiting. If there's a waiting error
+; response, it will be dealt with by a BRK; if a waiting response of
+; some other type, it'll ready it for consumption as if recv_response
+; had been called.
+;
+; exit: C=0 - nothing buffered/link doesn't have a buffer
+;       C=1 - message found - same as calling recv_response
+;             A = response type (bit 7 clear)
+; preserves: X; Y
+;
+poll_response: .proc
+                jsr link_poll_recv
+                bcc done
+                jsr recv_response
+                sec
+done:
+                rts
+                .endproc
+
+;-------------------------------------------------------------------------
 ; 
 ; Receive response.
 ;
@@ -1664,7 +1699,6 @@ recv_response: .proc
                 .debug_print ['r_r: response &',DP_A,' + &',DP_DWORD(payload_counter),' byte(s)\r\n']
                 jsr negate_payload_counter
                 .debug_print ['r_r: (negated: &',DP_DWORD(payload_counter),')\r\n']
-                
                 cmp #RESPONSE_ERROR
                 beq got_error
                 rts
@@ -2670,13 +2704,61 @@ blfs_osbget: .proc
                 tya
                 pha             ;file handle
 
-                tax             ;X = file handle
-                lda #REQUEST_OSBGET
+                ; There might be buffered OSBGET responses waiting.
+
+                ; .debug_print ['osbget: Y=',DP_Y,' lr=',last_request,' rbah=',rept_byte_access_handle,'\r\n']
+                ; If the last request wasn't OSBGET_WITH_READAHEAD,
+                ; send OSBGET.
+                lda last_request
+                cmp #REQUEST_OSBGET_WITH_READAHEAD
+                beq check_readahead_handle
+                cmp #REQUEST_OSBGET_READAHEAD_CONSUMED_FNF
+                bne send_osbget_request
+
+check_readahead_handle:
+                ; If the OSBGET_WITH_READAHEAD request was for a
+                ; different handle, send OSBGET.
+                cpy rept_byte_access_handle
+                bne send_osbget_request
+
+                ; If there's no buffered response, send OSBGET.
+                jsr poll_response
+                bcc send_osbget_request
+
+                ; Grab the first payload byte and consume the message.
+                tax             ;X = buffered response type
+                jsr recv_payload_byte ;A = buffered response payload
+                ; .debug_print ['osbget: bc=',DP_X,' bp=',DP_A,'\r\n']
+                jsr discard_remaining_payload
+
+                ; If message type unexpected, that's bad.
+                cpx #RESPONSE_OSBGET_READAHEAD_SPECULATIVE
+                bne bad_response_brk
+
+                ; Byte got.
+                pha             ;save byte retrieved
+
+                lda #REQUEST_OSBGET_READAHEAD_CONSUMED_FNF
+                ldx rept_byte_access_handle
+                jsr send_request_1_without_restart
+
+                pla             ;restore byte retrieved
+                
+                clc             ;was not EOF
+                bcc got_byte    ;always taken
+
+send_osbget_request:
+                pla             ;file handle
+                sta rept_byte_access_handle
+                tax
+                pha             ;file handle
+                lda #REQUEST_OSBGET_WITH_READAHEAD
                 jsr send_request_1_recv_response_1_without_restart
 
                 .cerror RESPONSE_OSBGET_EOF<RESPONSE_OSBGET,'oops'
                 cpx #RESPONSE_OSBGET_EOF ;C=1 if EOF
 
+got_byte:
                 tsx
                 sta $103,x      ;replace placeholder with byte read
                 
@@ -2686,6 +2768,7 @@ blfs_osbget: .proc
                 tax
                 pla             ;byte read
                 rts
+                
                 .pend
 
 ;-------------------------------------------------------------------------

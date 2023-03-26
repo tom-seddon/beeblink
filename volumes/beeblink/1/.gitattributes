@@ -5,3 +5,5 @@ $.COPYROMS diff=bbcbasic
 $.BPUT-TEST diff=bbcbasic
 $.BPUT1 diff=bbcbasic
 $.BPUT2 diff=bbcbasic
+$.BGET1 diff=bbcbasic
+$.BGET2 diff=bbcbasic

@@ -82,9 +82,9 @@ send_1_byte_messages=true
 
                 ; if true, include some stuff for filling a buffer
                 ; with logging data (assumes BLFS is loaded into
-                ; sideways RAM)
+                ; sideways RAM on Master 128)
 debug_buffer=false
-                
+
 ;-------------------------------------------------------------------------
                 
                 .virtual $fefe
@@ -532,17 +532,28 @@ begin_send_with_restart: .proc
 begin_send_without_restart: .proc
                 pha             ;save packet type
 
+                cmp #FNF_REQUESTS_BEGIN
+                bcc _drain       ;not a F&F request. Drain FIFO and send.
+
+                cmp #FNF_REQUESTS_END
+                bcc _send        ;is a F&F request. Send.
+                
+                ; not a F&F request. Drain fifo and send.
+_drain:
+                jsr drain_rx_fifo
+
+_send:
                 .if send_1_byte_messages
                 
                 ; payload size 1?
                 lda payload_counter+0
                 cmp #1
-                bne n_bytes     ;taken if payload size isn't $xxxxxx01
+                bne _n_bytes    ;taken if payload size isn't $xxxxxx01
 
                 lda payload_counter+1
                 ora payload_counter+2
                 ora payload_counter+3
-                bne n_bytes     ;taken if payload size isn't $00000001
+                bne _n_bytes    ;taken if payload size isn't $00000001
 
                 pla             ;restore packet type
                 and #$7f        ;clear the N-byte bit
@@ -553,7 +564,7 @@ begin_send_without_restart: .proc
 
                 .endif
 
-n_bytes:
+_n_bytes:
                 pla             ;restore packet type
                 ora #$80        ;set the N-byte bit
                 jsr send_header_byte ;send header type
@@ -573,6 +584,63 @@ n_bytes:
                 clc
                 rts
                 .endproc
+
+;-------------------------------------------------------------------------
+;
+; 
+;
+drain_rx_fifo: .proc
+                .debug_print ['ts: drain\r\n']
+                bit link_itu
+                bpl drain
+
+                php
+                jsr itu_sei_ext_tube
+                jsr drain
+                jsr itu_int_tube
+                plp
+                rts
+
+drain:
+                lda #status.rx_data
+drain_loop:
+                bit fifo        ;doesn't matter if this underflows...
+                bit status
+                bne drain_loop
+                rts
+                
+                .endproc
+                
+;-------------------------------------------------------------------------
+;
+; Poll for recv
+;
+; exit: C=0 - receive FIFO empty
+;       C=1 - receive FIFO not empty
+
+poll_recv: .proc
+                bit link_itu
+                bmi itu
+
+                lda status
+check_status:
+                and #status.rx_data
+                cmp #status.rx_data
+                rts
+
+itu:
+                .cpu '65c02'
+                php
+                jsr itu_sei_ext_tube
+                ldx status
+                jsr itu_int_tube
+                plp
+                txa
+                bra check_status
+                .cpu 'default'
+                
+                .endproc
+
 
 ;-------------------------------------------------------------------------
 ;
@@ -798,6 +866,7 @@ itu_recv_byte: .macro dest
                 .else
                 .txdp ['??\r\n']
                 .endif
+                .cpu 'default'
                 .endmacro
 
 ;-------------------------------------------------------------------------
@@ -1241,8 +1310,6 @@ loop:
                 jsr itu_int_tube
                 plp
                 rts
-                
-                .cpu 'default'
                 .endmacro
 
 ;-------------------------------------------------------------------------
@@ -1736,6 +1803,8 @@ link_begin_send_without_restart=tube_serial.begin_send_without_restart
 link_begin_send_with_restart=tube_serial.begin_send_with_restart
 
 link_begin_recv=tube_serial.begin_recv
+
+link_poll_recv=tube_serial.poll_recv
                 
 ;link_begin_recv=tube_serial.nop
 

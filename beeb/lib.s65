@@ -160,7 +160,7 @@ print: .macro items
                 .if len(\items[_i])==1
                 lda #\items[_i][0]
                 jsr oswrch
-                .elsif \items[_i]=='\r\n'
+                .elsif \items[_i]=='\r\n' || \items[_i]=='\n\r'
                 jsr osnewl
                 .else
                 jsr pcprint

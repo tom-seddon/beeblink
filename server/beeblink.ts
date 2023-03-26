@@ -78,6 +78,10 @@ export const DEFAULT_NUM_FILE_HANDLES = 16;
 export const FNF_REQUESTS_BEGIN = 0x60;
 export const FNF_REQUESTS_END = 0x70;
 
+// Inclusive-exclusive range for speculative responses.
+export const SPECULATIVE_RESPONSES_BEGIN = 0x70;
+export const SPECULATIVE_RESPONSES_END = 0x80;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 //
@@ -383,6 +387,17 @@ export const REQUEST_READ_DISK_IMAGE = 0x21;
 // Response (and restrictions) as per REQUEST_READ_DISK_IMAGE.
 export const REQUEST_WRITE_DISK_IMAGE = 0x22;
 
+// OSBGET request, with read-ahead. 
+//
+// Response is OSBGET or OSBGET_EOF.
+//
+// If OSBGET, and the link type supports this, additional
+// RESPONSE_OSBGET_READAHEAD_SPECULATIVE responses may have been sent as well,
+// holding the values for subsequent OSBGET calls.
+//
+// P = 1 byte, handle
+export const REQUEST_OSBGET_WITH_READAHEAD = 0x23;
+
 // Do an OSBPUT that definitely won't produce an error.
 //
 // (If an error is produced, that's a bug. The server logs the error and
@@ -390,6 +405,11 @@ export const REQUEST_WRITE_DISK_IMAGE = 0x22;
 //
 // P = handle; byte or, P = byte (and handle is the same as the previous OSBPUT)
 export const REQUEST_OSBPUT_FNF = 0x60;
+
+// Indicate that a read-ahead OSGBET response was consumed.
+//
+// P = 1 byte, handle
+export const REQUEST_OSBGET_READAHEAD_CONSUMED_FNF = 0x61;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -567,6 +587,11 @@ export const RESPONSE_VOLUME_BROWSER = 0x10;
 // REQUEST_OSBPUT.
 export const RESPONSE_OSBPUT = 0x11;
 
+// Speculative response to an OSBGET with readahead.
+//
+// P = 1 byte, the valid byte read (so C clear on exit from OSBGET)
+export const RESPONSE_OSBGET_READAHEAD_SPECULATIVE = 0x70;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -625,3 +650,8 @@ export const RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER = 5;
 // The additional stuff part promises to be <256 bytes. Mask this value with
 // 0xff00 to determine the maximum valid size for the sector data.
 //export const MAX_DISK_IMAGE_PART_SIZE = 4351;
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export const OPT_SET_OSBGET_READAHEAD_SIZE = 240;

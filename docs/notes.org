@@ -1061,9 +1061,68 @@ eventually end up calling OSBGET_READAHEAD to handle the EOF cases.
 
 Status:
 
-- HTTP: not yet implemented - protocol will need extending as
-  currently the BeebLink message payload length is inferred from the
-  HTTP message payload length
-- Tube Serial: not yet implemented
-- UPURS: might actually be possible, as there's a smallish Beeb-side
-  recv buffer? So, with a bit of care...
+- Tube Serial: done
+- HTTP: not implemented (HTTP payload format needs tweaking)
+- UPURS: not implemented (will need to test - discarding buffered up
+  data isn't cheap)
+
+** OSBGET throughput vs readahead size
+
+Tube Serial, tested with ~BPUT1~ on Master 128.
+
+This justifies the default of 15 bytes of readahead.
+
+| # R-A bytes |  BGETS/sec |
+|-------------+------------|
+|           0 | 496.605238 |
+|           1 | 663.212435 |
+|           2 | 752.941176 |
+|           3 | 831.844029 |
+|           4 | 881.618597 |
+|           5 | 897.065265 |
+|           6 | 911.843277 |
+|           7 | 921.277553 |
+|           8 | 926.277702 |
+|           9 | 978.967495 |
+|          10 | 984.615385 |
+|          11 | 984.142239 |
+|          12 | 976.167779 |
+|          13 | 991.287512 |
+|          14 | 995.140913 |
+|          15 | 998.050682 |
+|          16 | 998.050682 |
+|          17 | 998.537299 |
+|          18 | 998.537299 |
+|          19 | 999.511957 |
+|          20 | 999.511957 |
+|          21 |  999.02439 |
+|          22 | 999.511957 |
+|          23 | 999.511957 |
+|          24 | 997.078871 |
+|          25 | 1000.97752 |
+|          26 | 1006.38821 |
+|          27 | 1005.89391 |
+|          28 | 1003.92157 |
+|          29 | 1003.42969 |
+|          30 | 1013.86139 |
+|          31 | 1012.85856 |
+|          32 | 1015.36936 |
+|          40 | 1024.51226 |
+|          48 |  1022.4663 |
+|          56 | 1028.11245 |
+|          64 | 1032.25806 |
+|          72 | 1028.62883 |
+|          80 |  1026.0521 |
+|          88 | 1034.86609 |
+|          96 | 1032.25806 |
+|         104 | 1034.86609 |
+|         112 | 1036.96203 |
+|         120 | 1026.56642 |
+|         128 |   1035.913 |
+|         144 | 1035.38928 |
+|         160 | 1039.06646 |
+|         176 | 1038.01318 |
+|         192 | 1038.01318 |
+|         208 | 1039.59391 |
+|         224 | 1038.53955 |
+|         240 | 1039.06646 |
