@@ -1035,21 +1035,29 @@ the server could actually do that.
 
 This suggests a potential approach: 
 
-On the server, in response to OSBGET, send more than one (how many?)
-OSBGET responses, possibly including a terminating OSBGET_EOF,
-covering the byte requested and the bytes coming up. The client will
-consume one and the rest will remain in the FIFO.
+On the server, in response to OSBGET_READAHEAD, send more than one
+(how many?) OSBGET responses, covering the byte requested and the
+bytes coming up. The client will consume one and the rest will remain
+in the FIFO.
 
-On the client, when doing OSBGET, if the last request was OSBGET for
-the requested handle, check the FIFO. If it's empty, send an OSBGET
-request, note the handle, and await response. Otherwise, check the
-buffered-up message. If it's OSBGET/OSBGET_EOF, it's the response,
-immediately! If it's anything else, that's a protocol error.
+On the client, when doing OSBGET, if the last request was OSBGET or
+OSBGET_READAHEAD for the requested handle, check the FIFO. If it's
+empty, send an OSBGET_READAHEAD request, note the handle, and await
+response. Otherwise, check the buffered-up message. If it's OSBGET,
+it's the response, immediately! If it's anything else, that's a
+protocol error.
+
+After consuming a read-ahead OSBGET, send a
+OSBGET_READAHEAD_CONSUMED_FNF packet.
 
 On the client, when doing non-OSBGET, check the FIFO before sending
 the message. If there's anything in it, drain it before starting,
-checking that it's OSBGET/OSBGET_EOF messages that are being received.
-Anything else encountered is a protocol error.
+checking that it's OSBGET messages that are being received. Anything
+else encountered is a protocol error.
+
+If OSBGET_READAHEAD hits EOF while reading ahead, it simply stops. The
+client will consume as many OSBGET responses as there are, and
+eventually end up calling OSBGET_READAHEAD to handle the EOF cases.
 
 Status:
 
