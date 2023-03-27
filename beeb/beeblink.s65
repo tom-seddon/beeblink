@@ -305,6 +305,7 @@ rept_byte_access_counter: .block
                 .dsection code
                 .dsection lib_code
                 .dsection driver_code
+                .dsection debug_code ;must be last!
 
                 ; It's actually fine for the ROM to be the full 16 KB,
                 ; but the goal is for shipping versions to be 8 KB
@@ -348,6 +349,18 @@ link_tube_serial=false
                 .endweak
 
                 .section driver_code
+
+;-------------------------------------------------------------------------
+;
+; Assume the link does not have a FIFO or buffer or whatever, and so
+; can never poll for messages.
+;
+                .weak
+link_poll_recv:
+                clc
+                rts
+                .endweak
+
                 .if link_avr
                 .include "avr.s65"
                 .elsif link_tube_serial
@@ -357,6 +370,7 @@ link_tube_serial=false
                 .else
                 .error "unknown link type"
                 .endif
+                
                 .endsection driver_code
 
 ;-------------------------------------------------------------------------
@@ -371,17 +385,6 @@ link_send_file_data_parasite=send_file_data_parasite_bytewise
 link_send_file_data_host=send_file_data_host_bytewise
 link_recv_file_data_parasite=recv_file_data_parasite_bytewise
 link_recv_file_data_host=recv_file_data_host_bytewise
-                .endweak
-
-;-------------------------------------------------------------------------
-;
-; Assume the link does not have a FIFO or buffer or whatever, and so
-; can never poll for messages.
-;
-                .weak
-link_poll_recv:
-                clc
-                rts
                 .endweak
 
 ;-------------------------------------------------------------------------
@@ -4753,3 +4756,108 @@ prepare_request:
 ;-------------------------------------------------------------------------
                 
                 .send code
+
+;-------------------------------------------------------------------------
+
+
+                .section debug_code
+
+debug_write_a: .proc
+                php
+                pha
+                jsr debug_internal_write_a
+                pla
+                plp
+                rts
+                .endproc
+
+debug_write_y: .proc
+                php
+                pha
+                tya
+                jsr debug_internal_write_a
+                pla
+                plp
+                rts
+                .endproc
+
+debug_write_s_marker: .proc
+                php
+                pha
+                lda #'S'
+                jsr debug_internal_write_a
+                pla
+                pla
+                rts
+                .endproc
+
+debug_write_r_marker: .proc
+                php
+                pha
+                lda #'R'
+                jsr debug_internal_write_a
+                pla
+                pla
+                rts
+                .endproc
+
+debug_write_marker: .proc
+                php
+                pha
+                lda #$dd
+                jsr debug_internal_write_a
+                pla
+                plp
+                rts
+                .endproc
+
+debug_write_pc: .proc
+                php             ;$103,x = P
+                pha             ;$102,x = A
+                txa
+                pha             ;$101,x = X
+
+                tsx
+                lda $104,x      ;ret LSB
+                jsr debug_internal_write_a
+                lda $105,x      ;ret MSB
+                jsr debug_internal_write_a
+
+                pla
+                tax
+                pla
+                plp
+                rts
+                .endproc
+
+debug_internal_write_a: .proc
+                jsr debug_internal_store_a
+                inc debug_internal_store_a.write+1
+                bne done        ;taken if no carry into MSB
+                inc debug_internal_store_a.write+2
+                bit debug_internal_store_a.write+2
+                bvc done        ;taken if MSB<$c0
+                ; reset
+                lda #<debug_data
+                sta debug_internal_store_a.write+1
+                lda #>debug_data
+                sta debug_internal_store_a.write+2
+done:
+                rts
+                .endproc
+
+                .align 16
+debug_internal_store_a: .proc
+write:
+                sta debug_data
+                rts
+                .text "<-Ad"
+                .text "Dat---->"
+                .endproc
+
+debug_data: .proc
+                .endproc
+                
+                .endsection
+
+;-------------------------------------------------------------------------

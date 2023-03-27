@@ -1383,19 +1383,20 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
     port.on('data', (data: Buffer): void => {
         readBuffers.push(data);
 
-        dataInLog?.withIndent('data in: ', () => {
-            dataInLog.dumpBuffer(data);
-        });
+        const waiter = readWaiter;
+        readWaiter = undefined;
 
-        if (readWaiter !== undefined) {
-            const waiter = readWaiter;
-            readWaiter = undefined;
+        process.nextTick(() => {
+            dataInLog?.withIndent('data in: ', () => {
+                dataInLog.dumpBuffer(data);
+            });
 
-            if (waiter.resolve !== undefined) {
-                waiter.resolve();
+            if (waiter !== undefined) {
+                if (waiter.resolve !== undefined) {
+                    waiter.resolve();
+                }
             }
-        }
-
+        });
     });
 
     function rejectReadWaiter(error: any): void {
@@ -1421,7 +1422,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
 
     async function readByte(): Promise<number> {
         if (readBuffers.length === 0) {
-            //dataInLog?.pn(`readByte: waiting for more data...`);
+            dataInLog?.pn(`readByte: waiting for more data...`);
 
             await new Promise<void>((resolve, reject): void => {
                 if (readWaiter !== undefined) {
@@ -1430,11 +1431,9 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
 
                 readWaiter = { resolve, reject, debug: 'readByte' };
             });
-
-            //dataInLog?.pn(`readByte: got some data`);
         }
 
-        //dataInLog?.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
+        dataInLog?.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
         const byte = readBuffers[0][readIndex++];
 
         if (readIndex === readBuffers[0].length) {

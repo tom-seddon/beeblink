@@ -747,11 +747,12 @@ itu_sei_ext_tube: .block
 ;       FIFO in hoped-for state
 ;       ext Tube selected
 itu_wait_for_status: .proc
+wait:
                 pha
                 jsr itu_cli_briefly
                 pla
                 bit status
-                beq itu_wait_for_status
+                beq wait
                 rts
                 .endproc
                 
@@ -763,12 +764,13 @@ itu_wait_for_status: .proc
 ; preserves: X
 send_byte: .macro
                 .txdp ['send_byte: sending &',DP_Y]
-
+                jsr debug_write_s_marker
                 lda #status.tx_space
 -
                 bit status
                 beq -
                 sty fifo
+                jsr debug_write_y
                 .txdp ['\r\n']
                 .endmacro
 
@@ -782,11 +784,13 @@ send_byte: .macro
 
 recv_byte: .macro
                 .txdp ['recv_byte: received &']
+                jsr debug_write_r_marker
                 lda #status.rx_data
 -
                 bit status
                 beq -
                 lda fifo
+                jsr debug_write_a
                 .txdp [DP_A,'\r\n']
                 .endmacro
                 
@@ -1159,7 +1163,6 @@ link_transfer_routines_msb: .byte >link_transfer_routines
 ; preserves: X/Y
 transfer_wait_for_status: .macro dir
                 .check_dir \dir
-                
                 lda #get_status_flag_for_dir(\dir)
 -
                 bit status
@@ -1202,9 +1205,13 @@ transfer_host_data_byte: .macro dir
                 .if \dir==send
                 lda (payload_addr),y
                 sta fifo
+                jsr debug_write_s_marker
+                jsr debug_write_a
                 .else
                 lda fifo
                 sta (payload_addr),y
+                jsr debug_write_r_marker
+                jsr debug_write_a
                 .endif
                 
                 .endmacro
@@ -1245,8 +1252,12 @@ transfer_status_byte: .macro dir
                 .if \dir==send
                 lda #1
                 sta fifo
+                jsr debug_write_s_marker
+                jsr debug_write_a
                 .else
                 lda fifo        ;and discard it
+                jsr debug_write_r_marker
+                jsr debug_write_a
                 .endif
 
                 .endmacro
@@ -1318,7 +1329,7 @@ loop:
                 iny                            ;+2  20
                 .endrept                       ;20n
 
-                bne @b loop
+                bne loop
 
                 .transfer_wait_for_status \dir
                 .transfer_status_byte \dir

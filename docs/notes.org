@@ -1029,7 +1029,7 @@ useful enough speedup to be getting on with.
 ** Fixing OSBGET
 
 The BeebLink protocol is strictly request-response, so the server
-never sends data in advance. But the Tube Serial device has a 4 KB
+never sends data in advance. But the Tube Serial device has a 1 KB
 FIFO in the PC->BBC direction, so, if the client were expecting it,
 the server could actually do that.
 
