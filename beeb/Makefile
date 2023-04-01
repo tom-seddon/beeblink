@@ -1,9 +1,9 @@
 ifeq ($(OS),Windows_NT)
 TASS?=..\tools\64tass.exe
-PYTHON?=py
+PYTHON?=py -3
 else
 TASS?=64tass
-PYTHON?=python
+PYTHON?=python3
 endif
 
 ##########################################################################
@@ -155,15 +155,15 @@ _rom :
 	$(SHELLCMD) copy-file $(STEM)-test.rom $(BEEB_DEST)/T.$(ROM_BEEB_NAME)
 	$(SHELLCMD) touch $(BEEB_DEST)/T.$(ROM_BEEB_NAME).inf
 
-ifdef TOM_LAPTOP
+# ifdef TOM_LAPTOP
 
-# Create a third copy of the ROM: the FS ROM, but with some extra
-# stuff added in. This is for use in my BBC B.
+# # Create a third copy of the ROM: the FS ROM, but with some extra
+# # stuff added in. This is for use in my BBC B.
 
-	$(SMLOAD_JOIN) $(STEM).rom $(HOME)/beeb/beeb-files/stuff/65boot/0/$$.TUBEROM '../../startup_rom/.build/.tmp/startup_module.rom' -o $(BEEB_DEST)/B.$(ROM_BEEB_NAME)
-	touch $(BEEB_DEST)/B.$(ROM_BEEB_NAME).inf
+# 	$(SMLOAD_JOIN) $(STEM).rom $(HOME)/beeb/beeb-files/stuff/65boot/0/$$.TUBEROM '../../startup_rom/.build/.tmp/startup_module.rom' -o $(BEEB_DEST)/B.$(ROM_BEEB_NAME)
+# 	touch $(BEEB_DEST)/B.$(ROM_BEEB_NAME).inf
 
-endif
+# endif
 
 ##########################################################################
 ##########################################################################
