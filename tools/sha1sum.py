@@ -1,15 +1,16 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 import sys,argparse,hashlib
 
 def main(options):
     for path in options.paths:
         with open(path,'rb') as f: data=f.read()
 
-        for exclude in options.excludes: data=data.replace(exclude,'')
+        for exclude in options.excludes:
+            data=data.replace(exclude.encode('ascii'),b'')
 
         m=hashlib.sha1()
         m.update(data)
-        print '%s  %s'%(m.hexdigest(),path)
+        print('%s  %s'%(m.hexdigest(),path))
 
         # with open('%s.%s'%(path,m.hexdigest()),'wb') as f: f.write(data)
         
