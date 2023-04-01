@@ -16,15 +16,15 @@ files.
 
 ## Windows
 
-Pre-built files are available from
-[the BeebLink releases page](https://github.com/tom-seddon/beeblink/releases).
-Download the latest Windows zip and unzip it somewhere.
+Get the latest release from
+https://github.com/tom-seddon/beeblink/releases/latest. Download the
+Windows zip and unzip it somewhere.
 
 ## macOS
 
-Pre-built files are available from
-[the BeebLink releases page](https://github.com/tom-seddon/beeblink/releases).
-Download the latest macOS zip and unzip it somewhere.
+Get the latest release from
+https://github.com/tom-seddon/beeblink/releases/latest. Download the
+macOS zip and unzip it somewhere.
 
 The macOS version is not notarized. To bypass any Gatekeeper dialogs:
 open Terminal, change to the folder to which you unzipped the server,
