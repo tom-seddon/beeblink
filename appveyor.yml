@@ -86,26 +86,11 @@ build_script:
       if ($env:CI_WINDOWS -eq $true) {
         ./node_modules/.bin/pkg -t win .
         7z a $env:ZIP beeblink-server.exe
-        
-        Push-Location
-        cd node_modules/usb
-        7z a $env:ZIP prebuilds\win32-x64\node.napi.node
-        Pop-Location
       } elseif ($env:CI_MACOS -eq $true) {
         ./node_modules/.bin/pkg -t macos-x64 .
         7z a $env:ZIP beeblink-server
-
-        Push-Location
-        cd ./node_modules/usb
-        7z a $env:ZIP prebuilds/darwin-x64+arm64/node.napi.node
-        Pop-Location
       }
       
-      Push-Location
-      cd ./node_modules/@serialport/bindings/build/Release
-      7z a $env:ZIP bindings.node
-      Pop-Location
-
       Push-AppveyorArtifact $env:ZIP -DeploymentName output
   - ps: Pop-Location
 
