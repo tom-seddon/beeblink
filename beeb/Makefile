@@ -70,7 +70,7 @@ programs: _uputest_program
 .PHONY : roms
 roms : _avr_rom _tube_serial_rom _upurs_rom
 	@echo ---
-	@cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x '$(VER)' -x '$(BUILD_TIME)' -x '$(COMMIT)' beeblink_tube_serial.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom
+	cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x "$(VER)" -x "$(BUILD_TIME)" -x "$(COMMIT)" beeblink_tube_serial.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom
 
 ##########################################################################
 ##########################################################################
@@ -78,6 +78,7 @@ roms : _avr_rom _tube_serial_rom _upurs_rom
 .PHONY : _dest
 _dest:
 	$(SHELLCMD) mkdir $(DEST)
+	$(SHELLCMD) mkdir ../volumes/beeblink/z
 
 ##########################################################################
 ##########################################################################
