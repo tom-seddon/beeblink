@@ -106,5 +106,3 @@ deploy:
     artifact: output
     draft: false
     prerelease: $(PRERELEASE)
-    on:
-      branch: master
