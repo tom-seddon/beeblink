@@ -1146,6 +1146,7 @@ for endpoints 1 and 2. For example, if the detection event source is
 
 #+begin_example
   usb.addr=="1.16.0" || usb.addr=="1.16.1" || usb.addr=="1.16.2"
+  usb.addr=="20.10.0" || usb.addr=="20.10.1" || usb.addr=="20.10.2"
 #+end_example
 
 ** command line stuff
@@ -1154,3 +1155,4 @@ for endpoints 1 and 2. For example, if the detection event source is
   set DEBUG=serialport/stream serialport/bindings-cpp
   run --default-volume beeblink --verbose --serial-verbose --serial-data-verbose --fs-verbose --server-verbose
 #+end_example
+

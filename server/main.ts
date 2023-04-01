@@ -1386,11 +1386,11 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
         const waiter = readWaiter;
         readWaiter = undefined;
 
-        process.nextTick(() => {
-            dataInLog?.withIndent('data in: ', () => {
-                dataInLog.dumpBuffer(data);
-            });
+        dataInLog?.withIndent('data in: ', () => {
+            dataInLog.dumpBuffer(data);
+        });
 
+        process.nextTick(() => {
             if (waiter !== undefined) {
                 if (waiter.resolve !== undefined) {
                     waiter.resolve();
@@ -1433,8 +1433,8 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
             });
         }
 
-        dataInLog?.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
         const byte = readBuffers[0][readIndex++];
+        dataInLog?.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${(readIndex - 1).toString(16)}: ${utils.hexdecch(byte)}`);
 
         if (readIndex === readBuffers[0].length) {
             readBuffers.splice(0, 1);
@@ -1635,6 +1635,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                     let srcIdx = 0;
                     while (srcIdx < responsesData.length) {
                         const chunk = responsesData.subarray(srcIdx, srcIdx + maxChunkSize);
+                        srcIdx += maxChunkSize;
 
                         let resolveResult: ((result: boolean) => void) | undefined;
 
@@ -1658,8 +1659,18 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                                 readWaiter = {
                                     reject: undefined,
                                     resolve: (): void => {
-                                        serialLog?.pn(`Received data while sending - returning to sync state`);
-                                        callResolveResult(false);
+                                        if (srcIdx >= responsesData.length) {
+                                            // Last chunk was already sent.
+                                            // Plausible cause: client responded
+                                            // before the port.write callback
+                                            // was called. So don't enter sync
+                                            // state just yet. Whatever is
+                                            // happening, it can be dealt by the
+                                            // request loop.
+                                        } else {
+                                            serialLog?.pn(`Received data while sending - returning to sync state`);
+                                            callResolveResult(false);
+                                        }
                                     },
                                 };
 
@@ -1681,8 +1692,6 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                         if (!ok) {
                             break request_response_loop;
                         }
-
-                        srcIdx += maxChunkSize;
                     }
                 }
             }
