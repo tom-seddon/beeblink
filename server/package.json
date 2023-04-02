@@ -37,5 +37,11 @@
   },
   "engines": {
     "node": ">=16"
+  },
+  "pkg": {
+    "assets": [
+      "./node_modules/@serialport/bindings-cpp/prebuilds/",
+      "./node_modules/usb/prebuilds/"
+    ]
   }
 }

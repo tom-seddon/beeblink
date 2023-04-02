@@ -16,13 +16,13 @@ def main(options):
 
         size=len(data)
 
-        for exclude in options.excludes: data=data.replace(exclude,'')
+        for exclude in options.excludes:
+            data=data.replace(exclude.encode('ascii'),b'')
 
         m=hashlib.sha1()
         m.update(data)
 
         hashes.append(Hash(hexdigest=m.hexdigest(),path=path,size=size))
-
 
     if options.show_size:
         max_size_len=max([len(str(hash.size)) for hash in hashes])

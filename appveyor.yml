@@ -1,12 +1,27 @@
 # https://www.appveyor.com/docs/getting-started-with-appveyor-for-linux/#running-windows-and-linux-builds-side-by-side
 
+# https://www.appveyor.com/blog/2017/08/01/sharing-configuration-between-branches-in-appveyor-yml/
+
 version: '{build}'
 
 skip_tags: true
 
-branches:
-  only:
-    - master
+for:
+  -
+    branches:
+      only:
+        - master
+
+    environment:
+      PRERELEASE: false
+
+  -
+    branches:
+      only:
+      - wip/tom
+
+    environment:
+      PRERELEASE: true
 
 image:
   - Visual Studio 2019
@@ -34,9 +49,13 @@ install:
   - git submodule init
   - git submodule update
 
-  - ps: |
+  - ps:
   - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
   - ps: $env:RELEASE_NAME="beeblink-$env:SUFFIX"
+  - ps: |
+      if ($env:PRERELEASE -eq $true) {
+        $env:RELEASE_NAME="$env:RELEASE_NAME-prerelease"
+      }
 
 build_script:
   - ps: pwd
@@ -67,26 +86,11 @@ build_script:
       if ($env:CI_WINDOWS -eq $true) {
         ./node_modules/.bin/pkg -t win .
         7z a $env:ZIP beeblink-server.exe
-        
-        Push-Location
-        cd node_modules/usb
-        7z a $env:ZIP prebuilds\win32-x64\node.napi.node
-        Pop-Location
       } elseif ($env:CI_MACOS -eq $true) {
         ./node_modules/.bin/pkg -t macos-x64 .
         7z a $env:ZIP beeblink-server
-
-        Push-Location
-        cd ./node_modules/usb
-        7z a $env:ZIP prebuilds/darwin-x64+arm64/node.napi.node
-        Pop-Location
       }
       
-      Push-Location
-      cd ./node_modules/@serialport/bindings/build/Release
-      7z a $env:ZIP bindings.node
-      Pop-Location
-
       Push-AppveyorArtifact $env:ZIP -DeploymentName output
   - ps: Pop-Location
 
@@ -101,6 +105,4 @@ deploy:
       secure: T5CPAJmNl5j/eAVlQln8WoiFKTDkq2ebT9Y/PbWRbMIa4GFyov+t5QdqlU0O2sY9
     artifact: output
     draft: false
-    prerelease: false
-    on:
-      branch: master
+    prerelease: $(PRERELEASE)

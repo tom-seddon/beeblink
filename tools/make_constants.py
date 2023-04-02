@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 import os,sys,argparse,re
 
 ##########################################################################
@@ -47,11 +47,12 @@ def do_output(f,lines,options):
     for line in lines:
         m=k_re.match(line)
         if m is not None:
-            print>>f,fun(m.group('name'),m.group('value'))
+            f.write('%s\n'%fun(m.group('name'),m.group('value')))
 
 def main(options):
     if options.output_language not in g_languages:
-        print>>sys.stderr,'FATAL: unrecognised language: %s'%options.output_language
+        print('FATAL: unrecognised language: %s'%options.output_language,
+              file=sys.stderr)
         sys.exit(1)
 
     with open(options.input_file_path,'rt') as f:
