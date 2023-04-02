@@ -133,3 +133,15 @@ Please
 or
 [post in the StarDot BeebLink thread](https://stardot.org.uk/forums/viewtopic.php?f=53&t=15605)
 if you run into any difficulties!
+
+# Licence
+
+Copyright (C) 2018-2023 by Tom Seddon
+
+Licence: GPL v3
+
+-----
+
+[![Build status](https://ci.appveyor.com/api/projects/status/ubldrfvsg04smo50/branch/master?svg=true)](https://ci.appveyor.com/project/tom-seddon/beeblink/branch/master)
+
+[![Pre-release build status](https://ci.appveyor.com/api/projects/status/ubldrfvsg04smo50/branch/wip/tom?svg=true)](https://ci.appveyor.com/project/tom-seddon/beeblink/branch/wip/tom)
