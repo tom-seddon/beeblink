@@ -16,15 +16,15 @@ files.
 
 ## Windows
 
-Pre-built files are available from
-[the BeebLink releases page](https://github.com/tom-seddon/beeblink/releases).
-Download the latest Windows zip and unzip it somewhere.
+Get the latest release from
+https://github.com/tom-seddon/beeblink/releases/latest. Download the
+Windows zip and unzip it somewhere.
 
 ## macOS
 
-Pre-built files are available from
-[the BeebLink releases page](https://github.com/tom-seddon/beeblink/releases).
-Download the latest macOS zip and unzip it somewhere.
+Get the latest release from
+https://github.com/tom-seddon/beeblink/releases/latest. Download the
+macOS zip and unzip it somewhere.
 
 The macOS version is not notarized. To bypass any Gatekeeper dialogs:
 open Terminal, change to the folder to which you unzipped the server,
@@ -34,12 +34,13 @@ and run the following command:
 
 ## Linux
 
-Follow [the server build instructions](./docs/build-server.md) to
-build the server.
+Follow [the build instructions](#building-it-yourself) to build the
+server.
 
-Follow [the ROM build instructions](./docs/build-rom.md) to build the
-ROMs - or alternatively download the Windows or macOS zip and get them
-from there.
+You can build the ROM yourself, or get a prebuilt copy from the
+Windows or macOS release:
+https://github.com/tom-seddon/beeblink/releases/latest (you can use
+either; they are equivalent, though not currently bit-identical)
 
 # Setting up the Beeb
 
@@ -110,6 +111,23 @@ can [access your TubeHost files via BeebLink](./docs/tubehost.md).
 
 # Building it yourself
 
+This repo has submodules. Clone it with `--recursive`:
+
+	git clone --recursive https://github.com/tom-seddon/beeblink/
+
+Or, after cloning, use `git submodule` from inside the working copy to
+set the submodules up:
+
+	git submodule init
+	git submodule update
+	
+`master` is the branch used to build the latest release, so it should
+be good. `wip/tom` is for whatever I'm working on currently, and will
+probably work pretty well. Other branches are undocumented and
+probably only temporary.
+
+After switching branch, you'll need to do a `git submodule update`.
+
 [How to build the server](./docs/build-server.md).
 
 [How to build the ROM](./docs/build-rom.md).
@@ -121,3 +139,15 @@ Please
 or
 [post in the StarDot BeebLink thread](https://stardot.org.uk/forums/viewtopic.php?f=53&t=15605)
 if you run into any difficulties!
+
+# Licence
+
+Copyright (C) 2018-2023 by Tom Seddon
+
+Licence: GPL v3
+
+-----
+
+[Build status: ![status](https://ci.appveyor.com/api/projects/status/ubldrfvsg04smo50/branch/master?svg=true)](https://ci.appveyor.com/project/tom-seddon/beeblink/branch/master)
+
+[Pre-release build status: ![status](https://ci.appveyor.com/api/projects/status/ubldrfvsg04smo50/branch/wip/tom?svg=true)](https://ci.appveyor.com/project/tom-seddon/beeblink/branch/wip/tom)
