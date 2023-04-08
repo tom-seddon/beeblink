@@ -6,6 +6,11 @@ version: '{build}'
 
 skip_tags: true
 
+branches:
+  only:
+    - master
+    - wip/tom
+
 for:
   -
     branches:
