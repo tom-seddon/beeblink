@@ -1126,3 +1126,51 @@ This justifies the default of 15 bytes of readahead.
 |         208 | 1039.59391 |
 |         224 | 1038.53955 |
 |         240 | 1039.06646 |
+
+
+
+* Hang
+
+** WireShark stuff
+
+Filter to find Tube Serial widget events. Unplug and reinsert device
+and filter by this to find the events associated with the detection.
+
+#+begin_example
+  usb.idVendor==0x403 and usb.idProduct==0x6014
+#+end_example
+
+Note the `Source`/`Destination` column. This is a dotted sequence of
+numbers: the USB address, with a trailing .0 indicating this is the
+address of endpoint 0. So filter by that, plus corresponding addresses
+for endpoints 1 and 2. For example, if the detection event source is
+`1.16.0`:
+
+#+begin_example
+  usb.addr=="1.16.0" || usb.addr=="1.16.1" || usb.addr=="1.16.2"
+#+end_example
+
+** command line stuff
+
+#+begin_example
+  set DEBUG=serialport/stream serialport/bindings-cpp
+  run --default-volume beeblink --verbose --serial-verbose --serial-data-verbose --fs-verbose --server-verbose
+#+end_example
+
+** ~npm~ notes
+
+From the shell:
+
+: npm start --default-volume beeblink --verbose --serial-verbose --serial-data-verbose --fs-verbose --server-verbose
+
+Eventually runs:
+
+: node ./.build/main.js --default-volume beeblink --verbose --serial-verbose --serial-data-verbose --fs-verbose --server-verbose
+
+(Where ~./.build/main.js~ presumably comes either from ~$.bin~ or
+~$.main~ in ~package.json~.)
+
+So anything interesting is handled by ~node~.
+
+Use ~lsof -p PID~ to list open files.
+
