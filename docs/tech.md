@@ -126,7 +126,8 @@ Speculative responses are speculative, so they may just get thrown
 away sight unseen at the client end if the situation changes. Also,
 not all link types support speculative responses, so they may get
 dropped by the server internally. The protocol just has to be
-resistant to their non-arrival.
+resistant to their non-arrival. (Perhaps obviously: speculative
+responses should be short. It will take time to throw them away.)
 
 Notes:
 

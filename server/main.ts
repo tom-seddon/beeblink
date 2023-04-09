@@ -1419,22 +1419,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
         rejectReadWaiter(error);
     });
 
-    async function readByte(): Promise<number> {
-        if (readBuffers.length === 0) {
-            //dataInLog?.pn(`readByte: waiting for more data...`);
-
-            await new Promise<void>((resolve, reject): void => {
-                if (readWaiter !== undefined) {
-                    throw new Error(`agh1: ${readWaiter.debug}`);
-                }
-
-                readWaiter = { resolve, reject, debug: 'readByte' };
-            });
-
-            //dataInLog?.pn(`readByte: got some data`);
-        }
-
-        //dataInLog?.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
+    function readByte2(): number {
         const byte = readBuffers[0][readIndex++];
 
         if (readIndex === readBuffers[0].length) {
@@ -1443,6 +1428,31 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
         }
 
         return byte;
+    }
+
+    async function readByte(): Promise<number> {
+        if (readBuffers.length === 0) {
+            dataInLog?.pn(`readByte: waiting for more data...`);
+
+            await new Promise<void>((resolve, reject): void => {
+                if (readWaiter !== undefined) {
+                    throw new Error(`agh1: ${readWaiter.debug}`);
+                }
+
+                readWaiter = { resolve, reject, debug: 'readByte' };
+            });
+        }
+
+        dataInLog?.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
+        return readByte2();
+    }
+
+    function tryReadByte(): number | undefined {
+        if (readBuffers.length === 0) {
+            return undefined;
+        } else {
+            return readByte2();
+        }
     }
 
     async function readConfirmationByte(): Promise<boolean> {
@@ -1515,9 +1525,14 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                 const variableSizeRequest = (cmdByte & 0x80) !== 0;
 
                 if (c === 0 || c === 0x7f) {
-                    serialLog?.pn(`Got command ${utils.hex2(c)} - returning to sync state`);
+                    serialLog?.pn(`Got command 0x${utils.hex2(c)} - returning to sync state`);
                     // Special syntax.
                     break request_response_loop;
+                }
+
+                if (cmdByte === beeblink.REQUEST_TUBE_SERIAL_PLACEHOLDER) {
+                    serialLog?.pn(`Got "command" 0x${utils.hex2(c)} - ignoring`);
+                    continue;
                 }
 
                 let p: Buffer;
@@ -1633,9 +1648,22 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                     });
 
                     const maxChunkSize = 512;//arbitrary.
+
+                    // Round down, since once response 0's chunk has been sent,
+                    // the client could receive it and respond at any time.
+                    //
+                    // This does mean that received data can't cancel any
+                    // speculative responses, nor the last chunk of response 0
+                    // if it happens to contain data for any speculative
+                    // responses. But that shouldn't be a problem, as
+                    // speculative responses should be short anyway, to minimize
+                    // the time spent discarding them.
+                    const response0Idx = Math.floor(responseBuffers[0].length / maxChunkSize) * maxChunkSize;
+
                     let srcIdx = 0;
                     while (srcIdx < responsesData.length) {
                         const chunk = responsesData.subarray(srcIdx, srcIdx + maxChunkSize);
+                        srcIdx += maxChunkSize;
 
                         let resolveResult: ((result: boolean) => void) | undefined;
 
@@ -1656,13 +1684,25 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                                     throw new Error(`agh2: ${readWaiter.debug}`);
                                 }
 
-                                readWaiter = {
-                                    reject: undefined,
-                                    resolve: (): void => {
-                                        serialLog?.pn(`Received data while sending - returning to sync state`);
-                                        callResolveResult(false);
-                                    },
-                                };
+                                if (srcIdx < response0Idx) {
+                                    readWaiter = {
+                                        reject: undefined,
+                                        resolve: (): void => {
+                                            for (; ;) {
+                                                const c = tryReadByte();
+                                                if (c === undefined) {
+                                                    // input exhausted
+                                                    break;
+                                                }
+
+                                                if (c !== 1) {
+                                                    serialLog?.pn(`Received data while sending - returning to sync state`);
+                                                    return callResolveResult(false);
+                                                }
+                                            }
+                                        },
+                                    };
+                                }
 
                                 return port.write(chunk, (error: any): void => {
                                     readWaiter = undefined;
@@ -1682,8 +1722,6 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                         if (!ok) {
                             break request_response_loop;
                         }
-
-                        srcIdx += maxChunkSize;
                     }
                 }
             }
