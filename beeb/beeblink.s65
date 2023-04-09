@@ -348,6 +348,18 @@ link_tube_serial=false
                 .endweak
 
                 .section driver_code
+
+;-------------------------------------------------------------------------
+;
+; Assume the link does not have a FIFO or buffer or whatever, and so
+; can never poll for messages.
+;
+                .weak
+link_poll_recv:
+                clc
+                rts
+                .endweak
+
                 .if link_avr
                 .include "avr.s65"
                 .elsif link_tube_serial
@@ -371,17 +383,6 @@ link_send_file_data_parasite=send_file_data_parasite_bytewise
 link_send_file_data_host=send_file_data_host_bytewise
 link_recv_file_data_parasite=recv_file_data_parasite_bytewise
 link_recv_file_data_host=recv_file_data_host_bytewise
-                .endweak
-
-;-------------------------------------------------------------------------
-;
-; Assume the link does not have a FIFO or buffer or whatever, and so
-; can never poll for messages.
-;
-                .weak
-link_poll_recv:
-                clc
-                rts
                 .endweak
 
 ;-------------------------------------------------------------------------
