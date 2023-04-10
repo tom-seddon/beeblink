@@ -80,6 +80,10 @@
                 ; BGETs per second.
 send_1_byte_messages=true
 
+                ; write R (received)/S (sent) debug markers while
+                ; running.
+debug_markers=false
+
 ;-------------------------------------------------------------------------
                 
                 .virtual $fefe
@@ -803,11 +807,20 @@ itu_wait_for_status: .proc
 send_byte: .macro
                 .txdp ['send_byte: sending &',DP_Y]
 
+                .if debug_markers
+                jsr debug_write_s_marker
+                .endif
+
                 lda #status.tx_space
 -
                 bit status
                 beq -
                 sty fifo
+
+                .if debug_markers
+                jsr debug_write_y
+                .endif
+                
                 .txdp ['\r\n']
                 .endmacro
 
@@ -821,11 +834,21 @@ send_byte: .macro
 
 recv_byte: .macro
                 .txdp ['recv_byte: received &']
+
+                .if debug_markers
+                jsr debug_write_r_marker
+                .endif
+                
                 lda #status.rx_data
 -
                 bit status
                 beq -
                 lda fifo
+
+                .if debug_markers
+                jsr debug_write_a
+                .endif
+                
                 .txdp [DP_A,'\r\n']
                 .endmacro
                 
@@ -842,6 +865,9 @@ recv_byte: .macro
 itu_send_byte: .macro
                 .txdp ['itu_send_byte: sending &',DP_Y]
                 .cpu '65c02'
+                .if debug_markers
+                jsr debug_write_s_marker
+                .endif
 -
                 php
                 sei
@@ -856,6 +882,9 @@ itu_send_byte: .macro
                 bra -
 +
                 sty fifo
+                .if debug_markers
+                jsr debug_write_y
+                .endif
                 lda #acccon.itu
                 tsb acccon
                 plp
@@ -872,6 +901,9 @@ itu_send_byte: .macro
 itu_recv_byte: .macro dest
                 .txdp ['itu_recv_byte: received ']
                 .cpu '65c02'
+                .if debug_markers
+                jsr debug_write_r_marker
+                .endif
 -
                 php
                 sei
@@ -886,6 +918,9 @@ itu_recv_byte: .macro dest
                 bra -
 +
                 lda fifo
+                .if debug_markers
+                jsr debug_write_a
+                .endif
                 .if \dest>=0
                 sta \dest
                 .endif
@@ -1241,9 +1276,17 @@ transfer_host_data_byte: .macro dir
                 .if \dir==send
                 lda (payload_addr),y
                 sta fifo
+                .if debug_markers
+                jsr debug_write_s_marker
+                jsr debug_write_a
+                .endif
                 .else
                 lda fifo
                 sta (payload_addr),y
+                .if debug_markers
+                jsr debug_write_r_marker
+                jsr debug_write_a
+                .endif
                 .endif
                 
                 .endmacro
@@ -1265,9 +1308,17 @@ transfer_parasite_data_byte: .macro dir
                 .if \dir==send
                 ldy tube_fifo3_data
                 sty fifo
+                .if debug_markers
+                jsr debug_write_s_marker
+                jsr debug_write_y
+                .endif
                 .else
                 ldy fifo
                 sty tube_fifo3_data
+                .if debug_markers
+                jsr debug_write_r_marker
+                jsr debug_write_y
+                .endif
                 .endif
 
                 .endmacro
@@ -1284,8 +1335,16 @@ transfer_status_byte: .macro dir
                 .if \dir==send
                 lda #1
                 sta fifo
+                .if debug_markers
+                jsr debug_write_s_marker
+                jsr debug_write_a
+                .endif
                 .else
                 lda fifo        ;and discard it
+                .if debug_markers
+                jsr debug_write_r_marker
+                jsr debug_write_a
+                .endif
                 .endif
 
                 .endmacro
@@ -1357,8 +1416,12 @@ loop:
                 iny                            ;+2  20
                 .endrept                       ;20n
 
+                .if debug_markers
+                bne loop
+                .else
                 bne @b loop
-
+                .endif
+                
                 .transfer_wait_for_status \dir
                 .transfer_status_byte \dir
 
@@ -1485,12 +1548,18 @@ itu_recv_parasite_bytes: .proc
                 jsr itu_sei_ext_tube
 
 loop:
+                .if debug_markers
+                jsr debug_write_r_marker
+                .endif
                 lda #get_status_flag_for_dir(send) ;0 +2
                 bit status                         ;2 +4
                 bne +                              ;6 +3
                 jsr itu_wait_for_status            ;...
 +                                                  ;
                 ldy fifo                           ;9 +4
+                .if debug_markers
+                jsr debug_write_y
+                .endif
                 lda #acccon.itu                    ;13 +2
                 tsb acccon                         ;15 +6
                 sty tube_fifo3_data                ;21 +4
@@ -1520,6 +1589,9 @@ itu_send_parasite_bytes: .proc
                 jsr itu_sei_ext_tube ;9 +22 = 31
 
 loop:
+                .if debug_markers
+                jsr debug_write_s_marker
+                .endif
                 lda #acccon.itu                    ;0 +2
                 tsb acccon                         ;2 +6
                 ldy tube_fifo3_data                ;8 +4 
@@ -1530,6 +1602,9 @@ loop:
                 jsr itu_wait_for_status            ;
 +                                                  ;
                 sty fifo                           ;27 +4
+                .if debug_markers
+                jsr debug_write_y
+                .endif
                 jsr delay_12_cycles                ;31 +12
                 dex                                ;43 +2
                 bne @b loop                        ;45 +3
@@ -1566,6 +1641,9 @@ bytes_per_iteration=8
 loop:
                 .rept bytes_per_iteration
 
+                .if debug_markers
+                jsr debug_write_r_marker
+                .endif
                 stx acccon                         ;+4 4
                 lda #get_status_flag_for_dir(recv) ;+2 6
                 bit status                         ;+4 10
@@ -1573,6 +1651,9 @@ loop:
                 jsr wait_status                    ;...
 +                                                  ;...
                 lda fifo                           ;+4 17
+                .if debug_markers
+                jsr debug_write_a
+                .endif
                 sty acccon                         ;+4 21
                 sta tube_fifo3_data                ;+4 25
 
@@ -1631,6 +1712,10 @@ acccon_xtu=link_old_y
 loop:
                 .rept bytes_per_iteration
 
+                .if debug_markers
+                jsr debug_write_s_marker
+                .endif
+
                 sty acccon                         ;0 +4
                 ldx tube_fifo3_data                ;4 +4
                 lda acccon_xtu                     ;8 +3
@@ -1641,6 +1726,9 @@ loop:
                 jsr wait_status                    ;...
 +                                                  ;...
                 stx fifo                           ;24 +4 = 28
+                .if debug_markers
+                jsr debug_write_x
+                .endif
                 .endrept
 
                 dec link_value

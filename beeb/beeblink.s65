@@ -4769,6 +4769,16 @@ debug_write_a: .proc
                 rts
                 .endproc
 
+debug_write_x: .proc
+                php
+                pha
+                txa
+                jsr debug_internal_write_a
+                pla
+                plp
+                rts
+                .endproc
+                
 debug_write_y: .proc
                 php
                 pha
