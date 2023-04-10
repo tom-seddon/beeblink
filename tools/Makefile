@@ -12,7 +12,7 @@ default:
 
 .PHONY:run_with_system_node
 run_with_system_node:
-	cd ../server && npm start -- --default-volume beeblink --verbose --serial-verbose --serial-data-verbose --fs-verbose --server-verbose
+	cd ../server && npm start -- --default-volume beeblink --verbose --serial-verbose --serial-data-verbose --fs-verbose --server-verbose --http
 
 ##########################################################################
 ##########################################################################
