@@ -1,3 +1,4 @@
+
 ;-------------------------------------------------------------------------
 ;
 ; BeebLink - BBC Micro file storage system
@@ -3025,6 +3026,13 @@ close:
 close_spool_or_exec_handle:
                 lda #$77        ;close *SPOOL/*EXEC handles (AUG 141)
                 jsr osbyte
+
+                ; OSFIND got re-entered due to the OSBYTE, so the
+                ; handle got closed that way. Don't try to close it
+                ; again!
+                ;
+                ; (the re-entry is quite safe - handle 
+                jmp done
                 
 close_handle:
                 pla             ;A = file handle
@@ -3035,6 +3043,7 @@ close_handle:
                 
                 jsr recv_response_and_discard_payload
 
+done:
                 pla
                 tay             ;restore Y, file handle
                 pla
