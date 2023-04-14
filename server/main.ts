@@ -819,6 +819,25 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         usb.setDebugLevel(options.libusb_debug_level);
     }
 
+    function getFixedUpPath(p: string): string {
+        // argparse, or something, seems to "helpfully" insert a quote...
+        if (p.startsWith(`'`) && p.endsWith(`'`)) {
+            return p.substring(1, p.length - 1);
+        } else {
+            return p;
+        }
+    }
+
+    function fixupPaths(paths: string[]): void {
+        for (let i = 0; i < paths.length; ++i) {
+            paths[i] = getFixedUpPath(paths[i]);
+        }
+    }
+
+    fixupPaths(options.folders);
+    fixupPaths(options.pcFolders);
+    fixupPaths(options.tubeHostFolders);
+
     log?.pn('cwd: ``' + process.cwd() + '\'\'');
 
     if (options.serial_test_pc_to_bbc) {
