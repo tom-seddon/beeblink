@@ -54,13 +54,14 @@ be tested; if running over the Tube, it'll test throughput for main
 memory and throughput for the second processor as well.
 
 When transferring data to and from main memory, the screen will fill
-with junk, so you can see something is happeneng, but when
-transferring data to and from the second processor memory you won't
-see anything.
+with junk, so you can see something is happening. When transferring
+data to and from the second processor memory you won't see anything
+obvious.
 
-Results are saved to a text file on drive Z on the BeebLink volume.
+Results are printed to the screen, and also saved to a text file on
+drive Z on the BeebLink volume.
 
-## ROM Self-Update /(not Tube-compatible)/
+## ROM Self-Update _(not Tube-compatible)_
 
 Gets a copy of the appropriate filing system ROM from the server, and
 (if possible) uses it to update the current ROM.
@@ -73,7 +74,7 @@ you to save to disk - copy the command line displayed to do this. Or
 run `RTOOL` (supplied) and use its `P` command straight away. The ROM
 image is downloaded to the address `RTOOL` expects.
 
-## BooBip ROM Tool /(not Tube-compatible)/
+## BooBip ROM Tool _(not Tube-compatible)_
 
 Useful sideways ROM tool.
 
