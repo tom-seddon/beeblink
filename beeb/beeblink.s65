@@ -1701,13 +1701,12 @@ recv_response: .proc
                 jsr link_begin_recv
                 .debug_print ['r_r: response &',DP_A,' + &',DP_DWORD(payload_counter),' byte(s)\r\n']
                 jsr negate_payload_counter
-                .debug_print ['r_r: (negated: &',DP_DWORD(payload_counter),')\r\n']
                 cmp #RESPONSE_ERROR
                 beq got_error
                 rts
                 
 got_error:
-                .debug_print ["recv_response: handling error.\r\n"]
+                .debug_print ["r_r: error.\r\n"]
                 
                 ; For debugging, make sure there's a valid error of
                 ; some kind in the right place already.
@@ -2104,7 +2103,7 @@ link_ok:
                 lda #253        ;get reset type in X (AUG 244)
                 jsr osbyte_x00_yff
 
-                .debug_print ['i_b_i: sending REQUEST_RESET... (reset type: &',DP_X,', link_subtype: '..format('%d',link_subtype)..')\r\n']
+                .debug_print ['i_b_i: REQUEST_RESET... (reset type: &',DP_X,', link_subtype: '..format('%d',link_subtype)..')\r\n']
 
                 lda #2
                 jsr set_payload_counter
@@ -2123,7 +2122,7 @@ link_ok:
                 ; whatever it was, I'm sure it was fine...
                 jsr recv_response_and_discard_payload
 
-                .debug_print ['i_b_i: sending REQUEST_SET_FILE_HANDLE_RANGE...\r\n']
+                .debug_print ['i_b_i: REQUEST_SET_FILE_HANDLE_RANGE...\r\n']
                 
                 lda #2
                 jsr set_payload_counter
@@ -2139,7 +2138,7 @@ link_ok:
 
                 jsr recv_response_and_discard_payload
 
-                .debug_print ['i_b_i: OK, probably.\r\n']
+                .debug_print ['i_b_i: looks OK\n']
 
                 clc             ;init ok
                 rts
@@ -3031,7 +3030,8 @@ close_spool_or_exec_handle:
                 ; handle got closed that way. Don't try to close it
                 ; again!
                 ;
-                ; (the re-entry is quite safe - handle 
+                ; (The re-entry is quite safe - handle is no longer in
+                ; use at this point.)
                 jmp done
                 
 close_handle:
@@ -3302,12 +3302,12 @@ exec: .fill 4
                 lda #0
                 jsr set_payload_counter
 
-                .debug_print ["ptr=&",ptr+1,ptr+0,"\r\n"]
+                ; .debug_print ["ptr=&",ptr+1,ptr+0,"\r\n"]
 
                 ldx #ptr
                 jsr strlen_cr
 
-                .debug_print ["_ptr=&",ptr+1,ptr+0,", len=",DP_Y,"\r\n"]
+                ; .debug_print ["_ptr=&",ptr+1,ptr+0,", len=",DP_Y,"\r\n"]
 
                 sty payload_counter+0
 
@@ -4320,7 +4320,7 @@ buf_size=50
 +
                 sta build_handle
 
-                .debug_print ['Handle: ',build_handle,'\r\n']
+                ; .debug_print ['Handle: ',build_handle,'\r\n']
 
                 lda #1
                 sta build_line+0
