@@ -552,6 +552,7 @@ export function hexdecch(n: number): string {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+// see https://github.com/nodejs/node/issues/684
 export function getTildeExpanded(pathString: string): string {
     // yes, only with a forward slash...
     if (pathString.startsWith('~/')) {

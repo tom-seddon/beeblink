@@ -819,11 +819,23 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         usb.setDebugLevel(options.libusb_debug_level);
     }
 
-    function getFixedUpPath(p: string): string {
-        // argparse, or something, seems to "helpfully" insert a quote...
-        if (p.startsWith(`'`) && p.endsWith(`'`)) {
-            return p.substring(1, p.length - 1);
+    function getFixedUpPath(p: null): null;
+    function getFixedUpPath(p: string): string;
+    function getFixedUpPath(p: string | null): string | null;
+    function getFixedUpPath(p: string | null): string | null {
+        if (p === null) {
+            return null;
         } else {
+            // argparse, or something, seems to "helpfully" insert a quote...
+            if (p.startsWith(`'`) && p.endsWith(`'`)) {
+                p = p.substring(1, p.length - 1);
+            }
+
+            // Don't know why the ~ comes through. Presumably the -- in the npm
+            // start args causes zsh to stop trying to interpret any file names. It
+            // already fails to tab-complete anything.
+            p = utils.getTildeExpanded(p);
+
             return p;
         }
     }
@@ -837,6 +849,13 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     fixupPaths(options.folders);
     fixupPaths(options.pcFolders);
     fixupPaths(options.tubeHostFolders);
+
+    options.avr_rom = getFixedUpPath(options.avr_rom);
+    options.tube_serial_rom = getFixedUpPath(options.tube_serial_rom);
+    options.upurs_rom = getFixedUpPath(options.upurs_rom);
+
+    options.load_config = getFixedUpPath(options.load_config);
+    options.save_config = getFixedUpPath(options.save_config);
 
     log?.pn('cwd: ``' + process.cwd() + '\'\'');
 
@@ -2041,8 +2060,8 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     // don't use the argparse default mechanism for --default-volume - this
     // makes it easier to later detect the absence of --default-volume.
     always(['--default-volume'], { metavar: 'DEFAULT-VOLUME', help: 'load volume %(metavar)s on startup' });
-    always(['--pc'], { dest: 'pcFolders', action: 'append', defaultValue: [], metavar: 'FOLDER', help: 'use %(metavar)s as a PC volume' });
-    always(['--tube-host'], { dest: 'tubeHostFolders', action: 'append', defaultValue: [], metavar: 'FOLDER', help: 'use %(metavar)s as a Tube Host volume' });
+    always(['--pc'], { dest: 'pcFolders', action: 'append', defaultValue: [], metavar: 'VOLUME-FOLDER', help: 'use %(metavar)s as a PC volume' });
+    always(['--tube-host'], { dest: 'tubeHostFolders', action: 'append', defaultValue: [], metavar: 'VOLUME-FOLDER', help: 'use %(metavar)s as a Tube Host volume' });
     always(['folders'], { nargs: '*', metavar: 'VOLUME-FOLDER', help: 'search %(metavar)s for BeebLink volumes' });
     fullHelpOnly(['--exclude-volume'], { dest: 'excludeVolumeRegExps', action: 'append', defaultValue: [], metavar: 'REGEXP', help: 'for this run, exclude volume(s) with paths matching regexp %(metavar)s' });
 
