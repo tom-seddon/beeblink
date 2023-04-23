@@ -84,6 +84,28 @@ send_1_byte_messages=true
                 ; running.
 debug_markers=false
 
+                ; Seen on macOS Big Sur with continuous BGETs:
+                ; occasional hangs, due to bytes going missing. Looks
+                ; like they make it to the Mac's USB layer, but then
+                ; never show up for fd readability purposes as
+                ; reported by kqueue. But then send 1 more byte from
+                ; the Beeb, and the missing bytes turn up! - plus the
+                ; one you just sent.
+                ;
+                ; If true, apply a workaround for this: if no response
+                ; is forthcoming after a reasonable time passes, send
+                ; a byte that the server will ignore, and see if that
+                ; helps.
+use_placeholder_requests=true
+                
+                .if use_placeholder_requests
+                ; The reasonable time mentioned above, in number of
+                ; FIFO poll calls. Corresponds to ~0.5 sec (no
+                ; Tube/ext Tube) or ~1.0 sec (int Tube).
+reasonable_wait_time=16384
+                .endif
+
+                
 ;-------------------------------------------------------------------------
                 
                 .virtual $fefe
@@ -673,20 +695,7 @@ itu:
 ; Begin recv.
 
 begin_recv: .proc
-                ; Seen on macOS with continuous BGETs: occasional
-                ; hangs, due to bytes going missing. Looks like they
-                ; make it to the Mac's USB layer, but then never show
-                ; up for fd readability purposes as reported by
-                ; kqueue. But then send 1 more byte from the Beeb, and
-                ; the missing bytes turn up! - plus the one you just
-                ; sent.
-                ;
-                ; So, workaround: if no response is forthcoming after
-                ; a reasonable time passes, send a byte that the
-                ; server will ignore, and see if that helps.
-
-                ; ~0.5 sec (no Tube/ext Tube), ~1.0 sec (int Tube)
-reasonable_wait_time=16384
+                .if use_placeholder_requests
                 
                 lda #<reasonable_wait_time
                 jsr set_payload_counter
@@ -711,6 +720,7 @@ wait_loop:
                 ; Only do it the once. Either it worked, or it didn't.
                 
 got_data:
+                .endif
                 
                 jsr recv_header_byte ;receive packet type
 
