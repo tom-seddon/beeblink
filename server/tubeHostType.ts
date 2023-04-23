@@ -153,7 +153,12 @@ async function scanTubeHostFolder(folderPath: AbsPath, log: utils.Log | undefine
     const disks: ITubeHostDisk[] = [];
     const folders: string[] = [];
 
-    const ents: fs.Dirent[] = await utils.fsReaddir(folderPath, { withFileTypes: true });
+    let ents: fs.Dirent[];
+    try {
+        ents = await utils.fsReaddir(folderPath, { withFileTypes: true });
+    } catch (error) {
+        return errors.nodeError(error);
+    }
 
     //const indexRegExp = new RegExp('^([0-9]+)\\.', 'i');
     let maxIndex: undefined | number;
