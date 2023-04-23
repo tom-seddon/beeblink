@@ -84,6 +84,22 @@ export const SPECULATIVE_RESPONSES_END = 0x80;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
+
+// Serial protocol status bytes.
+//
+// A status of 0 always means enter sync mode.
+
+// Client->server: last payload part was valid
+// Server->client: last payload part was valid
+export const SERIAL_STATUS_OK = 0x01;
+
+// Client->server: never valid.
+// Server->client, mid request: not valid
+// Server->client, end request: an additional speculative response follows
+export const SERIAL_STATUS_SPECULATIVE_FOLLOWS = 0x02;
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
 //
 // Request types 0x00/0x80 and 0x01/0x81 are link-dependent and may have special
 // syntax.

@@ -1474,13 +1474,13 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
         }
     }
 
-    async function readConfirmationByte(): Promise<boolean> {
+    async function readStatusByte(): Promise<boolean> {
         const byte = await readByte();
 
-        if (byte === 1) {
+        if (byte === beeblink.SERIAL_STATUS_OK) {
             return true;
         } else {
-            serialLog?.pn(`Got confirmation byte: ${byte}  - returning to sync state`);
+            serialLog?.pn(`Got status byte: ${byte}  - returning to sync state`);
             return false;
         }
     }
@@ -1580,7 +1580,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                     //serialLog?.pn(`    index ${i} (-ve LSB=0x${utils.hex2(j)}): value=${p[i]} (0x${utils.hex2(p[i])})`);
 
                     if (j === 0) {
-                        if (!await readConfirmationByte()) {
+                        if (!await readStatusByte()) {
                             break request_response_loop;
                         }
                     }
@@ -1606,7 +1606,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
 
                         data[i++] = r.c & 0x7f;
                         data[i++] = r.p[0];
-                        data[i++] = 1;//confirmation byte
+                        data[i++] = beeblink.SERIAL_STATUS_OK;//status byte
                     } else {
                         data = Buffer.alloc(1 + 4 + r.p.length + ((r.p.length + 255) >> 8));
 
@@ -1619,7 +1619,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                             data[i++] = r.p[srcIdx];
 
                             if (getNegativeOffsetLSB(srcIdx, r.p) === 0) {
-                                data[i++] = 1;//confirmation byte
+                                data[i++] = beeblink.SERIAL_STATUS_OK;//status byte
                             }
                         }
                     }
@@ -1633,6 +1633,15 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                 if (response.speculativeResponses !== undefined) {
                     for (const r of response.speculativeResponses) {
                         responseBuffers.push(createResponseData(r));
+                    }
+
+                    // The last byte of each buffer is a status byte with
+                    // SERIAL_STATUS_OK. Replace with
+                    // SERIAL_STATUS_SPECULATIVE_FOLLOWS as appropriate.
+                    for (let responseBufferIndex = 0; responseBufferIndex < responseBuffers.length - 1; ++responseBufferIndex) {
+                        const b = responseBuffers[responseBufferIndex];
+                        assert.strictEqual(b[b.length - 1], beeblink.SERIAL_STATUS_OK);
+                        b[b.length - 1] = beeblink.SERIAL_STATUS_SPECULATIVE_FOLLOWS;
                     }
                 }
 

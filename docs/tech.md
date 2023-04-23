@@ -227,14 +227,22 @@ should be followed by a status byte.
 transferring data, the LSB of the byte's negative offset can be found
 in `scratch_payload_size+0`.)
 
-For client->server payloads, the status bytes indicate whether there's
-more data to come, or that the request has been cancelled. To indicate
-a cancelled request, send `0x01`; to indicate cancellation, send
-`0x00` or `0x80`.
+For client->server payloads, the status bytes indicate whether the
+request was cancelled or not. To indicate a non-cancelled request,
+send `0x01`; to indicate cancellation, send `0x00` or `0x80`.
 
-For server->client payloads, the status bytes are always `0x01`, as
-the server isn't allowed to cancel responses. These bytes are still
-sent, as they fulfil purpose 1 above.
+For server->client payloads, the status bytes are never `0x00` or
+`0x80`, as the server isn't allowed to cancel responses. But status
+bytes are still sent, as they fulfil purpose 1 above.
+
+There are two valid status byte values:
+
+- `0x01` - ordinary non-zero status byte
+- `0x02` - if the last status byte of a response, indicates an
+  additional speculative response follows 
+
+The client uses status byte `0x02` to correctly discard unwanted
+speculative responses without having to worry about the timing.
 
 ### Sync mode
 

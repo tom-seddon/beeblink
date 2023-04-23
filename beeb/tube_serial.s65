@@ -164,6 +164,7 @@ link_old_y: .fill 1
 link_value: .fill 1
 link_transfer_flags: .fill 1
 link_transfer_thunk: .fill 3    ;$4C, LSB, MSB
+link_last_status_byte: .fill 1
                 .endsection link_workspace
 
 ;-------------------------------------------------------------------------
@@ -536,7 +537,36 @@ begin_send_without_restart: .proc
                 
                 ; not a F&F request. Drain fifo and send.
 _drain:
-                jsr drain_rx_fifo
+                ; If no speculative responses expected, nothing to
+                ; drain.
+                lda link_last_status_byte
+                cmp #SERIAL_STATUS_SPECULATIVE_FOLLOWS
+                bne _send
+
+                lda payload_counter+0
+                pha
+                lda payload_counter+1
+                pha
+                lda payload_counter+2
+                pha
+                lda payload_counter+3
+                pha
+
+_drain_loop:
+                jsr recv_response_and_discard_payload
+
+                lda link_last_status_byte
+                cmp #SERIAL_STATUS_SPECULATIVE_FOLLOWS
+                beq _drain_loop
+
+                pla
+                lda payload_counter+3
+                pla
+                lda payload_counter+2
+                pla
+                lda payload_counter+1
+                pla
+                lda payload_counter+0
 
 _send:
                 .if send_1_byte_messages
@@ -1340,7 +1370,8 @@ transfer_status_byte: .macro dir
                 jsr debug_write_a
                 .endif
                 .else
-                lda fifo        ;and discard it
+                lda fifo
+                sta link_last_status_byte
                 .if debug_markers
                 jsr debug_write_r_marker
                 jsr debug_write_a
@@ -1471,7 +1502,7 @@ loop:
 ; Min 24 usec/48 cycles per byte.
 ;
 ; entry: Tube FIFO ready for transfer mode 0/1
-;        (recv) X+1 bytes incoming - X data bytes, 1 confirmation byte
+;        (recv) X+1 bytes incoming - X data bytes, 1 status byte
 transfer_parasite_bytes_routine: .macro dir
                 .check_dir \dir
 
@@ -1826,21 +1857,24 @@ itu_send_host_page: .proc
 ;     BBC->PC: 85.2 KBytes/sec
 ;     PC->BBC: 84.2 KBytes/sec
                 
-                .align 128
-recv_parasite_bytes: .proc
-                .transfer_parasite_bytes_routine recv
-                .endproc
-
+                .align 64
 send_parasite_bytes: .proc
                 .transfer_parasite_bytes_routine send
                  .endproc
 
+                .align 64
+send_parasite_page: .proc
+                .transfer_parasite_page_routine send
+                .endproc
+
+                .align 64
 recv_parasite_page: .proc
                 .transfer_parasite_page_routine recv
                 .endproc
 
-send_parasite_page: .proc
-                .transfer_parasite_page_routine send
+                .align 64
+recv_parasite_bytes: .proc
+                .transfer_parasite_bytes_routine recv
                 .endproc
 
 ;-------------------------------------------------------------------------
