@@ -3003,9 +3003,7 @@ close:
                 pha             ;save X, not used
                 tya
                 pha             ;save Y, file handle
-
-                beq close_spool_or_exec_handle ;taken if Y=0, so all
-                                               ;files are to be closed
+                beq close_spool_or_exec_handle
 
                 sta handle      ;save file handle
 
@@ -3026,17 +3024,21 @@ close_spool_or_exec_handle:
                 lda #$77        ;close *SPOOL/*EXEC handles (AUG 141)
                 jsr osbyte
 
-                ; OSFIND got re-entered due to the OSBYTE, so the
-                ; handle got closed that way. Don't try to close it
-                ; again!
+                ; If closing a specific handle, OSFIND got re-entered
+                ; due to the OSBYTE, so the handle got closed that
+                ; way. Don't try to close it again! (The re-entry in
+                ; this case is quite safe - handle is no longer in use
+                ; at this point.)
                 ;
-                ; (The re-entry is quite safe - handle is no longer in
-                ; use at this point.)
-                jmp done
-                
+                ; If closing all handles, still make the request. If
+                ; there's no more handles to close, it's benign.
+                pla             ;restore file handle
+                pha             ;save file handle
+                bne done        ;taken if closing a specific handle
+
 close_handle:
-                pla             ;A = file handle
-                pha
+                pla             ;restore file handle
+                pha             ;save file handle
                 tax
                 lda #REQUEST_OSFIND_CLOSE
                 jsr send_request_1_with_restart
@@ -3044,7 +3046,7 @@ close_handle:
                 jsr recv_response_and_discard_payload
 
 done:
-                pla
+                pla             ;restore file handle
                 tay             ;restore Y, file handle
                 pla
                 tax             ;restore X, never used
@@ -3090,6 +3092,7 @@ send_name_done:
                 ldx name_ptr+0
                 ldy name_ptr+1
                 rts
+
                 .pend
 
 ;-------------------------------------------------------------------------
