@@ -98,6 +98,10 @@ export const SERIAL_STATUS_OK = 0x01;
 // Server->client, end request: an additional speculative response follows
 export const SERIAL_STATUS_SPECULATIVE_FOLLOWS = 0x02;
 
+// Not actually sent. Used as a placeholder value in the ROM, so it's a bit
+// clearer to spot when the last status byte didn't get set.
+export const SERIAL_STATUS_NOT_RECEIVED = 0x03;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 //

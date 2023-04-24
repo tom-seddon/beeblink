@@ -327,7 +327,7 @@ export class Server {
 
         this.dumpPacket(request, handler !== undefined && handler.showFullRequestDump());
 
-        const response = await this.handleRequestInternal(handler, request);
+        let response = await this.handleRequestInternal(handler, request);
 
         if (this.dumpPackets) {
             const showFullResponseDump = handler !== undefined && handler.showFullResponseDump();
@@ -346,6 +346,30 @@ export class Server {
 
         if (handler === undefined || handler.shouldResetLastOSBPUTHandle()) {
             this.lastOSBPUTHandle = undefined;
+        }
+
+        // Enforce the speculative response payload size restrictions. (This
+        // stems from the way things are encoded with the serial link types. In
+        // principle, there'd be no problem doing this!)
+        if (response.speculativeResponses !== undefined) {
+            let valid = true;
+
+            if (response.response.p.length === 0) {
+                valid = false;
+            } else {
+                for (const speculativeResponse of response.speculativeResponses) {
+                    if (speculativeResponse.p.length === 0) {
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+
+            if (!valid) {
+                response = {
+                    response: newErrorResponse(errors.generic(`Invalid speculative responses`)),
+                };
+            }
         }
 
         return response;

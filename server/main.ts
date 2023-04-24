@@ -1614,7 +1614,6 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                 // Do nothing.
                 serialLog?.pn('(Fire-and-forget request - no response)');
             } else {
-
                 const createResponseData = (r: Response): Buffer => {
                     let data: Buffer;
 

@@ -116,8 +116,10 @@ Response types are 7-bit numbers, divided up as follows:
 - $01...$5f - ordinary response, sent in response to an ordinary
   request
 - $70...$7f - speculative responses, sent following on from an
-  ordinary response, sent in advance to be cached or held in a FIFO or
-  something. These responses are not guaranteed to arrive
+  ordinary response with a payload of 1 or more bytes, sent in advance
+  to be cached or held in a FIFO or something. Speculative responses
+  must also themselves have a 1+-byte payload. These responses are not
+  guaranteed to arrive
 
 Response type $04 is the error response, indicating that the BBC
 should produce a BRK message containin the supplied text.
@@ -128,6 +130,9 @@ not all link types support speculative responses, so they may get
 dropped by the server internally. The protocol just has to be
 resistant to their non-arrival. (Perhaps obviously: speculative
 responses should be short. It will take time to throw them away.)
+
+Speculative responses may only follow on from a response with a
+payload of 1 or more bytes, because they were a late addition :(
 
 Notes:
 
@@ -215,8 +220,8 @@ bytes during transfers. These have 2 purposes:
 
 ### Status bytes
 
-Non-empty request payloads include status bytes at particular points,
-based on the LSB of the byte's negative offset, i.e.,
+Non-empty payloads include status bytes at particular points, based on
+the LSB of the byte's negative offset, i.e.,
 `-((payload_size)-1-(offset of byte))`. (The first byte's negative
 offset is `-((payload_size)-1)`, and the last byte's is `0`.)
 
@@ -243,6 +248,12 @@ There are two valid status byte values:
 
 The client uses status byte `0x02` to correctly discard unwanted
 speculative responses without having to worry about the timing.
+
+(If the payload has 0 bytes, there are no status bytes, so the client
+has to assume - and it assumes there are no speculative responses
+following. This is the reason speculative responses may only follow on
+from response with a a 1+-byte payload, and must themselves have a
+1+-byte payload.)
 
 ### Sync mode
 
@@ -343,7 +354,7 @@ Notes:
 
 - a 0-byte payload has to be encoded using the N-byte format, even
   though that's more bytes than an optimal 1-byte payload
-
+  
 - a 1-byte payload may use either the 1-byte or N-byte format. Both
   are equally valid
   

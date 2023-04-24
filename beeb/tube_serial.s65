@@ -457,7 +457,7 @@ sync_step_2_loop:
                 beq sync_step_2_loop
 
                 cmp #1
-                bne failed
+                bne failed_2
                 .endblock
 
                 .block
@@ -480,6 +480,11 @@ ok:
 
 failed:
                 ldx #status_text.sync_failed-status_text
+                sec             ;no good
+                rts
+
+failed_2:
+                ldx #status_text.sync_failed_2-status_text
                 sec             ;no good
                 rts
 
@@ -522,6 +527,8 @@ sync_timed_out_1:
                 .text 'Sync timeout (step 1)',0
 sync_timed_out_2:
                 .text 'Sync timeout (step 2)',0
+sync_failed_2:
+                .text 'Sync failed (step 2)',0
 sync_timed_out_3:
                 .text 'Sync timeout (step 3)',0
                 .endblock
@@ -559,6 +566,13 @@ begin_send_without_restart: .proc
                 
                 ; not a F&F request. Drain fifo and send.
 _drain:
+                .if debug_markers
+                lda #'D'
+                jsr debug_write_a
+                lda link_last_status_byte
+                jsr debug_write_a
+                .endif
+                
                 ; If no speculative responses expected, nothing to
                 ; drain.
                 lda link_last_status_byte
@@ -638,23 +652,23 @@ _n_bytes:
 ; 
 ;
 drain_rx_fifo: .proc
-                .debug_print ['ts: drain\r\n']
+                ; .debug_print ['ts: drain\r\n']
                 bit link_itu
-                bpl drain
-
-                php
-                jsr itu_sei_ext_tube
-                jsr drain
-                jsr itu_int_tube
-                plp
-                rts
-
+                bmi itu
 drain:
                 lda #status.rx_data
 drain_loop:
                 bit fifo        ;doesn't matter if this underflows...
                 bit status
                 bne drain_loop
+                rts
+                
+itu:
+                php
+                jsr itu_sei_ext_tube
+                jsr drain
+                jsr itu_int_tube
+                plp
                 rts
                 
                 .endproc
@@ -721,6 +735,9 @@ wait_loop:
                 
 got_data:
                 .endif
+
+                lda #SERIAL_STATUS_NOT_RECEIVED
+                sta link_last_status_byte
                 
                 jsr recv_header_byte ;receive packet type
 
@@ -1065,6 +1082,7 @@ recv_status_byte:
                 pha             ;save data byte
 
                 .recv_byte
+                sta link_last_status_byte
 
                 pla             ;restore data byte
                 rts
@@ -1080,7 +1098,7 @@ itu_recv_data_byte:
 
 itu_recv_status_byte:
                 jsr itu_recv_data_byte
-                .itu_recv_byte -1
+                .itu_recv_byte link_last_status_byte
                 lda link_value
                 rts
                 
@@ -1136,6 +1154,8 @@ transfer_file_data: .proc
                 rol a                   ;0 00000RIH
                 asl a                   ;0 0000RIH0 (b0 = page flag)
                 pha                     ;save routine index
+
+                ; .debug_print ['tfd: routine=',DP_A,' -count=&',payload_counter+3,payload_counter+2,payload_counter+1,payload_counter+0,'\r\n']
 
                 ; Claim Tube if necessary.
                 lda link_transfer_flags ;N=0 if Tube
@@ -1224,7 +1244,7 @@ init_link_transfer_thunk:
                 sta link_transfer_thunk+1
                 lda link_transfer_routines_msb,x
                 sta link_transfer_thunk+2
-                ;.debug_print ['Transfer thunk: ',link_transfer_thunk+0,link_transfer_thunk+1,link_transfer_thunk+2,' (idx=&',DP_X,')\r\n']
+                ; .debug_print ['Transfer thunk: ',link_transfer_thunk+0,link_transfer_thunk+1,link_transfer_thunk+2,' (idx=&',DP_X,')\r\n']
                 rts
 
                 ; Initiate a Tube transfer, if necessary.
@@ -1233,7 +1253,7 @@ initiate_tube_transfer:
                 bpl +           ;taken if Tube transfer wanted
                 rts
 +
-                ;.debug_print ['Tube transfer: mode=&',DP_A,' addr=&',payload_addr+3,payload_addr+2,payload_addr+1,payload_addr+0,'\r\n']
+                ; .debug_print ['Tube transfer: mode=&',DP_A,' addr=&',payload_addr+3,payload_addr+2,payload_addr+1,payload_addr+0,'\r\n']
                 ldx #<payload_addr
                 ldy #>payload_addr
                 jmp $406
