@@ -4807,7 +4807,7 @@ debug_write_s_marker: .proc
                 lda #'S'
                 jsr debug_internal_write_a
                 pla
-                pla
+                plp
                 rts
                 .endproc
 
@@ -4817,7 +4817,7 @@ debug_write_r_marker: .proc
                 lda #'R'
                 jsr debug_internal_write_a
                 pla
-                pla
+                plp
                 rts
                 .endproc
 
