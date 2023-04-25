@@ -596,13 +596,13 @@ _drain_loop:
                 beq _drain_loop
 
                 pla
-                lda payload_counter+3
+                sta payload_counter+3
                 pla
-                lda payload_counter+2
+                sta payload_counter+2
                 pla
-                lda payload_counter+1
+                sta payload_counter+1
                 pla
-                lda payload_counter+0
+                sta payload_counter+0
 
 _send:
                 .if send_1_byte_messages
