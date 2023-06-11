@@ -104,15 +104,22 @@ use_placeholder_requests=true
                 ; Tube/ext Tube) or ~1.0 sec (int Tube).
 reasonable_wait_time=16384
                 .endif
-
                 
 ;-------------------------------------------------------------------------
+
+                .if target_electron
+tube_serial_base=$fcee
+                .else
+tube_serial_base=$fefe
+                .endif
                 
-                .virtual $fefe
+;-------------------------------------------------------------------------
+
+                .virtual tube_serial_base+0
 fifo:
                 .endvirtual
 
-                .virtual $feff
+                .virtual tube_serial_base+1
 status: .block
 rx_data=$01
 tx_space=$02
@@ -167,7 +174,9 @@ get_tube_mode: .function mode,dir
 
                 .section link_startup_workspace
 num_sync_zeros_received: .fill 2
+                .if !target_electron
 startup_itu: .fill 1
+                .endif
 startup_counter: .fill 2
 startup_sync_counter: .fill 1
                 .endsection link_startup_workspace
@@ -180,8 +189,10 @@ startup_sync_counter: .fill 1
 ;-------------------------------------------------------------------------
 
                 .section link_workspace
+                .if !target_electron
 ; bit 7 set if M128, using internal Tube.
 link_itu: .fill 1
+                .endif
 link_old_y: .fill 1
 link_value: .fill 1
 link_transfer_flags: .fill 1
@@ -235,12 +246,15 @@ is_itu: .proc
 ;
 ; exit: A=value of status register
 startup_read_status: .proc
+                .if !target_electron
                 bit startup_itu
                 bmi +
+                .endif
 
                 lda status
                 rts
 
+                .if !target_electron
 +
                 .cpu '65c02'
                 php
@@ -256,6 +270,7 @@ startup_read_status: .proc
                 plp
                 .cpu 'default'
                 rts
+                .endif
                 .endproc
 
 ;-------------------------------------------------------------------------
@@ -264,8 +279,10 @@ startup_read_status: .proc
 ; exit: C=0 if no data was available
 ;       C=1 if data was available, A = value read
 startup_read_fifo: .proc
+                .if !target_electron
                 bit startup_itu
                 bmi itu
+                .endif
 
 read_fifo:
                 lda status
@@ -281,6 +298,7 @@ got_data:
                 sec
                 rts
 
+                .if !target_electron
 itu:
                 .cpu '65c02'
                 php
@@ -297,6 +315,7 @@ itu:
                 plp
                 .cpu 'default'
                 rts
+                .endif
                 .endproc
 
 ;-------------------------------------------------------------------------
@@ -306,8 +325,10 @@ itu:
 ; exit: C=0 if no space
 ;       C=1 if data was written
 startup_write_fifo: .proc
+                .if !target_electron
                 bit startup_itu
                 bmi itu
+                .endif
 
 write_y_fifo:
                 lda status
@@ -323,6 +344,7 @@ space:
                 sec
                 rts
 
+                .if !target_electron
 itu:
                 .cpu '65c02'
                 php
@@ -343,13 +365,16 @@ itu:
 
                 asl a           ;restore carry
                 rts
+                .endif
                 .endproc
                 
 ;-------------------------------------------------------------------------
 
 startup: .proc
+                .if !target_electron
                 jsr is_itu
                 sta startup_itu
+                .endif
 
 ; During service call 3, IRQs appear to be disabled. So the startup
 ; process doesn't check the system clock - it just counts number of
@@ -541,6 +566,7 @@ sync_timed_out_3:
 ; flag.
 ;
 begin_send_with_restart: .proc
+                .if !target_electron
                 pha             ;save packet type
 
                 ; sort out ITU flag
@@ -548,6 +574,8 @@ begin_send_with_restart: .proc
                 sta link_itu
 
                 pla             ;restore packet type
+                .endif
+                
                 jmp begin_send_without_restart
                 .endproc
                 
@@ -663,8 +691,10 @@ _n_bytes:
 ;
 drain_rx_fifo: .proc
                 ; .debug_print ['ts: drain\r\n']
+                .if !target_electron
                 bit link_itu
                 bmi itu
+                .endif
 drain:
                 lda #status.rx_data
 drain_loop:
@@ -672,7 +702,8 @@ drain_loop:
                 bit status
                 bne drain_loop
                 rts
-                
+
+                .if !target_electron
 itu:
                 php
                 jsr itu_sei_ext_tube
@@ -680,7 +711,7 @@ itu:
                 jsr itu_int_tube
                 plp
                 rts
-                
+                .endif
                 .endproc
                 
 ;-------------------------------------------------------------------------
@@ -691,8 +722,10 @@ itu:
 ;       C=1 - receive FIFO not empty
 
 poll_recv: .proc
+                .if !target_electron
                 bit link_itu
                 bmi itu
+                .endif
 
                 lda status
 check_status:
@@ -700,6 +733,7 @@ check_status:
                 cmp #status.rx_data
                 rts
 
+                .if !target_electron
 itu:
                 .cpu '65c02'
                 php
@@ -710,7 +744,7 @@ itu:
                 txa
                 bra check_status
                 .cpu 'default'
-                
+                .endif
                 .endproc
 
 
@@ -826,9 +860,10 @@ itu_int_tube: .proc
 itu_cli_briefly: .proc
                 jsr itu_int_tube
                 cli
-                .cerror *!=itu_sei_ext_tube,'oops'
+                jmp itu_sei_ext_tube
+                ;.cerror *!=itu_sei_ext_tube,'oops'
                 .endproc
-
+                
 ;-------------------------------------------------------------------------
 ;
 ; Disable IRQs and select ext Tube.
@@ -838,14 +873,14 @@ itu_cli_briefly: .proc
 ; exit: I=1
 ;       ext Tube selected
 ; preserves: X/Y
-itu_sei_ext_tube: .block
+itu_sei_ext_tube: .proc
                 .cpu '65c02'
                 sei             ;6 +2
                 lda #acccon.itu ;8 +2
                 trb acccon      ;10 +6
                 rts             ;16 +6 = 22
                 .cpu 'default'
-                .endblock
+                .endproc
 
 ;-------------------------------------------------------------------------
 ; 
@@ -856,6 +891,7 @@ itu_sei_ext_tube: .block
 ; exit: I=1
 ;       FIFO in hoped-for state
 ;       ext Tube selected
+                .if !target_electron
 itu_wait_for_status: .proc
                 pha
                 jsr itu_cli_briefly
@@ -864,6 +900,7 @@ itu_wait_for_status: .proc
                 beq itu_wait_for_status
                 rts
                 .endproc
+                .endif
                 
 ;-------------------------------------------------------------------------
 ;
@@ -880,6 +917,9 @@ send_byte: .macro
 
                 lda #status.tx_space
 -
+                .if target_electron
+                ; lda #status.tx_space ;yep, wtf
+                .endif
                 bit status
                 beq -
                 sty fifo
@@ -908,6 +948,9 @@ recv_byte: .macro
                 
                 lda #status.rx_data
 -
+                .if target_electron
+                ; lda #status.tx_space ;yep, wtf
+                .endif
                 bit status
                 beq -
                 lda fifo
@@ -1007,18 +1050,22 @@ itu_recv_byte: .macro dest
 send_header_byte: .proc
                 sty link_old_y
                 tay
-                
+
+                .if !target_electron
                 bit link_itu
                 bmi itu
+                .endif
 
                 .send_byte
                 ldy link_old_y
                 rts
 
+                .if !target_electron
 itu:
                 .itu_send_byte
                 ldy link_old_y
                 rts
+                .endif
                 .endproc
 
 ;-------------------------------------------------------------------------
@@ -1027,9 +1074,11 @@ send_payload_byte: .proc
                 sty link_old_y
                 
                 tay
-                
+
+                .if !target_electron
                 bit link_itu
                 bmi itu
+                .endif
 
                 .send_byte
 
@@ -1043,6 +1092,7 @@ send_payload_byte: .proc
                 ldy link_old_y
                 rts
 
+                .if !target_electron
 itu:
                 .itu_send_byte
 
@@ -1055,30 +1105,36 @@ itu:
 +
                 ldy link_old_y
                 rts
+                .endif
                 .endproc
 
 ;-------------------------------------------------------------------------
 
 recv_header_byte: .proc
+                .if !target_electron
                 bit link_itu
                 bmi itu
+                .endif
                 
                 ; receive data byte
                 .recv_byte
                 rts
 
+                .if !target_electron
 itu:
                 .itu_recv_byte link_value
                 lda link_value
                 rts
-                
+                .endif
                 .endproc
 
 ;-------------------------------------------------------------------------
 
 recv_payload_byte: .proc
+                .if !target_electron
                 bit link_itu
                 bmi itu
+                .endif
 
                 lda payload_counter+0
                 beq recv_status_byte
@@ -1097,6 +1153,7 @@ recv_status_byte:
                 pla             ;restore data byte
                 rts
 
+                .if !target_electron
 itu:
                 lda payload_counter+0
                 beq itu_recv_status_byte
@@ -1111,7 +1168,7 @@ itu_recv_status_byte:
                 .itu_recv_byte link_last_status_byte
                 lda link_value
                 rts
-                
+                .endif
                 .endproc
 
 ;-------------------------------------------------------------------------
@@ -1157,7 +1214,11 @@ transfer_file_data: .proc
                 ;
                 ; (link_itu is currently bit 7 only. But that might
                 ; change.)
+                .if target_electron
+                lda #0                  ;I=0
+                .else
                 lda link_itu            ;? I???????
+                .endif
                 asl a                   ;I ????????
                 lda link_transfer_flags ;I H000000R
                 rol a                   ;H 000000RI
@@ -1273,23 +1334,38 @@ _..=[send_parasite_bytes]       ; R=0 I=0 H=0 p=0 $0
 _..=[send_parasite_page]        ; R=0 I=0 H=0 p=1 $1
 _..=[send_host_bytes]           ; R=0 I=0 H=1 p=0 $2
 _..=[send_host_page]            ; R=0 I=0 H=1 p=1 $3
+                .if target_electron
+_..=[not_implemented,not_implemented,not_implemented,not_implemented]
+                .else
 _..=[itu_send_parasite_bytes]   ; R=0 I=1 H=0 p=0 $4
 _..=[itu_send_parasite_page]    ; R=0 I=1 H=0 p=1 $5
 _..=[itu_send_host_bytes]       ; R=0 I=1 H=1 p=0 $6
 _..=[itu_send_host_page]        ; R=0 I=1 H=1 p=1 $7
+                .endif
 _..=[recv_parasite_bytes]       ; R=1 I=0 H=0 p=0 $8
 _..=[recv_parasite_page]        ; R=1 I=0 H=0 p=1 $9
 _..=[recv_host_bytes]           ; R=1 I=0 H=1 p=0 $a
 _..=[recv_host_page]            ; R=1 I=0 H=1 p=1 $b
+                .if target_electron
+_..=[not_implemented,not_implemented,not_implemented,not_implemented]
+                .else
 _..=[itu_recv_parasite_bytes]   ; R=1 I=1 H=0 p=0 $c
 _..=[itu_recv_parasite_page]    ; R=1 I=1 H=0 p=1 $d
 _..=[itu_recv_host_bytes]       ; R=1 I=1 H=1 p=0 $e
 _..=[itu_recv_host_page]        ; R=1 I=1 H=1 p=1 $f
+                .endif
 link_transfer_routines=_
-
+                .cerror len(link_transfer_routines)!=16,'oops'
 link_transfer_routines_lsb: .byte <link_transfer_routines
 link_transfer_routines_msb: .byte >link_transfer_routines
                 
+                .endproc
+
+;-------------------------------------------------------------------------
+;
+;
+not_implemented: .proc
+                .brk_error 255,'Internal error (ITU)'
                 .endproc
 
 ;-------------------------------------------------------------------------
@@ -1306,6 +1382,9 @@ transfer_wait_for_status: .macro dir
                 
                 lda #get_status_flag_for_dir(\dir)
 -
+                .if target_electron
+                lda #get_status_flag_for_dir(\dir)
+                .endif
                 bit status
                 beq -
                 .endmacro
@@ -1376,7 +1455,7 @@ transfer_parasite_data_byte: .macro dir
                 .check_dir \dir
 
                 .if \dir==send
-                ldy tube_fifo3_data
+                ldy tube.fifo3_data
                 sty fifo
                 .if debug_markers
                 jsr debug_write_s_marker
@@ -1384,7 +1463,7 @@ transfer_parasite_data_byte: .macro dir
                 .endif
                 .else
                 ldy fifo
-                sty tube_fifo3_data
+                sty tube.fifo3_data
                 .if debug_markers
                 jsr debug_write_r_marker
                 jsr debug_write_y
@@ -1633,7 +1712,7 @@ loop:
                 .endif
                 lda #acccon.itu                    ;13 +2
                 tsb acccon                         ;15 +6
-                sty tube_fifo3_data                ;21 +4
+                sty tube.fifo3_data                ;21 +4
                 trb acccon                         ;25 +6
                 jsr delay_12_cycles                ;31 +12
                 dex                                ;43 +2
@@ -1665,7 +1744,7 @@ loop:
                 .endif
                 lda #acccon.itu                    ;0 +2
                 tsb acccon                         ;2 +6
-                ldy tube_fifo3_data                ;8 +4 
+                ldy tube.fifo3_data                ;8 +4 
                 trb acccon                         ;12 +6
                 lda #get_status_flag_for_dir(send) ;18 +2
                 bit status                         ;20 +4
@@ -1726,7 +1805,7 @@ loop:
                 jsr debug_write_a
                 .endif
                 sty acccon                         ;+4 21
-                sta tube_fifo3_data                ;+4 25
+                sta tube.fifo3_data                ;+4 25
 
                 .endrept
 
@@ -1788,7 +1867,7 @@ loop:
                 .endif
 
                 sty acccon                         ;0 +4
-                ldx tube_fifo3_data                ;4 +4
+                ldx tube.fifo3_data                ;4 +4
                 lda acccon_xtu                     ;8 +3
                 sta acccon                         ;11 +4
                 lda #get_status_flag_for_dir(send) ;15 +2
@@ -1922,9 +2001,14 @@ recv_parasite_bytes: .proc
                 .endblock
 
 ;-------------------------------------------------------------------------
-                
+
+                .if target_electron
+link_name='Tube Serial, Electron+AP5'
+link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL_ELECTRON
+                .else
 link_name='Tube Serial'
 link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL
+                .endif
                 
 ; link_prepare=tube_serial.prepare
 ; link_prepare_and_maybe_restart=link_prepare

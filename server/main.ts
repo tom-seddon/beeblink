@@ -64,6 +64,7 @@ const DEVICE_RETRY_DELAY_MS = 1000;
 
 const DEFAULT_BEEBLINK_AVR_ROM = './beeblink_avr_fe60.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_ROM = './beeblink_tube_serial.rom';
+const DEFAULT_BEEBLINK_TUBE_SERIAL_ELECTRON_ROM = './beeblink_tube_serial_electron.rom';
 const DEFAULT_BEEBLINK_UPURS_ROM = './beeblink_upurs_fe60.rom';
 
 const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
@@ -134,6 +135,7 @@ interface ICommandLineOptions {
     verbose: boolean;
     avr_rom: string | null;
     tube_serial_rom: string | null;
+    tube_serial_electron_rom: string | null;
     upurs_rom: string | null;
     fs_verbose: boolean;
     server_verbose: boolean;
@@ -697,6 +699,7 @@ async function serialTestPCToBBC(options: ICommandLineOptions): Promise<void> {
 
 async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
     const port = await openSerialPort(device.portInfo);
+    const log = utils.Log.create(getSerialPortPath(device.portInfo), process.stdout);
 
     await new Promise<void>((resolve, reject) => {
         port.flush((error: any) => {
@@ -1034,6 +1037,10 @@ function getRomPathsForSerial(options: ICommandLineOptions): Map<number, string>
 
     if (options.tube_serial_rom !== null) {
         map.set(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL, options.tube_serial_rom);
+    }
+
+    if (options.tube_serial_electron_rom !== null) {
+        map.set(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL_ELECTRON, options.tube_serial_electron_rom);
     }
 
     return map;
@@ -1470,7 +1477,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
 
     async function readByte(): Promise<number> {
         if (readBuffers.length === 0) {
-            dataInLog?.pn(`readByte: waiting for more data...`);
+            //dataInLog?.pn(`readByte: waiting for more data...`);
 
             await new Promise<void>((resolve, reject): void => {
                 if (readWaiter !== undefined) {
@@ -1481,7 +1488,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
             });
         }
 
-        dataInLog?.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
+        //dataInLog?.pn(`readByte: readBuffers.length=${readBuffers.length}, readBuffers[0].length=${readBuffers[0].length}, readIndex=0x${readIndex.toString(16)}`);
         return readByte2();
     }
 
@@ -2018,6 +2025,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     fullHelpOnly(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink AVR ROM (for use with b2) from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM });
     fullHelpOnly(['--tube-serial-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink Tube Serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ROM });
     fullHelpOnly(['--upurs-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink UPURS ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_UPURS_ROM });
+    fullHelpOnly(['--tube-serial-electron-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink Tube Serial (Electron+AP5) ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ELECTRON_ROM });
 
     // Verbosity
     always(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });

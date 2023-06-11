@@ -41,9 +41,25 @@
 ;
 ;-------------------------------------------------------------------------
 
+                .weak
+target_electron=false
+                .endweak
+                
+                .if target_electron
+                .include "../submodules/beeb/include/electron.s65"
+
+                ; There's no standard Tube address on the Electron.
+                ; BeebLink assumes AP5.
+                .virtual $fce0
+tube: .dstruct Tube
+                .endvirtual
+                
+                .else
+                .include "../submodules/beeb/include/beeb.s65"
+                .endif
+                
                 .include "common.s65"
                 .include ".build/beeblink_constants.s65"
-                .include "../submodules/beeb/include/beeb.s65"
                 .include "lib.s65"
                 
 ;-------------------------------------------------------------------------
@@ -347,6 +363,7 @@ end:
                 .weak
 link_avr=false
 link_tube_serial=false
+link_tube_serial_electron=false
                 .endweak
 
                 .section driver_code
@@ -3424,6 +3441,8 @@ special:
                 cmp #RESPONSE_SPECIAL_SRLOAD
                 beq srload_special
 
+not_supported:
+                jsr discard_remaining_payload
                 .brk_error 255,"Not supported",0
                 
                 .pend
@@ -3587,7 +3606,7 @@ loop:
                 jsr recv_payload_byte
                 bcc done
 
-                sta $fee5
+                sta tube.fifo3_data
                 jmp loop
 
 done:
@@ -3670,7 +3689,7 @@ send_tube_loop:
                 jsr test_payload_counter
                 beq send_tube_done
 
-                lda $fee5
+                lda tube.fifo3_data
                 jsr send_payload_byte
 
                 jmp send_tube_loop
@@ -4205,87 +4224,6 @@ routine_end:
 
 ;-------------------------------------------------------------------------
 ;
-; Try to unlock ABR.
-;
-; exit: C=0 if ROM not writeable, C=1 if writeable
-;       Y>=$80 if ABR not unlocked (for whatever reason)
-;       Y<$80 if ABR unlocked - value is offset from $FCDD of unlock address
-; 
-unlock_ABR: .proc
-                jsr is_sideways_ram
-                bcs not_unlocked ;taken if sideways RAM - i.e., not
-                                 ;ABR, or already unlocked
-
-                lda #$81
-                ldx #$00
-                ldy #$ff
-                jsr osbyte
-
-                cpx #$fd
-                beq try_unlock  ;taken if Master 128
-                
-                cpx #$f7
-                beq try_unlock  ;taken if Master ET
-
-                ; could probably support Electron as well...
-
-                clc
-not_unlocked:
-                ldy #$80
-                rts
-
-try_unlock:
-                lda $f4
-                cmp #4
-                bcs not_unlocked ;taken if not in a M128 cartridge
-                                 ;slot - i.e., unlock impossible
-
-                lda $f4
-                and #1
-                asl a
-                tay
-
-                jsr write_ABR_m128
-
-                tya
-                pha
-                jsr is_sideways_ram
-                pla
-                tay
-                
-                bcc not_unlocked ;taken if still not sideways RAM -
-                                 ;i.e., probably not an ABR
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
-; Access ABR on Master.
-;
-; entry: Y = offset from $fcdc
-;
-write_ABR_m128: .proc
-                php
-                sei
-                
-                lda $fe34
-                pha
-                
-                ora #$20        ;$FCxx=cartridge
-                sta $fe34
-
-                sta $fcdc,y     ;value irrelevant.
-
-                pla
-                sta $fe34
-                
-                plp
-                rts
-                
-                .pend
-                
-;-------------------------------------------------------------------------
-;
 ; *BUILD
 ;
 ; This is only for OS 1.20/OS 2.00. I didn't bother being
@@ -4439,7 +4377,15 @@ version_cmd: .proc
 ;-------------------------------------------------------------------------
 ;
 ; Handle *SRLOAD.
-; 
+;
+                .if target_electron
+
+srload_special: .proc
+                jmp communicate_star_command.not_supported
+                .endproc
+
+                .else                
+
 srload_special: .proc
                 .section srload_workspace
 routine_addr: .fill 2           ;address of routine on stack
@@ -4515,16 +4461,18 @@ routine_begin:
                 stx old_bank
                 ldx bank
                 stx $f4
-                stx $fe30
+                stx romsel
                 ldx #dest_addr
                 sta (0,x)
                 ldx old_bank
                 stx $f4
-                stx $fe30
+                stx romsel
                 jmp loop_continue
 routine_end:
                 .cerror routine_end-routine_begin-1>128,'no'
                 .pend
+
+                .endif
                 
 ;-------------------------------------------------------------------------
 ; 

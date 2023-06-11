@@ -68,9 +68,9 @@ all : programs roms
 programs: _uputest_program
 
 .PHONY : roms
-roms : _avr_rom _tube_serial_rom _upurs_rom
+roms : _avr_rom _tube_serial_rom _upurs_rom _electron_tube_serial_rom
 	@echo ---
-	cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x "$(VER)" -x "$(BUILD_TIME)" -x "$(COMMIT)" beeblink_tube_serial.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom
+	cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x "$(VER)" -x "$(BUILD_TIME)" -x "$(COMMIT)" beeblink_tube_serial.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom beeblink_electron_tube_serial.rom
 
 ##########################################################################
 ##########################################################################
@@ -96,19 +96,23 @@ _uputest_program: _dest
 ##########################################################################
 ##########################################################################
 
-.PHONY : avr_rom
+.PHONY : _avr_rom
 _avr_rom : _dest $(DEST)/beeblink_constants.s65
 # 65120 = $fe60 - can't figure out how to get the $ through without
 # making a mess...	
 	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=avr_fe60 ROM_BEEB_NAME=AVRFE60 LINK=avr CMD_PREFIX=AVR "EXTRA_ARGS=-Dlink_avr_via=65120"
 
-.PHONY : tube_serial_rom
+.PHONY : _tube_serial_rom
 _tube_serial_rom : _dest $(DEST)/beeblink_constants.s65
 	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=tube_serial ROM_BEEB_NAME=TS LINK=tube_serial CMD_PREFIX=TS
 
-.PHONY : upurs_rom
+.PHONY : _upurs_rom
 _upurs_rom : _dest $(DEST)/beeblink_constants.s65
 	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=upurs_fe60 ROM_BEEB_NAME=UPUFE60 LINK=upurs CMD_PREFIX=U "EXTRA_ARGS=-Dlink_upurs_via=65120"
+
+.PHONY : _electron_tube_serial_rom
+_electron_tube_serial_rom: _dest $(DEST)/beeblink_constants.s65
+	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=electron_tube_serial ROM_BEEB_NAME=ETS LINK=tube_serial CMD_PREFIX=TS "EXTRA_ARGS=-Dtarget_electron=true"
 
 ##########################################################################
 ##########################################################################
