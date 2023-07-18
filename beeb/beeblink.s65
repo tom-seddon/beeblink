@@ -303,9 +303,13 @@ rept_byte_access_counter: .block
 
 *=$8000
                 .dsection header
+                .dsection driver_code
+                ; avoid problem addresses for Tube Serial FIFO
+                ; accesses - see
+                ; https://stardot.org.uk/forums/viewtopic.php?f=3&t=27093
+                .cerror *>=$8e00,"driver code too large"
                 .dsection code
                 .dsection lib_code
-                .dsection driver_code
                 .dsection debug_code ;must be last!
 
                 ; It's actually fine for the ROM to be the full 16 KB,
