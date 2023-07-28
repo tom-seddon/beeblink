@@ -9,3 +9,4 @@ $.BGET1 diff=bbcbasic
 $.BGET2 diff=bbcbasic
 $.LOOPTEST diff=bbcbasic
 $.TESTS diff=bbcbasic
+$.TUTEST diff=bbcbasic
