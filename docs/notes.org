@@ -1236,3 +1236,20 @@ COM5:          00000290: 0d 01 a4 05 e1 0d 01 ae 04 04 0d ff 01 ** ** **  ......
 - 71a12eb6cfb49b72499acd5a94c5f436697f63fa  8129  beeblink_tube_serial.rom
 - 671874ca42e4082a52a2e3c98e93ec19a0a08858  6166  beeblink_avr_fe60.rom
 - c2d9784d38ce733fe1dc3b3948932ecf68277982  7383  beeblink_upurs_fe60.rom
+
+Electron:
+
+| Byte |  Bad | Total | Addr |
+|------+------+-------+------|
+| 0x15 | 4287 |  6125 | 30f8 |
+| 0x59 | 6125 |  6125 | 33e4 |
+| 0x71 | 6125 |  6125 | 34ec |
+| 0x89 | 6125 |  6125 | 35f4 |
+| 0xa1 | 3772 |  6125 | 36fc |
+| 0xe5 | 3376 |  6125 | 39e8 |
+| 0xfd | 2206 |  6124 | 3af8 |
+
+B+:
+
+(no problems)
+
