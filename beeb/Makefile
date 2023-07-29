@@ -9,6 +9,17 @@ endif
 ##########################################################################
 ##########################################################################
 
+ifeq ($(VERBOSE),1)
+_V:=
+_TASSQUIET:=
+else
+_TASSQUIET:=--quiet
+_V:=@
+endif
+
+##########################################################################
+##########################################################################
+
 # https://stackoverflow.com/a/665045/1618406
 
 lcase = $(subst A,a,$(subst B,b,$(subst C,c,$(subst D,d,$(subst E,e,$(subst F,f,$(subst G,g,$(subst H,h,$(subst I,i,$(subst J,j,$(subst K,k,$(subst L,l,$(subst M,m,$(subst N,n,$(subst O,o,$(subst P,p,$(subst Q,q,$(subst R,r,$(subst S,s,$(subst T,t,$(subst U,u,$(subst V,v,$(subst W,w,$(subst X,x,$(subst Y,y,$(subst Z,z,$1))))))))))))))))))))))))))
@@ -19,7 +30,7 @@ ucase = $(subst a,A,$(subst b,B,$(subst c,C,$(subst d,D,$(subst e,E,$(subst f,F,
 ##########################################################################
 
 DEST:=.build
-TASSCMD:=$(TASS) --m65xx -Wall -Wno-implied-reg -Wno-portable -C --line-numbers --long-branch
+TASSCMD:=$(TASS) --m65xx -Wall -Wno-implied-reg -Wno-portable -C --line-numbers --long-branch $(_TASSQUIET)
 GIT_VER:=$(shell git log -1 '--format=%cd-%h' '--date=format:%Y%m%d-%H%M%S')
 SHELLCMD:=$(PYTHON) ../submodules/shellcmd.py/shellcmd.py
 SMLOAD_JOIN:=$(PYTHON) ../submodules/beeb/bin/smload_join.py
@@ -70,28 +81,28 @@ programs: _uputest_program
 .PHONY : roms
 roms : _avr_rom _tube_serial_rom _upurs_rom _electron_tube_serial_rom
 	@echo ---
-	cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x "$(VER)" -x "$(BUILD_TIME)" -x "$(COMMIT)" beeblink_tube_serial.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom beeblink_electron_tube_serial.rom
+	$(_V)cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x "$(VER)" -x "$(BUILD_TIME)" -x "$(COMMIT)" beeblink_tube_serial.rom beeblink_tube_serial_safe.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom beeblink_electron_tube_serial.rom beeblink_electron_tube_serial_safe.rom
 
 ##########################################################################
 ##########################################################################
 
 .PHONY : _dest
 _dest:
-	$(SHELLCMD) mkdir $(DEST)
-	$(SHELLCMD) mkdir ../volumes/beeblink/z
+	$(_V)$(SHELLCMD) mkdir $(DEST)
+	$(_V)$(SHELLCMD) mkdir ../volumes/beeblink/z
 
 ##########################################################################
 ##########################################################################
 
 $(DEST)/beeblink_constants.s65 : ../server/beeblink.ts ../tools/make_constants.py
-	$(PYTHON) ../tools/make_constants.py -o "$@" "$<" 6502
+	$(_V)$(PYTHON) ../tools/make_constants.py -o "$@" "$<" 6502
 
 ##########################################################################
 ##########################################################################
 
 .PHONY : _uputest_program
-_uputest_program: _dest
-	$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=uputest IO=1 DRIVE=z
+_uputest_program: _dest $(DEST)/beeblink_constants.s65
+	$(_V)$(MAKE) _program "BUILD_TIME=$(BUILD_TIME)" STEM=uputest IO=1 DRIVE=z
 
 ##########################################################################
 ##########################################################################
@@ -100,27 +111,29 @@ _uputest_program: _dest
 _avr_rom : _dest $(DEST)/beeblink_constants.s65
 # 65120 = $fe60 - can't figure out how to get the $ through without
 # making a mess...	
-	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=avr_fe60 ROM_BEEB_NAME=AVRFE60 LINK=avr CMD_PREFIX=AVR "EXTRA_ARGS=-Dlink_avr_via=65120"
+	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=avr_fe60 ROM_BEEB_NAME=AVRFE60 LINK=avr CMD_PREFIX=AVR "EXTRA_ARGS=-Dlink_avr_via=65120"
 
 .PHONY : _tube_serial_rom
 _tube_serial_rom : _dest $(DEST)/beeblink_constants.s65
-	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=tube_serial ROM_BEEB_NAME=TS LINK=tube_serial CMD_PREFIX=TS
+	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=tube_serial ROM_BEEB_NAME=TS LINK=tube_serial CMD_PREFIX=TS
+	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=tube_serial_safe ROM_BEEB_NAME=TSS LINK=tube_serial CMD_PREFIX=TS "EXRTA_ARGS=-Dtube_serial_safe=true"
 
 .PHONY : _upurs_rom
 _upurs_rom : _dest $(DEST)/beeblink_constants.s65
-	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=upurs_fe60 ROM_BEEB_NAME=UPUFE60 LINK=upurs CMD_PREFIX=U "EXTRA_ARGS=-Dlink_upurs_via=65120"
+	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=upurs_fe60 ROM_BEEB_NAME=UPUFE60 LINK=upurs CMD_PREFIX=U "EXTRA_ARGS=-Dlink_upurs_via=65120"
 
 .PHONY : _electron_tube_serial_rom
 _electron_tube_serial_rom: _dest $(DEST)/beeblink_constants.s65
-	$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=electron_tube_serial ROM_BEEB_NAME=ETS LINK=tube_serial CMD_PREFIX=TS "EXTRA_ARGS=-Dtarget_electron=true"
+	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=electron_tube_serial ROM_BEEB_NAME=ETS LINK=tube_serial CMD_PREFIX=TS "EXTRA_ARGS=-Dtarget_electron=true"
+	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=electron_tube_serial_safe ROM_BEEB_NAME=ETSS LINK=tube_serial CMD_PREFIX=TS "EXTRA_ARGS=-Dtarget_electron=true -Dtube_serial_safe=true"
 
 ##########################################################################
 ##########################################################################
 
 .PHONY : _program
 _program :
-	$(TASSCMD) --cbm-prg $(STEM).s65 -L$(DEST)/$(STEM).lst -o$(DEST)/$(STEM).prg
-	$(PRG2BBC) $(if $(IO),--io) $(DEST)/$(STEM).prg ../volumes/beeblink/$(DRIVE)/$$.$(call ucase,$(STEM))
+	$(_V)$(TASSCMD) --cbm-prg $(STEM).s65 -L$(DEST)/$(STEM).lst -o$(DEST)/$(STEM).prg
+	$(_V)$(PRG2BBC) $(if $(IO),--io) $(DEST)/$(STEM).prg ../volumes/beeblink/$(DRIVE)/$$.$(call ucase,$(STEM))
 
 ##########################################################################
 ##########################################################################
@@ -150,23 +163,23 @@ _program :
 _rom : _EXTRA_ARGS:="-DVERSION=\"$(VER)\"" "-DBUILD_TIME=\"$(BUILD_TIME)\"" "-DCOMMIT=\"$(COMMIT)\"" -Dlink_$(LINK)=true $(EXTRA_ARGS)
 _rom : STEM:=$(DEST)/beeblink_$(ROM_SUFFIX)
 _rom :
-	$(TASSCMD) --nostart beeblink.s65 -L$(STEM).lst -o$(STEM).rom $(_EXTRA_ARGS)
+	$(_V)$(TASSCMD) --nostart beeblink.s65 -L$(STEM).lst -o$(STEM).rom $(_EXTRA_ARGS)
 
-	$(TASSCMD) --nostart beeblink.s65 -L$(STEM)-test.lst -o$(STEM)-test.rom $(_EXTRA_ARGS) -Dblfs_fs_number=94 -Dblfs_first_handle=160 -Dblfs_prefix=\"$(CMD_PREFIX)\"
+	$(_V)$(TASSCMD) --nostart beeblink.s65 -L$(STEM)-test.lst -o$(STEM)-test.rom $(_EXTRA_ARGS) -Dblfs_fs_number=94 -Dblfs_first_handle=160 -Dblfs_prefix=\"$(CMD_PREFIX)\"
 
-	$(SHELLCMD) mkdir $(BEEB_DEST)
-	$(SHELLCMD) copy-file $(STEM).rom $(BEEB_DEST)/R.$(ROM_BEEB_NAME)
-	$(SHELLCMD) touch $(BEEB_DEST)/R.$(ROM_BEEB_NAME).inf
-	$(SHELLCMD) copy-file $(STEM)-test.rom $(BEEB_DEST)/T.$(ROM_BEEB_NAME)
-	$(SHELLCMD) touch $(BEEB_DEST)/T.$(ROM_BEEB_NAME).inf
+	$(_V)$(SHELLCMD) mkdir $(BEEB_DEST)
+	$(_V)$(SHELLCMD) copy-file $(STEM).rom $(BEEB_DEST)/R.$(ROM_BEEB_NAME)
+	$(_V)$(SHELLCMD) touch $(BEEB_DEST)/R.$(ROM_BEEB_NAME).inf
+	$(_V)$(SHELLCMD) copy-file $(STEM)-test.rom $(BEEB_DEST)/T.$(ROM_BEEB_NAME)
+	$(_V)$(SHELLCMD) touch $(BEEB_DEST)/T.$(ROM_BEEB_NAME).inf
 
 # ifdef TOM_LAPTOP
 
 # # Create a third copy of the ROM: the FS ROM, but with some extra
 # # stuff added in. This is for use in my BBC B.
 
-# 	$(SMLOAD_JOIN) $(STEM).rom $(HOME)/beeb/beeb-files/stuff/65boot/0/$$.TUBEROM '../../startup_rom/.build/.tmp/startup_module.rom' -o $(BEEB_DEST)/B.$(ROM_BEEB_NAME)
-# 	touch $(BEEB_DEST)/B.$(ROM_BEEB_NAME).inf
+# 	$(_V)$(SMLOAD_JOIN) $(STEM).rom $(HOME)/beeb/beeb-files/stuff/65boot/0/$$.TUBEROM '../../startup_rom/.build/.tmp/startup_module.rom' -o $(BEEB_DEST)/B.$(ROM_BEEB_NAME)
+# 	$(_V)touch $(BEEB_DEST)/B.$(ROM_BEEB_NAME).inf
 
 # endif
 
@@ -175,7 +188,7 @@ _rom :
 
 .PHONY : clean
 clean :
-	$(SHELLCMD) rm-tree $(DEST)
+	$(_V)$(SHELLCMD) rm-tree $(DEST)
 
 ##########################################################################
 ##########################################################################

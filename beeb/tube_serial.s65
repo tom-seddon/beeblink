@@ -104,6 +104,18 @@ use_placeholder_requests=true
                 ; Tube/ext Tube) or ~1.0 sec (int Tube).
 reasonable_wait_time=16384
                 .endif
+
+;-------------------------------------------------------------------------
+;
+; Safe builds route all Tube Serial writes through a single routine
+; that runs from a specific address.
+;
+; A work around for the issue discussed in
+; https://stardot.org.uk/forums/viewtopic.php?f=3&t=27093
+
+                .weak
+tube_serial_safe=false
+                .endweak
                 
 ;-------------------------------------------------------------------------
 
