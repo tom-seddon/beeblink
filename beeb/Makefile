@@ -79,9 +79,9 @@ all : programs roms
 programs: _uputest_program
 
 .PHONY : roms
-roms : _avr_rom _tube_serial_rom _upurs_rom _electron_tube_serial_rom
+roms : _avr_rom _tube_serial_rom _upurs_rom _tube_serial_electron_rom
 	@echo ---
-	$(_V)cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x "$(VER)" -x "$(BUILD_TIME)" -x "$(COMMIT)" beeblink_tube_serial.rom beeblink_tube_serial_safe.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom beeblink_electron_tube_serial.rom beeblink_electron_tube_serial_safe.rom
+	$(_V)cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x "$(VER)" -x "$(BUILD_TIME)" -x "$(COMMIT)" beeblink_tube_serial.rom beeblink_tube_serial_safe.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom beeblink_tube_serial_electron.rom beeblink_tube_serial_safe_electron.rom
 
 ##########################################################################
 ##########################################################################
@@ -116,16 +116,16 @@ _avr_rom : _dest $(DEST)/beeblink_constants.s65
 .PHONY : _tube_serial_rom
 _tube_serial_rom : _dest $(DEST)/beeblink_constants.s65
 	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=tube_serial ROM_BEEB_NAME=TS LINK=tube_serial CMD_PREFIX=TS
-	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=tube_serial_safe ROM_BEEB_NAME=TSS LINK=tube_serial CMD_PREFIX=TS "EXRTA_ARGS=-Dtube_serial_safe=true"
+	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=tube_serial_safe ROM_BEEB_NAME=TSS LINK=tube_serial CMD_PREFIX=TS "EXTRA_ARGS=-Dtube_serial_safe=true"
 
 .PHONY : _upurs_rom
 _upurs_rom : _dest $(DEST)/beeblink_constants.s65
 	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=upurs_fe60 ROM_BEEB_NAME=UPUFE60 LINK=upurs CMD_PREFIX=U "EXTRA_ARGS=-Dlink_upurs_via=65120"
 
-.PHONY : _electron_tube_serial_rom
-_electron_tube_serial_rom: _dest $(DEST)/beeblink_constants.s65
-	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=electron_tube_serial ROM_BEEB_NAME=ETS LINK=tube_serial CMD_PREFIX=TS "EXTRA_ARGS=-Dtarget_electron=true"
-	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=electron_tube_serial_safe ROM_BEEB_NAME=ETSS LINK=tube_serial CMD_PREFIX=TS "EXTRA_ARGS=-Dtarget_electron=true -Dtube_serial_safe=true"
+.PHONY : _tube_serial_electron_rom
+_tube_serial_electron_rom: _dest $(DEST)/beeblink_constants.s65
+	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=tube_serial_electron ROM_BEEB_NAME=ETS LINK=tube_serial CMD_PREFIX=TS "EXTRA_ARGS=-Dtarget_electron=true"
+	$(_V)$(MAKE) _rom "BUILD_TIME=$(BUILD_TIME)" ROM_SUFFIX=tube_serial_safe_electron ROM_BEEB_NAME=ETSS LINK=tube_serial CMD_PREFIX=TS "EXTRA_ARGS=-Dtarget_electron=true -Dtube_serial_safe=true"
 
 ##########################################################################
 ##########################################################################

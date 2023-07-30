@@ -50,6 +50,8 @@ export const AVR_SUBTYPE_AVR = 0;
 export const SERIAL_SUBTYPE_TUBE_SERIAL = 0;
 export const SERIAL_SUBTYPE_UPURS = 1;
 export const SERIAL_SUBTYPE_TUBE_SERIAL_ELECTRON = 2;
+export const SERIAL_SUBTYPE_TUBE_SERIAL_SAFE_ELECTRON = 3;
+export const SERIAL_SUBTYPE_TUBE_SERIAL_SAFE = 4;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////

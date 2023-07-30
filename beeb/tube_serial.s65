@@ -116,6 +116,30 @@ reasonable_wait_time=16384
                 .weak
 tube_serial_safe=false
                 .endweak
+
+sta_fifo: .macro
+                .if tube_serial_safe
+                jsr sta_fifo_helper
+                .else
+                sta fifo
+                .endif
+                .endmacro
+
+stx_fifo: .macro
+                .if tube_serial_safe
+                jsr stx_fifo_helper
+                .else
+                stx fifo
+                .endif
+                .endmacro
+
+sty_fifo: .macro
+                .if tube_serial_safe
+                jsr sty_fifo_helper
+                .else
+                sty fifo
+                .endif
+                .endmacro
                 
 ;-------------------------------------------------------------------------
 
@@ -352,7 +376,7 @@ no_space:
                 rts
 
 space:
-                sty fifo
+                .sty_fifo
                 sec
                 rts
 
@@ -934,7 +958,7 @@ send_byte: .macro
                 .endif
                 bit status
                 beq -
-                sty fifo
+                .sty_fifo
 
                 .if debug_markers
                 jsr debug_write_y
@@ -1003,7 +1027,7 @@ itu_send_byte: .macro
                 plp
                 bra -
 +
-                sty fifo
+                .sty_fifo
                 .if debug_markers
                 jsr debug_write_y
                 .endif
@@ -1436,7 +1460,7 @@ transfer_host_data_byte: .macro dir
                 
                 .if \dir==send
                 lda (payload_addr),y
-                sta fifo
+                .sta_fifo
                 .if debug_markers
                 jsr debug_write_s_marker
                 jsr debug_write_a
@@ -1468,7 +1492,7 @@ transfer_parasite_data_byte: .macro dir
 
                 .if \dir==send
                 ldy tube.fifo3_data
-                sty fifo
+                .sty_fifo
                 .if debug_markers
                 jsr debug_write_s_marker
                 jsr debug_write_y
@@ -1495,7 +1519,7 @@ transfer_status_byte: .macro dir
 
                 .if \dir==send
                 lda #1
-                sta fifo
+                .sta_fifo
                 .if debug_markers
                 jsr debug_write_s_marker
                 jsr debug_write_a
@@ -1763,7 +1787,7 @@ loop:
                 bne +                              ;24 +3
                 jsr itu_wait_for_status            ;
 +                                                  ;
-                sty fifo                           ;27 +4
+                .sty_fifo                           ;27 +4
                 .if debug_markers
                 jsr debug_write_y
                 .endif
@@ -1887,7 +1911,7 @@ loop:
                 bne +                              ;21 +3
                 jsr wait_status                    ;...
 +                                                  ;...
-                stx fifo                           ;24 +4 = 28
+                .stx_fifo                           ;24 +4 = 28
                 .if debug_markers
                 jsr debug_write_x
                 .endif
@@ -2010,16 +2034,53 @@ recv_parasite_bytes: .proc
 
 ;-------------------------------------------------------------------------
 
+                .if tube_serial_safe
+
+; addresses of the form $xxx0 seem to be safe.
+
+                .align 16
+sta_fifo_helper:
+                sta fifo
+                rts
+
+                .align 16
+stx_fifo_helper:
+                stx fifo
+                rts
+
+                .align 16
+sty_fifo_helper:
+                sty fifo
+                rts
+                
+                .endif
+                
+;-------------------------------------------------------------------------
+
                 .endblock
 
 ;-------------------------------------------------------------------------
 
-                .if target_electron
-link_name='Tube Serial, Electron+AP5'
+                .if target_electron&&!tube_serial_safe
+                
+link_name='Tube Serial (Electron+AP5)'
 link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL_ELECTRON
-                .else
+                
+                .elsif target_electron&&tube_serial_safe
+                
+link_name='Tube Serial (Safe) (Electron+AP5)'
+link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL_SAFE_ELECTRON
+                
+                .elsif !target_electron&&!tube_serial_safe
+                
 link_name='Tube Serial'
 link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL
+                
+                .elsif !target_electron&&tube_serial_safe
+                
+link_name='Tube Serial (Safe)'
+link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL_SAFE
+
                 .endif
                 
 ; link_prepare=tube_serial.prepare

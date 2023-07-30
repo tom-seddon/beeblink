@@ -62,10 +62,19 @@ const ioctl = getIOCTL();
 
 const DEVICE_RETRY_DELAY_MS = 1000;
 
+const AVR_NAME = 'AVR';
+const UPURS_NAME = 'UPURS';
+const TUBE_SERIAL_NAME = 'Tube Serial';
+const TUBE_SERIAL_SAFE_NAME = 'Tube Serial (Safe)';
+const TUBE_SERIAL_ELECTRON_NAME = 'Tube Serial (Electron+AP5)';
+const TUBE_SERIAL_SAFE_ELECTRON_NAME = 'Tube Serial (Safe) (Electron+AP5)';
+
 const DEFAULT_BEEBLINK_AVR_ROM = './beeblink_avr_fe60.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_ROM = './beeblink_tube_serial.rom';
+const DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ROM = './beeblink_tube_serial_safe.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_ELECTRON_ROM = './beeblink_tube_serial_electron.rom';
 const DEFAULT_BEEBLINK_UPURS_ROM = './beeblink_upurs_fe60.rom';
+const DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ELECTRON_ROM = './beeblink_tube_serial_safe_electron.rom';
 
 const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
 
@@ -120,6 +129,9 @@ interface IConfigFile {
     default_volume: string | undefined;
     avr_rom: string | undefined;
     tube_serial_rom: string | undefined;
+    tube_serial_safe_rom: string | undefined;
+    tube_serial_electron_rom: string | undefined;
+    tube_serial_safe_electron_rom: string | undefined;
     upurs_rom: string | undefined;
     git: boolean | undefined;
     serial_include: string[] | undefined;
@@ -135,7 +147,9 @@ interface ICommandLineOptions {
     verbose: boolean;
     avr_rom: string | null;
     tube_serial_rom: string | null;
+    tube_serial_safe_rom: string | null;
     tube_serial_electron_rom: string | null;
+    tube_serial_safe_electron_rom: string | null;
     upurs_rom: string | null;
     fs_verbose: boolean;
     server_verbose: boolean;
@@ -313,23 +327,20 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
         options.serial_exclude_all = config.serial_exclude_all;
     }
 
-    if (options.avr_rom === null) {
-        if (config.avr_rom !== undefined) {
-            options.avr_rom = config.avr_rom;
+    function loadROM(optionsROM: string | null, configROM: string | undefined): string | null {
+        if (optionsROM === null && configROM !== undefined) {
+            return configROM;
+        } else {
+            return optionsROM;
         }
     }
 
-    if (options.tube_serial_rom === null) {
-        if (config.tube_serial_rom !== undefined) {
-            options.tube_serial_rom = config.tube_serial_rom;
-        }
-    }
-
-    if (options.upurs_rom === null) {
-        if (config.upurs_rom !== undefined) {
-            options.upurs_rom = config.upurs_rom;
-        }
-    }
+    options.avr_rom = loadROM(options.avr_rom, config.avr_rom);
+    options.upurs_rom = loadROM(options.upurs_rom, config.upurs_rom);
+    options.tube_serial_rom = loadROM(options.tube_serial_rom, config.tube_serial_rom);
+    options.tube_serial_safe_rom = loadROM(options.tube_serial_safe_rom, config.tube_serial_safe_rom);
+    options.tube_serial_electron_rom = loadROM(options.tube_serial_electron_rom, config.tube_serial_electron_rom);
+    options.tube_serial_safe_electron_rom = loadROM(options.tube_serial_safe_electron_rom, config.tube_serial_safe_electron_rom);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -699,7 +710,7 @@ async function serialTestPCToBBC(options: ICommandLineOptions): Promise<void> {
 
 async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
     const port = await openSerialPort(device.portInfo);
-    const log = utils.Log.create(getSerialPortPath(device.portInfo), process.stdout);
+    //const log = utils.Log.create(getSerialPortPath(device.portInfo), process.stdout);
 
     await new Promise<void>((resolve, reject) => {
         port.flush((error: any) => {
@@ -855,6 +866,9 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
 
     options.avr_rom = getFixedUpPath(options.avr_rom);
     options.tube_serial_rom = getFixedUpPath(options.tube_serial_rom);
+    options.tube_serial_safe_rom = getFixedUpPath(options.tube_serial_safe_rom);
+    options.tube_serial_electron_rom = getFixedUpPath(options.tube_serial_electron_rom);
+    options.tube_serial_safe_electron_rom = getFixedUpPath(options.tube_serial_safe_electron_rom);
     options.upurs_rom = getFixedUpPath(options.upurs_rom);
 
     options.load_config = getFixedUpPath(options.load_config);
@@ -896,13 +910,24 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     }
 
     if (options.save_config !== null) {
+        function getConfigString(str: string | null): string | undefined {
+            if (str === null) {
+                return undefined;
+            } else {
+                return str;
+            }
+        }
+
         const config: IConfigFile = {
-            default_volume: options.default_volume !== null ? options.default_volume : undefined,
+            default_volume: getConfigString(options.default_volume),
             folders: options.folders,
             pc_folders: options.pcFolders,
             tube_host_folders: options.tubeHostFolders,
-            avr_rom: options.avr_rom !== null ? options.avr_rom : undefined,
-            tube_serial_rom: options.tube_serial_rom !== null ? options.tube_serial_rom : undefined,
+            avr_rom: getConfigString(options.avr_rom),
+            tube_serial_rom: getConfigString(options.tube_serial_rom),
+            tube_serial_safe_rom: getConfigString(options.tube_serial_safe_rom),
+            tube_serial_electron_rom: getConfigString(options.tube_serial_electron_rom),
+            tube_serial_safe_electron_rom: getConfigString(options.tube_serial_safe_electron_rom),
             upurs_rom: options.upurs_rom !== null ? options.upurs_rom : undefined,
             git: options.git,
             serial_include: options.serial_include !== null ? options.serial_include : undefined,
@@ -913,29 +938,24 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         await utils.fsMkdirAndWriteFile(options.save_config, JSON.stringify(config, undefined, '  '));
     }
 
-    if (options.avr_rom === null) {
-        options.avr_rom = DEFAULT_BEEBLINK_AVR_ROM;
+    async function getOptionsROM(rom: string | null, name: string, defaultROM: string): Promise<string> {
+        if (rom === null) {
+            rom = defaultROM;
+        }
+
+        if (!await utils.isFile(rom)) {
+            process.stderr.write(`${name} ROM image not found for update tool/bootstrap: ${rom}\n`);
+        }
+
+        return rom;
     }
 
-    if (options.tube_serial_rom === null) {
-        options.tube_serial_rom = DEFAULT_BEEBLINK_TUBE_SERIAL_ROM;
-    }
-
-    if (options.upurs_rom === null) {
-        options.upurs_rom = DEFAULT_BEEBLINK_UPURS_ROM;
-    }
-
-    if (!await utils.isFile(options.avr_rom)) {
-        process.stderr.write(`AVR ROM image not found for update tool/bootstrap: ${options.avr_rom} \n`);
-    }
-
-    if (!await utils.isFile(options.tube_serial_rom)) {
-        process.stderr.write(`Tube Serial ROM image not found for update tool/bootstrap: ${options.tube_serial_rom} \n`);
-    }
-
-    if (!await utils.isFile(options.upurs_rom)) {
-        process.stderr.write(`UPURS ROM image not found for update tool/bootstrap: ${options.upurs_rom} \n`);
-    }
+    options.avr_rom = await getOptionsROM(options.avr_rom, AVR_NAME, DEFAULT_BEEBLINK_AVR_ROM);
+    options.upurs_rom = await getOptionsROM(options.upurs_rom, UPURS_NAME, DEFAULT_BEEBLINK_UPURS_ROM);
+    options.tube_serial_rom = await getOptionsROM(options.tube_serial_rom, TUBE_SERIAL_NAME, DEFAULT_BEEBLINK_TUBE_SERIAL_ROM);
+    options.tube_serial_safe_rom = await getOptionsROM(options.tube_serial_safe_rom, TUBE_SERIAL_SAFE_NAME, DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ROM);
+    options.tube_serial_electron_rom = await getOptionsROM(options.tube_serial_electron_rom, TUBE_SERIAL_ELECTRON_NAME, DEFAULT_BEEBLINK_TUBE_SERIAL_ELECTRON_ROM);
+    options.tube_serial_safe_electron_rom = await getOptionsROM(options.tube_serial_safe_electron_rom, TUBE_SERIAL_SAFE_ELECTRON_NAME, DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ELECTRON_ROM);
 
     return true;
 }
@@ -1031,17 +1051,17 @@ function getRomPathsForAVR(options: ICommandLineOptions): Map<number, string> {
 function getRomPathsForSerial(options: ICommandLineOptions): Map<number, string> {
     const map = new Map<number, string>();
 
-    if (options.upurs_rom !== null) {
-        map.set(beeblink.SERIAL_SUBTYPE_UPURS, options.upurs_rom);
+    function setROM(subtype: number, rom: string | null): void {
+        if (rom !== null) {
+            map.set(subtype, rom);
+        }
     }
 
-    if (options.tube_serial_rom !== null) {
-        map.set(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL, options.tube_serial_rom);
-    }
-
-    if (options.tube_serial_electron_rom !== null) {
-        map.set(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL_ELECTRON, options.tube_serial_electron_rom);
-    }
+    setROM(beeblink.SERIAL_SUBTYPE_UPURS, options.upurs_rom);
+    setROM(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL, options.tube_serial_rom);
+    setROM(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL_SAFE, options.tube_serial_safe_rom);
+    setROM(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL_ELECTRON, options.tube_serial_electron_rom);
+    setROM(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL_SAFE_ELECTRON, options.tube_serial_safe_electron_rom);
 
     return map;
 }
@@ -2022,10 +2042,12 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     always(['-h', '--help'], { action: 'storeTrue', help: 'Show this help message, then exit (combine with -v to show more options)' });
 
     // ROM paths
-    fullHelpOnly(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink AVR ROM (for use with b2) from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM });
-    fullHelpOnly(['--tube-serial-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink Tube Serial ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ROM });
-    fullHelpOnly(['--upurs-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink UPURS ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_UPURS_ROM });
-    fullHelpOnly(['--tube-serial-electron-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink Tube Serial (Electron+AP5) ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ELECTRON_ROM });
+    fullHelpOnly(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + AVR_NAME + ' ROM (for use with b2) from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM });
+    fullHelpOnly(['--tube-serial-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + TUBE_SERIAL_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ROM });
+    fullHelpOnly(['--tube-serial-safe-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + TUBE_SERIAL_SAFE_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ROM });
+    fullHelpOnly(['--upurs-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + UPURS_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_UPURS_ROM });
+    fullHelpOnly(['--tube-serial-electron-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + TUBE_SERIAL_ELECTRON_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ELECTRON_ROM });
+    fullHelpOnly(['--tube-serial-safe-electron-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + TUBE_SERIAL_SAFE_ELECTRON_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ELECTRON_ROM });
 
     // Verbosity
     always(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });

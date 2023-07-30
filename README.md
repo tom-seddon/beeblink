@@ -71,12 +71,10 @@ Comms mode, and connect the device to your PC.
 If using Windows, you'll need to
 [tweak one of the device settings](./docs/ftdi_latency_timer.md).
 
-If using macOS, you're good to go straight away!
-
 If you've got some way of getting files to your BBC already, copy
-`beeblink_tube_serial.rom` from the ROMs zip and load it on your BBC;
-otherwise, use the [bootstrap process](./docs/bootstrap.md), and get
-the file that way.
+[the appropriate ROM image](./docs/tube_serial_roms.md) from the zip
+and load it on your BBC; otherwise, use the
+[bootstrap process](./docs/bootstrap.md), and get the file that way.
 
 ## UPURS cable
 
@@ -107,7 +105,7 @@ Hardware New AP5).
 
 You'll need a Tube USB serial adapter (see above). The adapter
 requires modification: carefully bend up pin 9 of the PLD, so it's
-clear of the socket when plugged in.
+clear of the socket when plugged in. 
 
 Connect the Tube serial board to the AP5's Tube connector, connect any
 second processor to the Tube serial board, use the jumper to select
@@ -116,11 +114,9 @@ Comms mode, and connect the device to your PC.
 If using Windows, you'll need to
 [tweak one of the device settings](./docs/ftdi_latency_timer.md).
 
-If using macOS, you're good to go straight away!
-
 There's not currently a bootstrap process for the Electron. I used my
-Master to get `beeblink_electron_tube_serial.rom` onto a cartridge,
-then plugged the cartridge into the Electron.
+Master to get [the appropriate ROM image](./docs/tube_serial_roms.md)
+onto a cartridge, then plugged the cartridge into the Electron.
 
 **Electron support is experimental**
 
