@@ -157,7 +157,7 @@ There isn't any versioning mechanism, other than being a bit careful.
 
 ## Message sub-types
 
-Some of the earlier message types have 2-layer type mechanism, with
+Some of the earlier message types have a 2-layer type mechanism, with
 the first byte of the payload being a kind of message sub-type. The
 idea here was to avoid exhausting the 7-bit message type space.
 
@@ -360,7 +360,7 @@ Notes:
   
 - OSBPUT needs a 2-byte packet :( - but you should be using OSGBPB
   anyway
-
+  
 ## AVR
 
 Early versions of BeebLink handled BBC to PC communication with an AVR

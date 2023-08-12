@@ -328,7 +328,7 @@ Create a new volume.
 
 Rename file.
 
-### `SRLOAD <fsp> <addr> <bank> (Q)` (*B*)
+### `SRLOAD <fsp> <addr> <bank> (Q)` (*B*, *not Electron*)
 
 Load ROM image into a sideways RAM bank.
 
