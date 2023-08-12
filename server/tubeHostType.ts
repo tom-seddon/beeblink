@@ -35,8 +35,9 @@ import CommandLine from './CommandLine';
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// 10 is the CFS/CFS/ADFS limit, so it's not pushing the boat out *too* much...
-const MAX_NAME_LENGTH = 10;
+// The choice of 200 is fairly arbitrary. It could probably be 254 or 255 but if
+// I'm going to wing it I'd rather do it with some headroom.
+const MAX_NAME_LENGTH = 200;
 
 // Must be <255, but aside from that it's an arbitrary limit. (39 = it fits in
 // Mode 7.)
