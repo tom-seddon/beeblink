@@ -34,6 +34,8 @@ export class SpeedTest {
     }
 
     public gotTestData(parasite: boolean, data: Buffer, log: utils.Log | undefined): Buffer {
+        const diff = process.hrtime(this.lastHRTime);
+        
         const stats = parasite ? this.parasiteStats : this.serverStats;
 
         if (stats.originalData === undefined) {
@@ -91,7 +93,6 @@ export class SpeedTest {
             stats.expectedData = stats.originalData;
         }
 
-        const diff = process.hrtime(this.lastHRTime);
         stats.serverRecvTimeSeconds += diff[0] + diff[1] / 1e9;
         this.lastHRTime = process.hrtime();
 
