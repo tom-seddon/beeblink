@@ -1916,8 +1916,8 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
         }
 
         if (numAutoDetected > 0 && !autoDetectMessageShown) {
-            process.stdout.write(`Note: using ${numAutoDetected} auto - detected serial devices.\n`);
-            process.stdout.write(`Note: to control which devices get opened, see--verbose--help output for these options: ${SERIAL_EXCLUDE_OPTION_NAME}, ${SERIAL_EXCLUDE_ALL_OPTION_NAME}, ${SERIAL_INCLUDE_OPTION_NAME} \n`);
+            process.stdout.write(`Note: using ${numAutoDetected} auto-detected serial devices.\n`);
+            process.stdout.write(`Note: to control which devices get opened, see --verbose --help output for these options: ${SERIAL_EXCLUDE_OPTION_NAME}, ${SERIAL_EXCLUDE_ALL_OPTION_NAME}, ${SERIAL_INCLUDE_OPTION_NAME} \n`);
             autoDetectMessageShown = true;
         }
 
