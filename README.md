@@ -105,11 +105,12 @@ Hardware New AP5).
 
 You'll need a Tube USB serial adapter (see above). The adapter
 requires modification: carefully bend up pin 9 of the PLD, so it's
-clear of the socket when plugged in. 
+clear of the socket when plugged in. Note that the modified adapter
+won't work with a second processor. (A future update to the hardware
+will fix all of this stuff...)
 
-Connect the Tube serial board to the AP5's Tube connector, connect any
-second processor to the Tube serial board, use the jumper to select
-Comms mode, and connect the device to your PC.
+Connect the Tube serial board to the AP5's Tube connector, use the
+jumper to select Comms mode, and connect the device to your PC.
 
 If using Windows, you'll need to
 [tweak one of the device settings](./docs/ftdi_latency_timer.md).
