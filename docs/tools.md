@@ -45,18 +45,14 @@ Notes:
 ## Speed Test
 
 Transfers data to and from the server repeatedly to get a rough
-estimate of throughput. Speed Test will ask you how many iterations
-you want to run - each one transfers at least 25 KB, so pick as many
-as you can be bothered to wait for!
+estimate of throughput. Main memory and (when active) second processor
+memory are both tested, and on Electron it'll do separate tests in
+modes 0, 3 and 4 to monitor the overhead.
 
-If running without the Tube, throughput to and from main memory will
-be tested; if running over the Tube, it'll test throughput for main
-memory and throughput for the second processor as well.
-
-When transferring data to and from main memory, the screen will fill
-with junk, so you can see something is happening. When transferring
-data to and from the second processor memory you won't see anything
-obvious.
+Speed Test will ask you how many iterations you want to run, then do
+its thing. While testing transfers to main memory, you'll see the
+screen fill with junk; for transfers to second processor memory,
+you'll see nothing obvious.
 
 Results are printed to the screen, and also saved to a text file on
 drive Z on the BeebLink volume.
@@ -74,7 +70,7 @@ you to save to disk - copy the command line displayed to do this. Or
 run `RTOOL` (supplied) and use its `P` command straight away. The ROM
 image is downloaded to the address `RTOOL` expects.
 
-## BooBip ROM Tool _(not Tube-compatible)_
+## BooBip ROM Tool _(not Tube-compatible, not on Electron)_
 
 Useful sideways ROM tool.
 
