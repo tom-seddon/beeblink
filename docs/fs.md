@@ -199,7 +199,7 @@ Shows BeebLink ROM version, Git commit and build date/time.
 The BeebLink ROM version has a `*` suffix if the ROM was built with a
 modified working copy rather than the exact contents of that commit.
 
-### `BUILD <fsp>` (*B/B+*)
+### `BUILD <fsp>` (*B/B+/Electron*)
 
 Create a text file line by line. Designed for creating `!BOOT`, but
 not much else - there's a limit of 64 bytes per line.
@@ -224,10 +224,10 @@ available in all filing systems, but the BLFS versions of these
 commands are handled on the server, and so are only available when the
 BLFS is selected.
 
-(Commands marked *B* or *B/B+* only get used on the models mentioned -
-on other models, the built-in command of the same name is used
-instead. This isn't supposed to make a meaningful difference, but it's
-possible the behaviour won't be identical.)
+(Some commands will only get used on the models mentioned - on other
+models, the built-in command of the same name is used instead. This
+isn't supposed to make a meaningful difference, but it's possible the
+behaviour won't be identical.)
 
 ### `ACCESS <afsp> (<mode>)`
 
@@ -257,7 +257,7 @@ The defaults are reset when changing volume.
 
 The `*HSTATUS` output shows the current defaults.
 
-### `DELETE <fsp>` (*B/B+*)
+### `DELETE <fsp>` (*B/B+/Electron*)
 
 Delete a file.
 
@@ -269,7 +269,7 @@ Change directory and/or drive on the current volume.
 
 Change drive on the current volume.
 
-### `DUMP <fsp>` (*B/B+*)
+### `DUMP <fsp>` (*B/B+/Electron*)
 
 Produce hex dump of file.
 
@@ -281,7 +281,7 @@ currently open files, and currently available drives.
 Supply codes on the command line to restrict the output: `H` to show
 the status, `F` to show open files, and `D` to show drives.
 
-### `INFO <afsp>` (*B/B+*)
+### `INFO <afsp>` (*B/B+/Electron*)
 
 Show metadata of the file(s) specified - lock status, load address,
 execution address and size.
@@ -290,7 +290,7 @@ execution address and size.
 
 Change library drive and directory on the current volume.
 
-### `LIST <fsp>` (*B/B+*)
+### `LIST <fsp>` (*B/B+/Electron*)
 
 Show contents of text file, with lines numbered.
 
@@ -328,7 +328,7 @@ Create a new volume.
 
 Rename file.
 
-### `SRLOAD <fsp> <addr> <bank> (Q)` (*B*, *not Electron*)
+### `SRLOAD <fsp> <addr> <bank> (Q)` (*B, not Electron*)
 
 Load ROM image into a sideways RAM bank.
 
@@ -343,7 +343,7 @@ syntax, and is ignored. The operation never uses main memory.
 
 Set current drive's title.
 
-### `TYPE <fsp>` (*B/B+*) ###
+### `TYPE <fsp>` (*B/B+/Electron*) ###
 
 Show contents of text file.
 
