@@ -102,6 +102,7 @@ export class Command {
     public readonly nameUC: string;
     private readonly syntax: string | undefined;
     private readonly fun: (commandLine: CommandLine) => Promise<void | string | Buffer | Response>;
+    private unsupportedMachineTypes: Set<number> | undefined;
 
     public constructor(name: string, syntax: string | undefined, fun: (commandLine: CommandLine) => Promise<void | string | Buffer | Response>) {
         this.nameUC = name.toUpperCase();
@@ -113,6 +114,16 @@ export class Command {
         return this.fun(commandLine);
     }
 
+    public isSupportedMachineType(machineType: number): boolean {
+        if (this.unsupportedMachineTypes !== undefined) {
+            if (this.unsupportedMachineTypes.has(machineType)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public getSyntaxString(): string {
         let syntax = this.nameUC;
 
@@ -121,6 +132,16 @@ export class Command {
         }
 
         return syntax;
+    }
+
+    public unlessMachineType(machineType: number): Command {
+        if (this.unsupportedMachineTypes === undefined) {
+            this.unsupportedMachineTypes = new Set<number>();
+        }
+
+        this.unsupportedMachineTypes.add(machineType);
+
+        return this;
     }
 }
 
@@ -221,6 +242,7 @@ function encodeForOSCLI(command: string): Buffer {
 export class Server {
     private bfs: beebfs.FS;
     private linkSubtype: number | undefined;
+    private machineType: number | undefined;
     private romPathByLinkSubtype: Map<number, string>;
     private stringBuffer: Buffer | undefined;
     private stringBufferIdx: number;
@@ -239,6 +261,7 @@ export class Server {
     public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, log: utils.Log | undefined, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
         this.romPathByLinkSubtype = romPathByLinkSubtype;
         this.linkSubtype = undefined;
+        this.machineType = undefined;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
         this.linkSupportsFireAndForgetRequests = linkSupportsFireAndForgetRequests;
@@ -257,7 +280,7 @@ export class Server {
             new Command('LOCATE', '<afsp> (<format>)', this.locateCommand),
             new Command('NEWVOL', '<vsp>', this.newvolCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
-            new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand),
+            new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand).unlessMachineType(1),
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
             new Command('VOLBROWSER', undefined, this.volbrowserCommand),
@@ -492,6 +515,14 @@ export class Server {
             this.linkSubtype = 0;
             this.log?.pn(`link subtype=${this.linkSubtype} (inferred)`);
         }
+
+        if (p.length > 2) {
+            this.machineType = p[2];
+            this.log?.pn(`machine type=0x${utils.hex2(this.machineType)}`);
+        } else {
+            this.machineType = undefined;
+            this.log?.pn(`machine type=unknown`);
+        }
     };
 
     private readonly handleEchoData = async (_handler: Handler, p: Buffer): Promise<Response> => {
@@ -537,13 +568,17 @@ export class Server {
         return this.bfs.getCAT(commandLine.parts.length >= 1 ? commandLine.parts[0] : undefined);
     };
 
-    private matchStarCommand(nameUC: string, commandLine: CommandLine): boolean {
+    private matchStarCommand(command: Command, commandLine: CommandLine): boolean {
+        if (!this.isSupportedCommand(command)) {
+            return false;
+        }
+
         const part0UC = commandLine.parts[0].toUpperCase();
 
-        for (let i = 0; i < nameUC.length; ++i) {
-            let abbrevUC: string = nameUC.slice(0, 1 + i);
+        for (let i = 0; i < command.nameUC.length; ++i) {
+            let abbrevUC: string = command.nameUC.slice(0, 1 + i);
 
-            if (abbrevUC.length < nameUC.length) {
+            if (abbrevUC.length < command.nameUC.length) {
                 abbrevUC += '.';
                 if (part0UC === abbrevUC) {
                     return true;
@@ -567,12 +602,22 @@ export class Server {
             }
 
             // Special case for emergency use.
-            if (part0UC === 'BLFS_' + nameUC) {
+            if (part0UC === 'BLFS_' + command.nameUC) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private isSupportedCommand(command: Command): boolean {
+        if (this.machineType !== undefined) {
+            if (!command.isSupportedMachineType(this.machineType)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private readonly handleStarCommand = async (handler: Handler, p: Buffer): Promise<Response> => {
@@ -590,7 +635,7 @@ export class Server {
         let matchedCommand: Command | undefined;
 
         for (const command of this.commonCommands) {
-            if (this.matchStarCommand(command.nameUC, commandLine)) {
+            if (this.matchStarCommand(command, commandLine)) {
                 matchedCommand = command;
                 break;
             }
@@ -598,7 +643,7 @@ export class Server {
 
         if (matchedCommand === undefined) {
             for (const command of this.bfs.getCommands()) {
-                if (this.matchStarCommand(command.nameUC, commandLine)) {
+                if (this.matchStarCommand(command, commandLine)) {
                     matchedCommand = command;
                     break;
                 }
@@ -632,14 +677,20 @@ export class Server {
         let help = '';
 
         for (const command of this.commonCommands) {
-            help += `  ${command.getSyntaxString()}${BNL}`;
+            if (this.isSupportedCommand(command)) {
+                help += `  ${command.getSyntaxString()}${BNL}`;
+            }
         }
 
-        const extraCommands = this.bfs.getCommands();
-        if (extraCommands.length > 0) {
-            help += ` Volume-specific:${BNL}`;
-            for (const command of extraCommands) {
+        let anySupported = false;
+        for (const command of this.bfs.getCommands()) {
+            if (this.isSupportedCommand(command)) {
+                if (!anySupported) {
+                    help += ` Volume-specific:${BNL}`;
+                }
+
                 help += `  ${command.getSyntaxString()}${BNL}`;
+                anySupported = true;
             }
         }
 

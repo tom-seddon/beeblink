@@ -166,8 +166,13 @@ export const REQUEST_GET_ROM = 0x02;
 //
 // Response is YES.
 //
-// P = reset type as per OSBYTE 253 (AUG p244); (optional) link subtype,
-// inferred as 0 if not present
+// P = reset type as per OSBYTE 253 (AUG p244); (optional) link subtype;
+// (optional) machine type from OSBYTE $81
+//
+// If not present, the link subtype is assumed to be 0.
+//
+// If not present, the machine type is treated as unknown, and machine-specific
+// functionality may be incorrectly included or excluded.
 export const REQUEST_RESET = 0x03;
 
 // Request an echo'd DATA response with whatever payload accompanies this

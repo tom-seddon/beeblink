@@ -2126,7 +2126,14 @@ link_ok:
 
                 .debug_print ['i_b_i: REQUEST_RESET... (reset type: &',DP_X,', link_subtype: '..format('%d',link_subtype)..')\r\n']
 
-                lda #2
+                lda #$81
+                ldx #$00
+                ldy #$ff
+                jsr osbyte      ;get machine type (AUG p152)
+                txa             ;A=machine type
+                pha             ;save machine type
+
+                lda #3
                 jsr set_payload_counter
                 
                 lda #REQUEST_RESET
@@ -2138,6 +2145,10 @@ link_ok:
 
                 ; link subtype
                 lda #link_subtype
+                jsr send_payload_byte
+
+                ; machine type
+                pla             ;restore machine type
                 jsr send_payload_byte
 
                 ; whatever it was, I'm sure it was fine...
