@@ -250,6 +250,8 @@ export class Server {
     private handlers: (Handler | undefined)[];
     private log: utils.Log | undefined;
     private volumeBrowser: volumebrowser.Browser | undefined;
+    private volumeBrowserDefaultFilters: string[] | undefined;
+    private volumeBrowserInitialFilters: string[] | undefined;
     private speedTest: speedtest.SpeedTest | undefined;
     private dumpPackets: boolean;
     private diskImageFlow: diskimage.Flow | undefined;
@@ -283,7 +285,7 @@ export class Server {
             new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand).unlessMachineType(1),
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
-            new Command('VOLBROWSER', undefined, this.volbrowserCommand),
+            new Command('VOLBROWSER', '(<filters>)', this.volbrowserCommand),
             new Command('VOL', '(<avsp>) ([QR]+)', this.volCommand),
             new Command('VOLS', '(<avsp>)', this.volsCommand),
             new Command('WDUMP', '<fsp>', this.wdumpCommand),
@@ -1055,7 +1057,8 @@ export class Server {
 
             const volumePaths = await this.bfs.findAllVolumesMatching('*');
 
-            this.volumeBrowser = new volumebrowser.Browser(charSizeBytes, width, height, m128, volumePaths);
+            this.volumeBrowser = new volumebrowser.Browser(charSizeBytes, width, height, m128, volumePaths, this.volumeBrowserInitialFilters || this.volumeBrowserDefaultFilters);
+            this.volumeBrowserInitialFilters = undefined;
 
             const text = this.volumeBrowser.getInitialString();
 
@@ -1070,6 +1073,10 @@ export class Server {
             const result = this.volumeBrowser.handleKey(p[2], p[1] !== 0);
 
             //this.log?.pn('done=' + result.done + ', text=' + (result.text === undefined ? 'N/A' : this.getBASICStringExpr(result.text)));
+
+            if (result.newDefaultFilters) {
+                this.volumeBrowserDefaultFilters = result.newDefaultFilters;
+            }
 
             if (result.done) {
                 let responseType = beeblink.RESPONSE_VOLUME_BROWSER_CANCELED;
@@ -1499,6 +1506,14 @@ export class Server {
                 // where that's a bit annoying.
                 text += `${error}${BNL}`;
             }
+
+            text += '*VOLBROWSER filter:';
+            if (this.volumeBrowserDefaultFilters !== undefined) {
+                for (const filter of this.volumeBrowserDefaultFilters) {
+                    text += ` "${filter}"`;
+                }
+            }
+            text += BNL;
         };
 
         const files = () => {
@@ -1896,7 +1911,13 @@ export class Server {
         await this.bfs.setTitle(commandLine.parts[1]);
     };
 
-    private readonly volbrowserCommand = async (_commandLine: CommandLine): Promise<Response> => {
+    private readonly volbrowserCommand = async (commandLine: CommandLine): Promise<Response> => {
+        if (commandLine.parts.length > 1) {
+            this.volumeBrowserInitialFilters = commandLine.parts.slice(1);
+        } else {
+            this.volumeBrowserInitialFilters = undefined;
+        }
+        
         return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_VOLUME_BROWSER);
     };
 

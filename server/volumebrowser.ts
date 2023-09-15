@@ -41,13 +41,15 @@ export class Result {
     public readonly volume: beebfs.Volume | undefined;
     public readonly boot: boolean;
     public readonly flushKeyboardBuffer: boolean;
+    public readonly newDefaultFilters: string[] | undefined;
 
-    public constructor(done: boolean, text: Buffer, volume: beebfs.Volume | undefined, boot: boolean, flushKeyboardBuffer: boolean) {
+    public constructor(done: boolean, text: Buffer, volume: beebfs.Volume | undefined, boot: boolean, flushKeyboardBuffer: boolean, newDefaultFilters: string[] | undefined) {
         this.done = done;
         this.text = text;
         this.volume = volume;
         this.boot = boot;
         this.flushKeyboardBuffer = flushKeyboardBuffer;
+        this.newDefaultFilters = newDefaultFilters;
     }
 }
 
@@ -99,7 +101,7 @@ export class Browser {
     // used in filter edit mode
     private filterEditY: number;
 
-    public constructor(charSizeBytes: number, width: number, height: number, m128: boolean, volumes: beebfs.Volume[]) {
+    public constructor(charSizeBytes: number, width: number, height: number, m128: boolean, volumes: beebfs.Volume[], initialFilters: string[] | undefined) {
         this.log = utils.Log.create('BROWSER', process.stderr, true);
 
         this.width = width;
@@ -158,7 +160,13 @@ export class Browser {
         this.x = 0;
         this.mode = BrowserMode.Browse;
         this.filter = '';
+
         this.filterLCs = [];
+        if (initialFilters !== undefined) {
+            for (const initialFilter of initialFilters) {
+                this.filterLCs.push(initialFilter.toLowerCase());
+            }
+        }
 
         this.columns = [];
         this.numFilteredVolumes = 0;
@@ -200,16 +208,19 @@ export class Browser {
         // let volume: string | undefined;
         // let flushKeyboardBuffer;
 
+        let newDefaultFilters: string[] | undefined;
 
         if (this.mode === BrowserMode.Browse) {
-            this.handleBrowserKey(key, shift);
+            if (this.handleBrowserKey(key, shift)) {
+                newDefaultFilters = this.filterLCs.slice();
+            }
         } else if (this.mode === BrowserMode.EditFilter) {
             this.handleEditFilterKey(key);
         } else if (this.mode === BrowserMode.ShowInfo) {
             this.handleShowInfoKey();
         }
 
-        return new Result(this.done, this.createPrintsBuffer(), this.selectedVolume, this.boot, this.flushKeyboardBuffer);
+        return new Result(this.done, this.createPrintsBuffer(), this.selectedVolume, this.boot, this.flushKeyboardBuffer, newDefaultFilters);
     }
 
     private clearPrints(): void {
@@ -306,7 +317,9 @@ export class Browser {
         }
     }
 
-    private handleBrowserKey(key: number, shift: boolean): void {
+    private handleBrowserKey(key: number, shift: boolean): boolean {
+        let saveDefaultFilters = false;
+
         if (key === 0x88) {
             this.printCursorMovement(-1, 0);
         } else if (key === 0x89) {
@@ -329,6 +342,9 @@ export class Browser {
                 this.printFinish();
                 this.done = true;
             }
+        } else if (key === 19) {
+            // Ctrl+S
+            saveDefaultFilters = true;
         } else if (key === 32) {
             this.printFullPath();
             this.mode = BrowserMode.ShowInfo;
@@ -339,6 +355,8 @@ export class Browser {
             this.printFilter();
             this.flushKeyboardBuffer = false;
         }
+
+        return saveDefaultFilters;
     }
 
     private handleEditFilterKey(key: number): void {

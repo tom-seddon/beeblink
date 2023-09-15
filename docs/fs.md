@@ -366,7 +366,7 @@ mode.
 Show a list of available volumes. Use wildcards to narrow the list
 down.
 
-### `VOLBROWSER`
+### `VOLBROWSER (<filters>)`
 
 Activate the volume browser: an interactive method of loading a
 volume.
@@ -379,13 +379,20 @@ Press SPACE to display the volume's path on the server. (If you have
 multiple volumes with the same name, this lets you figure out which is
 which. The specific volume selected will be the one loaded.)
 
-You can filter the list by just typing stuff in. Press ESCAPE to
-cancel, or RETURN to narrow the list down to the discs whose names
-contain the string you entered. When looking at a filtered list, press
-ESCAPE to remove the filters.
+You can filter the list by supplying strings on the command line, or
+typing stuff in while in the volume browser. (When typing in a filter
+string, press ESCAPE to cancel or RETURN to accept.) The list will be
+narrowed down to only the volumes whose names contain the string
+you've entered.
 
-(You can enter multiple filter strings, narrowing the existing list
-down each time.)
+You can enter multiple filter strings, narrowing the existing list
+down each time.
+
+When looking at a filtered list, press ESCAPE to remove the filters.
+
+Press CTRL+S to save the current filter as the default for the current
+session. The default filter will be used if you don't supply one on
+the command line.
 
 The volume browser isn't recommended in 20-column modes.
 
