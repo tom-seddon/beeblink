@@ -5,8 +5,9 @@ SHIFT+BREAK to run the menu, and select the tool of interest.
 
 ## Disk Imager
 
-Create a disk image from a disk, or write a disk image to a formatted
-disk. Supports single-density DFS, ADFS, and Opus DDOS/Challenger.
+Create a disk image on a BeebLink volume from a disk, or write a disk
+image on a BeebLink volume to a formatted disk. Supports
+single-density DFS, ADFS, and Opus DDOS/Challenger.
 
 Select `R` to read a disk, creating a disk image, or `W` to write a
 disk from a disk image.
@@ -20,7 +21,9 @@ Select the disk type - Acorn DFS, ADFS, or Opus DDOS/Challenger. ADFS
 can detect the disk type automatically; for DFS or Opus you'll need to
 specify single or double sided.
 
-Finally, specify the image to read from or write to.
+Finally, specify the image to read from or write to. (You can also
+enter * commands at this point by entering a line starting with `*` -
+e.g., to change volume, or get a catalogue.)
 
 Notes:
 
