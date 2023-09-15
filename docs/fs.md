@@ -87,10 +87,10 @@ Use `*VOL` to load `newvol2`.
 Creating a new folder in the right place like this is enough to create
 a volume. 
 
-Volume names may only contain non-space printable ASCII characters
-(i.e., >=33 and <=126). `*NEWVOL` will produce an error if invalid
-characters are used; or, if you create a volume on the server with an
-invalid name, it will just be ignored.
+Volume names may only contain printable 7-bit ASCII characters (i.e.,
+>=32 and <=126). `*NEWVOL` will produce an error if invalid characters
+are used; or, if you create a volume on the server with an invalid
+name, it will just be ignored.
 
 (You can have the server find volumes from multiple folders. See the
 list of [server command line options](./server.md).)

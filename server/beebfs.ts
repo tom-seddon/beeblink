@@ -940,7 +940,7 @@ export class FS {
         for (let i = 0; i < name.length; ++i) {
             const c = name.charCodeAt(i);
 
-            if (!(c >= 33 && c < 127)) {
+            if (!(c >= 32 && c < 127)) {
                 return false;
             } else if (name[i] === ':' || name[i] === '/') {
                 return false;
