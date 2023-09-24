@@ -345,6 +345,12 @@ export class Browser {
         } else if (key === 19) {
             // Ctrl+S
             saveDefaultFilters = true;
+            const y = this.printBox('Info', 1);
+            this.printTAB(2, y);
+            // 01234567890123456789
+            // Default saved
+            this.print('Default saved');
+            this.mode = BrowserMode.ShowInfo;
         } else if (key === 32) {
             this.printFullPath();
             this.mode = BrowserMode.ShowInfo;
