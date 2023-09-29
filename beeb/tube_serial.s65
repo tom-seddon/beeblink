@@ -257,23 +257,48 @@ is_itu: .proc
                 jsr osbyte
 
                 ; X=0 (Electron), 1 (B), 2 (B+), 3 (Master), 4 (Master
-                ; 128), 5 (Master Compact) - all other options appears
+                ; ET), 5 (Master Compact) - all other options appears
                 ; to be non-6502.
                 cpx #3
-                bcc +           ;taken with C=0if not Master
+                bcs maybe_itu   ;maybe itu if Master/ET/Compact
 
+                cpx #0
+                beq xtu         ;always xtu if Electron
+
+                ; OS 1.20 or OS 2.00. This is probably a B or B+, but
+                ; it could also be a Master with a modified OS, in
+                ; which case ITU might still need resetting.
+                ;
+                ; (On the RetroClinic multi-MOS I've got, ITU is set
+                ; in ACCCON on startup, so the extra processing is
+                ; required.)
+                ; 
+                ; Easiest way to detect the Master hardware: simply
+                ; read ACCCON. If it's $fe (usual bus capacitance
+                ; thing), it's a B/B+; otherwise, it's a Master. Looks
+                ; like bits 7+6 are clear when reading on a Master, so
+                ; $fe is impossible.
+                lda $fe34
+                cmp #$fe
+                bne maybe_itu   ;looks like actually Master hardware
+
+xtu:
+                clc
+                bcc done
+                
+maybe_itu:
                 lda acccon
                 and #acccon.itu
-                cmp #acccon.itu ;C=1 if int Tube
-+
-
+                cmp #acccon.itu ;C=1 if ITU
+                
+done:
                 pla
                 tax
 
                 lda #0
                 ror a
-                
                 rts
+
                 .endproc
 
 ;-------------------------------------------------------------------------
