@@ -328,11 +328,15 @@ rept_byte_access_counter: .block
                 .dsection lib_code
                 .dsection debug_code ;must be last!
 
-                ; It's actually fine for the ROM to be the full 16 KB,
-                ; but the goal is for shipping versions to be 8 KB
-                ; max.
+                ; I had a goal of sticking to 8 KB, so that the BLFS
+                ; could be combined with some other 8 KB ROM - 8 KB
+                ; being a standard size. But I never actually made any
+                ; use of it, and the Tube Serial code (which has a lot
+                ; of quite large unrolled loops...) keeps bumping into
+                ; the limit.
                 
                 ; .cerror *>$a000,format("ROM overflow: %d bytes too large",*-$a000)
+                
                 
                 .section header
                 brk
