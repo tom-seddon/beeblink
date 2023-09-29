@@ -169,9 +169,7 @@ _rom :
 
 	$(_V)$(SHELLCMD) mkdir $(BEEB_DEST)
 	$(_V)$(SHELLCMD) copy-file $(STEM).rom $(BEEB_DEST)/R.$(ROM_BEEB_NAME)
-	$(_V)$(SHELLCMD) touch $(BEEB_DEST)/R.$(ROM_BEEB_NAME).inf
 	$(_V)$(SHELLCMD) copy-file $(STEM)-test.rom $(BEEB_DEST)/T.$(ROM_BEEB_NAME)
-	$(_V)$(SHELLCMD) touch $(BEEB_DEST)/T.$(ROM_BEEB_NAME).inf
 
 # ifdef TOM_LAPTOP
 
