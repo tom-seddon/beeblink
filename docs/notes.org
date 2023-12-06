@@ -909,7 +909,6 @@ Parasite<->server: 245,760 bytes in 10 tests
     PC->BBC: 88.2 KBytes/sec
 #+end_example
 
-
 * Star commands
 
 ** BeebLink set
@@ -962,7 +961,6 @@ Parasite<->server: 245,760 bytes in 10 tests
 | HRESET   |        |                             |
 | IAM/I AM |        | probably won't add this     |
 | VERSION  |        | covered by *BLVERSION       |
-
 
 * OSBGET/OSBPUT throughput
 
@@ -1128,7 +1126,6 @@ This justifies the default of 15 bytes of readahead.
 |         240 | 1039.06646 |
 
 
-
 * Hang
 
 ** WireShark stuff
@@ -1173,7 +1170,6 @@ Eventually runs:
 So anything interesting is handled by ~node~.
 
 Use ~lsof -p PID~ to list open files.
-
 
 
 * Doubled-up bytes
@@ -1253,3 +1249,67 @@ B+:
 
 (no problems)
 
+* Econet connector
+
+Board with ADF10-type connectors.
+
+Idea dismissed originally, but only because I hadn't noticed the hole
+that would be perfect for a USB extension cable, permitting (with
+suitable board) the thing to be mounted internally:
+https://www.amibay.com/threads/a-more-compact-bbc-master-compact.37092/
+(6th/7th pic down)
+
+Other advantages, of course:
+
+- fits Master 128 too (there's a suitable cable exit point, albeit
+  possibly used by a MOS switcher dial/switch) - and I/O ports are
+  accessible with internal Tube selected, so you'd hopefully get full
+  speed transfers in all cases
+- would fit B with ADF10 adapter if for some reason you don't want to
+  use the Tube socket
+- would potentially fit Archimedes?
+
+The ADF10 gets 2 address bits, so 4 locations. If these are treated as
+addresses 011xx as the widget sees it, with the ver 2 PLD you'll get
+access to the following registers:
+
+| CPU addr | Binary | Hex | Read   | Write      |
+|----------+--------+-----+--------+------------|
+| FEA0     | +01100 | +c  | FIFO   | FIFO       |
+| FEA1     | +01101 | +d  | FIFO   | FIFO+Flush |
+| FEA2     | +01110 | +e  | FIFO   | FIFO       |
+| FEA3     | +01111 | +f  | Status | -          |
+
+Pinout as per Master Compact: 17-pin CPU<->board socket marked SKT.4:
+
+| SK4 pin | SK4 what | TS pin | TS what |
+|---------+----------+--------+---------|
+|       1 | nNETINT  |      - | -       |
+|       2 | RnW      |      2 | RnW     |
+|       3 | nADLC    |      8 | nTUBE   |
+|       4 | phi2 in  |      4 | 2MHzE   |
+|       5 | A0       |     28 | A0      |
+|       6 | A1       |     30 | A1      |
+|       7 | CD0      |     12 | D0      |
+|       8 | CD1      |     14 | D1      |
+|       9 | CD2      |     16 | D2      |
+|      10 | CD3      |     18 | D3      |
+|      11 | CD4      |     20 | D4      |
+|      12 | CD5      |     22 | D5      |
+|      13 | CD6      |     24 | D6      |
+|      14 | CD7      |     26 | D7      |
+|      15 | nRST     |     10 | nRS     |
+|      16 | 0V       |      1 | 0V      |
+|         |          |     36 | A4      |
+|      17 | 5V       |     31 | 5V      |
+|         |          |     34 | A3      |
+|         |          |     32 | A2      |
+
+There is also a 5-pin board<->DIN plug socket marked SKT.5, not used
+here. Dummy pins (would only need 2?) would be present for physical
+stability and ensuring the board is aligned correctly.
+
+The Master 128's equivalent of SKT.4 (SK5, sheet 1, bottom left) has
+19 pins: it's got A2 and A3 connected as well. The extra pins aren't
+used. The 5-pin connector will ensure the 17 useful pins are aligned
+properly.
