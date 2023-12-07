@@ -9,7 +9,7 @@ skip_tags: true
 branches:
   only:
     - master
-    - wip/tom
+    - wip/master
 
 for:
   -
