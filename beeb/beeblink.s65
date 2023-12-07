@@ -371,7 +371,7 @@ end:
                 .weak
 link_avr=false
 link_tube_serial=false
-link_tube_serial_electron=false
+link_econet_serial=false
                 .endweak
 
                 .section driver_code
@@ -390,6 +390,9 @@ link_poll_recv:
                 .if link_avr
                 .include "avr.s65"
                 .elsif link_tube_serial
+                .include "tube_serial.s65"
+                .elsif link_econet_serial
+tube_serial_econet=true
                 .include "tube_serial.s65"
                 .elsif link_upurs
                 .include "upurs.s65"

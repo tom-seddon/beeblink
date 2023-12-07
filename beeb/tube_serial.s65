@@ -115,6 +115,7 @@ reasonable_wait_time=16384
 
                 .weak
 tube_serial_safe=false
+tube_serial_econet=false
                 .endweak
 
 sta_fifo: .macro
@@ -143,10 +144,15 @@ sty_fifo: .macro
                 
 ;-------------------------------------------------------------------------
 
-                .if target_electron
+                .if tube_serial_econet
+tube_serial_base=$fea2
+handle_itu=false
+                .elsif target_electron
 tube_serial_base=$fcee
+handle_itu=false
                 .else
 tube_serial_base=$fefe
+handle_itu=true
                 .endif
                 
 ;-------------------------------------------------------------------------
@@ -210,7 +216,7 @@ get_tube_mode: .function mode,dir
 
                 .section link_startup_workspace
 num_sync_zeros_received: .fill 2
-                .if !target_electron
+                .if handle_itu
 startup_itu: .fill 1
                 .endif
 startup_counter: .fill 2
@@ -225,7 +231,7 @@ startup_sync_counter: .fill 1
 ;-------------------------------------------------------------------------
 
                 .section link_workspace
-                .if !target_electron
+                .if handle_itu
 ; bit 7 set if M128, using internal Tube.
 link_itu: .fill 1
                 .endif
@@ -307,7 +313,7 @@ done:
 ;
 ; exit: A=value of status register
 startup_read_status: .proc
-                .if !target_electron
+                .if handle_itu
                 bit startup_itu
                 bmi +
                 .endif
@@ -315,7 +321,7 @@ startup_read_status: .proc
                 lda status
                 rts
 
-                .if !target_electron
+                .if handle_itu
 +
                 .cpu '65c02'
                 php
@@ -340,7 +346,7 @@ startup_read_status: .proc
 ; exit: C=0 if no data was available
 ;       C=1 if data was available, A = value read
 startup_read_fifo: .proc
-                .if !target_electron
+                .if handle_itu
                 bit startup_itu
                 bmi itu
                 .endif
@@ -359,7 +365,7 @@ got_data:
                 sec
                 rts
 
-                .if !target_electron
+                .if handle_itu
 itu:
                 .cpu '65c02'
                 php
@@ -386,7 +392,7 @@ itu:
 ; exit: C=0 if no space
 ;       C=1 if data was written
 startup_write_fifo: .proc
-                .if !target_electron
+                .if handle_itu
                 bit startup_itu
                 bmi itu
                 .endif
@@ -405,7 +411,7 @@ space:
                 sec
                 rts
 
-                .if !target_electron
+                .if handle_itu
 itu:
                 .cpu '65c02'
                 php
@@ -432,7 +438,7 @@ itu:
 ;-------------------------------------------------------------------------
 
 startup: .proc
-                .if !target_electron
+                .if handle_itu
                 jsr is_itu
                 sta startup_itu
                 .endif
@@ -627,7 +633,7 @@ sync_timed_out_3:
 ; flag.
 ;
 begin_send_with_restart: .proc
-                .if !target_electron
+                .if handle_itu
                 pha             ;save packet type
 
                 ; sort out ITU flag
@@ -752,7 +758,7 @@ _n_bytes:
 ;
 drain_rx_fifo: .proc
                 ; .debug_print ['ts: drain\r\n']
-                .if !target_electron
+                .if handle_itu
                 bit link_itu
                 bmi itu
                 .endif
@@ -764,7 +770,7 @@ drain_loop:
                 bne drain_loop
                 rts
 
-                .if !target_electron
+                .if handle_itu
 itu:
                 php
                 jsr itu_sei_ext_tube
@@ -783,7 +789,7 @@ itu:
 ;       C=1 - receive FIFO not empty
 
 poll_recv: .proc
-                .if !target_electron
+                .if handle_itu
                 bit link_itu
                 bmi itu
                 .endif
@@ -794,7 +800,7 @@ check_status:
                 cmp #status.rx_data
                 rts
 
-                .if !target_electron
+                .if handle_itu
 itu:
                 .cpu '65c02'
                 php
@@ -952,7 +958,7 @@ itu_sei_ext_tube: .proc
 ; exit: I=1
 ;       FIFO in hoped-for state
 ;       ext Tube selected
-                .if !target_electron
+                .if handle_itu
 itu_wait_for_status: .proc
                 pha
                 jsr itu_cli_briefly
@@ -978,9 +984,6 @@ send_byte: .macro
 
                 lda #status.tx_space
 -
-                .if target_electron
-                ; lda #status.tx_space ;yep, wtf
-                .endif
                 bit status
                 beq -
                 .sty_fifo
@@ -1009,9 +1012,6 @@ recv_byte: .macro
                 
                 lda #status.rx_data
 -
-                .if target_electron
-                ; lda #status.tx_space ;yep, wtf
-                .endif
                 bit status
                 beq -
                 lda fifo
@@ -1112,7 +1112,7 @@ send_header_byte: .proc
                 sty link_old_y
                 tay
 
-                .if !target_electron
+                .if handle_itu
                 bit link_itu
                 bmi itu
                 .endif
@@ -1121,7 +1121,7 @@ send_header_byte: .proc
                 ldy link_old_y
                 rts
 
-                .if !target_electron
+                .if handle_itu
 itu:
                 .itu_send_byte
                 ldy link_old_y
@@ -1136,7 +1136,7 @@ send_payload_byte: .proc
                 
                 tay
 
-                .if !target_electron
+                .if handle_itu
                 bit link_itu
                 bmi itu
                 .endif
@@ -1153,7 +1153,7 @@ send_payload_byte: .proc
                 ldy link_old_y
                 rts
 
-                .if !target_electron
+                .if handle_itu
 itu:
                 .itu_send_byte
 
@@ -1172,7 +1172,7 @@ itu:
 ;-------------------------------------------------------------------------
 
 recv_header_byte: .proc
-                .if !target_electron
+                .if handle_itu
                 bit link_itu
                 bmi itu
                 .endif
@@ -1181,7 +1181,7 @@ recv_header_byte: .proc
                 .recv_byte
                 rts
 
-                .if !target_electron
+                .if handle_itu
 itu:
                 .itu_recv_byte link_value
                 lda link_value
@@ -1192,7 +1192,7 @@ itu:
 ;-------------------------------------------------------------------------
 
 recv_payload_byte: .proc
-                .if !target_electron
+                .if handle_itu
                 bit link_itu
                 bmi itu
                 .endif
@@ -1214,7 +1214,7 @@ recv_status_byte:
                 pla             ;restore data byte
                 rts
 
-                .if !target_electron
+                .if handle_itu
 itu:
                 lda payload_counter+0
                 beq itu_recv_status_byte
@@ -1275,7 +1275,7 @@ transfer_file_data: .proc
                 ;
                 ; (link_itu is currently bit 7 only. But that might
                 ; change.)
-                .if target_electron
+                .if !handle_itu
                 lda #0                  ;I=0
                 .else
                 lda link_itu            ;? I???????
@@ -1395,7 +1395,7 @@ _..=[send_parasite_bytes]       ; R=0 I=0 H=0 p=0 $0
 _..=[send_parasite_page]        ; R=0 I=0 H=0 p=1 $1
 _..=[send_host_bytes]           ; R=0 I=0 H=1 p=0 $2
 _..=[send_host_page]            ; R=0 I=0 H=1 p=1 $3
-                .if target_electron
+                .if !handle_itu
 _..=[not_implemented,not_implemented,not_implemented,not_implemented]
                 .else
 _..=[itu_send_parasite_bytes]   ; R=0 I=1 H=0 p=0 $4
@@ -1407,7 +1407,7 @@ _..=[recv_parasite_bytes]       ; R=1 I=0 H=0 p=0 $8
 _..=[recv_parasite_page]        ; R=1 I=0 H=0 p=1 $9
 _..=[recv_host_bytes]           ; R=1 I=0 H=1 p=0 $a
 _..=[recv_host_page]            ; R=1 I=0 H=1 p=1 $b
-                .if target_electron
+                .if !handle_itu
 _..=[not_implemented,not_implemented,not_implemented,not_implemented]
                 .else
 _..=[itu_recv_parasite_bytes]   ; R=1 I=1 H=0 p=0 $c
@@ -2086,7 +2086,12 @@ sty_fifo_helper:
 
 ;-------------------------------------------------------------------------
 
-                .if target_electron&&!tube_serial_safe
+                .if tube_serial_econet
+
+link_name='Econet Serial'
+link_subtype=SERIAL_SUBTYPE_ECONET_SERIAL
+
+                .elsif target_electron&&!tube_serial_safe
                 
 link_name='Tube Serial (Electron+AP5)'
 link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL_ELECTRON

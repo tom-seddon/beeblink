@@ -68,6 +68,7 @@ const TUBE_SERIAL_NAME = 'Tube Serial';
 const TUBE_SERIAL_SAFE_NAME = 'Tube Serial (Safe)';
 const TUBE_SERIAL_ELECTRON_NAME = 'Tube Serial (Electron+AP5)';
 const TUBE_SERIAL_SAFE_ELECTRON_NAME = 'Tube Serial (Safe) (Electron+AP5)';
+const ECONET_SERIAL_NAME = 'Econet Serial';
 
 const DEFAULT_BEEBLINK_AVR_ROM = './beeblink_avr_fe60.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_ROM = './beeblink_tube_serial.rom';
@@ -75,6 +76,7 @@ const DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ROM = './beeblink_tube_serial_safe.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_ELECTRON_ROM = './beeblink_tube_serial_electron.rom';
 const DEFAULT_BEEBLINK_UPURS_ROM = './beeblink_upurs_fe60.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ELECTRON_ROM = './beeblink_tube_serial_safe_electron.rom';
+const DEFAULT_ECONET_SERIAL_ROM = './beeblink_econet_serial.rom';
 
 const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
 
@@ -132,6 +134,7 @@ interface IConfigFile {
     tube_serial_safe_rom: string | undefined;
     tube_serial_electron_rom: string | undefined;
     tube_serial_safe_electron_rom: string | undefined;
+    econet_serial_rom: string | undefined;
     upurs_rom: string | undefined;
     git: boolean | undefined;
     serial_include: string[] | undefined;
@@ -150,6 +153,7 @@ interface ICommandLineOptions {
     tube_serial_safe_rom: string | null;
     tube_serial_electron_rom: string | null;
     tube_serial_safe_electron_rom: string | null;
+    econet_serial_rom: string | null;
     upurs_rom: string | null;
     fs_verbose: boolean;
     server_verbose: boolean;
@@ -341,6 +345,7 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
     options.tube_serial_safe_rom = loadROM(options.tube_serial_safe_rom, config.tube_serial_safe_rom);
     options.tube_serial_electron_rom = loadROM(options.tube_serial_electron_rom, config.tube_serial_electron_rom);
     options.tube_serial_safe_electron_rom = loadROM(options.tube_serial_safe_electron_rom, config.tube_serial_safe_electron_rom);
+    options.econet_serial_rom = loadROM(options.econet_serial_rom, config.econet_serial_rom);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -870,6 +875,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     options.tube_serial_electron_rom = getFixedUpPath(options.tube_serial_electron_rom);
     options.tube_serial_safe_electron_rom = getFixedUpPath(options.tube_serial_safe_electron_rom);
     options.upurs_rom = getFixedUpPath(options.upurs_rom);
+    options.econet_serial_rom = getFixedUpPath(options.econet_serial_rom);
 
     options.load_config = getFixedUpPath(options.load_config);
     options.save_config = getFixedUpPath(options.save_config);
@@ -928,6 +934,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
             tube_serial_safe_rom: getConfigString(options.tube_serial_safe_rom),
             tube_serial_electron_rom: getConfigString(options.tube_serial_electron_rom),
             tube_serial_safe_electron_rom: getConfigString(options.tube_serial_safe_electron_rom),
+            econet_serial_rom: getConfigString(options.econet_serial_rom),
             upurs_rom: options.upurs_rom !== null ? options.upurs_rom : undefined,
             git: options.git,
             serial_include: options.serial_include !== null ? options.serial_include : undefined,
@@ -956,6 +963,7 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     options.tube_serial_safe_rom = await getOptionsROM(options.tube_serial_safe_rom, TUBE_SERIAL_SAFE_NAME, DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ROM);
     options.tube_serial_electron_rom = await getOptionsROM(options.tube_serial_electron_rom, TUBE_SERIAL_ELECTRON_NAME, DEFAULT_BEEBLINK_TUBE_SERIAL_ELECTRON_ROM);
     options.tube_serial_safe_electron_rom = await getOptionsROM(options.tube_serial_safe_electron_rom, TUBE_SERIAL_SAFE_ELECTRON_NAME, DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ELECTRON_ROM);
+    options.econet_serial_rom = await getOptionsROM(options.econet_serial_rom, ECONET_SERIAL_NAME, DEFAULT_ECONET_SERIAL_ROM);
 
     return true;
 }
@@ -2048,6 +2056,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     fullHelpOnly(['--upurs-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + UPURS_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_UPURS_ROM });
     fullHelpOnly(['--tube-serial-electron-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + TUBE_SERIAL_ELECTRON_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ELECTRON_ROM });
     fullHelpOnly(['--tube-serial-safe-electron-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + TUBE_SERIAL_SAFE_ELECTRON_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ELECTRON_ROM });
+    fullHelpOnly(['--econet-serial-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + ECONET_SERIAL_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_ECONET_SERIAL_ROM });
 
     // Verbosity
     always(['-v', '--verbose'], { action: 'storeTrue', help: 'extra output' });

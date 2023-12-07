@@ -52,6 +52,7 @@ export const SERIAL_SUBTYPE_UPURS = 1;
 export const SERIAL_SUBTYPE_TUBE_SERIAL_ELECTRON = 2;
 export const SERIAL_SUBTYPE_TUBE_SERIAL_SAFE_ELECTRON = 3;
 export const SERIAL_SUBTYPE_TUBE_SERIAL_SAFE = 4;
+export const SERIAL_SUBTYPE_ECONET_SERIAL = 5;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////

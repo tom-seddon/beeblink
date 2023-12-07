@@ -1301,7 +1301,7 @@ Pinout as per Master Compact: 17-pin CPU<->board socket marked SKT.4:
 |      15 | nRST     |     10 | nRS     |
 |      16 | 0V       |      1 | 0V      |
 |         |          |     36 | A4      |
-|      17 | 5V       |     31 | 5V      |
+|      17 | 5V       |     39 | 5V      |
 |         |          |     34 | A3      |
 |         |          |     32 | A2      |
 
