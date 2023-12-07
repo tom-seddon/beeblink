@@ -23,7 +23,7 @@ for:
   -
     branches:
       only:
-      - wip/tom
+      - wip/master
 
     environment:
       PRERELEASE: true
