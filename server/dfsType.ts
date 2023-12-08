@@ -169,7 +169,7 @@ class DFSState implements beebfs.IFSState {
             tryLibDir = false;
         }
 
-        const curFile = await beebfs.getBeebFile(fqn, true,this.log);
+        const curFile = await beebfs.getBeebFile(fqn, true, this.log);
         if (curFile !== undefined) {
             return curFile;
         }
@@ -177,7 +177,7 @@ class DFSState implements beebfs.IFSState {
         if (tryLibDir) {
             const libPath = new beebfs.FilePath(fqn.filePath.volume, fqn.filePath.volumeExplicit, this.library.drive, true, this.library.dir, true);
             const libFQN = new beebfs.FQN(libPath, fqn.name);
-            const libFile = await beebfs.getBeebFile(libFQN, true,this.log);
+            const libFile = await beebfs.getBeebFile(libFQN, true, this.log);
             if (libFile !== undefined) {
                 return libFile;
             }
@@ -375,8 +375,8 @@ class DFSType implements beebfs.IFSType {
     public async findBeebFilesMatching(fqn: beebfs.FQN, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {
         // The recurse flag is ignored. There is no hierarchy within a BeebLink volume.
 
-        const driveRegExp = utils.getRegExpFromAFSP(fqn.filePath.drive);
-        const dirRegExp = utils.getRegExpFromAFSP(fqn.filePath.dir);
+        const driveRegExp = fqn.filePath.driveExplicit ? utils.getRegExpFromAFSP(fqn.filePath.drive) : utils.MATCH_ANY_REG_EXP;
+        const dirRegExp = fqn.filePath.dirExplicit ? utils.getRegExpFromAFSP(fqn.filePath.dir) : utils.MATCH_ANY_REG_EXP;
         const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
         return await this.findFiles(fqn.filePath.volume, driveRegExp, dirRegExp, nameRegExp, log);
