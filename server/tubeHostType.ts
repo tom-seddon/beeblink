@@ -992,7 +992,7 @@ class TubeHostType implements beebfs.IFSType {
         }
 
         //const driveRegExp = utils.getRegExpFromAFSP(tubeHostFQN.drive);
-        const dirRegExp = utils.getRegExpFromAFSP(tubeHostFilePath.dir);
+        const dirRegExp = tubeHostFilePath.dirExplicit ? utils.getRegExpFromAFSP(tubeHostFilePath.dir) : utils.MATCH_ANY_REG_EXP;
         const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
         const files: beebfs.File[] = [];

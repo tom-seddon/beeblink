@@ -33,7 +33,7 @@ import * as errors from './errors';
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export const BNL = '\r\n';
+export const BNL = '\n\r';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -806,7 +806,7 @@ export function isBASIC(b: Buffer): boolean {
 
 export const MATCH_N_CHAR = '*';
 export const MATCH_ONE_CHAR = '#';
-const MATCH_ANY_REG_EXP = new RegExp('^.*$');
+export const MATCH_ANY_REG_EXP = new RegExp('^.*$');
 
 export function isAmbiguousAFSP(afsp: string): boolean {
     if (afsp.includes(MATCH_N_CHAR)) {
