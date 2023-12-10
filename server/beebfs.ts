@@ -1943,7 +1943,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILEDelete(fqn: FQN): Promise<OSFILEResult> {
-        const file = await getBeebFile(fqn, true, this.log);
+        const file = await getBeebFile(fqn, false, this.log);
         if (file === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         } else {
