@@ -1313,3 +1313,14 @@ The Master 128's equivalent of SKT.4 (SK5, sheet 1, bottom left) has
 19 pins: it's got A2 and A3 connected as well. The extra pins aren't
 used. The 5-pin connector will ensure the 17 useful pins are aligned
 properly.
+
+* Command tables stuff
+
+| ROM                                    | Size before | Size after |
+|----------------------------------------+-------------+------------|
+| beeblink_tube_serial.rom               |        8147 |       8080 |
+| beeblink_tube_serial_safe.rom          |        8197 |       8130 |
+| beeblink_avr_fe60.rom                  |        6184 |       6117 |
+| beeblink_upurs_fe60.rom                |        7401 |       7334 |
+| beeblink_tube_serial_electron.rom      |        6777 |       6710 |
+| beeblink_tube_serial_safe_electron.rom |        6823 |       6756 |
