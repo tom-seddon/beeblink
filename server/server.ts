@@ -475,6 +475,9 @@ export class Server {
     }
 
     private readonly handleGetROM = async (_handler: Handler, _p: Buffer): Promise<Response> => {
+        // The error messages here are going to be handled by the selfupdate
+        // program, which will execute the BRK by calling directly into the
+        // response buffer. So the usual 39-char limit doesn't apply.
         if (this.romPathByLinkSubtype.size === 0) {
             return errors.generic('No ROM available');
         } else if (this.linkSubtype === undefined) {
@@ -482,14 +485,18 @@ export class Server {
         } else {
             const romPath = this.romPathByLinkSubtype.get(this.linkSubtype);
             if (romPath === undefined) {
-                return errors.generic('No ROM for link subtype');
+                return errors.generic(`No ROM available for link subtype &${utils.hex2(this.linkSubtype)}`);
             } else {
                 try {
                     const rom = await utils.fsReadFile(romPath);
-                    this.log?.pn('ROM is ' + rom.length + ' bytes');
                     return newResponse(beeblink.RESPONSE_DATA, rom);
                 } catch (error) {
-                    return errors.nodeError(error);
+                    if (errors.getErrno(error) == 'ENOENT') {
+                        // Try to supply a slightly less confusing-looking error in this case!
+                        return errors.generic(`ROM file not found on server: ${romPath}`);
+                    } else {
+                        return errors.nodeError(error);
+                    }
                 }
             }
         }
@@ -1917,7 +1924,7 @@ export class Server {
         } else {
             this.volumeBrowserInitialFilters = undefined;
         }
-        
+
         return newResponse(beeblink.RESPONSE_SPECIAL, beeblink.RESPONSE_SPECIAL_VOLUME_BROWSER);
     };
 

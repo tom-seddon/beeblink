@@ -1324,3 +1324,7 @@ properly.
 | beeblink_upurs_fe60.rom                |        7401 |       7334 |
 | beeblink_tube_serial_electron.rom      |        6777 |       6710 |
 | beeblink_tube_serial_safe_electron.rom |        6823 |       6756 |
+
+* ROM not found
+
+: "tube_serial_rom": "../beeb/.build/beeblink_tube_serial.rom",
