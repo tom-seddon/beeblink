@@ -173,7 +173,7 @@ sf_power_on_defaults=0
 ;
 ;
 ; 
-command .macro name,value,routine
+command: .macro name,value,routine
                 .cerror (\value&$80)!=0,"command value bit 7 can't be set"
 
                 .text \name
@@ -264,7 +264,6 @@ fs_workspace_start:
 
                 .section misc_workspace
 print_ptr: .fill 0
-cmd_ptr: .fill 0
 brk_ptr: .fill 0
                 .fill 2
                 .send misc_workspace
@@ -416,6 +415,10 @@ link_recv_file_data_host=recv_file_data_host_bytewise
 
                 .section code
 
+command_tables:
+                ; There aren't many commands in the ROM. All the
+                ; tables can fit into one page, indexed by X or Y.
+
 help_subjects_commands:
                 .command blfs_prefix.."BLFS",0,svc_help.blfs
                 .command "UTILS",0,svc_help.utils
@@ -433,6 +436,7 @@ disc_commands:
                 .command "DISC",0,init_blfs
                 .command "DISK",0,init_blfs
                 .byte 255
+                .cwarn *-command_tables>256,"command tables are too large"
 
 ;-------------------------------------------------------------------------
 
@@ -897,11 +901,10 @@ command_lines: .strings_list ["","LOAD !BOOT\r","RUN !BOOT\r","EXEC !BOOT\r"]
 ;
 ; 
 svc_star: .proc
-                .push16 cmd_ptr
                 tya
                 pha
 
-                jsr select_utils_commands
+                ldx #utils_commands-command_tables
                 jsr sev         ;disallow 0-char abbrev
                 jsr find_cmd
                 bcs found
@@ -910,7 +913,7 @@ svc_star: .proc
                 jsr get_rom_status_flag
                 bcs done
 
-                jsr select_disc_commands
+                ldx #disc_commands-command_tables
                 jsr sev         ;disallow 0-char abbrev
                 jsr find_cmd
                 bcs found
@@ -929,17 +932,14 @@ found:
 ;
 ; 
 svc_help: .proc
-                .push16 cmd_ptr
                 tya
                 pha
 
-                lda #<help_subjects_commands
-                sta cmd_ptr+0
-                lda #>help_subjects_commands
-                sta cmd_ptr+1
                 lda ($f2),y
                 cmp #13
                 bne check_for_subject
+
+                ldx #help_subjects_commands-command_tables
 
 print_subjects:
                 jsr print_rom_banner
@@ -953,23 +953,26 @@ check_for_subject:
                 tay
                 jsr find_cmd
                 bcc done
-                .push16 cmd_ptr
+                txa
+                pha
                 jsr cmd_call_pointer
-                .pop16 cmd_ptr
-                ldx #cmd_ptr
-                jsr add3z16     ;skip metadata
+                pla
+                tax
+                inx
+                inx
+                inx
                 jmp check_for_subject
 
 utils:
                 jsr print_rom_banner
-                
-                jsr select_utils_commands
+
+                ldx #utils_commands-command_tables
                 jsr print_cmds
 
                 lda #sf_ignore_disc
                 jsr get_rom_status_flag
                 bcs +
-                jsr select_disc_commands
+                ldx #disc_commands-command_tables
                 jsr print_cmds
 +
                 rts
@@ -999,44 +1002,19 @@ done:
 svc_help_or_star_done:
                 pla
                 tay
-                .pop16 cmd_ptr
                 txa
                 jmp svc.done
 
 ;-------------------------------------------------------------------------
 ;
-; Point cmd_ptr at the UTILS table.
-; 
-select_utils_commands: .proc
-                lda #<utils_commands
-                sta cmd_ptr+0
-                lda #>utils_commands
-                sta cmd_ptr+1
-                rts                
-                .pend
-
-;-------------------------------------------------------------------------
-;
-; Point cmd_ptr at the *DISC commands table.
-;
-select_disc_commands: .proc
-                lda #<disc_commands
-                sta cmd_ptr+0
-                lda #>disc_commands
-                sta cmd_ptr+1
-                rts
-                .pend
-
-;-------------------------------------------------------------------------
-;
 ; entry: V=0 = allow 0-char abbrev; V=1 = disallow
 ;        ($f2),y = command line
-;        (cmd_ptr) = table
+;        X = offset into command_tables of table
 ; exit:  C clear: not matched
 ;                 preserves ($f2); Y
 ;        C set: matched
 ;               ($f2),y = command line tail
-;               (cmd_ptr) = cmd metadata
+;               X = cmd metadata
 ;
 ; (After a successful match, can call add3z16, then try again with the
 ; old Y value, to attempt a match against the rest of the table.)
@@ -1045,12 +1023,11 @@ find_cmd: .proc
                 php             ;save V flag
                 tya
                 pha             ;save initial command line offset
-                ldx #cmd_ptr
 
 check_end_of_table:
                 ; No match if end of table.
                 clc
-                lda (0,x)
+                lda command_tables,x
                 bmi done        ;taken with C=0 if end of table
                 
 check_cmd:
@@ -1060,7 +1037,7 @@ check_cmd:
                 php             ;save V flag
                 pha             ;save initial command line offset
 loop:
-                lda (0,x)
+                lda command_tables,x
                 bmi maybe_match
                 lda ($f2),y
                 iny
@@ -1070,9 +1047,9 @@ loop:
 +
                 clv
                 jsr toupper
-                cmp (0,x)
+                cmp command_tables,x
                 bne no_match
-                jsr add1z16
+                inx
                 jmp loop
 
 maybe_match:
@@ -1095,30 +1072,25 @@ done:
 
 no_match:
                 jsr cmd_metadata
-                jsr add3z16
+                inx
+                inx
+                inx
                 jmp check_end_of_table
                 .pend
 
 ;-------------------------------------------------------------------------
-; advance (cmd_ptr) to the metadata for the current command
+; advance to the metadata for the current command
 ;
-; entry: (cmd_ptr) = point to somewhere in the text of the command
-; exit: (cmd_ptr) = points to command's metadata
-; preserves: X; Y; C
+; entry: X = offset into command_tables of somewhere in the text of the command
+; exit: X = offset into command_tables of command's metadata
+; preserves: Y; C
 
 cmd_metadata: .proc
-                txa
-                pha
-                ldx #cmd_ptr
-loop:
-                lda (0,x)
+                lda command_tables,x
                 bmi found
-                jsr add1z16
-                jmp loop
-
+                inx
+                jmp cmd_metadata
 found:
-                pla
-                tax
                 rts
                 .pend
 
@@ -1127,49 +1099,31 @@ found:
 ;
 ; Y and C are passed as-is to routine.
 ;
-; entry: (cmd_ptr) = points to command's metadata
+; entry: X = offset of command's metadata in command tables
 ; 
 
 cmd_call_pointer: .proc
+                lda command_tables+2,x ; routine MSB
                 pha
+                lda command_tables+1,x ; routine LSB
                 pha
-                tya
-                pha
-
-                tsx
-
-                ; $101,x=Y
-                ; $102,x=PC LSB
-                ; $103,x=PC MSB
-                
-                ldy #1
-                lda (cmd_ptr),y ;routine LSB
-                sta $102,x
-
-                iny
-                lda (cmd_ptr),y ;routine MSB
-                sta $103,x
-
-                pla
-                tay
                 rts
                 .pend
                 
 ;-------------------------------------------------------------------------
 
 print_cmds: .proc
-                ldx #cmd_ptr
 loop:
-                lda (0,x)
+                lda command_tables,x
                 bmi done
 
                 jsr print_2_spaces
                 
 name_loop:
-                lda (0,x)
+                lda command_tables,x
                 bmi print_syntax
                 jsr oswrch
-                jsr add1z16
+                inx
                 jmp name_loop
 
 print_syntax:
@@ -1180,7 +1134,7 @@ print_syntax:
                 pha
                 
                 clc
-                lda (0,x)
+                lda command_tables,x
                 and #$7f
                 adc #<syntaxes
                 tax
@@ -1194,8 +1148,10 @@ print_syntax:
                 pla
                 tax
 
-syntax_done:                
-                jsr add3z16
+syntax_done:
+                inx
+                inx
+                inx
                 jsr osnewl
                 jmp loop
 
@@ -2335,18 +2291,9 @@ blfs_oscli_hack: .proc
                 ; lda $f2
                 ; jsr print_hex_byte
 
-                push16 cmd_ptr
-                
-                lda #<fs_trap_commands
-                sta cmd_ptr+0
-                
-                lda #>fs_trap_commands
-                sta cmd_ptr+1
-
                 jsr sev         ;disallow 0-char abbrev
+                ldx #fs_trap_commands-command_tables
                 jsr find_cmd
-                
-                pop16 cmd_ptr
 
                 bcc not_matched
 
