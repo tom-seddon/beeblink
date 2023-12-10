@@ -2105,26 +2105,18 @@ link_ok:
                 ; claim vectors and so on
                 jsr init_fs
                 
-                lda #253        ;get reset type in X (AUG 244)
-                jsr osbyte_x00_yff
-
-                .debug_print ['i_b_i: REQUEST_RESET... (reset type: &',DP_X,', link_subtype: '..format('%d',link_subtype)..')\r\n']
-
-                lda #$81
-                ldx #$00
-                ldy #$ff
-                jsr osbyte      ;get machine type (AUG p152)
-                txa             ;A=machine type
-                pha             ;save machine type
-
                 lda #3
                 jsr set_payload_counter
+
+                .debug_print ['i_b_i: REQUEST_RESET...\r\n']
                 
                 lda #REQUEST_RESET
                 jsr send_request_n_with_restart
 
                 ; reset type
-                txa
+                lda #253        ;get reset type in X (AUG 244)
+                jsr osbyte_x00_yff
+                txa             ; A=reset type
                 jsr send_payload_byte
 
                 ; link subtype
@@ -2132,7 +2124,9 @@ link_ok:
                 jsr send_payload_byte
 
                 ; machine type
-                pla             ;restore machine type
+                lda #$81
+                jsr osbyte_x00_yff ; get machine type (AUG p152)
+                txa                ; A=machine type
                 jsr send_payload_byte
 
                 ; whatever it was, I'm sure it was fine...
