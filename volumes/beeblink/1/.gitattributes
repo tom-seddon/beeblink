@@ -11,3 +11,4 @@ $.LOOPTEST diff=bbcbasic
 $.TESTS diff=bbcbasic
 $.TUTEST diff=bbcbasic
 $.ESREAD diff=bbcbasic
+$.BOOTSTRAP diff=bbcbasic
