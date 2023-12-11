@@ -53,6 +53,7 @@ install:
   - node --version
   - git submodule init
   - git submodule update
+  - git status --porcelain
 
   - ps:
   - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
@@ -73,6 +74,7 @@ build_script:
       }
   - ps: 7z a $env:ZIP volumes
   - ps: cd ./beeb
+  - git status --porcelain
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
         ../tools/snmake roms
