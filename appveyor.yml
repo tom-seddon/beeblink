@@ -53,6 +53,7 @@ install:
   - node --version
   - git submodule init
   - git submodule update
+  - git status --porcelain
 
   - ps:
   - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
@@ -71,17 +72,18 @@ build_script:
       } elseif ($env:CI_MACOS -eq $true) {
         $env:ZIP=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$env:RELEASE_NAME-macos.zip")
       }
-  - ps: 7z a $env:ZIP volumes
   - ps: cd ./beeb
+  - git status --porcelain
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
-        ../tools/snmake roms
+        ../tools/snmake roms CI_BUILD=1
       } elseif ($env:CI_MACOS -eq $true) {
-        make roms TASS=../tools/64tass
+        make roms CI_BUILD=1 TASS=../tools/64tass
       }
   - ps: cd .build
   - ps: 7z a $env:ZIP beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_tube_serial_safe.rom beeblink_upurs_fe60.rom beeblink_tube_serial_electron.rom beeblink_tube_serial_safe_electron.rom
   - ps: Pop-Location
+  - ps: 7z a $env:ZIP volumes
   - ps: Push-Location
   - ps: cd ./server
   - npm install
