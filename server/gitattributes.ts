@@ -135,7 +135,7 @@ export class Manipulator {
             if (gaData === undefined) {
                 if (add === undefined) {
                     // it's ok, nothing to do.
-                    this.log?.pn('(nothing to do)');
+                    this.log?.pn(`nothing to do for: ${filePath}`);
                     return;
                 }
 
