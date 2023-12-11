@@ -491,7 +491,7 @@ export class Server {
                     const rom = await utils.fsReadFile(romPath);
                     return newResponse(beeblink.RESPONSE_DATA, rom);
                 } catch (error) {
-                    if (errors.getErrno(error) == 'ENOENT') {
+                    if (errors.getErrno(error) === 'ENOENT') {
                         // Try to supply a slightly less confusing-looking error in this case!
                         return errors.generic(`ROM file not found on server: ${romPath}`);
                     } else {
