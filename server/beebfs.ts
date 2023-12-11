@@ -534,14 +534,15 @@ export interface IFSType {
     canWrite(): boolean;
 
     // get list of all Beeb files in volume.
+    findBeebFilesInVolume(volume: Volume, log: utils.Log | undefined): Promise<File[]>;
+
+    // Handle *LOCATE: get list of all Beeb files in volume matching explicit
+    // parts of FQN. Treat implicit drive/dir values as matching anything.
     //
-    // If volumeOrFQN is a Volume, find all files in the volume; if volumeOrFQN
-    // is a FQN, find all files matching that FQN.
-    //
-    // When called with a FQN, this entry point differs from
-    // findBeebFilesMatching in that it may discover files that aren't directly
-    // accessible via a Beeb path, but could become so by arrangement.
-    findBeebFilesInVolume(volumeOrFQN: Volume | FQN, log: utils.Log | undefined): Promise<File[]>;
+    // (This entry point differs from findBeebFilesMatching in that it may
+    // discover files that aren't directly accessible via a Beeb path, but could
+    // become so by arrangement. TubeHost files are like this.)
+    locateBeebFiles(fqn: FQN, log: utils.Log | undefined): Promise<File[]>;
 
     // get list of Beeb files matching FQN. The volume will be of the right type.
     findBeebFilesMatching(fqn: FQN, recurse: boolean, log: utils.Log | undefined): Promise<File[]>;
@@ -1230,7 +1231,7 @@ export class FS {
                     continue;
                 }
 
-                const files = await volume.type.findBeebFilesInVolume(fqn, this.locateVerbose ? this.log : undefined);
+                const files = await volume.type.locateBeebFiles(fqn, this.locateVerbose ? this.log : undefined);
 
                 for (const file of files) {
                     foundFiles.push(file);

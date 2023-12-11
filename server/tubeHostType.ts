@@ -954,30 +954,26 @@ class TubeHostType implements beebfs.IFSType {
         return path.join(tubeHostFilePath.serverFolder, beebfs.getServerChars(fqn.filePath.dir) + '.' + beebfs.getServerChars(fqn.name)) as VolRelPath;
     }
 
-    public async findBeebFilesInVolume(volumeOrFQN: beebfs.Volume | beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
         const files: beebfs.File[] = [];
 
-        let volume: beebfs.Volume;
-        let dirRegExp: RegExp | undefined;
-        let nameRegExp: RegExp | undefined;
-        if (volumeOrFQN instanceof beebfs.FQN) {
-            // TubeHost volume files have unknowable drives, but that will still
-            // match an explicit '#' or '*'.
-            if (volumeOrFQN.filePath.driveExplicit &&
-                volumeOrFQN.filePath.drive !== utils.MATCH_N_CHAR &&
-                volumeOrFQN.filePath.drive !== utils.MATCH_ONE_CHAR) {
-                return files;
-            }
+        await this.findBeebFilesInVolumeRecurse(volume, log, files, undefined, undefined, '' as VolRelPath);
 
-            volume = volumeOrFQN.filePath.volume;
-            dirRegExp = utils.getRegExpFromAFSP(volumeOrFQN.filePath.dir);
-            nameRegExp = utils.getRegExpFromAFSP(volumeOrFQN.name);
-        } else {
-            volume = volumeOrFQN;
+        return files;
+    }
+
+    public async locateBeebFiles(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
+        // TubeHost volume files have unknowable drives, but that will still
+        // match an explicit # or *.
+        if (fqn.filePath.driveExplicit && fqn.filePath.drive !== utils.MATCH_N_CHAR && fqn.filePath.drive !== utils.MATCH_ONE_CHAR) {
+            return [];
         }
 
-        await this.findBeebFilesInVolumeRecurse(volume, log, files, dirRegExp, nameRegExp, '' as VolRelPath);
+        const dirRegExp = fqn.filePath.dirExplicit ? utils.getRegExpFromAFSP(fqn.filePath.dir) : utils.MATCH_ANY_REG_EXP;
+        const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
+        const files: beebfs.File[] = [];
+        await this.findBeebFilesInVolumeRecurse(fqn.filePath.volume, log, files, dirRegExp, nameRegExp, '' as VolRelPath);
         return files;
     }
 

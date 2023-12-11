@@ -364,19 +364,22 @@ class DFSType implements beebfs.IFSType {
         return path.join(fqn.filePath.drive.toUpperCase(), beebfs.getServerChars(fqn.filePath.dir) + '.' + beebfs.getServerChars(fqn.name));
     }
 
-    public async findBeebFilesInVolume(volumeOrFQN: beebfs.Volume | beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        if (volumeOrFQN instanceof beebfs.Volume) {
-            return await this.findFiles(volumeOrFQN, undefined, undefined, undefined, log);
-        } else {
-            return await this.findBeebFilesMatching(volumeOrFQN, false, log);
-        }
+    public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
+        return await this.findFiles(volume, undefined, undefined, undefined, log);
+    }
+
+    public async locateBeebFiles(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
+        const driveRegExp = fqn.filePath.driveExplicit ? utils.getRegExpFromAFSP(fqn.filePath.drive) : utils.MATCH_ANY_REG_EXP;
+        const dirRegExp = fqn.filePath.driveExplicit ? utils.getRegExpFromAFSP(fqn.filePath.dir) : utils.MATCH_ANY_REG_EXP;
+        const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
+        return await this.findFiles(fqn.filePath.volume, driveRegExp, dirRegExp, nameRegExp, log);
     }
 
     public async findBeebFilesMatching(fqn: beebfs.FQN, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {
         // The recurse flag is ignored. There is no hierarchy within a BeebLink volume.
 
-        const driveRegExp = fqn.filePath.driveExplicit ? utils.getRegExpFromAFSP(fqn.filePath.drive) : utils.MATCH_ANY_REG_EXP;
-        const dirRegExp = fqn.filePath.dirExplicit ? utils.getRegExpFromAFSP(fqn.filePath.dir) : utils.MATCH_ANY_REG_EXP;
+        const driveRegExp = utils.getRegExpFromAFSP(fqn.filePath.drive);
+        const dirRegExp = utils.getRegExpFromAFSP(fqn.filePath.dir);
         const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
         return await this.findFiles(fqn.filePath.volume, driveRegExp, dirRegExp, nameRegExp, log);
