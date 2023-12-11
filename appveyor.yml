@@ -76,9 +76,9 @@ build_script:
   - git status --porcelain
   - ps: |
       if ($env:CI_WINDOWS -eq $true) {
-        ../tools/snmake roms
+        ../tools/snmake roms CI_BUILD=1
       } elseif ($env:CI_MACOS -eq $true) {
-        make roms TASS=../tools/64tass
+        make roms CI_BUILD=1 TASS=../tools/64tass
       }
   - ps: cd .build
   - ps: 7z a $env:ZIP beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_tube_serial_safe.rom beeblink_upurs_fe60.rom beeblink_tube_serial_electron.rom beeblink_tube_serial_safe_electron.rom

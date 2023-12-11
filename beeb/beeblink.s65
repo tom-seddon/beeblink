@@ -358,11 +358,7 @@ rom_version_string:
 rom_version_text:
                 .text VERSION
 rom_copyright:
-                .text 0,"(C) "
-rom_build_time: .block
-                .text BUILD_TIME
-end:
-                .bend
+                .text 0,"(C)"
                 .byte 0
                 .send header
 
@@ -4386,11 +4382,9 @@ version_cmd: .proc
                 jsr print_rom_banner.no_newline
                 jsr pcprint
                 .text "Git commit: ",COMMIT,10,13
-                .text "Build time: ",255
-                ldx #<rom_build_time
-                ldy #rom_build_time.end-rom_build_time
-                jsr print_rom_header_text
-                jmp osnewl
+                .text "Build info: ",BUILD_INFO,10,13
+                .byte 255
+                rts
                 .pend
                 
 ;-------------------------------------------------------------------------
