@@ -321,13 +321,8 @@ class PCType implements beebfs.IFSType {
                 continue;
             }
 
-            let text = false;
-            if (utils.getCaseNormalizedPath(path.extname(serverName)) === '.txt') {
-                text = true;
-            }
-
             const fqn = new beebfs.FQN(new beebfs.FilePath(volume, true, '', false, '', false), serverName);
-            const file = new beebfs.File(path.join(volume.path, serverName), fqn, beebfs.DEFAULT_LOAD, beebfs.DEFAULT_EXEC, beebfs.R_ATTR, text);
+            const file = new beebfs.File(path.join(volume.path, serverName), fqn, beebfs.DEFAULT_LOAD, beebfs.DEFAULT_EXEC, beebfs.R_ATTR);
             beebFiles.push(file);
         }
 

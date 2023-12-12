@@ -56,6 +56,11 @@ export const SERIAL_SUBTYPE_TUBE_SERIAL_SAFE = 4;
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+export const CAPS1_SUPPORT_TEXT_EXEC = 1;
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 // response is 1 byte: the protocol version.
 export const CR_GET_PROTOCOL_VERSION = 1;
 
@@ -167,12 +172,18 @@ export const REQUEST_GET_ROM = 0x02;
 // Response is YES.
 //
 // P = reset type as per OSBYTE 253 (AUG p244); (optional) link subtype;
-// (optional) machine type from OSBYTE $81
+// (optional) machine type from OSBYTE $81; (optional) caps1 bits
 //
 // If not present, the link subtype is assumed to be 0.
 //
 // If not present, the machine type is treated as unknown, and machine-specific
 // functionality may be incorrectly included or excluded.
+//
+// If not present, the caps1 bits are assumed to be 0.
+//
+// (Inferring anything from the machine type was a big mistake, and I'm not sure
+// what I was thinking. Future features will use the caps bits instead, with
+// additional bytes to be added as required.)
 export const REQUEST_RESET = 0x03;
 
 // Request an echo'd DATA response with whatever payload accompanies this
@@ -662,6 +673,11 @@ export const RESPONSE_SPECIAL_SRLOAD = 6;
 
 // No longer used.
 export const RESPONSE_SPECIAL_07 = 7;
+
+// Do *EXECTEXT.
+//
+// P = 1 byte, handle of open file.
+export const RESPONSE_SPECIAL_EXECTEXT = 8;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////

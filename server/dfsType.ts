@@ -464,7 +464,7 @@ class DFSType implements beebfs.IFSType {
         const newServerPath = path.join(newFQN.filePath.volume.path, this.getIdealVolumeRelativeServerPath(newFQN));
         await inf.mustNotExist(newServerPath);
 
-        const newFile = new beebfs.File(newServerPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr, false);
+        const newFile = new beebfs.File(newServerPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr);
 
         await this.writeBeebMetadata(newFile.serverPath, newFQN, newFile.load, newFile.exec, newFile.attr);
 
@@ -585,7 +585,7 @@ class DFSType implements beebfs.IFSType {
                 }
 
                 const fqn = new beebfs.FQN(new beebfs.FilePath(volume, true, drive.beebName, true, dir, true), name);
-                const file = new beebfs.File(info.serverPath, fqn, info.load, info.exec, info.attr, false);
+                const file = new beebfs.File(info.serverPath, fqn, info.load, info.exec, info.attr);
                 log?.pn(`${file}`);
 
                 beebFiles.push(file);

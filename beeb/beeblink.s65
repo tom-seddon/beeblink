@@ -2101,7 +2101,7 @@ link_ok:
                 ; claim vectors and so on
                 jsr init_fs
                 
-                lda #3
+                lda #4
                 jsr set_payload_counter
 
                 .debug_print ['i_b_i: REQUEST_RESET...\r\n']
@@ -2125,7 +2125,10 @@ link_ok:
                 txa                ; A=machine type
                 jsr send_payload_byte
 
-                ; whatever it was, I'm sure it was fine...
+                ; caps1 flags
+                lda #CAPS1_SUPPORT_TEXT_EXEC
+                jsr send_payload_byte
+
                 jsr recv_response_and_discard_payload
 
                 .debug_print ['i_b_i: REQUEST_SET_FILE_HANDLE_RANGE...\r\n']
@@ -3421,6 +3424,9 @@ special:
                 cmp #RESPONSE_SPECIAL_SRLOAD
                 beq srload_special
 
+                cmp #RESPONSE_SPECIAL_EXECTEXT
+                beq exectext_special
+
 not_supported:
                 jsr discard_remaining_payload
                 .brk_error 255,"Not supported",0
@@ -4351,7 +4357,38 @@ version_cmd: .proc
                 .byte 255
                 rts
                 .pend
+
+;-------------------------------------------------------------------------
+;
+; Handle *EXECTEXT.
+;
+exectext_special: .proc
+                jsr recv_payload_byte
+                pha             ; save new *EXEC file handle
+
+                jsr discard_remaining_payload
+
+                lda #198        ; read EXEC file handle (AUG p203)
+                jsr osbyte_x00_yff
+                txa
+                bne already_execing ; taken if *EXEC in progress
+
+                pla
+                tax
+                ldy #0
+                lda #198        ; write *EXEC file handle
+                jmp osbyte
+
+already_execing:
+                pla             ; restore new *EXEC file handle
+                tay
+                lda #0          ; close file
+                jsr osfind
+                .endproc
+wont_brk:
+                .brk_error $93,"Won't"
                 
+
 ;-------------------------------------------------------------------------
 ;
 ; Handle *SRLOAD.
@@ -4379,7 +4416,7 @@ old_bank: .fill 1
 
                 ; Trying to write to BLFS ROM! Don't allow it.
                 jsr discard_remaining_payload
-                .brk_error $93,"Won't"
+                jmp wont_brk
                 
 +
                 sta bank

@@ -273,6 +273,28 @@ Change drive on the current volume.
 
 Produce hex dump of file.
 
+### `EXECTEXT <fsp>`
+
+Do the equivalent of a `*EXEC` with a text file that might not have
+Acorn-style line endings. You might need this if you've saved a text
+file on the PC and you're getting incorrect results with ordinary
+`*EXEC`. This is particularly likely if you use macOS or Linux.
+
+The following sequences of bytes will be treated as a single line
+ending, so this should handle pretty much any text file:
+
+- 10 13 (LF CR) - 2-byte Acorn line endings
+- 13 10 (CR LF) - 2-byte Windows line endings
+- 10 (LF) - Unix line endings
+- 13 (CR) - 1-byte Acorn line endings
+
+There will also always be a line ending at the end of the file.
+
+(Note that this is not a drop-in replacement for `*EXEC`. The file
+name is mandatory, and it won't cancel an existing `*EXEC` or
+`*EXECTEXT` if one is in progress. It's also only available when the
+BLFS is active.)
+
 ### `HSTATUS ([HFD]+)`
 
 Show current status: general info (current volume, current defaults),
@@ -540,3 +562,6 @@ execution address is &FFFFFFFF. (This usually means the file has a
 `*SRLOAD` produces this error if trying to load a ROM image over the
 BLFS itself, or if the address range would be outside the ROM area of
 &8000-&BFFF.
+
+`*EXECTEXT` produces this error if there is `*EXEC` or `*EXECTEXT`
+in progress.

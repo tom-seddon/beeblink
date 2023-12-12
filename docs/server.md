@@ -140,31 +140,9 @@ Limitations and oddities of PC volumes:
   the PC
 * PC files don't have load and execution addresses - both are
   effectively always &FFFFFFFF (see the `Won't` error)
-* a file's extension is `.txt`, it will be treated as a text file (see
-  below)
 * valid file name chars are at the discretion of the server's filing
   system
 * file name matching is case-insensitive (as you'll probably have caps
   lock on...), which may cause issues with case-sensitive server
   filing systems
 * `*OPT 4` and `*TITLE` are not supported
-
-## Text files
-
-The standard BBC Micro newline is a single CR, making it incompatible
-with Windows- or Unix-style text files. If a file is treated as text,
-the server can perform newline translation when the file is opened for
-random access. This is a hack to make it easy to use PC-style text
-files with `*EXEC`, e.g., after downloading from the web.
-
-When opened for random access, double-/single-byte newlines will be
-converted to ASCII 13, and an ASCII 13 will be added to the end if
-necessary. This affects data read from `OSBGET`/`OSGBPB`, and the
-value of `EXT#`.
-
-`OSFILE` access is unaffected, and SHA1 hashes printed by `*LOCATE`
-ignore the file's text status.
-
-Correct results in general are far from guaranteed.
-
-This mechanism may improve over time...

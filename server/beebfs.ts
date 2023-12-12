@@ -286,17 +286,16 @@ export class File {
     public readonly exec: FileAddress;
     public readonly attr: FileAttributes;
 
-    // could perhaps be part of the attr field, but I'm a bit reluctant to
-    // fiddle around with that.
-    public readonly text: boolean;
+    // // could perhaps be part of the attr field, but I'm a bit reluctant to
+    // // fiddle around with that.
+    // public readonly text: boolean;
 
-    public constructor(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes, text: boolean) {
+    public constructor(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes) {
         this.serverPath = serverPath;
         this.fqn = fqn;
         this.load = load;
         this.exec = exec;
         this.attr = attr;
-        this.text = text;
     }
 
     public toString(): string {
@@ -313,6 +312,7 @@ class OpenFile {
     public readonly fqn: FQN;
     public readonly read: boolean;
     public readonly write: boolean;
+    public readonly openedAsText: boolean;
     public ptr: number;
     public eofError: boolean;// http://beebwiki.mdfs.net/OSBGET
     public dirty: boolean;
@@ -321,12 +321,13 @@ class OpenFile {
     // massively simplifies the error handling.
     public readonly contents: number[];
 
-    public constructor(handle: number, serverPath: string, fqn: FQN, read: boolean, write: boolean, contents: number[]) {
+    public constructor(handle: number, serverPath: string, fqn: FQN, read: boolean, write: boolean, openedAsText: boolean, contents: number[]) {
         this.handle = handle;
         this.serverPath = serverPath;
         this.fqn = fqn;
         this.read = read;
         this.write = write;
+        this.openedAsText = openedAsText;
         this.ptr = 0;
         this.eofError = false;
         this.contents = contents;
@@ -1296,6 +1297,10 @@ export class FS {
                 text += 'out';
             }
 
+            if (openFile.openedAsText) {
+                text += ' (text)';
+            }
+
             text += ' PTR#=&' + utils.hex8(openFile.ptr) + ' EXT#=&' + utils.hex8(openFile.contents.length) + ' - ' + openFile.serverPath + utils.BNL;
         }
 
@@ -1476,7 +1481,7 @@ export class FS {
     // The OSFIND file name is not actually a file name, but a command line
     // string, the first arg of which is the file name. (When doing a *SRLOAD,
     // for example, the MOS just hands the whole command line to OSFIND.)
-    public async OSFINDOpen(mode: number, nameString: string): Promise<number> {
+    public async OSFINDOpen(mode: number, nameString: string, openAsText: boolean): Promise<number> {
         const commandLine = new CommandLine(nameString);
         if (commandLine.parts.length === 0) {
             return errors.badName();
@@ -1494,6 +1499,11 @@ export class FS {
 
         const fqn = await this.parseFileString(commandLine.parts[0]);
         let serverPath: string;
+
+        if (openAsText && write) {
+            // Should never see this!
+            return errors.generic('Can\'t open text file for write');
+        }
 
         let contentsBuffer: Buffer | undefined;
         const file = await getBeebFile(fqn, read && !write, this.log);
@@ -1514,7 +1524,7 @@ export class FS {
             }
 
             this.log?.pn('        serverPath=``' + file.serverPath + '\'\'');
-            this.log?.pn('        text=' + file.text);
+            this.log?.pn('        openAsText=' + openAsText);
 
             // File exists.
             serverPath = file.serverPath;
@@ -1533,7 +1543,7 @@ export class FS {
                 }
             }
 
-            if (file.text) {
+            if (openAsText) {
                 // Not efficient, but I don't think it matters...
                 const lines = await this.readTextFile(file);
 
@@ -1567,7 +1577,7 @@ export class FS {
             }
         }
 
-        const openFile = new OpenFile(this.firstFileHandle + index, serverPath, fqn, read, write, contents);
+        const openFile = new OpenFile(this.firstFileHandle + index, serverPath, fqn, read, write, openAsText, contents);
         this.openFiles[index] = openFile;
         this.log?.pn(`        handle=0x${openFile.handle}`);
         return openFile.handle;
@@ -1652,7 +1662,7 @@ export class FS {
         if (file !== undefined) {
             this.mustNotBeOpen(file);
         } else {
-            file = new File(this.getServerPath(fqn), fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, DEFAULT_ATTR, false);
+            file = new File(this.getServerPath(fqn), fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, DEFAULT_ATTR);
         }
 
         FS.mustBeWriteableFile(file);
@@ -1704,7 +1714,7 @@ export class FS {
             return errors.badAttribute();
         }
 
-        return new File(file.serverPath, file.fqn, file.load, file.exec, newAttr, file.text);
+        return new File(file.serverPath, file.fqn, file.load, file.exec, newAttr);
     }
 
     /////////////////////////////////////////////////////////////////////////

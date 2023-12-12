@@ -103,11 +103,13 @@ export class Command {
     private readonly syntax: string | undefined;
     private readonly fun: (commandLine: CommandLine) => Promise<void | string | Buffer | Response>;
     private unsupportedMachineTypes: Set<number> | undefined;
+    private caps1: number;
 
     public constructor(name: string, syntax: string | undefined, fun: (commandLine: CommandLine) => Promise<void | string | Buffer | Response>) {
         this.nameUC = name.toUpperCase();
         this.syntax = syntax;
         this.fun = fun;
+        this.caps1 = 0;
     }
 
     public async call(commandLine: CommandLine): Promise<void | string | Buffer | Response> {
@@ -124,6 +126,14 @@ export class Command {
         return true;
     }
 
+    public isSupportedCaps1(caps1: number): boolean {
+        if (this.caps1 !== 0 && (this.caps1 & caps1) === 0) {
+            return false;
+        }
+
+        return true;
+    }
+
     public getSyntaxString(): string {
         let syntax = this.nameUC;
 
@@ -132,6 +142,12 @@ export class Command {
         }
 
         return syntax;
+    }
+
+    public whenCaps1(caps1: number): Command {
+        this.caps1 |= caps1;
+
+        return this;
     }
 
     public unlessMachineType(machineType: number): Command {
@@ -243,6 +259,7 @@ export class Server {
     private bfs: beebfs.FS;
     private linkSubtype: number | undefined;
     private machineType: number | undefined;
+    private caps1: number;
     private romPathByLinkSubtype: Map<number, string>;
     private stringBuffer: Buffer | undefined;
     private stringBufferIdx: number;
@@ -275,6 +292,7 @@ export class Server {
             new Command('DIR', '(<dir>)', this.dirCommand),
             new Command('DRIVE', '(<drive>)', this.driveCommand),
             new Command('DUMP', '<fsp>', this.dumpCommand),
+            new Command('EXECTEXT', '<fsp>', this.execTextCommand).whenCaps1(beeblink.CAPS1_SUPPORT_TEXT_EXEC),
             new Command('HSTATUS', '([HFD])', this.hstatusCommand),
             new Command('INFO', '<afsp>', this.infoCommand),
             new Command('LIB', '(<dir>)', this.libCommand),
@@ -341,6 +359,8 @@ export class Server {
         //
         // Looked kind of marginal past 9 bytes though.
         this.numOSBGETReadaheadBytes = 15;
+
+        this.caps1 = 0;
     }
 
     public getLinkSubtype(): number | undefined {
@@ -532,6 +552,13 @@ export class Server {
             this.machineType = undefined;
             this.log?.pn(`machine type=unknown`);
         }
+
+        if (p.length > 3) {
+            this.caps1 = p[3];
+        } else {
+            this.caps1 = 0;
+        }
+        this.log?.pn(`caps1=0x${utils.hex2(this.caps1)}`);
     };
 
     private readonly handleEchoData = async (_handler: Handler, p: Buffer): Promise<Response> => {
@@ -624,6 +651,10 @@ export class Server {
             if (!command.isSupportedMachineType(this.machineType)) {
                 return false;
             }
+
+            if (!command.isSupportedCaps1(this.caps1)) {
+                return false;
+            }
         }
 
         return true;
@@ -702,6 +733,10 @@ export class Server {
                 anySupported = true;
             }
         }
+
+        this.log?.withIndent('*HELP BLFS:', () => {
+            this.log?.pn(help);
+        });
 
         return help;
     };
@@ -782,7 +817,7 @@ export class Server {
 
         this.log?.pn('Input: mode=0x' + utils.hex2(mode) + ', name=``' + nameString + '\'\'');
 
-        const handle = await this.bfs.OSFINDOpen(mode, nameString);
+        const handle = await this.bfs.OSFINDOpen(mode, nameString, false);
 
         this.log?.pn('Output: handle=' + utils.hexdec(handle));
 
@@ -2140,5 +2175,22 @@ export class Server {
         }
 
         return this.bfs.getDefaultsString();
+    };
+
+    private readonly execTextCommand = async (commandLine: CommandLine): Promise<Response> => {
+        if (commandLine.parts.length < 2) {
+            return errors.syntax();
+        }
+
+        const handle: number = await this.bfs.OSFINDOpen(0x40, commandLine.parts[1], true);
+        if (handle === 0) {
+            return errors.notFound();
+        }
+
+        const builder = new utils.BufferBuilder();
+        builder.writeUInt8(beeblink.RESPONSE_SPECIAL_EXECTEXT);
+        builder.writeUInt8(handle);
+
+        return newResponse(beeblink.RESPONSE_SPECIAL, builder);
     };
 }

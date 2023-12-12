@@ -1102,7 +1102,7 @@ class TubeHostType implements beebfs.IFSType {
         const newServerPath = getAbsPath(newFQN.filePath.volume, this.getIdealVolumeRelativeServerPath(newFQN));
         await inf.mustNotExist(newServerPath);
 
-        const newFile = new beebfs.File(newServerPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr, false);
+        const newFile = new beebfs.File(newServerPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr);
 
         await this.writeBeebMetadata(newFile.serverPath, newFQN, newFile.load, newFile.exec, newFile.attr);
 
@@ -1230,7 +1230,7 @@ class TubeHostType implements beebfs.IFSType {
             }
 
             const fqn = new beebfs.FQN(new TubeHostFilePath(volume, true, drive, driveExplicit, dir, true, folderPath), name);
-            const file = new beebfs.File(info.serverPath, fqn, info.load, info.exec, info.attr, false);
+            const file = new beebfs.File(info.serverPath, fqn, info.load, info.exec, info.attr);
             files.push(file);
         }
     }
