@@ -217,17 +217,15 @@ export class Manipulator {
                     }
                 }
 
-                if (lineChanged) {
+                if (parts.length <= 1) {
+                    // no point keeping this line...
+                    gaLines.splice(lineIdx, 1);
                     fileChanged = true;
-
-                    if (parts.length <= 1) {
-                        // can remove this line now.
-                        gaLines.splice(lineIdx, 1);
-                    } else {
-                        // replace this line.
-                        gaLines[lineIdx] = parts.join(' ');
-                        ++lineIdx;
-                    }
+                } else if (lineChanged) {
+                    // replace this line.
+                    gaLines[lineIdx] = parts.join(' ');
+                    fileChanged = true;
+                    ++lineIdx;
                 } else {
                     ++lineIdx;
                 }
