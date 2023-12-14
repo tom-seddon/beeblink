@@ -1747,8 +1747,10 @@ export class FS {
 
         if (this.gaManipulator !== undefined) {
             if (!newFQN.filePath.volume.isReadOnly()) {
-                // could be cleverer than this.
-                this.gaManipulator.renameFile(oldFile.serverPath, newFQN.filePath.volume.type.getIdealVolumeRelativeServerPath(newFQN));
+                // The gitattributes handling deliberately doesn't know too much
+                // about volumes and so on, so supply full paths.
+                const newFilePath = path.join(newFQN.filePath.volume.path, newFQN.filePath.volume.type.getIdealVolumeRelativeServerPath(newFQN));
+                this.gaManipulator.renameFile(oldFile.serverPath, newFilePath);
             }
         }
     }

@@ -16,15 +16,24 @@ The `.gitattributes` files are updated at the following times:
 * when saving files from the Beeb (reset text flag, find BASIC files)
 * when loading a volume with `*VOL` (reset text flag)
 * when creating a new volume with `*NEWVOL` (reset text flag)
+* when renaming files from the Beeb (name is updated)
+* when deleting files from the Beeb (file's entry is removed)
 
 Notes:
 
 * the server only spots changes based on Beeb activity - changing
   files on the PC won't get noticed until it does an exhaustive scan
   on the next startup
+* the exhaustive scan only ever adds entries, so if renaming or
+  deleting BBC files via the shell you can end up with stale
+  `.gitattributes` entries. This isn't usually a problem in practice
+  though
 * the server pays no attention to `.gitignore`, and always updates
   `.gitattributes` even if the files are already covered by a
   perfectly good `.gitattributes` file elsewhere
+* the `.gitattributes` files in volume folders are owned by Beeblink,
+  and not designed for editing. The server will blithely add and
+  remove entries as it sees fit
 
 ## `diff=bbcbasic`
 

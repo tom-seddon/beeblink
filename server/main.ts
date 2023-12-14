@@ -161,6 +161,7 @@ interface ICommandLineOptions {
     save_config: string | null;
     git: boolean;
     git_verbose: boolean;
+    git_extra_verbose: boolean;
     http: boolean;
     server_data_verbose: boolean;
     http_all_interfaces: boolean;
@@ -985,7 +986,7 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
         return undefined;
     }
 
-    const gaManipulator = new gitattributes.Manipulator(options.git_verbose);
+    const gaManipulator = new gitattributes.Manipulator(options.git_verbose, options.git_extra_verbose);
 
     // Find all the paths first, then set the gitattributes manipulator
     // going once they've all been collected, in the interests of doing one
@@ -2061,6 +2062,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     // Git
     always(['--git'], { action: 'storeTrue', help: 'look after .gitattributes for BBC volumes' });
     fullHelpOnly(['--git-verbose'], { action: 'storeTrue', help: 'extra git-related output' });
+    fullHelpOnly(['--git-extra-verbose'], { action: 'storeTrue', help: 'even more extra git-related output' });
 
     // Serial devices
     fullHelpOnly([SERIAL_INCLUDE_OPTION_NAME], { action: 'append', metavar: 'DEVICE', help: 'listen on serial port DEVICE' });
