@@ -37,7 +37,7 @@ export class Manipulator {
 
     public constructor(verbose: boolean, extraVerbose: boolean) {
         this.queue = [];
-        this.log = utils.Log.create('.gitattributes', process.stderr, verbose);
+        this.log = utils.Log.create('.gitattributes', process.stdout, verbose);
         this.quiescentCallbacks = [];
         this.extraVerbose = extraVerbose;
     }

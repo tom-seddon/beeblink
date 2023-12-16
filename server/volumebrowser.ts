@@ -102,7 +102,7 @@ export class Browser {
     private filterEditY: number;
 
     public constructor(charSizeBytes: number, width: number, height: number, m128: boolean, volumes: beebfs.Volume[], initialFilters: string[] | undefined) {
-        this.log = utils.Log.create('BROWSER', process.stderr, true);
+        this.log = utils.Log.create('BROWSER', process.stdout, true);
 
         this.width = width;
         this.height = height;

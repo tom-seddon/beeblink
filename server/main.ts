@@ -1932,7 +1932,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
 async function main(options: ICommandLineOptions) {
     beebfs.setFSTypes(dfsType, pcType, tubeHostType);
 
-    const log = utils.Log.create('', process.stderr, options.verbose);
+    const log = utils.Log.create('', process.stdout, options.verbose);
 
     if (!await handleCommandLineOptions(options, log)) {
         return;
@@ -1977,13 +1977,13 @@ async function main(options: ICommandLineOptions) {
         const colours = logPalette[(connectionId - 1) % logPalette.length];//-1 as IDs are 1-based
 
         const bfsLogPrefix = options.fs_verbose ? 'FS' + connectionId : undefined;
-        const bfsLog = utils.Log.create(bfsLogPrefix !== undefined ? bfsLogPrefix : '', process.stderr, bfsLogPrefix !== undefined);
+        const bfsLog = utils.Log.create(bfsLogPrefix !== undefined ? bfsLogPrefix : '', process.stdout, bfsLogPrefix !== undefined);
         if (bfsLog !== undefined) {
             bfsLog.colours = colours;
         }
 
         const serverLogPrefix = options.server_verbose ? additionalPrefix + 'SRV' + connectionId : undefined;
-        const serverLog = utils.Log.create(serverLogPrefix !== undefined ? serverLogPrefix : '', process.stderr, serverLogPrefix !== undefined);
+        const serverLog = utils.Log.create(serverLogPrefix !== undefined ? serverLogPrefix : '', process.stdout, serverLogPrefix !== undefined);
 
         const bfs = new beebfs.FS(searchFolders, gaManipulator, bfsLog, options.locate_verbose);
 
