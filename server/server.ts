@@ -98,21 +98,35 @@ export interface IServerResponse {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+class StringWithError {
+    public readonly str: string;
+
+    public readonly error: errors.BeebError;
+
+    public constructor(str: string, error: errors.BeebError) {
+        this.str = str;
+        this.error = error;
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 export class Command {
     public readonly nameUC: string;
     private readonly syntax: string | undefined;
-    private readonly fun: (commandLine: CommandLine) => Promise<void | string | Buffer | Response>;
+    private readonly fun: (commandLine: CommandLine) => Promise<void | string | StringWithError | Response>;
     private unsupportedMachineTypes: Set<number> | undefined;
     private caps1: number;
 
-    public constructor(name: string, syntax: string | undefined, fun: (commandLine: CommandLine) => Promise<void | string | Buffer | Response>) {
+    public constructor(name: string, syntax: string | undefined, fun: (commandLine: CommandLine) => Promise<void | string | StringWithError | Response>) {
         this.nameUC = name.toUpperCase();
         this.syntax = syntax;
         this.fun = fun;
         this.caps1 = 0;
     }
 
-    public async call(commandLine: CommandLine): Promise<void | string | Buffer | Response> {
+    public async call(commandLine: CommandLine): Promise<void | string | StringWithError | Response> {
         return this.fun(commandLine);
     }
 
@@ -166,20 +180,20 @@ export class Command {
 
 class Handler {
     public readonly name: string;
-    private readonly fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response | IServerResponse>;
+    private readonly fun: (handler: Handler, p: Buffer) => Promise<void | string | StringWithError | Response | IServerResponse>;
     private quiet: boolean;
     private fullRequestDump = false;
     private fullResponseDump = false;
     private resetLastOSBPUTHandle: boolean;
 
-    public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<void | string | Buffer | Response | IServerResponse>) {
+    public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<void | string | StringWithError | Response | IServerResponse>) {
         this.name = name;
         this.fun = fun;
         this.quiet = false;
         this.resetLastOSBPUTHandle = true;
     }
 
-    public async call(p: Buffer): Promise<void | string | Buffer | Response | IServerResponse> {
+    public async call(p: Buffer): Promise<void | string | StringWithError | Response | IServerResponse> {
         return this.fun(this, p);
     }
 
@@ -263,6 +277,7 @@ export class Server {
     private romPathByLinkSubtype: Map<number, string>;
     private stringBuffer: Buffer | undefined;
     private stringBufferIdx: number;
+    private stringError: errors.BeebError | undefined;
     private commonCommands: Command[];
     private handlers: (Handler | undefined)[];
     private log: utils.Log | undefined;
@@ -287,6 +302,7 @@ export class Server {
 
         this.commonCommands = [
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
+            new Command('COPY', '<afsp> <dir>', this.copyCommand),
             new Command('DEFAULTS', '([SRP])', this.defaultsCommand),
             new Command('DELETE', '<fsp>', this.deleteCommand),
             new Command('DIR', '(<dir>)', this.dirCommand),
@@ -447,11 +463,14 @@ export class Server {
         }
     }
 
-    private getResponseForResult(result: void | string | Buffer | Response | IServerResponse): IServerResponse {
+    private getResponseForResult(result: void | string | StringWithError | Response | IServerResponse): IServerResponse {
         if (result === undefined) {
             return { response: newResponse(beeblink.RESPONSE_YES) };
-        } else if (typeof (result) === 'string' || result instanceof Buffer) {
+        } else if (typeof (result) === 'string') {
             this.prepareForTextResponse(result);
+            return { response: newResponse(beeblink.RESPONSE_TEXT) };
+        } else if (result instanceof StringWithError) {
+            this.prepareForTextResponse(result.str, result.error);
             return { response: newResponse(beeblink.RESPONSE_TEXT) };
         } else if (result instanceof Response) {
             return { response: result };
@@ -574,7 +593,11 @@ export class Server {
             return newResponse(beeblink.RESPONSE_NO, 0);
         } else if (this.stringBufferIdx >= this.stringBuffer.length) {
             this.log?.pn('string exhausted.');
-            return newResponse(beeblink.RESPONSE_NO, 0);
+            if (this.stringError !== undefined) {
+                return newErrorResponse(this.stringError);
+            } else {
+                return newResponse(beeblink.RESPONSE_NO, 0);
+            }
         } else {
             let n = Math.min(this.stringBuffer.length - this.stringBufferIdx, p[0]);
             if (n === 0) {
@@ -1084,7 +1107,7 @@ export class Server {
         return newResponse(beeblink.RESPONSE_BOOT_OPTION, option);
     };
 
-    private readonly handleVolumeBrowser = async (handler: Handler, p: Buffer): Promise<Buffer | Response> => {
+    private readonly handleVolumeBrowser = async (handler: Handler, p: Buffer): Promise<Response> => {
         this.payloadMustBeAtLeast(handler, p, 1);
 
         if (p[0] === beeblink.REQUEST_VOLUME_BROWSER_RESET) {
@@ -1106,7 +1129,8 @@ export class Server {
 
             //this.log?.pn('Browser initial string: ' + this.getBASICStringExpr(text));
 
-            return text;
+            this.prepareForTextResponse(text);
+            return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING);
         } else if (p[0] === beeblink.REQUEST_VOLUME_BROWSER_KEYPRESS && this.volumeBrowser !== undefined) {
             this.log?.pn('REQUEST_VOLUME_BROWSER_KEYPRESS');
 
@@ -1442,13 +1466,14 @@ export class Server {
     //     this.stringBufferIdx = 0;
     // }
 
-    private prepareForTextResponse(value: string | Buffer): void {
+    private prepareForTextResponse(value: string | Buffer, error?: errors.BeebError | undefined): void {
         if (typeof value === 'string') {
             value = Buffer.from(value, 'binary');
         }
 
         this.stringBuffer = value;
         this.stringBufferIdx = 0;
+        this.stringError = error;
 
         // ...args: (number | string)[]) {
         // this.setString(...args);
@@ -2192,5 +2217,36 @@ export class Server {
         builder.writeUInt8(handle);
 
         return newResponse(beeblink.RESPONSE_SPECIAL, builder);
+    };
+
+    private readonly copyCommand = async (commandLine: CommandLine): Promise<string | StringWithError> => {
+        if (commandLine.parts.length < 2) {
+            return errors.syntax();
+        }
+
+        const srcFQN = await this.bfs.parseFileString(commandLine.parts[1]);
+        const srcFiles = await this.bfs.findFilesMatching(srcFQN);
+        if (srcFiles.length === 0) {
+            return errors.notFound();
+        }
+
+        const destFilePath = await this.bfs.parseDirString(commandLine.parts[2]);
+
+        let result = '';
+        for (const srcFile of srcFiles) {
+            try {
+                const destFQN = new beebfs.FQN(destFilePath, srcFile.fqn.name);
+                result += `${srcFile.fqn} -> ${destFQN}${BNL}`;
+                await this.bfs.copy(srcFile, destFQN);
+            } catch (error) {
+                if (error instanceof errors.BeebError) {
+                    return new StringWithError(result, error);
+                } else {
+                    throw error;
+                }
+            }
+        }
+
+        return result;
     };
 }

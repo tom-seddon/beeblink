@@ -1803,6 +1803,18 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    public async copy(src: File, dest: FQN): Promise<void> {
+        this.mustNotBeOpen(src);
+        FS.mustBeWriteableVolume(dest.filePath.volume);
+
+        const data = await FS.readFile(src);
+
+        await this.saveFile(dest, src.load, src.exec, src.attr, data);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     private setState(state: IFSState): void {
         this.state = state;
         this.stateCommands = undefined;
@@ -1859,6 +1871,15 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILESave(fqn: FQN, load: FileAddress, exec: FileAddress, data: Buffer): Promise<OSFILEResult> {
+        const attr = DEFAULT_ATTR;
+        await this.saveFile(fqn, load, exec, attr, data);
+        return new OSFILEResult(1, this.createOSFILEBlock(load, exec, data.length, attr), undefined, undefined);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private async saveFile(fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes, data: Buffer): Promise<void> {
         FS.mustBeWriteableVolume(fqn.filePath.volume);
         FS.mustNotBeTooBig(data.length);
 
@@ -1876,11 +1897,8 @@ export class FS {
             await inf.mustNotExist(serverPath);
         }
 
-        const attr = DEFAULT_ATTR;
         await this.writeBeebData(serverPath, fqn, data);
         await this.writeBeebMetadata(serverPath, fqn, load, exec, attr);
-
-        return new OSFILEResult(1, this.createOSFILEBlock(load, exec, data.length, attr), undefined, undefined);
     }
 
     /////////////////////////////////////////////////////////////////////////

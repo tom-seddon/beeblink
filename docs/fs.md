@@ -234,6 +234,13 @@ behaviour won't be identical.)
 Lock or unlock file(s). `<mode>` can be blank to unlock, or `L` to
 lock.
 
+### `*COPY <afsp> <dest>`
+
+Copy file(s) to another drive and/or volume.
+
+The copy operation takes place entirely on the server. None of the BBC
+Micro's memory is overwritten.
+
 ### `DEFAULTS ([SF])`
 
 Manage filing system defaults for use after a hard reset (CTRL+BREAK
