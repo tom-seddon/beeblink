@@ -518,7 +518,7 @@ TBD...
 
 # New OSWORD call
 
-OSWORD $99 - perform BeebLink call
+OSWORD $9A - perform BeebLink call
 
 Parameter block `B` on entry:
 

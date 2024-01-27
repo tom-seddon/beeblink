@@ -136,6 +136,9 @@ tube_claimant_id=35
 ; server's string.
 server_string_buffer_size=50
 
+; OSWORD number for the Make BeebLink Request operation.
+make_request_osword_number=$9a
+                
                 .cerror server_string_buffer_size<1,"server string buffer must be 1+ bytes"
                 .cerror server_string_buffer_size>64,"string packet has to fit on the 6502 stack"
 
@@ -220,7 +223,7 @@ fs_scratch_workspace_start:
                 .struct_section osfind_workspace
                 .struct_section init_workspace
                 .struct_section osfsc_workspace
-                .struct_section osword_99_workspace
+                .struct_section make_request_osword_workspace
                 .endu
 
                 ; Workspace for specific * commands.
@@ -517,9 +520,9 @@ done:
 ;
 svc_osword: .proc
                 ldx $ef
-                cpx #$99
+                cpx #make_request_osword_number
                 bne svc.done
-                jsr osword_99
+                jsr make_request_osword
                 jmp svc.done
                 .pend
                 
@@ -4495,11 +4498,11 @@ routine_end:
 ;
 ; Return $00 if handled, $08 if not - the result is passed on.
 
-osword_99: .proc
+make_request_osword: .proc
 
-                .section osword_99_workspace
+                .section make_request_osword_workspace
 block_ptr: .fill 2
-                .send osword_99_workspace
+                .send make_request_osword_workspace
                 
                 ;.debug_print ['OSWORD $99: block=&',$f1,$f0,'\r\n']
                 ;.debug_print ['input_size=&',DP_IND($f0,osword_99_block.input_size),'\r\n']
@@ -4511,18 +4514,18 @@ block_ptr: .fill 2
                 ;.debug_print ['response max size=&',DP_IND($f0,osword_99_block.response_size+3),DP_IND($f0,osword_99_block.response_size+2),DP_IND($f0,osword_99_block.response_size+1),DP_IND($f0,osword_99_block.response_size+0),'\r\n']
 
                 ; Ignore if block is wrong size.
-                ldy #osword_99_block.input_size
+                ldy #make_request_osword_block.input_size
                 lda ($f0),y
-                cmp #size(osword_99_block)
+                cmp #size(make_request_osword_block)
                 bne ignore
                 
                 iny             ;output size
                 lda ($f0),y
-                cmp #size(osword_99_block)
+                cmp #size(make_request_osword_block)
                 bne ignore
 
                 ; Ignore if wrong FS ID.
-                ldy #osword_99_block.fs_id
+                ldy #make_request_osword_block.fs_id
                 lda ($f0),y
                 beq handle      ;0 means pick highest priority ROM
                 cmp #blfs_fs_number
@@ -4533,17 +4536,17 @@ ignore:
 
 handle:
                 ; Set error flag.
-                ldy #osword_99_block.response
+                ldy #make_request_osword_block.response
                 lda #$ff
                 sta ($f0),y
 
                 ; Indicate which ROM dealt with it.
-                ldy #osword_99_block.fs_id
+                ldy #make_request_osword_block.fs_id
                 lda #blfs_fs_number
                 sta ($f0),y
 
                 ; Catch invalid requests.
-                ldy #osword_99_block.request
+                ldy #make_request_osword_block.request
                 lda ($f0),y
                 beq done        ;taken if ROM presence check
                 bmi done        ;taken if >=$80
@@ -4564,12 +4567,12 @@ handle:
                 jsr send_request_n_with_restart
 
 do_request:
-                ldy #osword_99_block.request
+                ldy #make_request_osword_block.request
                 lda (block_ptr),y
                 ;.debug_print ['wrapped request: &',DP_A,'\r\n']
                 jsr send_payload_byte
 
-                ldy #osword_99_block.response_size
+                ldy #make_request_osword_block.response_size
                 ldx #4
 -
                 lda (block_ptr),y
@@ -4578,7 +4581,7 @@ do_request:
                 dex
                 bne -
 
-                ldy #osword_99_block.request_addr
+                ldy #make_request_osword_block.request_addr
                 ldx #payload_addr
                 jsr copy_block_dword
 
@@ -4592,12 +4595,12 @@ do_request:
 
                 ; receive actual response type.
                 jsr recv_payload_byte
-                ldy #osword_99_block.response
+                ldy #make_request_osword_block.response
                 sta (block_ptr),y
 
                 ; receive actual response size.
                 ldx #4
-                ldy #osword_99_block.response_size
+                ldy #make_request_osword_block.response_size
 -
                 jsr recv_payload_byte
                 sta (block_ptr),y
@@ -4610,11 +4613,11 @@ do_request:
 ;                 lda (block_ptr),y
 ;                 .debug_print [DP_A]
 ;                 iny
-;                 cpy #size(osword_99_block)
+;                 cpy #size(make_request_osword_block)
 ;                 bne -
 ;                 jsr osnewl
 
-                ldy #osword_99_block.response_addr
+                ldy #make_request_osword_block.response_addr
                 ldx #payload_addr
                 jsr copy_block_dword
 
@@ -4713,7 +4716,7 @@ copy_byte:
 prepare_request:
                 ; Form request payload size - requested size, +5 for
                 ; the request code and payload limit.
-                ldy #osword_99_block.request_size
+                ldy #make_request_osword_block.request_size
                 ldx #payload_counter
                 jsr copy_block_dword
 

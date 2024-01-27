@@ -558,7 +558,7 @@ print_p: .proc
 
 ;-------------------------------------------------------------------------
 
-osword_99_block: .struct request,request_addr,request_size,response_addr,response_size
+make_request_osword_block: .struct request,request_addr,request_size,response_addr,response_size
 input_size: .byte 22;\block_size
 output_size: .byte 22;\block_size
 request: .byte \request
