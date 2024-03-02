@@ -1328,3 +1328,73 @@ properly.
 * ROM not found
 
 : "tube_serial_rom": "../beeb/.build/beeblink_tube_serial.rom",
+
+* Node v20 upgrade
+
+** New package.json
+
+#+begin_src js-json
+  {
+      "name": "beeblink-server",
+      "version": "0.1.0",
+      "description": "",
+      "bin": ".build/main.js",
+      "main": ".build/main.js",
+      "scripts": {
+	  "test": "echo \"Error: no test specified\" && exit 1",
+	  "compile": "tsc -p ./tsconfig.json",
+	  "lint": "eslint -f unix -c .eslintrc.js --ext .ts .",
+	  "start": "npm run compile && node ./.build/main.js"
+      },
+      "author": "",
+      "license": "GPL-3.0-or-later",
+      "dependencies": {
+	  "argparse": "~2",
+	  "chalk": "^5",
+	  "serialport": "^12",
+	  "usb": "^2"
+      },
+      "optionalDependencies": {
+	  "ioctl": "^2.0.1"
+      },
+      "devDependencies": {
+	  "@types/argparse": "~2",
+	  "@types/node": "^20",
+	  "@typescript-eslint/eslint-plugin": "^7",
+	  "@typescript-eslint/eslint-plugin-tslint": "^7",
+	  "@typescript-eslint/parser": "^7",
+	  "eslint": "^8.35.0",
+	  "eslint-plugin-import": "^2.27.5",
+	  "eslint-plugin-jsdoc": "^48",
+	  "eslint-plugin-prefer-arrow": "^1.2.3",
+	  "pkg": "^5",
+	  "typescript": "^4.9"
+      },
+      "engines": {
+	  "node": ">=16"
+      },
+      "pkg": {
+	  "assets": [
+	      "./node_modules/@serialport/bindings-cpp/prebuilds/",
+	      "./node_modules/usb/prebuilds/"
+	  ]
+      }
+  }
+#+end_src
+
+** Windows
+
+Node v20.11.1
+
+Delete package-lock.json, delete node_modules, npm install:
+
+#+begin_example
+  npm WARN EBADENGINE Unsupported engine {
+  npm WARN EBADENGINE   package: 'eslint-plugin-jsdoc@40.3.0',
+  npm WARN EBADENGINE   required: { node: '^14 || ^16 || ^17 || ^18 || ^19' },
+  npm WARN EBADENGINE   current: { node: 'v20.11.1', npm: '10.2.4' }
+  npm WARN EBADENGINE }
+  npm WARN deprecated tslint@6.1.3: TSLint has been deprecated in favor of ESLint. Please see https://github.com/palantir/tslint/issues/4534 for more information.
+#+end_example
+
+...but it does seem to work???
