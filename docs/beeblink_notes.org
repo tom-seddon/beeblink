@@ -1398,3 +1398,23 @@ Delete package-lock.json, delete node_modules, npm install:
 #+end_example
 
 ...but it does seem to work???
+
+** macOS
+
+Node v20.11.1
+
+(Reuse package-lock.json from the Windows npm install)
+
+Delete node_modules, npm install:
+
+#+begin_example
+  npm WARN EBADENGINE Unsupported engine {
+  npm WARN EBADENGINE   package: 'eslint-plugin-jsdoc@40.3.0',
+  npm WARN EBADENGINE   required: { node: '^14 || ^16 || ^17 || ^18 || ^19' },
+  npm WARN EBADENGINE   current: { node: 'v20.11.1', npm: '10.2.4' }
+  npm WARN EBADENGINE }
+  npm WARN deprecated tslint@6.1.3: TSLint has been deprecated in favor of ESLint. Please see https://github.com/palantir/tslint/issues/4534 for more information.
+#+end_example
+
+Seems to work...
+
