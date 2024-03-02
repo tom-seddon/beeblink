@@ -308,7 +308,7 @@ export class Server {
             new Command('DIR', '(<dir>)', this.dirCommand),
             new Command('DRIVE', '(<drive>)', this.driveCommand),
             new Command('DUMP', '<fsp>', this.dumpCommand),
-            new Command('EXECTEXT', '<fsp>', this.execTextCommand).whenCaps1(beeblink.CAPS1_SUPPORT_TEXT_EXEC),
+            new Command('EXECTEXT', '<fsp> (B)', this.execTextCommand).whenCaps1(beeblink.CAPS1_SUPPORT_TEXT_EXEC),
             new Command('HSTATUS', '([HFD])', this.hstatusCommand),
             new Command('INFO', '<afsp>', this.infoCommand),
             new Command('LIB', '(<dir>)', this.libCommand),
@@ -840,7 +840,7 @@ export class Server {
 
         this.log?.pn('Input: mode=0x' + utils.hex2(mode) + ', name=``' + nameString + '\'\'');
 
-        const handle = await this.bfs.OSFINDOpen(mode, nameString, false);
+        const handle = await this.bfs.OSFINDOpen(mode, nameString, undefined);
 
         this.log?.pn('Output: handle=' + utils.hexdec(handle));
 
@@ -2207,7 +2207,25 @@ export class Server {
             return errors.syntax();
         }
 
-        const handle: number = await this.bfs.OSFINDOpen(0x40, commandLine.parts[1], true);
+        let basic = false;
+        if (commandLine.parts.length === 3) {
+            if (commandLine.parts[2].toUpperCase() === 'B') {
+                basic = true;
+            } else {
+                return errors.syntax();
+            }
+        }
+
+        let prefix: string[];
+        let suffix: string | undefined;
+        if (basic) {
+            prefix = ['*BASIC', 'NEW', 'AUTO'];
+            suffix = '\x1b';
+        } else {
+            prefix = [];
+        }
+
+        const handle: number = await this.bfs.OSFINDOpen(0x40, commandLine.parts[1], prefix);
         if (handle === 0) {
             return errors.notFound();
         }

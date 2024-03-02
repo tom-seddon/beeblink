@@ -1481,7 +1481,13 @@ export class FS {
     // The OSFIND file name is not actually a file name, but a command line
     // string, the first arg of which is the file name. (When doing a *SRLOAD,
     // for example, the MOS just hands the whole command line to OSFIND.)
-    public async OSFINDOpen(mode: number, nameString: string, openAsText: boolean): Promise<number> {
+    //
+    // If textPrefix is not undefined, the file is opened as text (see docs),
+    // and the prefix lines - if any - prepended as if those lines were read
+    // from the start of the file.
+    //
+    // If textPrefix is undefined, the file is opened as binary.
+    public async OSFINDOpen(mode: number, nameString: string, textPrefix: string[] | undefined): Promise<number> {
         const commandLine = new CommandLine(nameString);
         if (commandLine.parts.length === 0) {
             return errors.badName();
@@ -1500,7 +1506,7 @@ export class FS {
         const fqn = await this.parseFileString(commandLine.parts[0]);
         let serverPath: string;
 
-        if (openAsText && write) {
+        if (textPrefix !== undefined && write) {
             // Should never see this!
             return errors.generic('Can\'t open text file for write');
         }
@@ -1524,7 +1530,7 @@ export class FS {
             }
 
             this.log?.pn('        serverPath=``' + file.serverPath + '\'\'');
-            this.log?.pn('        openAsText=' + openAsText);
+            this.log?.pn('        openAsText=' + (textPrefix !== undefined));
 
             // File exists.
             serverPath = file.serverPath;
@@ -1543,11 +1549,16 @@ export class FS {
                 }
             }
 
-            if (openAsText) {
+            if (textPrefix !== undefined) {
                 // Not efficient, but I don't think it matters...
                 const lines = await this.readTextFile(file);
 
                 let linesString = '';
+
+                for (const line of textPrefix) {
+                    linesString += line + '\x0d';
+                }
+
                 for (const line of lines) {
                     linesString += line + '\x0d';
                 }
@@ -1577,7 +1588,7 @@ export class FS {
             }
         }
 
-        const openFile = new OpenFile(this.firstFileHandle + index, serverPath, fqn, read, write, openAsText, contents);
+        const openFile = new OpenFile(this.firstFileHandle + index, serverPath, fqn, read, write, textPrefix !== undefined, contents);
         this.openFiles[index] = openFile;
         this.log?.pn(`        handle=0x${openFile.handle}`);
         return openFile.handle;

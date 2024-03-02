@@ -280,7 +280,7 @@ Change drive on the current volume.
 
 Produce hex dump of file.
 
-### `EXECTEXT <fsp>`
+### `EXECTEXT <fsp> (B)`
 
 Do the equivalent of a `*EXEC` with a text file that might not have
 Acorn-style line endings. You might need this if you've saved a text
@@ -301,6 +301,12 @@ There will also always be a line ending at the end of the file.
 name is mandatory, and it won't cancel an existing `*EXEC` or
 `*EXECTEXT` if one is in progress. It's also only available when the
 BLFS is active.)
+
+Supply `B` to handle a file consisting of unnumbered lines of BASIC
+code. The EXEC'd text will start with `*BASIC`, `NEW`, `AUTO`, so that
+the text from the file will get entered as a program. (Once it's all
+typed in, you'll have to press Escape yourself though - unfortunately
+`*EXECTEXT` can't do that bit for you.)
 
 ### `HSTATUS ([HFD]+)`
 
