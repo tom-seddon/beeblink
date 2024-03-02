@@ -28,9 +28,12 @@ Notes:
   deleting BBC files via the shell you can end up with stale
   `.gitattributes` entries. This isn't usually a problem in practice
   though
-* the server pays no attention to `.gitignore`, and always updates
-  `.gitattributes` even if the files are already covered by a
-  perfectly good `.gitattributes` file elsewhere
+* the server pays no attention to `.gitignore`, and will update
+  `.gitattributes` even if the folder and/or files in question are
+  ignored
+* the server pays no attention to existing `.gitattributes` files, and
+  will make the modifications even if the files would already be
+  covered by a perfectly `.gitattributes` in some parent folder
 * the `.gitattributes` files in volume folders are owned by Beeblink,
   and not designed for editing. The server will blithely add and
   remove entries as it sees fit

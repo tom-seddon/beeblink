@@ -97,20 +97,21 @@ to get `beeblink_upurs_fe60.rom` copied onto your BBC.
 
 # Setting up the Electron (experimental!)
 
-**Electron support is experimental**
+**Electron support is experimental! DIY required**
 
 You'll need an Electron with Plus 1 (or equivalent - I'm uing an Acorn
 Plus 1) and Advanced Plus 5 (or equivalent - I'm using the Retro
 Hardware New AP5).
 
-You'll need a Tube USB serial adapter (see above). The adapter
-requires modification: carefully bend up pin 9 of the PLD, so it's
-clear of the socket when plugged in. Note that the modified adapter
-won't work with a second processor. (A future update to the hardware
-will fix all of this stuff...)
+You'll need a Tube USB serial adapter (see above). The PLD needs
+reprogramming with the .jed file here:
+https://gist.github.com/tom-seddon/07d9f2942590899044a161edd5fe891a,
+and please also note the instructions there. (The reprogrammed PLD
+will be fully compatible with BBC B, B+ and Master as well.)
 
-Connect the Tube serial board to the AP5's Tube connector, use the
-jumper to select Comms mode, and connect the device to your PC.
+Once set up, Connect the Tube serial board to the AP5's Tube
+connector, use the jumper to select Comms mode, and connect the device
+to your PC.
 
 If using Windows, you'll need to
 [tweak one of the device settings](./docs/ftdi_latency_timer.md).
@@ -119,7 +120,7 @@ There's not currently a bootstrap process for the Electron. I used my
 Master to get [the appropriate ROM image](./docs/tube_serial_roms.md)
 onto a cartridge, then plugged the cartridge into the Electron.
 
-**Electron support is experimental**
+**Electron support is experimental! DIY required**
 
 # Use
 
