@@ -1930,7 +1930,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
 /////////////////////////////////////////////////////////////////////////
 
 async function main(options: ICommandLineOptions) {
-    process.title='BeebLink Server';
+    process.title = 'BeebLink Server';
 
     beebfs.setFSTypes(dfsType, pcType, tubeHostType);
 

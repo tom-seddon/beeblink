@@ -2217,10 +2217,8 @@ export class Server {
         }
 
         let prefix: string[];
-        let suffix: string | undefined;
         if (basic) {
             prefix = ['*BASIC', 'NEW', 'AUTO'];
-            suffix = '\x1b';
         } else {
             prefix = [];
         }
