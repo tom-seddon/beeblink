@@ -20,7 +20,7 @@
         "noEmitOnError": true,
         "exactOptionalPropertyTypes": true
     },
-    "include": [
+    "files": [
         "./adfsimage.ts",
         "./beebfs.ts",
         "./beeblink.ts",
@@ -31,10 +31,10 @@
         "./gitattributes.ts",
         "./inf.ts",
         "./main.ts",
-        "./Message.ts",
+        "./message.ts",
         "./pcType.ts",
-        "./Request.ts",
-        "./Response.ts",
+        "./request.ts",
+        "./response.ts",
         "./server.ts",
         "./speedtest.ts",
         "./tubeHostType.ts",

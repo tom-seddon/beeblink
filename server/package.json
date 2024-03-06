@@ -6,7 +6,7 @@
   "main": ".build/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "compile": "tsc -p ./tsconfig.json",
+    "compile": "tsc -p ./tsconfig.json --forceConsistentCasingInFileNames",
     "lint": "eslint -f unix -c .eslintrc.js --ext .ts .",
     "start": "npm run compile && node ./.build/main.js"
   },
