@@ -46,10 +46,15 @@ import tubeHostType from './tubeHostType';
 
 function getIOCTL(): ((fd: number, request: number, data?: Buffer | number) => void) | undefined {
     if (process.platform === 'linux') {
-        // work around lack of type definitions.
-
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        return require('ioctl') as ((fd: number, request: number, data?: Buffer | number) => void);
+        try {
+            // work around lack of type definitions.
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            return require('ioctl') as ((fd: number, request: number, data?: Buffer | number) => void);
+        } catch {
+            // Probably an error in the require. But whatever, it ain't
+            // happening.
+            return undefined;
+        }
     } else {
         return undefined;
     }
