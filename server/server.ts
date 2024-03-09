@@ -674,10 +674,10 @@ export class Server {
             if (!command.isSupportedMachineType(this.machineType)) {
                 return false;
             }
+        }
 
-            if (!command.isSupportedCaps1(this.caps1)) {
-                return false;
-            }
+        if (!command.isSupportedCaps1(this.caps1)) {
+            return false;
         }
 
         return true;
