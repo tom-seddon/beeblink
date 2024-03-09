@@ -170,6 +170,7 @@ interface ICommandLineOptions {
     http: boolean;
     server_data_verbose: boolean;
     http_all_interfaces: boolean;
+    http_verbose: boolean;
     libusb_debug_level: number | null;
     serial_verbose: string[] | null;
     serial_sync_verbose: string[] | null;
@@ -1083,7 +1084,14 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
     // "srv" :( - but "server" is taken...
     const srvBySenderId = new Map<string, server.Server>();
 
+    let httpLog: utils.Log | undefined;
+    if (options.http_verbose) {
+        httpLog = utils.Log.create("HTTP", process.stdout);
+    }
+
     async function handleHTTPRequest(httpRequest: http.IncomingMessage, httpResponse: http.ServerResponse): Promise<void> {
+        httpLog?.pn(`HTTP request: ${httpRequest.method} ${httpRequest.url}`);
+
         async function endResponse(): Promise<void> {
             await new Promise<void>((resolve, _reject) => {
                 httpResponse.end(() => resolve());
@@ -1149,14 +1157,19 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
                 srvBySenderId.set(senderId, srv);
             }
 
-            const response = (await srv.handleRequest(new Request(body[0] & 0x7f, body.slice(1)))).response;
+
+            const request = new Request(body[0] & 0x7f, body.slice(1));
+            httpLog?.pn(`Request (from ${senderId}): ${request.c} (${utils.getRequestTypeName(request.c)}) (${request.p.length} bytes payload)`);
+
+            const serverResponse: server.IServerResponse = await srv.handleRequest(request);
+            httpLog?.pn(`Response (for ${senderId}): ${serverResponse.response.c} (${utils.getResponseTypeName(serverResponse.response.c)} (${serverResponse.response.p.length} bytes payload)` + (serverResponse.speculativeResponses === undefined ? '' : ` (+${serverResponse.speculativeResponses.length} speculative responses)`));
 
             httpResponse.setHeader('Content-Type', 'application/binary');
 
-            await writeData(Buffer.alloc(1, response.c));
+            await writeData(Buffer.alloc(1, serverResponse.response.c));
 
-            if (response.p.length > 0) {
-                await writeData(response.p);
+            if (serverResponse.response.p.length > 0) {
+                await writeData(serverResponse.response.p);
             }
 
             await endResponse();
@@ -1269,7 +1282,7 @@ async function setFTDILatencyTimer(portInfo: PortInfo, serialLog: utils.Log | un
                 if (usbDevice.configDescriptor.bConfigurationValue !== usbDevice.allConfigDescriptors[0].bConfigurationValue) {
                     await new Promise<void>((resolve, reject) => {
                         usbDevice.setConfiguration(usbDevice.allConfigDescriptors[0].bConfigurationValue, (err) => {
-                            if (err !== undefined) {
+                            if (err !== undefined) {//callback type is (error: undefined | LibUSBException) => void
                                 reject(err);
                             } else {
                                 resolve();
@@ -2087,7 +2100,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     // HTTP server (for b2)
     always(['--http'], { action: 'storeTrue', help: 'enable HTTP server' });
     fullHelpOnly(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
-    //parser.addArgument(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
+    fullHelpOnly(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
 
     // Config file
     always(['--load-config'], { metavar: 'FILE', help: 'load config from %(metavar)s' });
