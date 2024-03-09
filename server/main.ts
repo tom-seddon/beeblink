@@ -1092,7 +1092,7 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 
         async function writeData(data: Buffer): Promise<void> {
             await new Promise<void>((resolve, reject) => {
-                httpResponse.write(data, 'binary', (error) => error === undefined ? resolve() : reject(error));
+                httpResponse.write(data, 'binary', (error) => error === undefined || error === null ? resolve() : reject(error));
             });
         }
 
