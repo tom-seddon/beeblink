@@ -692,7 +692,7 @@ async function serialTestPCToBBC2(device: ISerialDevice): Promise<void> {
                 // Despite what the TypeScript definitions appear to say,
                 // the JS code actually only seems to call the callback with
                 // a single argument: an error, or undefined.
-                port.write(data, (error: any): void => {
+                port.write(data, (error: unknown): void => {
                     if (error !== undefined && error !== null) {
                         reject(error);
                     } else {
@@ -720,7 +720,7 @@ async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
     //const log = utils.Log.create(getSerialPortPath(device.portInfo), process.stdout);
 
     await new Promise<void>((resolve, reject) => {
-        port.flush((error: any) => {
+        port.flush((error: unknown) => {
             if (error !== undefined && error !== null) {
                 reject(error);
             } else {
@@ -760,7 +760,7 @@ async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
         handleData(data);
     });
 
-    port.on('error', (error: any): void => {
+    port.on('error', (error: unknown): void => {
         throw new Error(`${getSerialPortPath(device.portInfo)}: error: ${error}`);
     });
 
@@ -810,7 +810,7 @@ async function sendFile(device: ISerialDevice, filePath: string): Promise<void> 
             // Despite what the TypeScript definitions appear to say,
             // the JS code actually only seems to call the callback with
             // a single argument: an error, or undefined.
-            port.write(chunk, (error: any): void => {
+            port.write(chunk, (error: unknown): void => {
                 if (error !== undefined && error !== null) {
                     reject(error);
                 } else {
@@ -1389,7 +1389,7 @@ async function setFTDILatencyTimer(portInfo: PortInfo, serialLog: utils.Log | un
 
 interface IReadWaiter {
     resolve: (() => void) | undefined;
-    reject: ((error: any) => void) | undefined;
+    reject: ((error: unknown) => void) | undefined;
     debug?: string;
 }
 
@@ -1415,7 +1415,7 @@ function isSerialDeviceVerbose(portInfo: PortInfo, verboseOptions: string[] | nu
 
 async function flushPort(port: SerialPort): Promise<void> {
     await new Promise<void>((resolve, reject) => {
-        port.flush((error: any) => {
+        port.flush((error: unknown) => {
             if (error !== undefined && error !== null) {
                 reject(error);
             } else {
@@ -1427,7 +1427,7 @@ async function flushPort(port: SerialPort): Promise<void> {
 
 async function drainPort(port: SerialPort): Promise<void> {
     await new Promise<void>((resolve, reject) => {
-        port.drain((error: any) => {
+        port.drain((error: unknown) => {
             if (error !== null && error !== undefined) {
                 reject(error);
             } else {
@@ -1482,7 +1482,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
 
     });
 
-    function rejectReadWaiter(error: any): void {
+    function rejectReadWaiter(error: unknown): void {
         if (readWaiter !== undefined) {
             const waiter = readWaiter;
             readWaiter = undefined;
@@ -1493,12 +1493,12 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
         }
     }
 
-    port.on('error', (error: any): void => {
+    port.on('error', (error: unknown): void => {
         serialLog?.pn(`error: ${error}`);
         rejectReadWaiter(error);
     });
 
-    port.on('close', (error: any): void => {
+    port.on('close', (error: unknown): void => {
         serialLog?.pn(`close: ${error}`);
         rejectReadWaiter(error);
     });
@@ -1560,7 +1560,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                 // Despite what the TypeScript definitions appear to say,
                 // the JS code actually only seems to call the callback with
                 // a single argument: an error, or undefined.
-                return port.write(syncData, (error: any): void => {
+                return port.write(syncData, (error: unknown): void => {
                     if (error !== undefined && error !== null) {
                         reject(error);
                     } else {
@@ -1796,7 +1796,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                                     };
                                 }
 
-                                return port.write(chunk, (error: any): void => {
+                                return port.write(chunk, (error: unknown): void => {
                                     readWaiter = undefined;
                                     if (error !== null && error !== undefined) {
                                         reject(error);

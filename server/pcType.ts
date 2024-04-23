@@ -72,19 +72,19 @@ class PCState implements beebfs.IFSState {
         return '';
     }
 
-    public getTransientSettings(): any | undefined {
+    public getTransientSettings(): unknown {
         return undefined;
     }
 
-    public getTransientSettingsString(_settings: unknown | undefined): string {
+    public getTransientSettingsString(_settings: unknown): string {
         return ``;
     }
 
-    public getPersistentSettings(): unknown | undefined {
+    public getPersistentSettings(): unknown {
         return undefined;
     }
 
-    public getPersistentSettingsString(_settings: unknown | undefined): string {
+    public getPersistentSettingsString(_settings: unknown): string {
         return '';
     }
 
@@ -155,7 +155,7 @@ class PCState implements beebfs.IFSState {
 class PCType implements beebfs.IFSType {
     public readonly name = 'PC';
 
-    public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log | undefined): Promise<beebfs.IFSState> {
+    public async createState(volume: beebfs.Volume, transientSettings: unknown , persistentSettings: unknown , log: utils.Log | undefined): Promise<beebfs.IFSState> {
         return new PCState(volume, log);
     }
 

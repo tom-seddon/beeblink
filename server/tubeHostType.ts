@@ -319,7 +319,7 @@ class TubeHostState implements beebfs.IFSState {
 
     private persistentSettings: TubeHostPersistentSettings | undefined;
 
-    public constructor(volume: beebfs.Volume, transientSettingsAny: unknown | undefined, persistentSettingsAny: unknown | undefined, log: utils.Log | undefined) {
+    public constructor(volume: beebfs.Volume, transientSettingsAny: unknown, persistentSettingsAny: unknown, log: utils.Log | undefined) {
         this.volume = volume;
         this.log = log;
 
@@ -364,7 +364,7 @@ class TubeHostState implements beebfs.IFSState {
         this.log?.pn(`TubeHostState created`);
     }
 
-    private static getTubeHostTransientSettings(settings: any | undefined): TubeHostTransientSettings {
+    private static getTubeHostTransientSettings(settings: unknown): TubeHostTransientSettings {
         if (settings === undefined) {
             return gDefaultTransientSettings;
         }
@@ -376,7 +376,7 @@ class TubeHostState implements beebfs.IFSState {
         return settings;
     }
 
-    private static getTubeHostPersistentSettings(settings: unknown | undefined): TubeHostPersistentSettings {
+    private static getTubeHostPersistentSettings(settings: unknown): TubeHostPersistentSettings {
         if (settings === undefined) {
             return gDefaultPersistentSettings;
         }
@@ -458,7 +458,7 @@ class TubeHostState implements beebfs.IFSState {
         return new TubeHostTransientSettings(this.current, this.library);
     }
 
-    public getTransientSettingsString(settingsAny: any | undefined): string {
+    public getTransientSettingsString(settingsAny: unknown): string {
         const settings = TubeHostState.getTubeHostTransientSettings(settingsAny);
 
         return `Default dir :${settings.current.drive}.${settings.current.dir}${utils.BNL}Default lib :${settings.library.drive}.${settings.library.dir}${utils.BNL}`;
@@ -473,7 +473,7 @@ class TubeHostState implements beebfs.IFSState {
         return new TubeHostPersistentSettings(this.folderPath, drives);
     }
 
-    public getPersistentSettingsString(settingsAny: unknown | undefined): string {
+    public getPersistentSettingsString(settingsAny: unknown): string {
         const settings = TubeHostState.getTubeHostPersistentSettings(settingsAny);
 
         let text = '';
@@ -918,7 +918,7 @@ class TubeHostType implements beebfs.IFSType {
         return true;
     }
 
-    public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log | undefined): Promise<beebfs.IFSState> {
+    public async createState(volume: beebfs.Volume, transientSettings: unknown, persistentSettings: unknown, log: utils.Log | undefined): Promise<beebfs.IFSState> {
         const state = new TubeHostState(volume, transientSettings, persistentSettings, log);
 
         await state.initialise();

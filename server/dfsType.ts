@@ -107,7 +107,7 @@ class DFSState implements beebfs.IFSState {
 
     private readonly log: utils.Log | undefined;// tslint:disable-line no-unused-variable
 
-    public constructor(volume: beebfs.Volume, transientSettingsAny: any | undefined, log: utils.Log | undefined) {
+    public constructor(volume: beebfs.Volume, transientSettingsAny: unknown, log: utils.Log | undefined) {
         this.volume = volume;
         this.log = log;
 
@@ -117,7 +117,7 @@ class DFSState implements beebfs.IFSState {
         this.library = transientSettings.library;
     }
 
-    private static getDFSTransientSettings(settings: any | undefined): DFSTransientSettings {
+    private static getDFSTransientSettings(settings: unknown): DFSTransientSettings {
         if (settings === undefined) {
             return gDefaultTransientSettings;
         }
@@ -149,7 +149,7 @@ class DFSState implements beebfs.IFSState {
         return new DFSTransientSettings(this.current, this.library);
     }
 
-    public getTransientSettingsString(settingsAny: any | undefined): string {
+    public getTransientSettingsString(settingsAny: unknown): string {
         const settings = DFSState.getDFSTransientSettings(settingsAny);
 
         return `Default dir :${settings.current.drive}.${settings.current.dir}${utils.BNL}Default lib :${settings.library.drive}.${settings.library.dir}${utils.BNL}`;
@@ -314,7 +314,7 @@ class DFSType implements beebfs.IFSType {
         return c >= 32 && c < 127;
     }
 
-    public async createState(volume: beebfs.Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log | undefined): Promise<beebfs.IFSState> {
+    public async createState(volume: beebfs.Volume, transientSettings: unknown , persistentSettings: unknown , log: utils.Log | undefined): Promise<beebfs.IFSState> {
         return new DFSState(volume, transientSettings, log);
     }
 

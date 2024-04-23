@@ -722,7 +722,7 @@ export async function isFolder(folderPath: string): Promise<boolean> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export async function saveJSON(filePath: string, obj: any): Promise<void> {
+export async function saveJSON(filePath: string, obj: unknown): Promise<void> {
     try {
         await fsWriteFile(filePath, JSON.stringify(obj));
     } catch (error) {

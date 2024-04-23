@@ -456,21 +456,21 @@ export interface IFSState {
     // state, to restore the current settings.
     //
     // The naming is crappy because 'state' was already taken.
-    getTransientSettings(): unknown | undefined;
+    getTransientSettings(): unknown;
 
     // turns transient settings into a human-readable string for printing on the
     // Beeb. This isn't a toString on an interface type, so the FS state has the
     // option of printing something useful out when there's no state.
-    getTransientSettingsString(transientSettings: unknown | undefined): string;
+    getTransientSettingsString(transientSettings: unknown): string;
 
     // get object holding current persistent settings, that would not be reset
     // on Ctrl+Break - drive assignments, and so on. Use when recreating the
     // state, to restore the current settings.
-    getPersistentSettings(): unknown | undefined;
+    getPersistentSettings(): unknown;
 
     // turns persistent settings into a human-readable string for printing on
     // the Beeb.
-    getPersistentSettingsString(persistentSettings: unknown | undefined): string;
+    getPersistentSettingsString(persistentSettings: unknown): string;
 
     // get file to use for *RUN. If tryLibDir is false, definitely don't try lib
     // drive/directory.
@@ -529,7 +529,7 @@ export interface IFSType {
     readonly name: string;
 
     // create new state for this type of FS.
-    createState(volume: Volume, transientSettings: any | undefined, persistentSettings: any | undefined, log: utils.Log | undefined): Promise<IFSState>;
+    createState(volume: Volume, transientSettings: unknown, persistentSettings: unknown, log: utils.Log | undefined): Promise<IFSState>;
 
     // whether this FS supports writing.
     canWrite(): boolean;
@@ -674,7 +674,7 @@ export class FS {
 
     private state: IFSState | undefined;
     private stateCommands: undefined | server.Command[];
-    private defaultTransientSettings: unknown | undefined;
+    private defaultTransientSettings: unknown ;
 
     private gaManipulator: gitattributes.Manipulator | undefined;
 
