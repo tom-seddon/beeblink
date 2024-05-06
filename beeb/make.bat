@@ -1,1 +1,1 @@
-@..\tools\snmake --no-print-directory %*
+@"%~dp0\..\tools\snmake" --no-print-directory %*

@@ -1,25 +1,35 @@
 # Tube Serial ROMs
 
 There are four Tube Serial ROM images, two for the BBC B/B+/Master and
-two for the Electron: a safe ROM, which is more widely compatible, and
-an ordinary ROM, which gives better performance.
+two for the Electron. One is the so-called safe ROM, widely
+compatible, and the other is the ordinary ROM, which only promises to
+work if the Tube Serial device's PLD has been updated to version 3 or
+later.
 
-If using a BBC B, use `beeblink_tube_serial_safe.rom`. (The ordinary
-ROM may also work, but unfortunately this isn't guaranteed.)
+Use the safe ROM if you're not sure which to use.
 
-For BBC B+ or Master, use `beeblink_tube_serial.rom`. (The safe ROM is
-unnecessary, but it'll also work.)
+For some info about updating the PLD, see here:
+[../devices/tube_serial](../devices/tube_serial)
 
-For Electron+Plus 1+AP5, use `beeblink_tube_serial_safe_electron.rom`.
-(The ordinary ROM may also work, but unfortunately this isn't
-guaranteed.)
+# Speed test results
+
+Representative throughput measurements from the speed test tool. Some
+notes:
+
+- Save throughput is measurably worse with the safe ROMs, but load
+  throughput is unaffected
+
+- Electron results are mode-dependent. (Mode 4 figures will also be
+  reached in modes 5 and 6; mode 0 figures will also be obtained in
+  modes 1 and 2; and mode 3 is its own thing)
+
+- When used with internal coprocessor on a Master 128, performance is
+  unavoidably worse when transferring to the coprocessor memory
+ 
 
 ## `beeblink_tube_serial_safe.rom`
 
-Compatible with BBC B/B+/Master.
-
-Representative throughput measurements from the speed test tool,
-running on Master Turbo with external 6502 second processor.
+Tested on Master Turbo with external 6502 second processor.
 
 No Tube:
 
@@ -45,19 +55,9 @@ Internal Tube (Master only):
         BBC->PC: 45.0 KBytes/sec
         PC->BBC: 68.2 KBytes/sec	
 
-Lower performance using the internal 2nd processor is unfortunately
-inevitable, as the software has to switch between internal and
-external while transferring.
-
 ## `beeblink_tube_serial.rom`
 
-Compatible with BBC B+/Master.
-
-May be compatible with BBC B - but not guaranteed! (For whatever it's
-worth, it does work with my own BBC B.)
-
-Representative throughput measurements from Master Turbo with external
-6502 second processor.
+Tested on Master Turbo with external 6502 second processor.
 
 No Tube:
 
@@ -85,13 +85,7 @@ Internal Tube (Master only):
     	
 ## `beeblink_tube_serial_safe_electron.rom`
 
-Compatible with Electron+Plus 1+AP5.
-
-Representative throughput measurements from Electron with 6502 second
-processor. As is typical with the Electron, performance is
-mode-dependent. (Mode 4 figures will also be reached in modes 5 and 6;
-mode 0 figures will also be obtained in modes 1 and 2; and mode 3 is
-its own thing.)
+Tested on Electron with AP5+6502 second processor.
 
 No Tube, Mode 4:
 
@@ -140,5 +134,49 @@ External Tube, Mode 0:
 
 ## `beeblink_tube_serial_electron.rom`
 
-May be compatible with Electron+Plus 1+AP5. At your own risk... it
-doesn't work on my own Electron :(
+Tested on Electron with AP5+6502 second processor.
+
+No Tube, Mode 4:
+
+    Host<->server: 172,032 bytes in 8 tests
+        Electron->PC: 63.9 KBytes/sec
+        PC->Electron: 60.4 KBytes/sec
+
+No Tube, Mode 3:
+
+    Host<->server: 172,032 bytes in 8 tests
+        Electron->PC: 41.5 KBytes/sec
+        PC->Electron: 40.1 KBytes/sec
+
+No Tube, Mode 0:
+
+    Host<->server: 172,032 bytes in 8 tests
+        Electron->PC: 35.8 KBytes/sec
+        PC->Electron: 34.2 KBytes/sec
+
+External Tube, Mode 4:
+
+    Host<->server: 172,032 bytes in 8 tests
+        Electron->PC: 64.0 KBytes/sec
+        PC->Electron: 60.0 KBytes/sec
+    Parasite<->server: 196,608 bytes in 8 tests
+        Electron->PC: 69.1 KBytes/sec
+        PC->Electron: 69.4 KBytes/sec
+
+External Tube, Mode 3:
+
+    Host<->server: 172,032 bytes in 8 tests
+        Electron->PC: 42.3 KBytes/sec
+        PC->Electron: 40.1 KBytes/sec
+    Parasite<->server: 196,608 bytes in 8 tests
+        Electron->PC: 64.1 KBytes/sec
+        PC->Electron: 62.8 KBytes/sec
+
+External Tube, Mode 0:
+
+    Host<->server: 172,032 bytes in 8 tests
+        Electron->PC: 35.8 KBytes/sec
+        PC->Electron: 34.2 KBytes/sec
+    Parasite<->server: 196,608 bytes in 8 tests
+        Electron->PC: 61.0 KBytes/sec
+        PC->Electron: 59.6 KBytes/sec

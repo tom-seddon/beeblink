@@ -103,13 +103,11 @@ You'll need an Electron with Plus 1 (or equivalent - I'm uing an Acorn
 Plus 1) and Advanced Plus 5 (or equivalent - I'm using the Retro
 Hardware New AP5).
 
-You'll need a Tube USB serial adapter (see above). The PLD needs
-reprogramming with the .jed file here:
-https://gist.github.com/tom-seddon/07d9f2942590899044a161edd5fe891a,
-and please also note the instructions there. (The reprogrammed PLD
-will be fully compatible with BBC B, B+ and Master as well.)
+You'll need a Tube USB serial adapter (see above). The PLD needs to be
+updated to V3 or later, as per the instructions here:
+[./devices/tube_serial](./devices/tube_serial)
 
-Once set up, Connect the Tube serial board to the AP5's Tube
+Once set up, connect the Tube serial board to the AP5's Tube
 connector, use the jumper to select Comms mode, and connect the device
 to your PC.
 

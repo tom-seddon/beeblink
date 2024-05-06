@@ -1,0 +1,95 @@
+Name     tom ;
+PartNo   18.008 ;
+Date     10/02/2018 ;
+Revision 03 ;
+Designer CFM ;
+Company  boobip.com ;
+Assembly None ;
+Location  ;
+Device   g16v8as ;
+
+/* *************** Port map *********************/
+/* Tube ON                                      */
+/* 00-07 Tube                                   */
+/* 08-0e FIFO                                   */
+/* 0f    R: Status W: Send immediate            */
+/* 10-1e FIFO                                   */
+/* 1f    R: Status W: Tube off                  */
+/*                                              */
+/* Tube OFF                                     */
+/* 00-1e FIFO                                   */
+/* 1f    R: Status W: Tube off                  */
+
+
+
+/* *************** INPUT PINS *********************/
+PIN 1   = clk_2MHzE               ; /* Host 2MHzE clock                */ 
+PIN 2   = D0                      ; /* Host D0                         */ 
+PIN 3   = power                   ; /* Host 5V                         */ 
+PIN 4   = RW                      ; /* Host R/W                        */ 
+PIN 5   = A0                      ; /* Host A0                         */ 
+PIN 6   = A1                      ; /* Host A1                         */ 
+PIN 7   = A2                      ; /* Host A2                         */ 
+PIN 8   = A3                      ; /* Host A3                         */ 
+PIN 9   = A4                      ; /* Host A4                         */ 
+
+PIN 11  = !Tube                   ; /* Host ~Tube                      */ 
+
+/* *************** OUTPUT PINS *********************/
+PIN 12  = !par_Tube               ; /* Parasite ~Tube                  */ 
+PIN 14  = !ft_CS                  ; /* FT232H ~CS                      */
+PIN 15  = ft_A0                   ; /* FT232H A0                       */
+PIN 16  = !ft_RD                  ; /* FT232H ~RD                      */ 
+PIN 17  = !ft_WR                  ; /* FT232H ~WR                      */
+PIN 19  = pld_tube_off            ; /* Disable parasite                */
+
+/* *************** PINNODES    *********************/
+PINNODE 13  = ft232h_statusread_latch; /* Ever read USB status?           */ 
+PINNODE 18  = ft232h_dowrite_latch;    /* This cycle a bus write?         */ 
+
+
+/* *************** DECLARATIONS ********************/
+
+
+$MACRO MUX A1 A2 WS
+(A1&!WS)#(A2&WS);
+$MEND
+
+$MACRO EQ A1 A2
+(A1 & A2)#(!A1 & !A2);
+$MEND
+
+/* *************** LOGIC       *********************/
+
+/* Address decoding */
+reg_send_imm = A0 & A1 & A2 & A3 & !A4 & !pld_tube_off;
+reg_tube_off = A0 & A1 & A2 & A3 & A4;
+reg_status = reg_send_imm # reg_tube_off;
+access_parasite = !A3 & !A4 & !pld_tube_off; /* parasite tube ULA target */ 
+
+/* Host read/write decoding */
+write_tube = Tube & !RW; /* any tube range being written */
+read_tube = Tube & RW; /* any tube range being written */
+
+
+/* PLD access */
+write_pld_en = reg_tube_off & write_tube # !power; /* write on host access or power off */
+write_pld_d = power & D0; /* reset if power off or value in D0 */
+
+pld_tube_off = MUX(pld_tube_off, write_pld_d, write_pld_en); /* PLD latch */
+
+/* FT232H USB status register access */
+ft232h_statusread_latch = power & (ft232h_statusread_latch # reg_status & read_tube & clk_2MHzE);
+
+/* co-pro tube enable/disable generation */
+par_Tube = Tube & access_parasite;
+
+/* FT232H read/write control */
+ft232h_dowrite = !(access_parasite # reg_tube_off) & write_tube; /* write unless parasite region or tube off reg */
+ft232h_dowrite_latch = MUX(ft232h_dowrite_latch & Tube & !RW, ft232h_dowrite, clk_2MHzE);
+
+ft_CS = 'b'1; /* permanent chip select */
+ft_RD = !access_parasite & read_tube & clk_2MHzE; /* read unless parasite region & active */
+ft_WR = ft232h_dowrite_latch & !clk_2MHzE; /* write in FIFO region only */
+/* ft_A0 = ft232h_statusread_latch & reg_status & Tube; */
+ft_A0 = reg_status & Tube; /* if status read or send immediate write then choose status reg otherwise FIFO */
