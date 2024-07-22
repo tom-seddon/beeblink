@@ -86,9 +86,9 @@ all : programs roms
 programs: _uputest_program
 
 .PHONY : roms
-roms : _avr_rom _tube_serial_rom _upurs_rom _tube_serial_electron_rom
+roms : _avr_rom _tube_serial_rom _upurs_rom _tube_serial_electron_rom _b2_rom
 	@echo ---
-	$(_V)cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x "$(VER)" -x "$(BUILD_INFO)" -x "$(COMMIT)" beeblink_tube_serial.rom beeblink_tube_serial_safe.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom beeblink_tube_serial_electron.rom beeblink_tube_serial_safe_electron.rom
+	$(_V)cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x "$(VER)" -x "$(BUILD_INFO)" -x "$(COMMIT)" beeblink_tube_serial.rom beeblink_tube_serial_safe.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom beeblink_tube_serial_electron.rom beeblink_tube_serial_safe_electron.rom beeblink_b2.rom
 
 ##########################################################################
 ##########################################################################
@@ -119,6 +119,10 @@ _avr_rom : _dest $(DEST)/beeblink_constants.s65
 # 65120 = $fe60 - can't figure out how to get the $ through without
 # making a mess...	
 	$(_V)$(MAKE) _rom "BUILD_INFO=$(BUILD_INFO)" ROM_SUFFIX=avr_fe60 ROM_BEEB_NAME=AVRFE60 LINK=avr CMD_PREFIX=AVR "EXTRA_ARGS=-Dlink_avr_via=65120"
+
+.PHONY : _b2_rom
+_b2_rom : _dest $(DEST)/beeblink_constants.s65
+	$(_V)$(MAKE) _rom "BUILD_INFO=$(BUILD_INFO)" ROM_SUFFIX=b2 ROM_BEEB_NAME=b2 LINK=b2 CMD_PREFIX=B2
 
 .PHONY : _tube_serial_rom
 _tube_serial_rom : _dest $(DEST)/beeblink_constants.s65

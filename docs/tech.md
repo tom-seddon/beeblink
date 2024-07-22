@@ -387,6 +387,27 @@ of bytes to the BBC. BREAK is handled by disabling the write
 handshaking, something the firmware can detect and report to the
 server via a USB stall.
 
+## b2
+
+A simple link type for use with
+[b2](https://github.com/tom-seddon/b2/), my BBC Micro emulator. When
+running under emulation, some stuff can be simplified...
+
+There are two I/O ports: control ($fefe) and data ($feff). Both are
+accessible regardless of whether internal or external Tube is
+selected.
+
+There's no sync step - the emulator looks after that.
+
+To send a request, write the request type to control, then write the
+4-byte size to data (LSB first), followed by the payload.
+
+To read response, poll control until bit 7 is clear. The value read is
+the payload type.
+
+Then read the payload: 4-byte size (LSB first), followed by the
+payload.
+
 # Adding new link types
 
 ## 6502 side

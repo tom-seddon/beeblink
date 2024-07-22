@@ -1,0 +1,107 @@
+;-------------------------------------------------------------------------
+;
+; BeebLink - BBC Micro file storage system
+;
+; Copyright (C) 2019, 2020 Tom Seddon
+; 
+; This program is free software: you can redistribute it and/or
+; modify it under the terms of the GNU General Public License as
+; published by the Free Software Foundation, either version 3 of the
+; License, or (at your option) any later version.
+; 
+; This program is distributed in the hope that it will be useful, but
+; WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+; General Public License for more details.
+; 
+; You should have received a copy of the GNU General Public License
+; along with this program. If not, see
+; <https://www.gnu.org/licenses/>.
+;
+;-------------------------------------------------------------------------
+
+b2: .block
+
+b2_control=$fefe
+b2_data=$feff                
+
+begin_send_with_restart:
+begin_send_without_restart:
+                sta b2_control
+
+                lda payload_counter+0
+                sta b2_data
+                lda payload_counter+1
+                sta b2_data
+                lda payload_counter+2
+                sta b2_data
+                lda payload_counter+3
+                sta b2_data
+
+                clc
+                rts
+
+send_payload_byte:
+                sta b2_data
+                rts
+
+begin_recv:
+                lda b2_control
+                bmi link_begin_recv
+
+                pha
+
+                lda b2_data
+                sta payload_counter+0
+                lda b2_data
+                sta payload_counter+1
+                lda b2_data
+                sta payload_counter+2
+                lda b2_data
+                sta payload_counter+3
+
+                pla
+
+                rts
+
+recv_payload_byte:
+                lda b2_data
+                rts
+
+unprepare:
+                rts
+
+startup:
+                lda #0
+                sta b2_control
+                lda b2_control
+                bne bad
+
+                clc
+                rts
+
+bad:
+                ldx #0
+                sec
+                rts
+                
+status_text:
+                .text 'b2 BeebLink not detected',0
+                
+                .endblock
+
+link_name='b2'
+link_subtype=0
+
+link_prepare=b2.prepare
+link_unprepare=b2.unprepare
+
+link_begin_send_without_restart=b2.begin_send_without_restart
+link_begin_send_with_restart=b2.begin_send_with_restart
+link_send_payload_byte=b2.send_payload_byte
+
+link_begin_recv=b2.begin_recv
+link_recv_payload_byte=b2.recv_payload_byte
+
+link_startup=b2.startup
+link_status_text=b2.status_text

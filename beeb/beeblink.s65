@@ -369,6 +369,8 @@ rom_copyright:
 link_avr=false
 link_tube_serial=false
 link_tube_serial_electron=false
+link_upurs=false
+link_b2=false
                 .endweak
 
                 .section driver_code
@@ -390,6 +392,8 @@ link_poll_recv:
                 .include "tube_serial.s65"
                 .elsif link_upurs
                 .include "upurs.s65"
+                .elsif link_b2
+                .include "b2.s65"
                 .else
                 .error "unknown link type"
                 .endif
