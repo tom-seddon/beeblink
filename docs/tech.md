@@ -512,6 +512,19 @@ These are weak symbols. If not defined, link-agnostic code will be
 used, that simply calls `link_(send|recv)_payload_byte` repeatedly.
 This works, but you probably won't get max throughput...
 
+### `link_poll_recv`
+
+Check whether there's a message waiting in the PC->BBC direction. If
+there is, return C=1; if not, return C=0.
+
+If a message is waiting, the ROM will call `link_begin_recv` and begin
+to receive the message as normal.
+
+This is a weak symbol. If not defined, a default routine will be used
+that always returns C=0, indicating no message available. This is
+suitable for connection types that can't support this sort of
+buffering.
+
 ## Server side
 
 TBD...
