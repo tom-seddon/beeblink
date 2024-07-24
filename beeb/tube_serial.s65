@@ -2088,23 +2088,23 @@ sty_fifo_helper:
 
                 .if target_electron&&!tube_serial_safe
                 
-link_name='Tube Serial (Electron+AP5)'
-link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL_ELECTRON
+link_beeb_name='Tube Serial (Electron+AP5)'
+link_beeb_type=LINK_BEEB_TYPE_TUBE_SERIAL_ELECTRON
                 
                 .elsif target_electron&&tube_serial_safe
                 
-link_name='Tube Serial (Safe) (Electron+AP5)'
-link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL_SAFE_ELECTRON
+link_beeb_name='Tube Serial (Safe) (Electron+AP5)'
+link_beeb_type=LINK_BEEB_TYPE_TUBE_SERIAL_SAFE_ELECTRON
                 
                 .elsif !target_electron&&!tube_serial_safe
                 
-link_name='Tube Serial'
-link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL
+link_beeb_name='Tube Serial'
+link_beeb_type=LINK_BEEB_TYPE_TUBE_SERIAL
                 
                 .elsif !target_electron&&tube_serial_safe
                 
-link_name='Tube Serial (Safe)'
-link_subtype=SERIAL_SUBTYPE_TUBE_SERIAL_SAFE
+link_beeb_name='Tube Serial (Safe)'
+link_beeb_type=LINK_BEEB_TYPE_TUBE_SERIAL_SAFE
 
                 .endif
                 

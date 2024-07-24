@@ -164,15 +164,7 @@ idea here was to avoid exhausting the 7-bit message type space.
 But it looks like there's little danger of this, and it's a bit more
 hassle to code. So the later message types don't do this.
 
-# Link types
-
-There are two supported link types: HTTP, and serial (which covers
-both UPURS and Tube Serial).
-
-There's also a 3rd, unsupported type, AVR, which lives on because
-that's what's emulated in
-[b2, my BBC Micro emulator](https://github.com/tom-seddon/b2) -
-something I haven't got round to updating yet.
+# Server link types
 
 ## HTTP
 
@@ -191,19 +183,16 @@ the 1-byte message type (bit 7 ignored), and the N-byte payload.
 To handle BREAK, forcibly close the open TCP connection, if there is
 one.
 
-(The HTTP protocol is currently used only by b2. The emulated BBC
-appears to have an AVR attached, and the emulator handles the
-communication with the HTTP server.)
+(The HTTP protocol is currently used only by
+[b2](https://github.com/tom-seddon/b2/), my BBC Micro emulator.)
 
 New endpoint name(s) will be added when this mechanism needs extending
 or improving.
 
 ## Serial
 
-These serial link types are quite different from the Beeb side (see
-the driver code: [tube_serial.s65](../rom/tube_serial.s65),
-[upurs.s65](../rom/upurs.s65)), but they're treated the same on the
-server as they present themselves as USB COM ports.
+Requests and responses are sent via a serial port, which currently
+means something supported by the npm SerialPort module.
 
 The only fiddly part about supporting the serial link is handling
 resets. There's no out-of-band mechanism for closing the connection,
@@ -358,57 +347,39 @@ Notes:
 - a 1-byte payload may use either the 1-byte or N-byte format. Both
   are equally valid
   
-- OSBPUT needs a 2-byte packet :( - but you should be using OSGBPB
+- OSBPUT needs a 2-byte payload :( - but you should be using OSGBPB
   anyway
   
+# BBC Micro link types
+
+## Tube Serial
+
+Communication via serial port on the server end.
+
+## UPURS
+
+Communication via serial port on the server end.
+
 ## AVR
 
-Early versions of BeebLink handled BBC to PC communication with an AVR
-microcontroller that connected to the PC's USB port and the BBC's user
-port.
+Outdated code that lives on because it's how older versions of b2
+emulated BeebLink.
 
-Last BeebLink commit that supported this:
-https://github.com/tom-seddon/beeblink/commit/1344cafc18a47b80e00018c13f05e15395ab7c80
-(5 May 2019)
-
-Some indication of how it worked can also be gleaned from the b2
-source:
-[BeebLink.cpp](https://github.com/tom-seddon/b2/blob/a0b8957cda511dbedc36703e09421d4787864a67/src/beeb/src/BeebLink.cpp)
-
-The AVR version also uses the shorter message format for 1-byte
-payloads.
-
-The user port is half duplex. The device firmware watches the messages
-so it knows whether transmission will be client->server or
-server->client.
-
-The device uses the user port write handshaking to manage transmission
-of bytes to the BBC. BREAK is handled by disabling the write
-handshaking, something the firmware can detect and report to the
-server via a USB stall.
+From the server's perspective, this appears as HTTP requests. b2
+handles all the translation.
 
 ## b2
 
-A simple link type for use with
-[b2](https://github.com/tom-seddon/b2/), my BBC Micro emulator. When
-running under emulation, some stuff can be simplified...
+A link type for use with b2, intended to simplify the code required
+for both ROM and emulator.
 
-There are two I/O ports: control ($fefe) and data ($feff). Both are
-accessible regardless of whether internal or external Tube is
-selected.
+From the server's perspective, this appears as HTTP requests. b2
+handles all the translation.
 
-There's no sync step - the emulator looks after that.
+# Adding new BBC Micro link types
 
-To send a request, write the request type to control, then write the
-4-byte size to data (LSB first), followed by the payload.
-
-To read response, poll control until bit 7 is clear. The value read is
-the payload type.
-
-Then read the payload: 4-byte size (LSB first), followed by the
-payload.
-
-# Adding new link types
+The four existing drivers should hopefully serve as examples. The b2
+driver is the simplest.
 
 ## 6502 side
 
@@ -439,14 +410,20 @@ would serve as an example of this.)
 
 There'll be an assembly error if any of these sections are too large.
 
-### `link_name` ###
+### `link_beeb_name` ###
 
 Name of the link, a string, as included in the ROM name.
 
-### `link_subtype` ###
+### `link_beeb_type` ###
 
-Link subtype, a byte. Used to distinguish links that aren't otherwise
-distinguishable from the PC end, e.g., UPURS vs Tube Serial.
+Link Beeb type, a byte. This is a slightly hacky mechanism, not very
+well named, used to determine which ROM to send when using the
+`SELFUPDATE` program on the Beeb.
+
+(The set of types is hard coded in the server.)
+
+If not set, a default value will be used that means the server won't
+send any ROM and `SELFUPDATE` will fail.
 
 ### `link_begin_send_with_restart`, `link_begin_send_without_restart`
 
@@ -548,7 +525,8 @@ buffering.
 
 ## Server side
 
-TBD...
+TBD... for now, from the server's perspective, everything is assumed
+to look like a serial port or send requests over HTTP.
 
 # New OSWORD call
 

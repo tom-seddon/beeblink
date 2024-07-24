@@ -350,7 +350,7 @@ rept_byte_access_counter: .block
 rom_version_number:
                 .byte 0         ;version
 rom_name:
-                .text "BeebLink (",link_name,")"
+                .text "BeebLink (",link_beeb_name,")"
                 .if default_von
                 .text " (V)"
                 .endif
@@ -413,6 +413,11 @@ link_recv_file_data_parasite=recv_file_data_parasite_bytewise
 link_recv_file_data_host=recv_file_data_host_bytewise
                 .endweak
 
+; $ff is the special value for no type value set.
+                .weak
+link_beeb_type=LINK_BEEB_TYPE_UNSPECIFIED
+                .endweak
+                
 ;-------------------------------------------------------------------------
 
                 .section code
@@ -2123,7 +2128,7 @@ link_ok:
                 jsr send_payload_byte
 
                 ; link subtype
-                lda #link_subtype
+                lda #link_beeb_type
                 jsr send_payload_byte
 
                 ; machine type

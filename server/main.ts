@@ -67,14 +67,12 @@ const ioctl = getIOCTL();
 
 const DEVICE_RETRY_DELAY_MS = 1000;
 
-const AVR_NAME = 'AVR';
 const UPURS_NAME = 'UPURS';
 const TUBE_SERIAL_NAME = 'Tube Serial';
 const TUBE_SERIAL_SAFE_NAME = 'Tube Serial (Safe)';
 const TUBE_SERIAL_ELECTRON_NAME = 'Tube Serial (Electron+AP5)';
 const TUBE_SERIAL_SAFE_ELECTRON_NAME = 'Tube Serial (Safe) (Electron+AP5)';
 
-const DEFAULT_BEEBLINK_AVR_ROM = './beeblink_avr_fe60.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_ROM = './beeblink_tube_serial.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ROM = './beeblink_tube_serial_safe.rom';
 const DEFAULT_BEEBLINK_TUBE_SERIAL_ELECTRON_ROM = './beeblink_tube_serial_electron.rom';
@@ -132,7 +130,6 @@ interface IConfigFile {
     pc_folders: string[] | undefined;
     tube_host_folders: string[] | undefined;
     default_volume: string | undefined;
-    avr_rom: string | undefined;
     tube_serial_rom: string | undefined;
     tube_serial_safe_rom: string | undefined;
     tube_serial_electron_rom: string | undefined;
@@ -150,7 +147,6 @@ interface IConfigFile {
 interface ICommandLineOptions {
     help: boolean;
     verbose: boolean;
-    avr_rom: string | null;
     tube_serial_rom: string | null;
     tube_serial_safe_rom: string | null;
     tube_serial_electron_rom: string | null;
@@ -342,7 +338,6 @@ async function loadConfig(options: ICommandLineOptions, filePath: string, mustEx
         }
     }
 
-    options.avr_rom = loadROM(options.avr_rom, config.avr_rom);
     options.upurs_rom = loadROM(options.upurs_rom, config.upurs_rom);
     options.tube_serial_rom = loadROM(options.tube_serial_rom, config.tube_serial_rom);
     options.tube_serial_safe_rom = loadROM(options.tube_serial_safe_rom, config.tube_serial_safe_rom);
@@ -871,7 +866,6 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
     fixupPaths(options.pcFolders);
     fixupPaths(options.tubeHostFolders);
 
-    options.avr_rom = getFixedUpPath(options.avr_rom);
     options.tube_serial_rom = getFixedUpPath(options.tube_serial_rom);
     options.tube_serial_safe_rom = getFixedUpPath(options.tube_serial_safe_rom);
     options.tube_serial_electron_rom = getFixedUpPath(options.tube_serial_electron_rom);
@@ -930,7 +924,6 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
             folders: options.folders,
             pc_folders: options.pcFolders,
             tube_host_folders: options.tubeHostFolders,
-            avr_rom: getConfigString(options.avr_rom),
             tube_serial_rom: getConfigString(options.tube_serial_rom),
             tube_serial_safe_rom: getConfigString(options.tube_serial_safe_rom),
             tube_serial_electron_rom: getConfigString(options.tube_serial_electron_rom),
@@ -957,7 +950,6 @@ async function handleCommandLineOptions(options: ICommandLineOptions, log: utils
         return rom;
     }
 
-    options.avr_rom = await getOptionsROM(options.avr_rom, AVR_NAME, DEFAULT_BEEBLINK_AVR_ROM);
     options.upurs_rom = await getOptionsROM(options.upurs_rom, UPURS_NAME, DEFAULT_BEEBLINK_UPURS_ROM);
     options.tube_serial_rom = await getOptionsROM(options.tube_serial_rom, TUBE_SERIAL_NAME, DEFAULT_BEEBLINK_TUBE_SERIAL_ROM);
     options.tube_serial_safe_rom = await getOptionsROM(options.tube_serial_safe_rom, TUBE_SERIAL_SAFE_NAME, DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ROM);
@@ -1042,20 +1034,7 @@ function findDefaultVolume(options: ICommandLineOptions, volumes: beebfs.Volume[
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function getRomPathsForAVR(options: ICommandLineOptions): Map<number, string> {
-    const map = new Map<number, string>();
-
-    if (options.avr_rom !== null) {
-        map.set(beeblink.AVR_SUBTYPE_AVR, options.avr_rom);
-    }
-
-    return map;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-function getRomPathsForSerial(options: ICommandLineOptions): Map<number, string> {
+function getRomPaths(options: ICommandLineOptions): Map<number, string> {
     const map = new Map<number, string>();
 
     function setROM(subtype: number, rom: string | null): void {
@@ -1064,11 +1043,11 @@ function getRomPathsForSerial(options: ICommandLineOptions): Map<number, string>
         }
     }
 
-    setROM(beeblink.SERIAL_SUBTYPE_UPURS, options.upurs_rom);
-    setROM(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL, options.tube_serial_rom);
-    setROM(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL_SAFE, options.tube_serial_safe_rom);
-    setROM(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL_ELECTRON, options.tube_serial_electron_rom);
-    setROM(beeblink.SERIAL_SUBTYPE_TUBE_SERIAL_SAFE_ELECTRON, options.tube_serial_safe_electron_rom);
+    setROM(beeblink.LINK_BEEB_TYPE_UPURS, options.upurs_rom);
+    setROM(beeblink.LINK_BEEB_TYPE_TUBE_SERIAL, options.tube_serial_rom);
+    setROM(beeblink.LINK_BEEB_TYPE_TUBE_SERIAL_SAFE, options.tube_serial_safe_rom);
+    setROM(beeblink.LINK_BEEB_TYPE_TUBE_SERIAL_ELECTRON, options.tube_serial_electron_rom);
+    setROM(beeblink.LINK_BEEB_TYPE_TUBE_SERIAL_SAFE_ELECTRON, options.tube_serial_safe_electron_rom);
 
     return map;
 }
@@ -1153,10 +1132,9 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
             // Find the Server for this sender id.
             let srv = srvBySenderId.get(senderId);
             if (srv === undefined) {
-                srv = await createServer('HTTP', getRomPathsForAVR(options), false);
+                srv = await createServer('HTTP', getRomPaths(options), false);
                 srvBySenderId.set(senderId, srv);
             }
-
 
             const request = new Request(body[0] & 0x7f, body.slice(1));
             httpLog?.pn(`Request (from ${senderId}): ${request.c} (${utils.getRequestTypeName(request.c)}) (${request.p.length} bytes payload)`);
@@ -1171,25 +1149,6 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
             if (serverResponse.response.p.length > 0) {
                 await writeData(serverResponse.response.p);
             }
-
-            await endResponse();
-        } else if (httpRequest.url === '/beeblink.rom') {
-            if (httpRequest.method !== 'GET') {
-                return await errorResponse(405, 'only GET is permitted');
-            }
-
-            if (options.avr_rom === null) {
-                return await errorResponse(404, undefined);
-            }
-
-            const rom = await utils.tryReadFile(options.avr_rom);
-            if (rom === undefined) {
-                return await errorResponse(501, undefined);
-            }
-
-            httpResponse.setHeader('Content-Type', 'application/binary');
-
-            await writeData(rom);
 
             await endResponse();
         } else {
@@ -1907,7 +1866,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
             if (value === undefined) {
                 log?.pn(`${portPath}: new serial port`);
                 value = {
-                    server: await createServer('SERIAL', getRomPathsForSerial(options), true),
+                    server: await createServer('SERIAL', getRomPaths(options), true),
                     active: false,//not quite active just yet!
                 };
                 portStateByPortPath.set(portPath, value);
@@ -2063,7 +2022,6 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     always(['-h', '--help'], { action: 'storeTrue', help: 'Show this help message, then exit (combine with -v to show more options)' });
 
     // ROM paths
-    fullHelpOnly(['--avr-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + AVR_NAME + ' ROM (for use with b2) from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_AVR_ROM });
     fullHelpOnly(['--tube-serial-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + TUBE_SERIAL_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_ROM });
     fullHelpOnly(['--tube-serial-safe-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + TUBE_SERIAL_SAFE_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ROM });
     fullHelpOnly(['--upurs-rom'], { metavar: 'FILE', defaultValue: null, help: 'read BeebLink ' + UPURS_NAME + ' ROM from %(metavar)s. Default: ' + DEFAULT_BEEBLINK_UPURS_ROM });

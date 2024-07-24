@@ -22,13 +22,18 @@
 
 b2: .block
 
-b2_control=$fefe
-b2_data=$feff                
+b2_control=$fe9e
+b2_data=$fe9f             
 
 begin_send_with_restart:
 begin_send_without_restart:
+                pha
+                
+                lda #1          ; send
                 sta b2_control
 
+                pla
+                sta b2_data
                 lda payload_counter+0
                 sta b2_data
                 lda payload_counter+1
@@ -38,6 +43,7 @@ begin_send_without_restart:
                 lda payload_counter+3
                 sta b2_data
 
+                
                 clc
                 rts
 
@@ -46,11 +52,11 @@ send_payload_byte:
                 rts
 
 begin_recv:
-                lda b2_control
-                bmi link_begin_recv
+                bit b2_control
+                bpl begin_recv
 
+                lda b2_data
                 pha
-
                 lda b2_data
                 sta payload_counter+0
                 lda b2_data
@@ -59,7 +65,6 @@ begin_recv:
                 sta payload_counter+2
                 lda b2_data
                 sta payload_counter+3
-
                 pla
 
                 rts
@@ -72,11 +77,18 @@ unprepare:
                 rts
 
 startup:
-                lda #0
+                lda #0          ; presence check
                 sta b2_control
-                lda b2_control
-                bne bad
 
+                ldx #0
+check_signature_loop:
+                lda signature,x
+                beq got_signature
+                cmp b2_data
+                bne bad
+                inx
+                jmp check_signature_loop
+got_signature:
                 clc
                 rts
 
@@ -84,14 +96,18 @@ bad:
                 ldx #0
                 sec
                 rts
+
+signature:
+                .byte $ff
+                .dword 9
+                .text 'BeebLink',0
                 
 status_text:
-                .text 'b2 BeebLink not detected',0
+                .text 'BeebLink support not detected. Ensure b2 version is recent enough (consult documentation) and that BeebLink support is enabled',0
                 
                 .endblock
 
-link_name='b2'
-link_subtype=0
+link_beeb_name='b2'
 
 link_prepare=b2.prepare
 link_unprepare=b2.unprepare

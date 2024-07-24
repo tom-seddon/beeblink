@@ -43,15 +43,13 @@ export const AVR_PROTOCOL_VERSION = 1;
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// link subtypes for AVR.
-export const AVR_SUBTYPE_AVR = 0;
-
 // link subtypes for serial.
-export const SERIAL_SUBTYPE_TUBE_SERIAL = 0;
-export const SERIAL_SUBTYPE_UPURS = 1;
-export const SERIAL_SUBTYPE_TUBE_SERIAL_ELECTRON = 2;
-export const SERIAL_SUBTYPE_TUBE_SERIAL_SAFE_ELECTRON = 3;
-export const SERIAL_SUBTYPE_TUBE_SERIAL_SAFE = 4;
+export const LINK_BEEB_TYPE_TUBE_SERIAL = 0;
+export const LINK_BEEB_TYPE_UPURS = 1;
+export const LINK_BEEB_TYPE_TUBE_SERIAL_ELECTRON = 2;
+export const LINK_BEEB_TYPE_TUBE_SERIAL_SAFE_ELECTRON = 3;
+export const LINK_BEEB_TYPE_TUBE_SERIAL_SAFE = 4;
+export const LINK_BEEB_TYPE_UNSPECIFIED=5;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////

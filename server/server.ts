@@ -271,10 +271,10 @@ function encodeForOSCLI(command: string): Buffer {
 
 export class Server {
     private bfs: beebfs.FS;
-    private linkSubtype: number | undefined;
+    private linkBeebType: number | undefined;
     private machineType: number | undefined;
     private caps1: number;
-    private romPathByLinkSubtype: Map<number, string>;
+    private romPathByLinkBeebType: Map<number, string>;
     private stringBuffer: Buffer | undefined;
     private stringBufferIdx: number;
     private stringError: errors.BeebError | undefined;
@@ -292,9 +292,9 @@ export class Server {
     private recentVolumes: beebfs.Volume[];
     private numOSBGETReadaheadBytes: number;
 
-    public constructor(romPathByLinkSubtype: Map<number, string>, bfs: beebfs.FS, log: utils.Log | undefined, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
-        this.romPathByLinkSubtype = romPathByLinkSubtype;
-        this.linkSubtype = undefined;
+    public constructor(romPathByLinkBeebType: Map<number, string>, bfs: beebfs.FS, log: utils.Log | undefined, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
+        this.romPathByLinkBeebType = romPathByLinkBeebType;
+        this.linkBeebType = undefined;
         this.machineType = undefined;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
@@ -379,8 +379,8 @@ export class Server {
         this.caps1 = 0;
     }
 
-    public getLinkSubtype(): number | undefined {
-        return this.linkSubtype;
+    public getLinkBeebType(): number | undefined {
+        return this.linkBeebType;
     }
 
     public async handleRequest(request: Request): Promise<IServerResponse> {
@@ -517,14 +517,14 @@ export class Server {
         // The error messages here are going to be handled by the selfupdate
         // program, which will execute the BRK by calling directly into the
         // response buffer. So the usual 39-char limit doesn't apply.
-        if (this.romPathByLinkSubtype.size === 0) {
+        if (this.romPathByLinkBeebType.size === 0) {
             return errors.generic('No ROM available');
-        } else if (this.linkSubtype === undefined) {
-            return errors.generic('Link subtype not set');
+        } else if (this.linkBeebType === undefined) {
+            return errors.generic('Link BBC type not set');
         } else {
-            const romPath = this.romPathByLinkSubtype.get(this.linkSubtype);
+            const romPath = this.romPathByLinkBeebType.get(this.linkBeebType);
             if (romPath === undefined) {
-                return errors.generic(`No ROM available for link subtype &${utils.hex2(this.linkSubtype)}`);
+                return errors.generic(`No ROM available for link subtype &${utils.hex2(this.linkBeebType)}`);
             } else {
                 try {
                     const rom = await utils.fsReadFile(romPath);
@@ -557,11 +557,14 @@ export class Server {
         }
 
         if (p.length > 1) {
-            this.linkSubtype = p[1];
-            this.log?.pn(`link subtype=${this.linkSubtype}`);
+            this.linkBeebType = p[1];
+            if (this.linkBeebType === beeblink.LINK_BEEB_TYPE_UNSPECIFIED) {
+                this.linkBeebType = undefined;
+            }
+            this.log?.pn(`link Beeb type=${this.linkBeebType}`);
         } else {
-            this.linkSubtype = 0;
-            this.log?.pn(`link subtype=${this.linkSubtype} (inferred)`);
+            this.linkBeebType = undefined;
+            this.log?.pn(`link Beeb type=${this.linkBeebType} (inferred)`);
         }
 
         if (p.length > 2) {

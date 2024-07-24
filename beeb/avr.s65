@@ -709,8 +709,7 @@ nop:
 
 ; Link interface.
 
-link_name="AVR "..format("%04x",avr.via)
-link_subtype=AVR_SUBTYPE_AVR
+link_beeb_name="AVR "..format("%04x",avr.via)
 link_begin_send_without_restart=avr.begin_send
 link_begin_send_with_restart=avr.begin_send
 link_send_payload_byte=avr.send_byte
