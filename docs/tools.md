@@ -12,8 +12,8 @@ single-density DFS, ADFS, and Opus DDOS/Challenger.
 Select `R` to read a disk, creating a disk image, or `W` to write a
 disk from a disk image.
 
-Select `A` to read/write all tracks, or `U` to read/write only the
-used tracks (potentially saving a bit of time).
+Select `A` to read/write all of the disk, or `U` to read/write only
+the used areas.
 
 Pick the drive to read from or write to.
 
@@ -38,12 +38,18 @@ Notes:
   the imager. This is a BeebLink bug:
   https://github.com/tom-seddon/beeblink/issues/42
   
-- used tracks mode isn't actually supported with Opus DDOS/Challenger
+- used areas mode isn't actually supported with Opus DDOS/Challenger
   (yet?), and the whole disk is always read or written
   
 - 62-file single-density Watford DFS disks aren't specifically
-  supported, but if you treat them as a DFS disk and read/write all
-  tracks then it might work!
+  supported, but if you treat them as a DFS disk and read/write the
+  whole disk it might work!
+  
+- The used areas option writes whole tracks on DFS and 4 KB chunks on
+  ADFS. It always reads or writes the whole area even if only part of
+  it is used - so the disk image can end up with actually unused data
+  in it. This mode is intended as a timesaving measure, not a way of
+  creating a perfectly tidy disk image
 
 ## Speed Test
 
