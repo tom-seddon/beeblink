@@ -65,7 +65,7 @@ drive Z on the BeebLink volume.
 Gets a copy of the appropriate filing system ROM from the server, and
 (if possible) uses it to update the current ROM.
 
-If you have the ROM in sideways ROM, the tool will find it and update
+If you have the ROM in sideways RAM, the tool will find it and update
 it automatically. Switch off any write protection first.
 
 Otherwise, the update program will place the ROM image in memory for
