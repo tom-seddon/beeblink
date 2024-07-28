@@ -251,13 +251,13 @@ loop:
 
 recv_host_page: .proc
                 ldy #0
-loop:
-                .rept 16
+                .for _i=0,_i<256,_i+=1
                 lda b2_data
                 sta (payload_addr),y
+                .if _i<255
                 iny
-                .endrept
-                bne loop
+                .endif
+                .endfor
                 rts
                 .endproc
 
@@ -274,13 +274,13 @@ loop:
 
 send_host_page: .proc
                 ldy #0
-loop:
-                .rept 16
+                .for _i=0,_i<256,_i+=1
                 lda (payload_addr),y
                 sta b2_data
+                .if _i<255
                 iny
-                .endrept
-                bne loop
+                .endif
+                .endfor
                 rts
                 .endproc
 
@@ -311,15 +311,13 @@ recv_parasite_page: .proc
                 lda #tube_256_byte_host_to_parasite
                 jsr initiate_tube_transfer
 
-                ldy #0
-loop:
-                lda b2_data     ; +4 9
+                .rept 256
+                lda b2_data
 -
                 bit tube.fifo3_status
                 bvc -
                 sta tube.fifo3_data
-                iny
-                bne loop
+                .endrept
                 rts
                 .endproc
 
@@ -346,15 +344,13 @@ send_parasite_page: .proc
                 lda #tube_256_byte_parasite_to_host
                 jsr initiate_tube_transfer
 
-                ldy #0
-loop:
+                .rept 256
 -
                 bit tube.fifo3_status
                 bpl -
                 lda tube.fifo3_data
                 sta b2_data
-                iny
-                bne loop
+                .endrept
                 rts
                 .endproc
 

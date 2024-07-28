@@ -324,7 +324,7 @@ rept_byte_access_counter: .block
                 ; avoid problem addresses for Tube Serial FIFO
                 ; accesses - see
                 ; https://stardot.org.uk/forums/viewtopic.php?f=3&t=27093
-                .cerror *>=$8e00,"driver code too large"
+                .cerror link_tube_serial&&*>=$8e00,"driver code too large"
                 .dsection code
                 .dsection lib_code
                 .dsection debug_code ;must be last!
