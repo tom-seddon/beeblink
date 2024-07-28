@@ -170,24 +170,48 @@ hassle to code. So the later message types don't do this.
 
 The protocol maps fairly cleanly to HTTP, aside from the latency.
 
-All requests are in the form of an HTTP `POST` to the `/request`
-endpoint.
-
 HTTP being stateless, the header must include a `beeblink-sender-id`
 value, an arbitrary string that identifies the client making the
 request. (This should be different for every Beeb connecting.)
 
-The request body must be `application/binary`, a sequence of bytes:
-the 1-byte message type (bit 7 ignored), and the N-byte payload.
-
 To handle BREAK, forcibly close the open TCP connection, if there is
 one.
+
+The HTTP API has 2 versions (so far...), accessible via different
+endpoints. Both are equally valid, and individual requests can use
+either endpoint without needing to be consistent.
 
 (The HTTP protocol is currently used only by
 [b2](https://github.com/tom-seddon/b2/), my BBC Micro emulator.)
 
-New endpoint name(s) will be added when this mechanism needs extending
-or improving.
+### HTTP v1
+
+Requests are in the form of an HTTP `POST` to the `/request` endpoint.
+
+The request body must be `application/binary`, a sequence of bytes:
+the 1-byte message type (bit 7 ignored), and the N-byte payload.
+
+The response is `application/binary` in the same format. Speculative
+responses are not sent.
+
+Fire-and-forget requests produce a dummy response that the client
+should disregard.
+
+### HTTP v2
+
+Requests are in the form of an HTTP `POST` to the `/request/v2`
+endpoint.
+
+The request body must be `application/binary`, a sequence of bytes:
+1-byte message type (bit 7 ignored), 4-byte little-endian payload
+size, then the N-byte payload.
+
+The response is `application/binary` in the same format. Any
+speculative responses are included after the main response (parse the
+response data to find them).
+
+Fire-and-forget requests produce a dummy response that the client
+should disregard.
 
 ## Serial
 

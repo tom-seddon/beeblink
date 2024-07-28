@@ -2770,7 +2770,7 @@ send_osbget_request:
                 jsr send_request_1_recv_response_1_without_restart
 
                 .cerror RESPONSE_OSBGET_EOF<RESPONSE_OSBGET,'oops'
-                cpx #RESPONSE_OSBGET_EOF ;C=1 if EOF
+                cpx #RESPONSE_OSBGET_EOF ;C=1 if >=EOF
 
 got_byte:
                 tsx

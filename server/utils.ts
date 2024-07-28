@@ -229,16 +229,6 @@ export class BufferReader {
         return str;
     }
 
-    public readBuffer(): Buffer {
-        const buffer = Buffer.alloc(this.buffer.length - this.offset);
-
-        this.buffer.copy(buffer, 0, this.offset);
-
-        this.offset = this.buffer.length;
-
-        return buffer;
-    }
-
     private prepareForRead(n: number): void {
         if (this.offset + n >= this.buffer.length) {
             return errors.generic('Bad request');

@@ -1068,6 +1068,14 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
         httpLog = utils.Log.create("HTTP", process.stdout);
     }
 
+    const V1_URL = '/request';
+
+    // The V2 URL needs to have the V1 URL as a prefix, because I didn't think
+    // through this properly when setting up the b2 options. But the BeebLink
+    // versioning is a bit scrappy anyway. And this will extend conveniently
+    // enough to future versions.
+    const V2_URL = '/request/2';
+
     async function handleHTTPRequest(httpRequest: http.IncomingMessage, httpResponse: http.ServerResponse): Promise<void> {
         httpLog?.pn(`HTTP request: ${httpRequest.method} ${httpRequest.url}`);
 
@@ -1093,11 +1101,15 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
             await endResponse();
         }
 
-        if (httpRequest.url === '/request') {
+        if (httpRequest.url === V1_URL || httpRequest.url === V2_URL) {
             //process.stderr.write('method: ' + httpRequest.method + '\n');
             if (httpRequest.method !== 'POST') {
                 return await errorResponse(405, 'only POST is permitted');
             }
+
+            const v2 = httpRequest.url === V2_URL;
+
+            httpLog?.pn(`v2: ${v2}`);
 
             // const packetTypeString = httpRequest.headers[BEEBLINK_PACKET_TYPE];
             // if (packetTypeString === undefined || packetTypeString === null || typeof (packetTypeString) !== 'string' || packetTypeString.length === 0) {
@@ -1132,22 +1144,73 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
             // Find the Server for this sender id.
             let srv = srvBySenderId.get(senderId);
             if (srv === undefined) {
-                srv = await createServer('HTTP', getRomPaths(options), false);
+                // If this is accessed via the V1 endpoint, fire-and-forget
+                // requests are not actually supported. But the fire-and-forget
+                // requests always send a HTTP response anyway, and it's the
+                // client's job to discard this, so no problem.
+                srv = await createServer('HTTP', getRomPaths(options), true);
                 srvBySenderId.set(senderId, srv);
             }
 
-            const request = new Request(body[0] & 0x7f, body.slice(1));
-            httpLog?.pn(`Request (from ${senderId}): ${request.c} (${utils.getRequestTypeName(request.c)}) (${request.p.length} bytes payload)`);
+            let request: Request;
+            if (v2) {
+                if (body.length < 5) {
+                    return await errorResponse(400, 'body too small: ' + BEEBLINK_SENDER_ID);
+                }
 
+                const payloadSize = body.readUInt32LE(1);
+
+                httpLog?.pn(`body.length=${body.length}; payloadSize=${payloadSize}`);
+                httpLog?.dumpBuffer(body);
+
+                // In theory, multiple BeebLink requests could be packed into
+                // one HTTP request, but that isn't currently supported.
+                if (body.length !== payloadSize + 5) {
+                    return await errorResponse(400, 'bad payload');
+                }
+
+                request = new Request(body[0] & 0x7f, body.slice(5));
+            } else {
+                request = new Request(body[0] & 0x7f, body.slice(1));
+            }
+
+            httpLog?.pn(`Request (from ${senderId}) (v2=${v2}): ${request.c} (${utils.getRequestTypeName(request.c)}) (${request.p.length} bytes payload)`);
+
+            async function writeResponse(response: Response): Promise<void> {
+                if (v2) {
+                    const header = Buffer.alloc(5);
+                    header.writeUInt8(response.c & 0x7f, 0);
+                    header.writeUInt32LE(response.p.length, 1);
+
+                    // httpLog?.withIndent('Send V2 header: ', () => {
+                    //     httpLog?.dumpBuffer(header);
+                    // });
+                    await writeData(header);
+                } else {
+                    await writeData(Buffer.alloc(1, response.c));
+                }
+
+                if (response.p.length > 0) {
+                    await writeData(response.p);
+                }
+            }
+
+            // Every HTTP request gets a response, even if it was a FNF request.
+            // Given the fixed HTTP overhead there's hardly any point discarding
+            // the RESPONSE_YES that gets made up in getResponseForResult.
             const serverResponse: server.IServerResponse = await srv.handleRequest(request);
             httpLog?.pn(`Response (for ${senderId}): ${serverResponse.response.c} (${utils.getResponseTypeName(serverResponse.response.c)} (${serverResponse.response.p.length} bytes payload)` + (serverResponse.speculativeResponses === undefined ? '' : ` (+${serverResponse.speculativeResponses.length} speculative responses)`));
 
             httpResponse.setHeader('Content-Type', 'application/binary');
 
-            await writeData(Buffer.alloc(1, serverResponse.response.c));
+            await writeResponse(serverResponse.response);
 
-            if (serverResponse.response.p.length > 0) {
-                await writeData(serverResponse.response.p);
+            if (v2) {
+                if (serverResponse.speculativeResponses !== undefined) {
+                    for (const speculativeResponse of serverResponse.speculativeResponses) {
+                        await writeResponse(speculativeResponse);
+                    }
+                }
             }
 
             await endResponse();
