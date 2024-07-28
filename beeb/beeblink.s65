@@ -1411,6 +1411,7 @@ add_y_to_payload_counter: .proc
 ; ORs all 4 bytes of the payload size into the accumulator.
 ;
 ; exit: A = a|b|c|d
+; preserves: X; Y; C
 ; takes: 22 cycles
 ;
 test_payload_counter: .proc

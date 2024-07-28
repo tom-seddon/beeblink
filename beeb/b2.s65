@@ -23,7 +23,12 @@
 b2: .block
 
 b2_control=$fe9e
-b2_data=$fe9f             
+b2_data=$fe9f
+
+                .section link_workspace
+link_routines_offset: .fill 1
+link_transfer_thunk: .fill 3    ; $4C, LSB, MSB
+                .endsection          
 
 begin_send_with_restart:
 begin_send_without_restart:
@@ -55,7 +60,6 @@ _send:
                 sta b2_data
                 lda payload_counter+3
                 sta b2_data
-
                 
                 clc
                 rts
@@ -122,6 +126,243 @@ signature:
                 
 status_text:
                 .text 'BeebLink support not detected. Ensure b2 version is recent enough (consult documentation) and that BeebLink support is enabled',0
+
+recv_file_data_host: .proc
+                lda #routines_table.recv_host-routines_table
+                jmp transfer_file_data
+                .endproc
+                
+send_file_data_host: .proc
+                lda #routines_table.send_host-routines_table
+                jmp transfer_file_data
+                .endproc
+
+recv_file_data_parasite: .proc
+                lda #routines_table.recv_parasite-routines_table
+                jmp transfer_file_data
+                .endproc
+
+send_file_data_parasite: .proc
+                lda #routines_table.send_parasite-routines_table
+                jmp transfer_file_data
+                .endproc
+
+transfer_file_data: .proc
+                sta link_routines_offset
+
+                ; Claim Tube if required
+                tay
+                lda routines_table+5,y
+                bpl maybe_transfer_bytes
+
+                jsr claim_tube
+
+maybe_transfer_bytes:
+                lda #$4c        ; JMP abs
+                sta link_transfer_thunk+0
+                
+                jsr negate_payload_counter ; get absolute bytes remaining
+                
+                ldx payload_counter+0
+                beq transfer_pages
+
+                ldy link_routines_offset
+                lda routines_table+0,y ; bytes routine LSB
+                sta link_transfer_thunk+1
+                lda routines_table+1,y ; bytes routine MSB
+                sta link_transfer_thunk+2
+
+                jsr link_transfer_thunk
+
+                clc
+                lda payload_addr+0
+                adc payload_counter+0
+                sta payload_addr+0
+                bcc +
+                inc payload_addr+1
+                bne +
+                inc payload_addr+2
+                bne +
+                inc payload_addr+3
++
+
+                lda #0
+                sta payload_counter+0
+
+transfer_pages:
+                jsr test_payload_counter
+                beq transfer_done
+
+                ldy link_routines_offset                
+                lda routines_table+2,y ; page routine LSB
+                sta link_transfer_thunk+1
+                lda routines_table+3,y ; page routine MSB
+                sta link_transfer_thunk+2
+
+                jsr negate_payload_counter
+
+transfer_pages_loop:
+                jsr link_transfer_thunk
+
+                inc payload_addr+1
+                bne +
+                inc payload_addr+2
+                bne +
+                inc payload_addr+3
++
+
+                inc payload_counter+1
+                bne transfer_pages_loop
+                inc payload_counter+2
+                bne transfer_pages_loop
+                inc payload_counter+3
+                bne transfer_pages_loop
+
+transfer_done:
+
+                ; Release Tube if required
+                ldy link_routines_offset
+                lda routines_table+5,y
+                bpl done
+
+                jsr release_tube
+
+done:
+                rts
+                .endproc
+
+routines_table: .proc
+recv_host: .word recv_host_bytes,recv_host_page,$00
+send_host: .word send_host_bytes,send_host_page,$00
+recv_parasite: .word recv_parasite_bytes,recv_parasite_page,$80
+send_parasite: .word send_parasite_bytes,send_parasite_page,$80
+                .endproc
+
+recv_host_bytes: .proc
+                ldy #0
+loop:
+                lda b2_data
+                sta (payload_addr),y
+                iny
+                dex
+                bne loop
+                rts
+                .endproc
+
+recv_host_page: .proc
+                ldy #0
+loop:
+                .rept 16
+                lda b2_data
+                sta (payload_addr),y
+                iny
+                .endrept
+                bne loop
+                rts
+                .endproc
+
+send_host_bytes: .proc
+                ldy #0
+loop:
+                lda (payload_addr),y
+                sta b2_data
+                iny
+                dex
+                bne loop
+                rts
+                .endproc
+
+send_host_page: .proc
+                ldy #0
+loop:
+                .rept 16
+                lda (payload_addr),y
+                sta b2_data
+                iny
+                .endrept
+                bne loop
+                rts
+                .endproc
+
+recv_parasite_bytes: .proc
+                txa
+                pha
+                lda #tube_multi_byte_host_to_parasite
+                jsr initiate_tube_transfer
+                pla
+                tax
+
+                ; 48 cycles/byte - but there's so little to this loop
+                ; that it's quicker just to poll for parasite
+                ; readiness.
+                
+loop:
+                lda b2_data
+-
+                bit tube.fifo3_status
+                bvc -
+                sta tube.fifo3_data
+                dex                
+                bne loop
+                rts
+                .endproc
+
+recv_parasite_page: .proc
+                lda #tube_256_byte_host_to_parasite
+                jsr initiate_tube_transfer
+
+                ldy #0
+loop:
+                lda b2_data     ; +4 9
+-
+                bit tube.fifo3_status
+                bvc -
+                sta tube.fifo3_data
+                iny
+                bne loop
+                rts
+                .endproc
+
+send_parasite_bytes: .proc
+                txa
+                pha
+                lda #tube_multi_byte_parasite_to_host
+                jsr initiate_tube_transfer
+                pla
+                tax
+
+loop:
+-
+                bit tube.fifo3_status
+                bpl -
+                lda tube.fifo3_data
+                sta b2_data
+                dex
+                bne loop
+                rts
+                .endproc
+
+send_parasite_page: .proc
+                lda #tube_256_byte_parasite_to_host
+                jsr initiate_tube_transfer
+
+                ldy #0
+loop:
+-
+                bit tube.fifo3_status
+                bpl -
+                lda tube.fifo3_data
+                sta b2_data
+                iny
+                bne loop
+                rts
+                .endproc
+
+initiate_tube_transfer: .proc
+                ldx #<payload_addr
+                ldy #>payload_addr
+                jmp $406
+                .endproc
                 
                 .endblock
 
@@ -140,3 +381,9 @@ link_recv_payload_byte=b2.recv_payload_byte
 
 link_startup=b2.startup
 link_status_text=b2.status_text
+
+link_recv_file_data_host=b2.recv_file_data_host
+link_send_file_data_host=b2.send_file_data_host
+link_recv_file_data_parasite=b2.recv_file_data_parasite
+link_send_file_data_parasite=b2.send_file_data_parasite
+                
