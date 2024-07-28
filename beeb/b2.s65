@@ -291,33 +291,43 @@ recv_parasite_bytes: .proc
                 jsr initiate_tube_transfer
                 pla
                 tax
+                jmp recv
 
-                ; 48 cycles/byte - but there's so little to this loop
-                ; that it's quicker just to poll for parasite
-                ; readiness.
-                
+                ; 48 cycles/iteration
 loop:
-                lda b2_data
--
-                bit tube.fifo3_status
-                bvc -
-                sta tube.fifo3_data
-                dex                
-                bne loop
+                bit $70             ; +3 8
+                .rept 12
+                nop             ; +2*12 32
+                .endrept
+
+recv:
+                lda b2_data     ; +4 44
+                sta tube.fifo3_data ; +4 48
+
+                dex             ; +2 2
+                bne loop        ; +3 5
+                
                 rts
                 .endproc
 
 recv_parasite_page: .proc
                 lda #tube_256_byte_host_to_parasite
                 jsr initiate_tube_transfer
+                ldy #0
+                jmp recv
 
-                .rept 256
-                lda b2_data
--
-                bit tube.fifo3_status
-                bvc -
-                sta tube.fifo3_data
-                .endrept
+                ; 20 cycles/iteration
+loop:
+                bit $70             ; +3 8
+                nop                 ; +2 10
+                nop                 ; +2 12
+recv:
+                lda b2_data         ; +4 16
+                sta tube.fifo3_data ; +4 20
+
+                iny             ; +2 2
+                bne loop        ; +3 5
+                
                 rts
                 .endproc
 
@@ -329,14 +339,20 @@ send_parasite_bytes: .proc
                 pla
                 tax
 
+                ; 48 cycle delay; 48 cycles/iteration
+                jsr delay_48_cycles
+                jmp send
+
 loop:
--
-                bit tube.fifo3_status
-                bpl -
-                lda tube.fifo3_data
-                sta b2_data
-                dex
-                bne loop
+                bit $70         ; +3 12
+                .rept 16
+                nop             ; +16*2 44
+                .endrept
+send:
+                lda tube.fifo3_data ; +4 48
+                sta b2_data     ; +4 4
+                dex             ; +2 6
+                bne loop        ; +3 9
                 rts
                 .endproc
 
@@ -344,13 +360,20 @@ send_parasite_page: .proc
                 lda #tube_256_byte_parasite_to_host
                 jsr initiate_tube_transfer
 
-                .rept 256
--
-                bit tube.fifo3_status
-                bpl -
-                lda tube.fifo3_data
-                sta b2_data
-                .endrept
+                ; 38 cycle delay; 20 cycles/iteration
+                jsr delay_36_cycles
+                ldy #0
+                jmp send
+
+loop:
+                bit $70         ; +3 12
+                nop             ; +2 14
+                nop             ; +2 16
+send:
+                lda tube.fifo3_data ; +4 20
+                sta b2_data         ; +4 4
+                iny                 ; +2 6
+                bne loop            ; +3 9
                 rts
                 .endproc
 
@@ -359,7 +382,7 @@ initiate_tube_transfer: .proc
                 ldy #>payload_addr
                 jmp $406
                 .endproc
-                
+
                 .endblock
 
 link_beeb_name='b2'
