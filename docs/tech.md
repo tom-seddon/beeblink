@@ -199,7 +199,7 @@ should disregard.
 
 ### HTTP v2
 
-Requests are in the form of an HTTP `POST` to the `/request/v2`
+Requests are in the form of an HTTP `POST` to the `/request/2`
 endpoint.
 
 The request body must be `application/binary`, a sequence of bytes:
