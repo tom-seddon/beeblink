@@ -303,7 +303,7 @@ export class Server {
         this.commonCommands = [
             new Command('ACCESS', '<afsp> (<mode>)', this.accessCommand),
             new Command('COPY', '<afsp> <dir>', this.copyCommand),
-            new Command('DEFAULTS', '([SRP])', this.defaultsCommand),
+            new Command('DEFAULTS', '(R)', this.defaultsCommand),
             new Command('DELETE', '<fsp>', this.deleteCommand),
             new Command('DIR', '(<dir>)', this.dirCommand),
             new Command('DRIVE', '(<drive>)', this.driveCommand),
@@ -2194,7 +2194,7 @@ export class Server {
     private readonly defaultsCommand = async (commandLine: CommandLine): Promise<string> => {
         const modeLC = commandLine.parts.length >= 2 ? commandLine.parts[1].toLowerCase() : undefined;
 
-        if (modeLC === undefined || modeLC === 's') {
+        if (modeLC === undefined) {
             this.bfs.setDefaults();
         } else if (modeLC === 'r') {
             this.bfs.resetDefaults();

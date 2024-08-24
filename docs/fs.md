@@ -241,7 +241,7 @@ Copy file(s) to another drive and/or volume.
 The copy operation takes place entirely on the server. None of the BBC
 Micro's memory is overwritten.
 
-### `DEFAULTS ([SF])`
+### `DEFAULTS (R)`
 
 Manage filing system defaults for use after a hard reset (CTRL+BREAK
 or power on).
@@ -251,8 +251,7 @@ By default, after a hard reset, the dir is `:0.$` and the library is
 instead - this can save a bit of time when doing something that
 requires pressing CTRL+BREAK a lot.
 
-Use `*DEFAULTS` or `*DEFAULTS S` - `S` for "set" - to save the
-current values.
+Use `*DEFAULTS` to save the current values.
 
 Use `*DEFAULTS R` - `R` for "reset" - to reset the saved defaults to
 the default defaults.
