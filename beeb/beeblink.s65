@@ -4660,6 +4660,9 @@ hacky_select:
 save_fs_workspace_loop:
                 lda $b0,x
                 pha
+                ; clear FS zero page as it goes, same as init_fs.
+                lda #0
+                sta $b0,x
                 dex
                 bpl save_fs_workspace_loop
 
