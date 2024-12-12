@@ -529,13 +529,13 @@ export interface IFSType {
     readonly name: string;
 
     // create new state for this type of FS.
-    createState(volume: Volume, transientSettings: unknown, persistentSettings: unknown, log: utils.Log | undefined): Promise<IFSState>;
+    createState: (volume: Volume, transientSettings: unknown, persistentSettings: unknown, log: utils.Log | undefined) => Promise<IFSState>;
 
     // whether this FS supports writing.
-    canWrite(): boolean;
+    canWrite: () => boolean;
 
     // get list of all Beeb files in volume.
-    findBeebFilesInVolume(volume: Volume, log: utils.Log | undefined): Promise<File[]>;
+    findBeebFilesInVolume: (volume: Volume, log: utils.Log | undefined) => Promise<File[]>;
 
     // Handle *LOCATE: get list of all Beeb files in volume matching explicit
     // parts of FQN. Treat implicit drive/dir values as matching anything.
@@ -543,51 +543,51 @@ export interface IFSType {
     // (This entry point differs from findBeebFilesMatching in that it may
     // discover files that aren't directly accessible via a Beeb path, but could
     // become so by arrangement. TubeHost files are like this.)
-    locateBeebFiles(fqn: FQN, log: utils.Log | undefined): Promise<File[]>;
+    locateBeebFiles: (fqn: FQN, log: utils.Log | undefined) => Promise<File[]>;
 
     // get list of Beeb files matching FQN. The volume will be of the right type.
-    findBeebFilesMatching(fqn: FQN, recurse: boolean, log: utils.Log | undefined): Promise<File[]>;
+    findBeebFilesMatching: (fqn: FQN, recurse: boolean, log: utils.Log | undefined) => Promise<File[]>;
 
     // parse file/dir string, starting at index i. 
-    parseFileString(str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean): FQN;
-    parseDirString(str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean): FilePath;
+    parseFileString: (str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean) => FQN;
+    parseDirString: (str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean) => FilePath;
 
     // create appropriate FSFQN from FSFSP, filling in defaults from the given State as appropriate.
-    //createFQN(fsp: IFSFSP, state: IFSState | undefined): IFSFQN;
+    //createFQN:(fsp: IFSFSP, state: IFSState | undefined)=> IFSFQN;
 
     // get ideal server path for FQN, relative to whichever volume it's in. Used
     // when creating a new file.
-    getIdealVolumeRelativeServerPath(fqn: FQN): string;
+    getIdealVolumeRelativeServerPath: (fqn: FQN) => string;
 
     // get *CAT text.
-    getCAT(filePath: FilePath, state: IFSState | undefined, log: utils.Log | undefined): Promise<string>;
+    getCAT: (filePath: FilePath, state: IFSState | undefined, log: utils.Log | undefined) => Promise<string>;
 
     // delete the given file.
-    deleteFile(file: File): Promise<void>;
+    deleteFile: (file: File) => Promise<void>;
 
     // rename the given file. The volume won't change. The new file doesn't
     // obviously exist.
-    renameFile(file: File, newName: FQN): Promise<void>;
+    renameFile: (file: File, newName: FQN) => Promise<void>;
 
     // write the metadata for the given file.
-    writeBeebMetadata(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes): Promise<void>;
+    writeBeebMetadata: (serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes) => Promise<void>;
 
     // get new attributes from attribute string. Return undefined if invalid.
-    getNewAttributes(oldAttr: FileAttributes, attrString: string): FileAttributes | undefined;
+    getNewAttributes: (oldAttr: FileAttributes, attrString: string) => FileAttributes | undefined;
 
     // get *INFO/*EX text for the given file. Show name, attributes and
     // metadata. Don't append newline - that will be added automatically.
-    getInfoText(file: File, fileSize: number): string;
+    getInfoText: (file: File, fileSize: number) => string;
 
     // get *WINFO text for the given file. Don't append newline - that will be
     // added automatically.
-    getWideInfoText(file: File, stats: fs.Stats): string;
+    getWideInfoText: (file: File, stats: fs.Stats) => string;
 
     // get *INFO/*EX-style attributes string for the given file.
     //
     // A return value of undefined indicates that attributes aren't relevant for
     // the current FS. (What's the value of distinguishing this from ''? TBC...)
-    getAttrString(file: File): string | undefined;
+    getAttrString: (file: File) => string | undefined;
 }
 
 /////////////////////////////////////////////////////////////////////////
