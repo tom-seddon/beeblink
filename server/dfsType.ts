@@ -159,7 +159,7 @@ class DFSState implements beebfs.IFSState {
         return undefined;
     }
 
-    public getPersistentSettingsString(_settings: undefined): string {
+    public getPersistentSettingsString(_settings: unknown): string {
         return '';
     }
 
@@ -219,12 +219,20 @@ class DFSState implements beebfs.IFSState {
         return true;
     }
 
-    public starDir(filePath: beebfs.FilePath): void {
-        this.current = this.getDFSPathFromFilePath(filePath);
+    public starDir(filePath: beebfs.FilePath | undefined): void {
+        if (filePath !== undefined) {
+            this.current = this.getDFSPathFromFilePath(filePath);
+        }
     }
 
-    public starLib(filePath: beebfs.FilePath): void {
-        this.library = this.getDFSPathFromFilePath(filePath);
+    public starLib(filePath: beebfs.FilePath | undefined): void {
+        if (filePath !== undefined) {
+            this.library = this.getDFSPathFromFilePath(filePath);
+        } else {
+            // This is what DFS 2.45 does, and BeebLink's DFS mode is trying to
+            // copy DFS...
+            this.library = gDefaultTransientSettings.library;
+        }
     }
 
     public async getDrivesOutput(): Promise<string> {
@@ -314,7 +322,7 @@ class DFSType implements beebfs.IFSType {
         return c >= 32 && c < 127;
     }
 
-    public async createState(volume: beebfs.Volume, transientSettings: unknown , persistentSettings: unknown , log: utils.Log | undefined): Promise<beebfs.IFSState> {
+    public async createState(volume: beebfs.Volume, transientSettings: unknown, persistentSettings: unknown, log: utils.Log | undefined): Promise<beebfs.IFSState> {
         return new DFSState(volume, transientSettings, log);
     }
 

@@ -437,44 +437,44 @@ export interface IFSState {
 
     // get current drive. (OSGBPB 6 reads this, so it's part of the standard
     // interface.)
-    getCurrentDrive(): string;
+    getCurrentDrive: () => string;
 
     // get current directory. (OSGBPB 6 reads this, so it's part of the standard
     // interface.)
-    getCurrentDir(): string;
+    getCurrentDir: () => string;
 
     // get library drive. (OSGBPB 7 reads this, so it's part of the standard
     // interface.)
-    getLibraryDrive(): string;
+    getLibraryDrive: () => string;
 
     // get library directory. (OSGBPB 7 reads this, so it's part of the standard
     // interface.)
-    getLibraryDir(): string;
+    getLibraryDir: () => string;
 
     // get object holding current transient settings that would be reset on
     // Ctrl+Break - drive/dir, lib drive/dir, and so on. Use when recreating the
     // state, to restore the current settings.
     //
     // The naming is crappy because 'state' was already taken.
-    getTransientSettings(): unknown;
+    getTransientSettings: () => unknown;
 
     // turns transient settings into a human-readable string for printing on the
     // Beeb. This isn't a toString on an interface type, so the FS state has the
     // option of printing something useful out when there's no state.
-    getTransientSettingsString(transientSettings: unknown): string;
+    getTransientSettingsString: (transientSettings: unknown) => string;
 
     // get object holding current persistent settings, that would not be reset
     // on Ctrl+Break - drive assignments, and so on. Use when recreating the
     // state, to restore the current settings.
-    getPersistentSettings(): unknown;
+    getPersistentSettings: () => unknown;
 
     // turns persistent settings into a human-readable string for printing on
     // the Beeb.
-    getPersistentSettingsString(persistentSettings: unknown): string;
+    getPersistentSettingsString: (persistentSettings: unknown) => string;
 
     // get file to use for *RUN. If tryLibDir is false, definitely don't try lib
     // drive/directory.
-    getFileForRUN(fqn: FQN, tryLibDir: boolean): Promise<File | undefined>;
+    getFileForRUN: (fqn: FQN, tryLibDir: boolean) => Promise<File | undefined>;
 
     // get *CAT text, given command line. Handle default case, when
     // commandLine===undefined, and any straightforward special cases that would
@@ -484,40 +484,40 @@ export interface IFSState {
     // If returning undefined, the BeebFS class will try to interpret the
     // command line as a FSP and use the resulting volume's handler type to
     // catalogue an appropriate drive based on that.
-    getCAT(commandLine: string | undefined): Promise<string | undefined>;
+    getCAT: (commandLine: string | undefined) => Promise<string | undefined>;
 
     // handle *DRIVE/*MOUNT.
-    starDrive(arg: string | undefined): void;
+    starDrive: (arg: string | undefined) => void;
 
     // handle *DIR.
-    starDir(filePath: FilePath | undefined): void;
+    starDir: (filePath: FilePath | undefined) => void;
 
     // handle *LIB.
-    starLib(filePath: FilePath | undefined): void;
+    starLib: (filePath: FilePath | undefined) => void;
 
     // handle *HSTATUS drives output.
-    getDrivesOutput(): Promise<string>;
+    getDrivesOutput: () => Promise<string>;
 
     // read boot option, for OSGBPB 5 or SHIFT+BREAK.
-    getBootOption(): Promise<number>;
+    getBootOption: () => Promise<number>;
 
     // handle *OPT 4.
-    setBootOption(option: number): Promise<void>;
+    setBootOption: (option: number) => Promise<void>;
 
     // handle *TITLE.
-    setTitle(title: string): Promise<void>;
+    setTitle: (title: string) => Promise<void>;
 
     // read title, for OSGBPB 5.
-    getTitle(): Promise<string>;
+    getTitle: () => Promise<string>;
 
     // read names, for OSGBPB 6.
-    readNames(): Promise<string[]>;
+    readNames: () => Promise<string[]>;
 
     // return list of type-specific commands.
     //
     // This is only called when the FS type potentially changes, so it's OK if
     // it does something expensive.
-    getCommands(): server.Command[];
+    getCommands: () => server.Command[];
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -674,7 +674,7 @@ export class FS {
 
     private state: IFSState | undefined;
     private stateCommands: undefined | server.Command[];
-    private defaultTransientSettings: unknown ;
+    private defaultTransientSettings: unknown;
 
     private gaManipulator: gitattributes.Manipulator | undefined;
 

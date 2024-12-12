@@ -105,11 +105,11 @@ class PCState implements beebfs.IFSState {
         return errors.badDrive();
     }
 
-    public starDir(_filePath: beebfs.FilePath): void {
+    public starDir(_filePath: beebfs.FilePath | undefined): void {
         return notSupported();
     }
 
-    public starLib(_filePath: beebfs.FilePath): void {
+    public starLib(_filePath: beebfs.FilePath | undefined): void {
         return notSupported();
     }
 
@@ -155,7 +155,7 @@ class PCState implements beebfs.IFSState {
 class PCType implements beebfs.IFSType {
     public readonly name = 'PC';
 
-    public async createState(volume: beebfs.Volume, transientSettings: unknown , persistentSettings: unknown , log: utils.Log | undefined): Promise<beebfs.IFSState> {
+    public async createState(volume: beebfs.Volume, transientSettings: unknown, persistentSettings: unknown, log: utils.Log | undefined): Promise<beebfs.IFSState> {
         return new PCState(volume, log);
     }
 

@@ -572,12 +572,16 @@ class TubeHostState implements beebfs.IFSState {
         return true;
     }
 
-    public starDir(filePath: beebfs.FilePath): void {
-        this.current = this.getTubeHostPathFromFilePath(filePath);
+    public starDir(filePath: beebfs.FilePath | undefined): void {
+        if (filePath !== undefined) {
+            this.current = this.getTubeHostPathFromFilePath(filePath);
+        }
     }
 
-    public starLib(filePath: beebfs.FilePath): void {
-        this.library = this.getTubeHostPathFromFilePath(filePath);
+    public starLib(filePath: beebfs.FilePath | undefined): void {
+        if (filePath !== undefined) {
+            this.library = this.getTubeHostPathFromFilePath(filePath);
+        }
     }
 
     public async getDrivesOutput(): Promise<string> {

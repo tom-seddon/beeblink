@@ -331,5 +331,6 @@ module.exports = {
 
         // Doesn't seem worth enforcing.
         "arrow-body-style": "off"
-    }
+    },
+    ignorePatterns: ['.eslintrc.js'],
 };
