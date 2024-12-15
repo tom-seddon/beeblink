@@ -646,7 +646,10 @@ class DFSType implements beebfs.IFSType {
             drive = str[i + 1];
             i += 2;
 
-            if (str[i] === '.') {
+            if (i < str.length) {
+                if (str[i] !== '.') {
+                    return errors.badDrive();
+                }
                 ++i;
             }
         }
