@@ -52,9 +52,9 @@ having to reload the ROM each time you power on, or have it zapped by
 careless programs!
 
 (If upgrading: you're advised to run the same version of ROM and
-server, though the server does try to support older ROMs at least well
-enough to allow `*CAT` and `RTOOL` to work. Newer ROM + older server
-on the other hand is not supported.)
+server, but if both server and ROM are from a 2024 (or later) release
+then they don't have to match exactly. But not every combination will
+have been tested!)
 
 You can connect BBC and PC using a Tube USB serial adapter or a UPURS
 cable.
