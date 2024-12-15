@@ -145,13 +145,13 @@ set the submodules up:
 
 	git submodule init
 	git submodule update
-	
-`master` is the branch used to build the latest release, so it should
-be good. `wip/tom` is for whatever I'm working on currently, and will
-probably work pretty well. Other branches are undocumented and
-probably only temporary.
 
-After switching branch, you'll need to do a `git submodule update`.
+(Note that you'll also need to do a `git submodule update` after
+switching branch.)
+
+Build the `master` branch to get the latest release, or `wip/master`
+to get the latest prerelease. Both should work well, though the
+prerelease will have had less testing.
 
 [How to build the server](./docs/build-server.md).
 
