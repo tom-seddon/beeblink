@@ -40,6 +40,7 @@ import * as os from 'os';
 import dfsType from './dfsType';
 import pcType from './pcType';
 import tubeHostType from './tubeHostType';
+import adfsType from './adfsType';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -1972,7 +1973,7 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
 async function main(options: ICommandLineOptions) {
     process.title = 'BeebLink Server';
 
-    beebfs.setFSTypes(dfsType, pcType, tubeHostType);
+    beebfs.setFSTypes(dfsType, pcType, tubeHostType, adfsType);
 
     const log = utils.Log.create('', process.stdout, options.verbose);
 

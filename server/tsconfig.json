@@ -39,6 +39,7 @@
         "./speedtest.ts",
         "./tubeHostType.ts",
         "./utils.ts",
-        "./volumebrowser.ts"
+        "./volumebrowser.ts",
+        "./adfsType.ts"
     ]
 }
