@@ -947,7 +947,7 @@ class TubeHostType implements beebfs.IFSType {
         return parseResult.filePath;
     }
 
-    public getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): VolRelPath {
+    public async getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): Promise<VolRelPath> {
         const tubeHostFilePath = mustBeTubeHostFilePath(fqn.filePath);
 
         if (tubeHostFilePath.serverFolder === undefined) {
@@ -1102,8 +1102,8 @@ class TubeHostType implements beebfs.IFSType {
         }
     }
 
-    public async renameFile(oldFile: beebfs.File, newFQN: beebfs.FQN): Promise<void> {
-        const newServerPath = getAbsPath(newFQN.filePath.volume, this.getIdealVolumeRelativeServerPath(newFQN));
+    public async renameFile(oldFile: beebfs.File, newFQN: beebfs.FQN): Promise<string> {
+        const newServerPath = getAbsPath(newFQN.filePath.volume, await this.getIdealVolumeRelativeServerPath(newFQN));
         await inf.mustNotExist(newServerPath);
 
         const newFile = new beebfs.File(newServerPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr);
@@ -1117,6 +1117,8 @@ class TubeHostType implements beebfs.IFSType {
         }
 
         await utils.forceFsUnlink(oldFile.serverPath + inf.ext);
+
+        return newServerPath;
     }
 
     public async writeBeebMetadata(serverPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, attr: beebfs.FileAttributes): Promise<void> {

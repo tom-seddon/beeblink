@@ -430,7 +430,7 @@ class ADFSType implements beebfs.IFSType {
         return this.parseFileOrDirString(str, i, state, true, volume, volumeExplicit).filePath;
     }
 
-    public getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): VolRelPath {
+    public async getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): Promise<VolRelPath> {
         const adfsFilePath = mustBeADFSFilePath(fqn.filePath);
 
         // Can't remember what would actually cause this
@@ -533,7 +533,7 @@ class ADFSType implements beebfs.IFSType {
         return errors.generic('TODO: delete');
     }
 
-    public async renameFile(_oldFile: beebfs.File, _newFQN: beebfs.FQN): Promise<void> {
+    public async renameFile(_oldFile: beebfs.File, _newFQN: beebfs.FQN): Promise<string> {
         return errors.generic('TODO: rename');
     }
 

@@ -587,7 +587,7 @@ export interface IFSType {
 
     // get ideal server path for FQN, relative to whichever volume it's in. Used
     // when creating a new file.
-    getIdealVolumeRelativeServerPath: (fqn: FQN) => string;
+    getIdealVolumeRelativeServerPath: (fqn: FQN) => Promise<string>;
 
     // get *CAT text.
     getCAT: (filePath: FilePath, state: IFSState | undefined, log: utils.Log | undefined) => Promise<string>;
@@ -597,7 +597,10 @@ export interface IFSType {
 
     // rename the given file. The volume won't change. The new file doesn't
     // obviously exist.
-    renameFile: (file: File, newName: FQN) => Promise<void>;
+    //
+    // Return new absolute path of the file on the server. The gitattributes
+    // manipulator will sort it out.
+    renameFile: (file: File, newName: FQN) => Promise<string>;
 
     // write the metadata for the given file.
     writeBeebMetadata: (serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes) => Promise<void>;
@@ -1611,7 +1614,7 @@ export class FS {
                 return 0;
             }
 
-            serverPath = this.getServerPath(fqn);
+            serverPath = await this.getServerPath(fqn);
             await inf.mustNotExist(serverPath);
 
             // Create file.
@@ -1710,7 +1713,7 @@ export class FS {
         if (file !== undefined) {
             this.mustNotBeOpen(file);
         } else {
-            file = new File(this.getServerPath(fqn), fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, DEFAULT_ATTR);
+            file = new File(await this.getServerPath(fqn), fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, DEFAULT_ATTR);
         }
 
         FS.mustBeWriteableFile(file);
@@ -1791,13 +1794,10 @@ export class FS {
 
         const oldFile = await mustGetBeebFile(oldFQN, false, this.log);
 
-        await oldFQN.filePath.volume.type.renameFile(oldFile, newFQN);
+        const newFilePath = await oldFQN.filePath.volume.type.renameFile(oldFile, newFQN);
 
         if (this.gaManipulator !== undefined) {
             if (!newFQN.filePath.volume.isReadOnly()) {
-                // The gitattributes handling deliberately doesn't know too much
-                // about volumes and so on, so supply full paths.
-                const newFilePath = path.join(newFQN.filePath.volume.path, newFQN.filePath.volume.type.getIdealVolumeRelativeServerPath(newFQN));
                 this.gaManipulator.renameFile(oldFile.serverPath, newFilePath);
             }
         }
@@ -1871,8 +1871,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private getServerPath(fqn: FQN): string {
-        return path.join(fqn.filePath.volume.path, fqn.filePath.volume.type.getIdealVolumeRelativeServerPath(fqn));
+    private async getServerPath(fqn: FQN): Promise<string> {
+        return path.join(fqn.filePath.volume.path, await fqn.filePath.volume.type.getIdealVolumeRelativeServerPath(fqn));
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1940,7 +1940,7 @@ export class FS {
 
             serverPath = file.serverPath;
         } else {
-            serverPath = this.getServerPath(fqn);
+            serverPath = await this.getServerPath(fqn);
 
             await inf.mustNotExist(serverPath);
         }

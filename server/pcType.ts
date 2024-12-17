@@ -214,7 +214,7 @@ class PCType implements beebfs.IFSType {
         }
     }
 
-    public getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): string {
+    public async getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): Promise<string> {
         return fqn.name;
     }
 
@@ -258,7 +258,7 @@ class PCType implements beebfs.IFSType {
         return notSupported();
     }
 
-    public async renameFile(_oldFile: beebfs.File, _newFQN: beebfs.FQN): Promise<void> {
+    public async renameFile(_oldFile: beebfs.File, _newFQN: beebfs.FQN): Promise<string> {
         return notSupported();
     }
 

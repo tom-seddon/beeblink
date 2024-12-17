@@ -368,7 +368,7 @@ class DFSType implements beebfs.IFSType {
         return this.parseFileOrDirString(str, i, state, true, volume, volumeExplicit).filePath;
     }
 
-    public getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): string {
+    public async getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): Promise<string> {
         return path.join(fqn.filePath.drive.toUpperCase(), beebfs.getServerCharsForNamePart(fqn.filePath.dir) + '.' + beebfs.getServerCharsForNamePart(fqn.name));
     }
 
@@ -466,8 +466,8 @@ class DFSType implements beebfs.IFSType {
         }
     }
 
-    public async renameFile(oldFile: beebfs.File, newFQN: beebfs.FQN): Promise<void> {
-        const newServerPath = path.join(newFQN.filePath.volume.path, this.getIdealVolumeRelativeServerPath(newFQN));
+    public async renameFile(oldFile: beebfs.File, newFQN: beebfs.FQN): Promise<string> {
+        const newServerPath = path.join(newFQN.filePath.volume.path, await this.getIdealVolumeRelativeServerPath(newFQN));
         await inf.mustNotExist(newServerPath);
 
         const newFile = new beebfs.File(newServerPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr);
@@ -481,6 +481,8 @@ class DFSType implements beebfs.IFSType {
         }
 
         await utils.forceFsUnlink(oldFile.serverPath + inf.ext);
+
+        return newServerPath;
     }
 
     public async writeBeebMetadata(serverPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, attr: beebfs.FileAttributes): Promise<void> {
