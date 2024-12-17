@@ -352,7 +352,7 @@ export class Browser {
             this.print('Default saved');
             this.mode = BrowserMode.ShowInfo;
         } else if (key === 32) {
-            this.printFullPath();
+            this.printProperties();
             this.mode = BrowserMode.ShowInfo;
         } else if (key >= 33 && key <= 126) {
             this.mode = BrowserMode.EditFilter;
@@ -428,16 +428,31 @@ export class Browser {
         return y + 2;
     }
 
-    private printFullPath() {
-        const volumePath = this.columns[this.colIdx].rows[this.rowIdx].path;
+    private printProperties() {
+        const volume = this.columns[this.colIdx].rows[this.rowIdx];
 
         const width = this.width - 4;
-        const lines = [];
-        for (let i = 0; i < volumePath.length; i += width) {
-            lines.push(volumePath.substring(i, i + width));
-        }
+        const lines: string[] = [];
 
-        const y = this.printBox('Full path', lines.length);
+        const add = (s: string): void => {
+            if (lines.length === 0 || lines[lines.length - 1].length < width) {
+                lines.push('');
+            }
+
+            for (const c of s) {
+                if (lines[lines.length - 1].length === width) {
+                    lines.push('');
+                }
+
+                lines[lines.length - 1] += c;
+            }
+        };
+
+        add(`Name: ${volume.name}`);
+        add(`Type: ${volume.type.name}`);
+        add(`Path: ${volume.path}`);
+
+        const y = this.printBox('Properties', lines.length);
         for (let i = 0; i < lines.length; ++i) {
             this.printTAB(2, y + i);
             this.print(lines[i]);

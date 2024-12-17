@@ -409,9 +409,10 @@ The list of available volumes is shown. Use the cursor keys to
 navigate. Press ESCAPE to cancel, RETURN to load that volume, or
 SHIFT+RETURN to load that volume and attempt to auto-boot it.
 
-Press SPACE to display the volume's path on the server. (If you have
-multiple volumes with the same name, this lets you figure out which is
-which. The specific volume selected will be the one loaded.)
+Press SPACE to display the volume's properties: name, type, and path
+on the server. (If you have multiple volumes with the same name, this
+lets you figure out which is which. The specific volume selected will
+be the one loaded.)
 
 You can filter the list by supplying strings on the command line, or
 typing stuff in while in the volume browser. (When typing in a filter
