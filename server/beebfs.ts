@@ -567,14 +567,16 @@ export interface IFSType {
 
     // Handle *LOCATE: get list of all Beeb files in volume matching explicit
     // parts of FQN. Treat implicit drive/dir values as matching anything.
+    // Always recursive when appropriate.
     //
     // (This entry point differs from findBeebFilesMatching in that it may
     // discover files that aren't directly accessible via a Beeb path, but could
     // become so by arrangement. TubeHost files are like this.)
     locateBeebFiles: (fqn: FQN, log: utils.Log | undefined) => Promise<File[]>;
 
-    // get list of Beeb files matching FQN. The volume will be of the right type.
-    findBeebFilesMatching: (fqn: FQN, recurse: boolean, log: utils.Log | undefined) => Promise<File[]>;
+    // get list of Beeb files matching FQN. The volume will be of the right
+    // type. Drive and directory wildcards may or may not work.
+    findBeebFilesMatching: (fqn: FQN, log: utils.Log | undefined) => Promise<File[]>;
 
     // parse file/dir string, starting at index i. 
     parseFileString: (str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean) => FQN;
@@ -630,7 +632,7 @@ async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log: utils.Lo
         }
     }
 
-    const files = await fqn.filePath.volume.type.findBeebFilesMatching(fqn, false, log);
+    const files = await fqn.filePath.volume.type.findBeebFilesMatching(fqn, log);
     log?.pn(`found ${files.length} file(s)`);
 
     if (files.length === 0) {
@@ -1202,7 +1204,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async findFilesMatching(fqn: FQN): Promise<File[]> {
-        return await fqn.filePath.volume.type.findBeebFilesMatching(fqn, false, this.log);
+        return await fqn.filePath.volume.type.findBeebFilesMatching(fqn, this.log);
     }
 
     /////////////////////////////////////////////////////////////////////////

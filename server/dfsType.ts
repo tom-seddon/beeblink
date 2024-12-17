@@ -277,7 +277,7 @@ class DFSState implements beebfs.IFSState {
 
     public async readNames(): Promise<string[]> {
         const fqn = new beebfs.FQN(new beebfs.FilePath(this.volume, false, this.current.drive, true, this.current.dir, true), utils.MATCH_N_CHAR);
-        const files = await this.volume.type.findBeebFilesMatching(fqn, false, undefined);
+        const files = await this.volume.type.findBeebFilesMatching(fqn, undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -383,9 +383,7 @@ class DFSType implements beebfs.IFSType {
         return await this.findFiles(fqn.filePath.volume, driveRegExp, dirRegExp, nameRegExp, log);
     }
 
-    public async findBeebFilesMatching(fqn: beebfs.FQN, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        // The recurse flag is ignored. There is no hierarchy within a BeebLink volume.
-
+    public async findBeebFilesMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
         const driveRegExp = utils.getRegExpFromAFSP(fqn.filePath.drive);
         const dirRegExp = utils.getRegExpFromAFSP(fqn.filePath.dir);
         const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
@@ -400,7 +398,7 @@ class DFSType implements beebfs.IFSType {
             return errors.badDrive();
         }
 
-        const beebFiles = await this.findBeebFilesMatching(new beebfs.FQN(new beebfs.FilePath(filePath.volume, true, filePath.drive, true, '*', false), '*'), false, undefined);
+        const beebFiles = await this.findBeebFilesMatching(new beebfs.FQN(new beebfs.FilePath(filePath.volume, true, filePath.drive, true, '*', false), '*'), undefined);
 
         let text = '';
 

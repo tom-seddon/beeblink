@@ -134,7 +134,7 @@ class PCState implements beebfs.IFSState {
     }
 
     public async readNames(): Promise<string[]> {
-        const files = await this.volume.type.findBeebFilesMatching(new beebfs.FQN(new beebfs.FilePath(this.volume, true, '', true, '', true), '*'), false, undefined);
+        const files = await this.volume.type.findBeebFilesMatching(new beebfs.FQN(new beebfs.FilePath(this.volume, true, '', true, '', true), '*'), undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -223,12 +223,12 @@ class PCType implements beebfs.IFSType {
     }
 
     public async locateBeebFiles(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        return this.findBeebFilesMatching(fqn, true, log);
+        const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
+
+        return await this.findFiles(fqn.filePath.volume, nameRegExp, log);
     }
 
-    public async findBeebFilesMatching(fqn: beebfs.FQN, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        // The recurse flag is ignored. PC folders are not currently
-        // hierarchical.
+    public async findBeebFilesMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
         const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
         return await this.findFiles(fqn.filePath.volume, nameRegExp, log);
@@ -239,7 +239,7 @@ class PCType implements beebfs.IFSType {
 
         text += `Volume: ${filePath.volume.path}${utils.BNL}${utils.BNL}`;
 
-        const beebFiles = await this.findBeebFilesMatching(new beebfs.FQN(filePath, '*'), false, log);
+        const beebFiles = await this.findBeebFilesMatching(new beebfs.FQN(filePath, '*'), log);
 
         beebFiles.sort((a, b) => {
             return utils.stricmp(a.fqn.name, b.fqn.name);

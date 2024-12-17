@@ -356,7 +356,7 @@ class ADFSState implements beebfs.IFSState {
 
     public async readNames(): Promise<string[]> {
         const fqn = new beebfs.FQN(new beebfs.FilePath(this.volume, false, this.current.drive, true, this.current.dir, true), utils.MATCH_N_CHAR);
-        const files = await this.volume.type.findBeebFilesMatching(fqn, false, undefined);
+        const files = await this.volume.type.findBeebFilesMatching(fqn, undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -453,12 +453,12 @@ class ADFSType implements beebfs.IFSType {
         return await this.findDirEntries(fqn.filePath.volume, driveRegExp, dirRegExp, nameRegExp, true, false, log);
     }
 
-    public async findBeebFilesMatching(fqn: beebfs.FQN, recurse: boolean, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    public async findBeebFilesMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
         const driveRegExp = utils.getRegExpFromAFSP(fqn.filePath.drive);
         const dirRegExp = utils.getRegExpFromAFSP(fqn.filePath.dir);
         const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
-        return await this.findDirEntries(fqn.filePath.volume, driveRegExp, dirRegExp, nameRegExp, recurse, false, log);
+        return await this.findDirEntries(fqn.filePath.volume, driveRegExp, dirRegExp, nameRegExp, false, false, log);
     }
 
     public async getCAT(filePath: beebfs.FilePath, state: beebfs.IFSState | undefined, _log: utils.Log | undefined): Promise<string> {
@@ -637,7 +637,7 @@ class ADFSType implements beebfs.IFSType {
             }
 
             return {
-                filePath: new beebfs.FilePath(volume, volumeExplicit, adfsState.getCurrentDrive(), false, adfsState.getCurrentDir(), false),
+                filePath: new ADFSFilePath(volume, volumeExplicit, adfsState.getCurrentDrive(), false, adfsState.getCurrentDir(), false, undefined),
                 name: undefined,
                 i: 0,
             };
@@ -703,7 +703,7 @@ class ADFSType implements beebfs.IFSType {
         }
 
         return {
-            filePath: new beebfs.FilePath(volume, volumeExplicit, drive, driveExplicit, dir, dirExplicit),
+            filePath: new ADFSFilePath(volume, volumeExplicit, drive, driveExplicit, dir, dirExplicit, undefined),
             i,
             name,
         };
