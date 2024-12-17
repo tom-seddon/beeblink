@@ -955,7 +955,7 @@ class TubeHostType implements beebfs.IFSType {
             return driveEmptyError('Drive empty (?)');
         }
 
-        return path.join(tubeHostFilePath.serverFolder, beebfs.getServerChars(fqn.filePath.dir) + '.' + beebfs.getServerChars(fqn.name)) as VolRelPath;
+        return path.join(tubeHostFilePath.serverFolder, beebfs.getServerCharsForNamePart(fqn.filePath.dir) + '.' + beebfs.getServerCharsForNamePart(fqn.name)) as VolRelPath;
     }
 
     public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {

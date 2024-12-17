@@ -1545,7 +1545,8 @@ export class Server {
             volumes.sort((a, b) => utils.stricmp(a.name, b.name));
 
             for (const volume of volumes) {
-                text += ' ' + volume.name;
+                //text += `${volume.name} (${volume.type.name})${utils.BNL}`;
+                text += ` ${volume.name}`;
             }
 
         }

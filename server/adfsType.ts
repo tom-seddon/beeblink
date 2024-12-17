@@ -141,14 +141,18 @@ class Dir {
 //////////////////////////////////////////////////////////////////////////
 
 class ADFSFilePath extends beebfs.FilePath {
-    public readonly serverFolder: VolRelPath | undefined;
+    public readonly serverFolder: AbsPath | undefined;
 
-    public constructor(volume: beebfs.Volume, volumeExplicit: boolean, drive: string, driveExplicit: boolean, dir: string, dirExplicit: boolean, serverFolder: VolRelPath | undefined) {
+    public constructor(volume: beebfs.Volume, volumeExplicit: boolean, drive: string, driveExplicit: boolean, dir: string, dirExplicit: boolean, serverFolder: AbsPath | undefined) {
         super(volume, volumeExplicit, drive, driveExplicit, dir, dirExplicit);
 
         if (serverFolder !== undefined) {
-            this.serverFolder = utils.getSeparatorAndCaseNormalizedPath(serverFolder) as VolRelPath;
+            this.serverFolder = utils.getSeparatorAndCaseNormalizedPath(serverFolder) as AbsPath;
         }
+    }
+
+    public override getFQNSuffix(): string | undefined {
+        return this.serverFolder;
     }
 }
 
@@ -434,7 +438,7 @@ class ADFSType implements beebfs.IFSType {
             return errors.generic('Unknown server folder');
         }
 
-        return path.join(adfsFilePath.serverFolder, beebfs.getServerChars(fqn.name)) as VolRelPath;
+        return path.join(adfsFilePath.serverFolder, beebfs.getServerCharsForName(fqn.name)) as VolRelPath;
     }
 
     public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
@@ -464,11 +468,12 @@ class ADFSType implements beebfs.IFSType {
 
         let text = '';
 
-        text += `Volume: ${filePath.volume.name}${utils.BNL} `;
-        text += `Drive: ${filePath.drive}${utils.BNL} `;
-        text += `Dir: ${filePath.dir}${utils.BNL} `;
+        text += `Volume: ${filePath.volume.name}${utils.BNL}`;
+        text += `Drive: ${filePath.drive}${utils.BNL}`;
+        text += `Dir: ${filePath.dir}${utils.BNL}`;
         text += utils.BNL;
 
+        const catStartIndex = text.length;
         for (const beebEntry of beebEntries) {
             const attributesWidth = 6;
             if (beebEntry instanceof beebfs.File) {
@@ -479,7 +484,7 @@ class ADFSType implements beebfs.IFSType {
                 text += beebEntry.fqn.name;
             }
 
-            while (text.length % 20 !== 0) {
+            while ((text.length - catStartIndex) % 20 !== 0) {
                 text += ' ';
             }
         }
@@ -584,20 +589,28 @@ class ADFSType implements beebfs.IFSType {
     private async findDirEntries(volume: beebfs.Volume, driveRegExp: RegExp | undefined, dirRegExp: RegExp | undefined, nameRegExp: RegExp | undefined, recurse: boolean, includeDirs: boolean, log: utils.Log | undefined): Promise<(beebfs.File | Dir)[]> {
         const drives = await this.findDrivesForVolume(volume, driveRegExp);
 
+        if (log !== undefined) {
+            log.p(`${drives.length} ADFS Drives found:`);
+            for (let i = 0; i < drives.length; ++i) {
+                log.pn(`  ${i}. ${drives[i].beebName} - ${drives[i].serverFolder}`);
+            }
+        }
+
         const dirEntries: (beebfs.File | Dir)[] = [];
 
-        const findDirEntriesRecursive = async (serverPath: AbsPath, filePath: beebfs.FilePath): Promise<void> => {
+        const findDirEntriesRecursive = async (serverPath: AbsPath, filePath: beebfs.FilePath, indent: string): Promise<void> => {
             const infos: inf.IINF[] = await inf.getINFsForFolder(serverPath, includeDirs, log);
             for (const info of infos) {
                 const fqn = new beebfs.FQN(filePath, info.name);
+                log?.pn(`${indent}${fqn} - ${info.serverPath}`);
                 if (info.extra !== undefined && info.extra.dir) {
                     const entry = new Dir(info.serverPath, fqn, info.attr);
                     dirEntries.push(entry);
 
                     // TODO... would it be better to recurse out of line?
                     if (recurse) {
-                        const newFilePath = new beebfs.FilePath(filePath.volume, filePath.volumeExplicit, filePath.drive, filePath.driveExplicit, filePath.dir + '.' + info.name, false);
-                        await findDirEntriesRecursive(info.serverPath as AbsPath, newFilePath);
+                        const newFilePath = new ADFSFilePath(filePath.volume, filePath.volumeExplicit, filePath.drive, filePath.driveExplicit, filePath.dir + '.' + info.name, false, serverPath);
+                        await findDirEntriesRecursive(info.serverPath as AbsPath, newFilePath, indent + '  ');
                     }
                 } else {
                     const entry = new beebfs.File(info.serverPath, fqn, info.load, info.exec, info.attr);
@@ -608,7 +621,8 @@ class ADFSType implements beebfs.IFSType {
 
         for (const drive of drives) {
             const rootPath = getAbsPath(volume, drive.serverFolder);
-            await findDirEntriesRecursive(rootPath, new beebfs.FilePath(volume, true, drive.beebName, true, '$', false));
+            log?.pn(`${drive.beebName}: rootPath: ${rootPath}`);
+            await findDirEntriesRecursive(rootPath, new beebfs.FilePath(volume, true, drive.beebName, true, '$', false), '');
         }
 
         return dirEntries;

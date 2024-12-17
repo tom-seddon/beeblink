@@ -61,6 +61,8 @@ const IGNORE_DIR_FILE_NAME = '.beeblink-ignore';
 
 const VOLUME_FILE_NAME = '.volume';
 
+const ADFS_FILE_NAME = '.adfs';
+
 const SERVER_NAME_ESCAPE_CHAR = '#';
 
 /////////////////////////////////////////////////////////////////////////
@@ -79,14 +81,14 @@ interface IFSTypeRef {
     name: string;
 }
 
-const gDFSType: IFSTypeRef = { type: undefined, name: 'DFSType' };
-const gPCType: IFSTypeRef = { type: undefined, name: 'PCType' };
-const gTubeHostType: IFSTypeRef = { type: undefined, name: 'TubeHostType' };
-const gADFSType: IFSTypeRef = { type: undefined, name: 'ADFSType' };
+const gDFSType: IFSTypeRef = { type: undefined, name: 'DFS' };
+const gPCType: IFSTypeRef = { type: undefined, name: 'PC' };
+const gTubeHostType: IFSTypeRef = { type: undefined, name: 'TubeHost' };
+const gADFSType: IFSTypeRef = { type: undefined, name: 'ADFS' };
 
 function getFSType(typeRef: IFSTypeRef): IFSType {
     if (typeRef.type === undefined) {
-        throw new Error(`${typeRef.name} not set`);
+        throw new Error(`${typeRef.name} type not set`);
     }
 
     return typeRef.type;
@@ -94,7 +96,7 @@ function getFSType(typeRef: IFSTypeRef): IFSType {
 
 function setFSType(typeRef: IFSTypeRef, type: IFSType): void {
     if (typeRef.type !== undefined) {
-        throw new Error(`${typeRef.name} already set`);
+        throw new Error(`${typeRef.name} type already set`);
     }
 
     typeRef.type = type;
@@ -133,7 +135,11 @@ export function getBootOptionDescription(option: number): string {
 
 const SERVER_NAME_CHARS: string[] = [];
 
-export function getServerChars(str: string): string {
+function getEscapedChar(c: number): string {
+    return `#${utils.hex2(c)}`;
+}
+
+export function getServerCharsForNamePart(str: string): string {
     if (SERVER_NAME_CHARS.length === 0) {
         for (let c = 0; c < 256; ++c) {
             let escape = false;
@@ -158,7 +164,7 @@ export function getServerChars(str: string): string {
             }
 
             if (escape) {
-                SERVER_NAME_CHARS.push('#' + utils.hex2(c));
+                SERVER_NAME_CHARS.push(getEscapedChar(c));
             } else {
                 SERVER_NAME_CHARS.push(String.fromCharCode(c));
             }
@@ -175,6 +181,26 @@ export function getServerChars(str: string): string {
         } else {
             result += SERVER_NAME_CHARS[c];
         }
+    }
+
+    return result;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// As above, but for an entire path component. If the result would be one of the
+// Windows reserved names, escape it.
+
+// See https://docs.microsoft.com/en-us/windows/desktop/fileio/naming-a-file#file-and-directory-names
+const WINDOWS_RESERVED_NAMES = new Set<string>(['CON', 'PRN', 'AUX', 'NUL', 'COM0', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9']);
+
+export function getServerCharsForName(str: string): string {
+
+    let result: string = getServerCharsForNamePart(str);
+
+    if (WINDOWS_RESERVED_NAMES.has(result.toUpperCase())) {
+        result = getEscapedChar(result.charCodeAt(0)) + result.substring(1);
     }
 
     return result;
@@ -880,7 +906,14 @@ export class FS {
                                 volumeName = name;
                             }
 
-                            if (addVolume(volumePath, volumeName, getFSType(gDFSType))) {
+                            let volumeType: IFSType;
+                            if (await utils.tryReadFile(path.join(volumePath, ADFS_FILE_NAME)) !== undefined) {
+                                volumeType = getFSType(gADFSType);
+                            } else {
+                                volumeType = getFSType(gDFSType);
+                            }
+
+                            if (addVolume(volumePath, volumeName, volumeType)) {
                                 return true;
                             }
                         }
