@@ -575,7 +575,7 @@ class DFSType implements beebfs.IFSType {
 
         for (const drive of drives) {
             const drivePath = path.join(volume.path, drive.serverFolder);
-            const infos = await inf.getINFsForFolder(drivePath, log);
+            const infos = await inf.getINFsForFolder(drivePath, false, log);
 
             for (const info of infos) {
                 if (!this.isValidBeebFileName(info.name)) {

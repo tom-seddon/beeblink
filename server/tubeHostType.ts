@@ -1203,7 +1203,7 @@ class TubeHostType implements beebfs.IFSType {
         dirRegExp: RegExp | undefined,
         nameRegExp: RegExp | undefined,
         log: utils.Log | undefined): Promise<void> {
-        const infos = await inf.getINFsForFolder(getAbsPath(volume, folderPath), log);
+        const infos = await inf.getINFsForFolder(getAbsPath(volume, folderPath), false, log);
 
         for (const info of infos) {
             let dir: string;

@@ -22,6 +22,7 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as utils from './utils';
@@ -70,6 +71,15 @@ export interface IINF {
 
 // Possible extra stuff from the .inf file.
 export interface IExtraData {
+    // If true, this is actually a directory. This information isn't actually
+    // stored anywhere in the .inf file (though a DIRTITLE value might be
+    // suggestive), and is instead a property of whichever object shares the
+    // name stem in the server's folder.
+    //
+    // As the load/exec/size fields are mandatory in the .INF syntax,
+    // directories have all 3 properties.
+    dir: boolean;
+
     // OPT=
     opt: number | undefined;
 
@@ -212,10 +222,11 @@ function tryParse2(
     infBuffer: Buffer | undefined,
     serverPath: string,
     serverName: string,
+    serverIsDirectory: boolean,
     log: utils.Log | undefined): IINF | undefined {
 
     if (infBuffer === undefined || infBuffer.length === 0) {
-        return {
+        const inf: IINF = {
             name: serverName,
             serverPath,
             load: beebfs.DEFAULT_LOAD,
@@ -224,6 +235,10 @@ function tryParse2(
             noINF: true,
             extra: undefined
         };
+        if (serverIsDirectory) {
+            inf.extra = { dir: true, opt: undefined, title: undefined, dirTitle: undefined };
+        }
+        return inf;
     }
 
     // See
@@ -276,7 +291,7 @@ function tryParse2(
 
     const getExtra = (): IExtraData => {
         if (extra === undefined) {
-            extra = { opt: undefined, title: undefined, dirTitle: undefined, };
+            extra = { dir: serverIsDirectory, opt: undefined, title: undefined, dirTitle: undefined, };
         }
 
         return extra;
@@ -442,6 +457,11 @@ function tryParse2(
         }
     }
 
+    // Ensure the directory flag is added.
+    if (serverIsDirectory) {
+        getExtra();
+    }
+
     return { serverPath, name, load, exec, attr, noINF, extra };
 }
 
@@ -449,15 +469,18 @@ function tryParse(
     infBuffer: Buffer | undefined,
     serverPath: string,
     serverName: string,
+    serverIsDirectory: boolean,
     log: utils.Log | undefined): IINF | undefined {
 
-    const inf = tryParse2(infBuffer, serverPath, serverName, log);
+    const inf = tryParse2(infBuffer, serverPath, serverName, serverIsDirectory, log);
     if (inf !== undefined && log !== undefined) {
 
         log.p(` - name=\`\`${inf.name}'' load=0x${inf.load.toString(16)} exec=0x${inf.exec.toString(16)} attr=0x${inf.attr.toString(16)}`);
 
         if (inf.extra !== undefined) {
             log.p(` (Extra info:`);
+
+            log.p(` dir=${inf.extra.dir}`);
 
             if (inf.extra.opt !== undefined) {
                 log.p(` opt=${inf.extra.opt}`);
@@ -485,10 +508,10 @@ function tryParse(
 
 // Find all .inf files in the given folder, call tryParse as
 // appropriate, and return an array of the results.
-export async function getINFsForFolder(serverFolderPath: string, log: utils.Log | undefined): Promise<IINF[]> {
-    let serverNames: string[];
+export async function getINFsForFolder(serverFolderPath: string, includeDirs: boolean, log: utils.Log | undefined): Promise<IINF[]> {
+    let entries: fs.Dirent[];
     try {
-        serverNames = await utils.fsReaddir(serverFolderPath);
+        entries = await utils.fsReaddir(serverFolderPath, { withFileTypes: true });
     } catch (error) {
         return [];
     }
@@ -500,23 +523,28 @@ export async function getINFsForFolder(serverFolderPath: string, log: utils.Log 
     log?.pn(`folder path: ${serverFolderPath}`);
     log?.pn(`.inf regexp: ${extRegExp.source}`);
 
-    for (const serverName of serverNames) {
-        if (extRegExp.exec(serverName) !== null) {
+    for (const entry of entries) {
+        if (entry.isDirectory() && !includeDirs) {
+            // skip directories when not interested.
+            continue;
+        }
+
+        if (extRegExp.exec(entry.name) !== null) {
             // skip .inf files.
             continue;
         }
 
-        const serverPath = path.join(serverFolderPath, serverName);
+        const serverPath = path.join(serverFolderPath, entry.name);
 
         const infBuffer = await utils.tryReadFile(`${serverPath}${ext}`);
-        if (serverName[0] === '.' && infBuffer === undefined) {
+        if (entry.name[0] === '.' && infBuffer === undefined) {
             // skip server dotfiles that aren't obviously intended to be Beeb
             // files.
             continue;
         }
 
-        log?.p(`${serverName}: `);
-        const beebFileInfo = tryParse(infBuffer, serverPath, serverName, log);
+        log?.p(`${entry.name}: `);
+        const beebFileInfo = tryParse(infBuffer, serverPath, entry.name, entry.isDirectory(), log);
         if (beebFileInfo === undefined) {
             continue;
         }

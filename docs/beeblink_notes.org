@@ -1328,3 +1328,59 @@ properly.
 * ROM not found
 
 : "tube_serial_rom": "../beeb/.build/beeblink_tube_serial.rom",
+
+* ADFS stuff
+
+** TODO Should ROM respond to *ADFS and *FADFS?
+
+Can't decide about this one.
+
+** TODO might need to adjust =beebfs.File=...
+
+Currently there's a separate =Dir= type in the ADFS-type code for
+representing directories separately from files.
+
+But there's some stuff at the top level that (possibly prematurely?)
+turns FQNs into File objects. Or maybe the Dir type needs to be at the
+top level too?
+
+Most stuff passes FQNs around so that should be fine.
+
+Affects at least these commands:
+
+*** TODO =*INFO=, =*WINFO=
+
+Needs fixing. 8-bit ADFS will show some (admittedly not super useful)
+info for directories: attributes and start sector.
+
+*** TODO =*ACCESS=
+
+Needs fixing... probably? I wasn't planning on being super careful
+about directory attributes.
+
+*** TODO =*COPY=
+
+Might be OK. 8-bit ADFS doesn't copy directories.
+
+** TODO ADFS commands that will need implementing
+
+Already covered in BeebLink: ACCESS, COPY, DIR, DRIVE, LIB, RENAME,
+TITLE
+
+Would be volume type-agnostic if I ever add them: DESTROY
+
+Irrelevant or out of scope: BACKUP, COMPACT, BYE, FREE, FORMAT, MAP,
+VERIFY
+
+The remainders. Would MOUNT and DISMOUNT (or some slightly tweaked
+equivalents) be useful?
+
+*** TODO =BACK=
+*** TODO =CDIR <Ob Spec>=
+*** TODO =DISMOUNT (<Drive>)=
+*** TODO =LCAT=
+*** TODO =LEX=
+
+*** TODO =MOUNT (<Drive>)=
+
+* eof.
