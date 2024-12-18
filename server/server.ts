@@ -1578,7 +1578,8 @@ export class Server {
                 text += `${error}${BNL}`;
             }
 
-            text += '*VOLBROWSER filter:';
+
+            text += `${utils.BNL}*VOLBROWSER filter:`;
             if (this.volumeBrowserDefaultFilters !== undefined) {
                 for (const filter of this.volumeBrowserDefaultFilters) {
                     text += ` "${filter}"`;
