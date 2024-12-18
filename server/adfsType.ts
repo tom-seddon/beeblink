@@ -533,7 +533,7 @@ class ADFSType implements beebfs.IFSType {
         return errors.generic('TODO: delete');
     }
 
-    public async renameFile(_oldFile: beebfs.File, _newFQN: beebfs.FQN): Promise<string> {
+    public async rename(_oldFQN: beebfs.FQN, _newFQN: beebfs.FQN): Promise<beebfs.IRenameFileResult> {
         return errors.generic('TODO: rename');
     }
 

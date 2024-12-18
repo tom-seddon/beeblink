@@ -551,6 +551,14 @@ export interface IFSState {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+// Result of a rename operation. The information is used by the gitattributes
+// manipulator, so only relevant for file renames. (If a folder is renamed, any
+// .gitattributes file inside it remains valid.)
+export interface IRenameFileResult {
+    oldServerPath: string;
+    newServerPath: string;
+}
+
 // Handle FS-specific stuff that doesn't require any state.
 
 export interface IFSType {
@@ -595,12 +603,12 @@ export interface IFSType {
     // delete the given file.
     deleteFile: (file: File) => Promise<void>;
 
-    // rename the given file. The volume won't change. The new file doesn't
+    // rename the given entry. The volume won't change. The new name doesn't
     // obviously exist.
     //
-    // Return new absolute path of the file on the server. The gitattributes
-    // manipulator will sort it out.
-    renameFile: (file: File, newName: FQN) => Promise<string>;
+    // If a file rename, return old and new file paths on the server, so the
+    // gitattributes manipulator can sort it out. Otherwise, return undefined.
+    rename: (oldFQN: FQN, newName: FQN) => Promise<IRenameFileResult | undefined>;
 
     // write the metadata for the given file.
     writeBeebMetadata: (serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes) => Promise<void>;
@@ -1792,13 +1800,13 @@ export class FS {
             return errors.exists();
         }
 
-        const oldFile = await mustGetBeebFile(oldFQN, false, this.log);
+        //const oldFile = await mustGetBeebFile(oldFQN, false, this.log);
 
-        const newFilePath = await oldFQN.filePath.volume.type.renameFile(oldFile, newFQN);
+        const renameFileResult = await oldFQN.filePath.volume.type.rename(oldFQN, newFQN);
 
-        if (this.gaManipulator !== undefined) {
+        if (this.gaManipulator !== undefined && renameFileResult !== undefined) {
             if (!newFQN.filePath.volume.isReadOnly()) {
-                this.gaManipulator.renameFile(oldFile.serverPath, newFilePath);
+                this.gaManipulator.renameFile(renameFileResult.oldServerPath, renameFileResult.newServerPath);
             }
         }
     }

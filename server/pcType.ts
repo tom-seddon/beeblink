@@ -258,7 +258,7 @@ class PCType implements beebfs.IFSType {
         return notSupported();
     }
 
-    public async renameFile(_oldFile: beebfs.File, _newFQN: beebfs.FQN): Promise<string> {
+    public async rename(_oldFQN: beebfs.FQN, _newFQN: beebfs.FQN): Promise<undefined> {
         return notSupported();
     }
 

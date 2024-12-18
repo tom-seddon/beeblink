@@ -466,7 +466,9 @@ class DFSType implements beebfs.IFSType {
         }
     }
 
-    public async renameFile(oldFile: beebfs.File, newFQN: beebfs.FQN): Promise<string> {
+    public async rename(oldFQN: beebfs.FQN, newFQN: beebfs.FQN): Promise<beebfs.IRenameFileResult> {
+        const oldFile = await beebfs.mustGetBeebFile(oldFQN, false, undefined);
+
         const newServerPath = path.join(newFQN.filePath.volume.path, await this.getIdealVolumeRelativeServerPath(newFQN));
         await inf.mustNotExist(newServerPath);
 
@@ -482,7 +484,7 @@ class DFSType implements beebfs.IFSType {
 
         await utils.forceFsUnlink(oldFile.serverPath + inf.ext);
 
-        return newServerPath;
+        return { oldServerPath: oldFile.serverPath, newServerPath };
     }
 
     public async writeBeebMetadata(serverPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, attr: beebfs.FileAttributes): Promise<void> {
