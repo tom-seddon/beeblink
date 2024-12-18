@@ -1,5 +1,7 @@
 #+STARTUP: overview
 
+https://github.com/mbuilov/gnumake-windows
+
 My favourite command lines:
 
 #+begin_example
@@ -1331,6 +1333,42 @@ properly.
 
 * ADFS stuff
 
+** TODO some other things I noticed...
+
+*** TODO =getPersistentSettingsString= is never called
+
+=*HSTATUS= should print it out?
+
+*** TODO Previous directory is not shown anywhere
+
+Again, should be something that =*HSTATUS= prints. More hooks
+needed...
+
+*** TODO =IFSType.findBeebFilesInVolume= might be pointless
+
+The =*LOCATE= handling could cover this - right?
+
+I think every FS type already funnels both entry points into the same
+shared routine.
+
+** TODO Current directory can include wildcards
+
+e.g., if you do =*DIR LIB*= then the current directory is literally
+=$.LIB*= or whatever! Should resolve the wildcards and set it to the
+result.
+
+** TODO Non-existent drives
+
+Nothing in there for creating them on demand yet. Will the logic get
+annoying?
+
+Maybe require =*CDIR :1= or whatever.
+
+** TODO no .INF handling for root directory
+
+Want to put the =OPT4\== in there at least. Make it the slightly
+different root directory format, for better DIM interop.
+
 ** TODO Should ROM respond to *ADFS and *FADFS?
 
 Can't decide about this one.
@@ -1348,11 +1386,6 @@ Most stuff passes FQNs around so that should be fine.
 
 Affects at least these commands:
 
-*** TODO =*INFO=, =*WINFO=
-
-Needs fixing. 8-bit ADFS will show some (admittedly not super useful)
-info for directories: attributes and start sector.
-
 *** TODO =*ACCESS=
 
 Needs fixing... probably? I wasn't planning on being super careful
@@ -1361,6 +1394,19 @@ about directory attributes.
 *** TODO =*COPY=
 
 Might be OK. 8-bit ADFS doesn't copy directories.
+
+*** TODO =*INFO=, =*WINFO=
+
+Needs fixing. 8-bit ADFS will show some (admittedly not super useful)
+info for directories: attributes and start sector.
+
+*** DONE =*RENAME=
+CLOSED: [2024-12-18 Wed 13:42]
+
+Needs fixing. You need to be able to rename directories!
+
+- =renameFile= now called =rename=
+- Returns a result struct with old/new server paths
 
 ** TODO ADFS commands that will need implementing
 
@@ -1375,12 +1421,20 @@ VERIFY
 The remainders. Would MOUNT and DISMOUNT (or some slightly tweaked
 equivalents) be useful?
 
-*** TODO =BACK=
+*** DONE =BACK=
+CLOSED: [2024-12-18 Wed 16:52]
 *** TODO =CDIR <Ob Spec>=
-*** TODO =DISMOUNT (<Drive>)=
+*** DONE =DISMOUNT (<Drive>)=
+CLOSED: [2024-12-18 Wed 16:52]
+
+Not going to do this.
+
 *** TODO =LCAT=
 *** TODO =LEX=
 
-*** TODO =MOUNT (<Drive>)=
+*** DONE =MOUNT (<Drive>)=
+CLOSED: [2024-12-18 Wed 16:52]
+
+Not going to do this.
 
 * eof.

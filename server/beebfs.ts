@@ -570,7 +570,11 @@ export interface IFSType {
     // whether this FS supports writing.
     canWrite: () => boolean;
 
-    // get list of all Beeb files in volume.
+    // get list of all Beeb files in volume. Used to scan for BASIC files on
+    // startup.
+    //
+    // TODO is this necessary? Would locateBeebFiles (with appropriate wild
+    // cards) not be good enough?
     findBeebFilesInVolume: (volume: Volume, log: utils.Log | undefined) => Promise<File[]>;
 
     // Handle *LOCATE: get list of all Beeb files in volume matching explicit
@@ -582,8 +586,12 @@ export interface IFSType {
     // become so by arrangement. TubeHost files are like this.)
     locateBeebFiles: (fqn: FQN, log: utils.Log | undefined) => Promise<File[]>;
 
-    // get list of Beeb files matching FQN. The volume will be of the right
-    // type. Drive and directory wildcards may or may not work.
+    // get list of Beeb files matching FQN. Used for generally finding files in
+    // a specific drive/directory, non-recursively, e.g., for finding the file
+    // that matches a name, or handling *CAT.
+    //
+    // The volume will be of the right type. Drive and directory wildcards don't
+    // have to work.
     findBeebFilesMatching: (fqn: FQN, log: utils.Log | undefined) => Promise<File[]>;
 
     // parse file/dir string, starting at index i. 

@@ -28,9 +28,23 @@ import * as path from 'path';
 import * as beebfs from './beebfs';
 import * as utils from './utils';
 import * as errors from './errors';
-//import CommandLine from './CommandLine';
+import CommandLine from './CommandLine';
 import * as inf from './inf';
 import * as server from './server';
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+// TODO...
+
+// ADFS doesn't work quite like any of the other supported volume types, but it
+// does hang together, sort of, just about.
+
+// Should the ADFSFilePath have an optional string[] holding the split dir
+// parts? Either it was created by scanning files on disk (in which case the
+// server path will be known, and the split dir parts are irrelevant), or it was
+// created by parsing a string (in which case the split dir parts will be known,
+// but the server path won't).
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -50,6 +64,10 @@ type VolRelPath = string & { 'volRelPath': object; };
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
+
+function todoError(what: string): never {
+    return errors.generic(`TODO: ${what}`);
+}
 
 function getAbsPath(volume: beebfs.Volume, volRelPath: VolRelPath): AbsPath {
     return path.join(volume.path, volRelPath) as AbsPath;
@@ -120,6 +138,7 @@ interface IADFSDrive {
 
 // Similar to beebfs.File, but for an ADFS directory.
 class Dir {
+    // Actual path to the folder on the server.
     public readonly serverPath: string;
 
     public readonly fqn: beebfs.FQN;
@@ -141,14 +160,12 @@ class Dir {
 //////////////////////////////////////////////////////////////////////////
 
 class ADFSFilePath extends beebfs.FilePath {
-    public readonly serverFolder: AbsPath | undefined;
+    public readonly serverFolder: AbsPath;
 
-    public constructor(volume: beebfs.Volume, volumeExplicit: boolean, drive: string, driveExplicit: boolean, dir: string, dirExplicit: boolean, serverFolder: AbsPath | undefined) {
+    public constructor(volume: beebfs.Volume, volumeExplicit: boolean, drive: string, driveExplicit: boolean, dir: string, dirExplicit: boolean, serverFolder: AbsPath) {
         super(volume, volumeExplicit, drive, driveExplicit, dir, dirExplicit);
 
-        if (serverFolder !== undefined) {
-            this.serverFolder = utils.getSeparatorAndCaseNormalizedPath(serverFolder) as AbsPath;
-        }
+        this.serverFolder = utils.getSeparatorAndCaseNormalizedPath(serverFolder) as AbsPath;
     }
 
     public override getFQNSuffix(): string | undefined {
@@ -156,19 +173,19 @@ class ADFSFilePath extends beebfs.FilePath {
     }
 }
 
-function mustBeADFSFilePath(filePath: beebfs.FilePath): ADFSFilePath {
-    if (!(filePath instanceof ADFSFilePath)) {
-        throw new Error('not ADFSFilePath');
-    }
+// function mustBeADFSFilePath(filePath: beebfs.FilePath): ADFSFilePath {
+//     if (!(filePath instanceof ADFSFilePath)) {
+//         throw new Error('not ADFSFilePath');
+//     }
 
-    return filePath;
-}
+//     return filePath;
+// }
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
 class ADFSPath {
-    public constructor(public readonly drive: string, public readonly dir: string) { }
+    public constructor(public readonly drive: string, public readonly dir: ReadonlyArray<string>) { }
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -178,7 +195,11 @@ class ADFSTransientSettings {
     public constructor(public readonly current: ADFSPath, public readonly library: ADFSPath) { }
 }
 
-const gDefaultTransientSettings = new ADFSTransientSettings(new ADFSPath('0', '$'), new ADFSPath('0', '$'));
+const gDefaultTransientSettings = new ADFSTransientSettings(new ADFSPath('0', ['$']), new ADFSPath('0', ['$']));
+
+function getDirString(dir: string[]): string {
+    return dir.join('.');
+}
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -186,10 +207,11 @@ const gDefaultTransientSettings = new ADFSTransientSettings(new ADFSPath('0', '$
 class ADFSState implements beebfs.IFSState {
     public readonly volume: beebfs.Volume;
 
-    private current: ADFSPath;
-    private library: ADFSPath;
+    public readonly log: utils.Log | undefined;// tslint:disable-line no-unused-variable
 
-    private readonly log: utils.Log | undefined;// tslint:disable-line no-unused-variable
+    private current: ADFSPath;
+    private previous: ADFSPath;
+    private library: ADFSPath;
 
     public constructor(volume: beebfs.Volume, transientSettingsAny: unknown, log: utils.Log | undefined) {
         this.volume = volume;
@@ -198,6 +220,7 @@ class ADFSState implements beebfs.IFSState {
         const transientSettings = ADFSState.getADFSTransientSettings(transientSettingsAny);
 
         this.current = transientSettings.current;
+        this.previous = this.current;
         this.library = transientSettings.library;
     }
 
@@ -213,12 +236,20 @@ class ADFSState implements beebfs.IFSState {
         return settings;
     }
 
+    public getCurrent(): ADFSPath {
+        return this.current;
+    }
+
+    public getLibrary(): ADFSPath {
+        return this.library;
+    }
+
     public getCurrentDrive(): string {
         return this.current.drive;
     }
 
     public getCurrentDir(): string {
-        return this.current.dir;
+        return this.current.dir.join('.');
     }
 
     public getLibraryDrive(): string {
@@ -226,7 +257,7 @@ class ADFSState implements beebfs.IFSState {
     }
 
     public getLibraryDir(): string {
-        return this.library.dir;
+        return this.library.dir.join('.');
     }
 
     public getTransientSettings(): ADFSTransientSettings {
@@ -236,7 +267,12 @@ class ADFSState implements beebfs.IFSState {
     public getTransientSettingsString(settingsAny: unknown): string {
         const settings = ADFSState.getADFSTransientSettings(settingsAny);
 
-        return `Default dir:${settings.current.drive}.${settings.current.dir}${utils.BNL}Default lib:${settings.library.drive}.${settings.library.dir}${utils.BNL} `;
+        let text = ``;
+
+        text += `Default dir: :${settings.current.drive}.${settings.current.dir}${utils.BNL}`;
+        text += `Default lib: :${settings.library.drive}.${settings.library.dir}${utils.BNL}`;
+
+        return text;
     }
 
     public getPersistentSettings(): undefined {
@@ -258,7 +294,7 @@ class ADFSState implements beebfs.IFSState {
         }
 
         if (tryLibDir) {
-            const libPath = new beebfs.FilePath(fqn.filePath.volume, fqn.filePath.volumeExplicit, this.library.drive, true, this.library.dir, true);
+            const libPath = new beebfs.FilePath(fqn.filePath.volume, fqn.filePath.volumeExplicit, this.library.drive, true, this.getLibraryDir(), true);
             const libFQN = new beebfs.FQN(libPath, fqn.name);
             const libFile = await beebfs.getBeebFile(libFQN, true, this.log);
             if (libFile !== undefined) {
@@ -272,7 +308,7 @@ class ADFSState implements beebfs.IFSState {
     public async getCAT(commandLine: string | undefined): Promise<string | undefined> {
         let filePath: beebfs.FilePath;
         if (commandLine === undefined) {
-            filePath = new beebfs.FilePath(this.volume, false, this.current.drive, false, this.current.dir, false);
+            filePath = new beebfs.FilePath(this.volume, false, this.current.drive, false, this.getCurrentDir(), false);
         } else {
             // TODO... handle <obspec>
             return undefined;
@@ -287,14 +323,14 @@ class ADFSState implements beebfs.IFSState {
         }
 
         if (ADFSType.isValidDrive(arg)) {
-            this.current = new ADFSPath(arg, this.current.dir);
+            this.setCurrentDir(new ADFSPath(arg, this.current.dir));
         } else {
             const filePath = this.volume.type.parseDirString(arg, 0, this, this.volume, false);
             if (!filePath.driveExplicit || filePath.dirExplicit) {
                 return errors.badDrive();
             }
 
-            this.current = new ADFSPath(filePath.drive, this.current.dir);
+            this.setCurrentDir(new ADFSPath(filePath.drive, this.current.dir));
         }
 
         return true;
@@ -302,9 +338,9 @@ class ADFSState implements beebfs.IFSState {
 
     public starDir(filePath: beebfs.FilePath | undefined): void {
         if (filePath !== undefined) {
-            this.current = this.getADFSPathFromFilePath(filePath);
+            this.setCurrentDir(this.getADFSPathFromFilePath(filePath));
         } else {
-            this.current = new ADFSPath(this.current.drive, gDefaultTransientSettings.current.dir);
+            this.setCurrentDir(new ADFSPath(this.current.drive, gDefaultTransientSettings.current.dir));
         }
     }
 
@@ -355,7 +391,7 @@ class ADFSState implements beebfs.IFSState {
     }
 
     public async readNames(): Promise<string[]> {
-        const fqn = new beebfs.FQN(new beebfs.FilePath(this.volume, false, this.current.drive, true, this.current.dir, true), utils.MATCH_N_CHAR);
+        const fqn = new beebfs.FQN(new beebfs.FilePath(this.volume, false, this.current.drive, true, this.getCurrentDir(), true), utils.MATCH_N_CHAR);
         const files = await this.volume.type.findBeebFilesMatching(fqn, undefined);
 
         const names: string[] = [];
@@ -366,22 +402,53 @@ class ADFSState implements beebfs.IFSState {
         return names;
     }
 
+    //private readonly fun: (commandLine: CommandLine) => Promise<void | string | StringWithError | Response>;
     public getCommands(): server.Command[] {
-        // TODO... bunch of stuff to fill in here
-        return [];
+        return [
+            new server.Command('BACK', undefined, this.backCommand),
+            new server.Command('CDIR', '<Ob Spec>', this.cdirCommand),
+            new server.Command('LCAT', undefined, this.lcatCommand),
+            new server.Command('LEX', undefined, this.lexCommand),
+        ];
     }
+
+    private readonly backCommand = async (_commandLine: CommandLine): Promise<void> => {
+        [this.current, this.previous] = [this.previous, this.current];
+        // const temp = this.current;
+        // this.current = this.previous;
+        // this.previous = temp;
+    };
+
+    private readonly cdirCommand = async (_commandLine: CommandLine): Promise<void> => {
+        return todoError('CDIR');
+    };
+
+    private readonly lcatCommand = async (_commandLine: CommandLine): Promise<void> => {
+        return todoError('LCAT');
+    };
+
+    private readonly lexCommand = async (_commandLine: CommandLine): Promise<void> => {
+        return todoError('LEX');
+    };
 
     private getADFSPathFromFilePath(filePath: beebfs.FilePath): ADFSPath {
         if (filePath.volumeExplicit) {
             return errors.badDir();
         }
 
-        return new ADFSPath(filePath.drive, filePath.dir);
+        return new ADFSPath(filePath.drive, filePath.dir.split('.'));
+    }
+
+    private setCurrentDir(newCurrent: ADFSPath): void {
+        this.previous = this.current;
+        this.current = newCurrent;
     }
 }
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
+
+const DRIVE_NAMES: ReadonlyArray<string> = ['0', '1', '2', '3', '4', '5', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',];
 
 class ADFSType implements beebfs.IFSType {
     public readonly name = 'BeebLink/ADFS';
@@ -390,20 +457,7 @@ class ADFSType implements beebfs.IFSType {
         return maybeDrive.length === 1 && utils.isalnum(maybeDrive);
     }
 
-    private static isValidFileNameChar(char: string): boolean {
-        const c = char.charCodeAt(0);
-        return c >= 32 && c < 127;
-    }
-
-    public async createState(volume: beebfs.Volume, transientSettings: unknown, persistentSettings: unknown, log: utils.Log | undefined): Promise<beebfs.IFSState> {
-        return new ADFSState(volume, transientSettings, log);
-    }
-
-    public canWrite(): boolean {
-        return true;
-    }
-
-    public isValidBeebFileName(str: string): boolean {
+    public static isValidBeebFileName(str: string): boolean {
         if (str.length > MAX_NAME_LENGTH) {
             return false;
         }
@@ -414,6 +468,34 @@ class ADFSType implements beebfs.IFSType {
             }
         }
 
+        return true;
+    }
+
+    public static isValidBeebDirectoryName(str: string): boolean {
+        if (str.length > MAX_NAME_LENGTH) {
+            return false;
+        }
+
+        for (const c of str) {
+            if (!ADFSType.isValidFileNameChar(c)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static isValidFileNameChar(char: string): boolean {
+        const c = char.charCodeAt(0);
+        // 46='.'
+        return c >= 32 && c < 127 && c !== 46;
+    }
+
+    public async createState(volume: beebfs.Volume, transientSettings: unknown, persistentSettings: unknown, log: utils.Log | undefined): Promise<beebfs.IFSState> {
+        return new ADFSState(volume, transientSettings, log);
+    }
+
+    public canWrite(): boolean {
         return true;
     }
 
@@ -431,40 +513,51 @@ class ADFSType implements beebfs.IFSType {
     }
 
     public async getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): Promise<VolRelPath> {
-        const adfsFilePath = mustBeADFSFilePath(fqn.filePath);
-
-        // Can't remember what would actually cause this
-        if (adfsFilePath.serverFolder === undefined) {
-            return errors.generic('Unknown server folder');
-        }
+        // The directory structure must be present when creating a file. *CDIR
+        // has its own handling.
+        const adfsFilePath = await this.mustFindADFSFilePath(fqn.filePath, undefined);
 
         return path.join(adfsFilePath.serverFolder, beebfs.getServerCharsForName(fqn.name)) as VolRelPath;
     }
 
     public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        return await this.findDirEntries(volume, utils.MATCH_ANY_REG_EXP, utils.MATCH_ANY_REG_EXP, utils.MATCH_ANY_REG_EXP, true, false, log);
+        return await this.findFiles(volume, undefined, undefined, undefined, log);
     }
 
+    // The dir matching is a bit weird - the entire dir string is matched, and
+    // regexp-style, so * matches any number of directories. But this is
+    // (probably) actually what you want.
     public async locateBeebFiles(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        const driveRegExp = utils.getRegExpFromAFSP(fqn.filePath.drive);
-        const dirRegExp = utils.getRegExpFromAFSP(fqn.filePath.dir);
-        const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
-
-        return await this.findDirEntries(fqn.filePath.volume, driveRegExp, dirRegExp, nameRegExp, true, false, log);
+        const driveRegExp = fqn.filePath.driveExplicit ? utils.getRegExpFromAFSP(fqn.filePath.drive) : undefined;
+        const dirRegExp = fqn.filePath.dirExplicit ? utils.getRegExpFromAFSP(fqn.filePath.dir) : undefined;
+        return await this.findFiles(fqn.filePath.volume, driveRegExp, dirRegExp, utils.getRegExpFromAFSP(fqn.name), log);
     }
 
     public async findBeebFilesMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        const driveRegExp = utils.getRegExpFromAFSP(fqn.filePath.drive);
-        const dirRegExp = utils.getRegExpFromAFSP(fqn.filePath.dir);
+        const filePath = await this.mustFindADFSFilePath(fqn.filePath, log);
         const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
-        return await this.findDirEntries(fqn.filePath.volume, driveRegExp, dirRegExp, nameRegExp, false, false, log);
+        const entries = await this.findDirEntries(filePath, log);
+
+        const files: beebfs.File[] = [];
+
+        for (const entry of entries) {
+            if (entry instanceof beebfs.File) {
+                if (nameRegExp.exec(entry.fqn.name) !== null) {
+                    files.push(entry);
+                }
+            }
+        }
+
+        return files;
     }
 
     public async getCAT(filePath: beebfs.FilePath, state: beebfs.IFSState | undefined, _log: utils.Log | undefined): Promise<string> {
-        //const adfsState = mustBeADFSState(state);
+        const adfsFilePath = await this.mustFindADFSFilePath(filePath, _log);
 
-        const beebEntries = await this.findDirEntries(filePath.volume, utils.getRegExpFromAFSP(filePath.drive), utils.getRegExpFromAFSP(filePath.dir), utils.MATCH_ANY_REG_EXP, false, true, _log);
+        const beebEntries = await this.findDirEntries(adfsFilePath, _log);
+
+        //const beebEntries = await this.findDirEntries(filePath.volume, utils.getRegExpFromAFSP(filePath.drive), utils.getRegExpFromAFSP(filePath.dir), utils.MATCH_ANY_REG_EXP, false, true, _log);
 
         let text = '';
 
@@ -580,71 +673,126 @@ class ADFSType implements beebfs.IFSType {
         return `${file.fqn.name.padEnd(15)} ${getAttributesString(file.attr, false).padEnd(6)} ${utils.hex8(file.load)} ${utils.hex8(file.exec)} ${fileSize}`;
     }
 
-    // private async findDirEntriesInFilePath(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<(beebfs.File | Dir)[]> {
-    //     const infos:inf.IINT[]=await inf.getINFsForFolder(filePath.
-    // }
+    private async mustFindADFSFilePath(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<ADFSFilePath> {
+        const adfsFilePath = await this.findADFSFilePath(filePath, log);
+        if (adfsFilePath === undefined) {
+            return errors.badDir();
+        }
 
-    private async findDirEntries(volume: beebfs.Volume, driveRegExp: RegExp | undefined, dirRegExp: RegExp | undefined, nameRegExp: RegExp | undefined, recurse: boolean, includeDirs: false, log: utils.Log | undefined): Promise<beebfs.File[]>;
-    private async findDirEntries(volume: beebfs.Volume, driveRegExp: RegExp | undefined, dirRegExp: RegExp | undefined, nameRegExp: RegExp | undefined, recurse: boolean, includeDirs: true, log: utils.Log | undefined): Promise<(beebfs.File | Dir)[]>;
-    private async findDirEntries(volume: beebfs.Volume, driveRegExp: RegExp | undefined, dirRegExp: RegExp | undefined, nameRegExp: RegExp | undefined, recurse: boolean, includeDirs: boolean, log: utils.Log | undefined): Promise<(beebfs.File | Dir)[]> {
-        const drives = await this.findDrivesForVolume(volume, driveRegExp);
+        return adfsFilePath;
+    }
 
-        if (log !== undefined) {
-            log.p(`${drives.length} ADFS Drives found:`);
-            for (let i = 0; i < drives.length; ++i) {
-                log.pn(`  ${i}. ${drives[i].beebName} - ${drives[i].serverFolder}`);
+    // Returns undefined if the directory tree doesn't exist.
+    private async findADFSFilePath(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<ADFSFilePath | undefined> {
+        if (filePath instanceof ADFSFilePath) {
+            return filePath;
+        }
+
+        // Bleargh.
+        let currentFilePath = new ADFSFilePath(filePath.volume, true, filePath.drive, true, '$', true, path.join(filePath.volume.path, filePath.drive) as AbsPath);
+
+        // The parse will already have done this. Might it be worth storing off?
+        //
+        // The server path and dir parts are mutually exclusive.
+        const dirs = filePath.dir.split('.');
+
+        let dirIndex = 0;
+        if (dirs[dirIndex] !== '$') {
+            return errors.generic('No $');
+        }
+        ++dirIndex;
+
+        while (dirIndex < dirs.length) {
+            const entries = await this.findDirEntries(currentFilePath, log);
+            const nameRegExp = utils.getRegExpFromAFSP(dirs[dirIndex]);
+            let foundEntry: Dir | undefined;
+            for (const entry of entries) {
+                if (entry instanceof Dir) {
+                    if (nameRegExp.exec(entry.fqn.name) !== null) {
+                        if (foundEntry !== undefined) {
+                            return errors.ambiguousName();
+                        } else {
+                            foundEntry = entry;
+                        }
+                    }
+                }
+            }
+            if (foundEntry === undefined) {
+                return undefined;
+            }
+
+            currentFilePath = new ADFSFilePath(currentFilePath.volume, true, currentFilePath.drive, true, currentFilePath + '.' + foundEntry.fqn.name, true, foundEntry.serverPath as AbsPath);
+            ++dirIndex;
+        }
+
+        return currentFilePath;
+    }
+
+    private async findDirEntries(filePath: ADFSFilePath, log: utils.Log | undefined): Promise<(beebfs.File | Dir)[]> {
+        const entries: (beebfs.File | Dir)[] = [];
+
+        const infos: inf.IINF[] = await inf.getINFsForFolder(filePath.serverFolder, true, log);
+        for (const info of infos) {
+            const fqn = new beebfs.FQN(filePath, info.name);
+            log?.pn(`${fqn} - ${info.serverPath}`);
+            if (info.extra !== undefined && info.extra.dir) {
+                entries.push(new Dir(info.serverPath, fqn, info.attr));
+            } else {
+                entries.push(new beebfs.File(info.serverPath, fqn, info.load, info.exec, info.attr));
             }
         }
 
-        const dirEntries: (beebfs.File | Dir)[] = [];
+        return entries;
+    }
 
-        const findDirEntriesRecursive = async (serverPath: AbsPath, filePath: beebfs.FilePath, indent: string): Promise<void> => {
-            const infos: inf.IINF[] = await inf.getINFsForFolder(serverPath, includeDirs, log);
-            for (const info of infos) {
-                const fqn = new beebfs.FQN(filePath, info.name);
-                log?.pn(`${indent}${fqn} - ${info.serverPath}`);
-                if (info.extra !== undefined && info.extra.dir) {
-                    const entry = new Dir(info.serverPath, fqn, info.attr);
-                    dirEntries.push(entry);
+    private async findFiles(volume: beebfs.Volume, driveRegExp: RegExp | undefined, dirRegExp: RegExp | undefined, nameRegExp: RegExp | undefined, log: utils.Log | undefined): Promise<beebfs.File[]> {
+        const files: beebfs.File[] = [];
 
-                    // TODO... would it be better to recurse out of line?
-                    if (recurse) {
-                        const newFilePath = new ADFSFilePath(filePath.volume, filePath.volumeExplicit, filePath.drive, filePath.driveExplicit, filePath.dir + '.' + info.name, false, serverPath);
-                        await findDirEntriesRecursive(info.serverPath as AbsPath, newFilePath, indent + '  ');
+        const recurse = async (filePath: ADFSFilePath): Promise<void> => {
+            const entries = await this.findDirEntries(filePath, log);
+            for (const entry of entries) {
+                if (entry instanceof beebfs.File) {
+                    if (utils.matchesOptionalRegExp(entry.fqn.filePath.dir, dirRegExp) && utils.matchesOptionalRegExp(entry.fqn.name, nameRegExp)) {
+                        files.push(entry);
                     }
-                } else {
-                    const entry = new beebfs.File(info.serverPath, fqn, info.load, info.exec, info.attr);
-                    dirEntries.push(entry);
+                } else if (entry instanceof Dir) {
+                    const newFilePath = new ADFSFilePath(entry.fqn.filePath.volume, entry.fqn.filePath.volumeExplicit, entry.fqn.filePath.drive, entry.fqn.filePath.driveExplicit, `${entry.fqn.filePath.dir}.${entry.fqn.name}`, true, entry.serverPath as AbsPath);
+                    await recurse(newFilePath);
                 }
             }
         };
 
-        for (const drive of drives) {
-            const rootPath = getAbsPath(volume, drive.serverFolder);
-            log?.pn(`${drive.beebName}: rootPath: ${rootPath}`);
-            await findDirEntriesRecursive(rootPath, new beebfs.FilePath(volume, true, drive.beebName, true, '$', false), '');
+        for (const driveName of DRIVE_NAMES) {
+            if (utils.matchesOptionalRegExp(driveName, driveRegExp)) {
+                await recurse(new ADFSFilePath(volume, true, driveName, true, '$', true, path.join(volume.path, driveName) as AbsPath));
+            }
         }
 
-        return dirEntries;
+        return files;
     }
 
     private parseFileOrDirString(str: string, i: number, state: beebfs.IFSState | undefined, parseAsDir: boolean, volume: beebfs.Volume, volumeExplicit: boolean): { filePath: beebfs.FilePath; name: string | undefined; i: number; } {
         const adfsState = mustBeADFSState(state);
 
+        const log: utils.Log | undefined = adfsState?.log;
+
+        //log?.pn(`ADFSType.parseFileOrDirString: str="${str}"; i=${i}; parseAsDir=${parseAsDir}; volume=${volume.name}`);
+
         if (i === str.length) {
+            //log?.pn(`ADFSType.parseFileOrDirString: default properties`);
             if (adfsState === undefined) {
                 return errors.badName();
             }
 
             return {
-                filePath: new ADFSFilePath(volume, volumeExplicit, adfsState.getCurrentDrive(), false, adfsState.getCurrentDir(), false, undefined),
+                filePath: new beebfs.FilePath(volume, volumeExplicit, adfsState.getCurrentDrive(), false, adfsState.getCurrentDir(), false),
                 name: undefined,
                 i: 0,
             };
         }
 
         let drive: string | undefined;
-        let dir: string | undefined;
+        let dirs: string[] | undefined;
         let name: string | undefined;
 
         if (str[i] === ':' && i + 1 < str.length) {
@@ -655,20 +803,22 @@ class ADFSType implements beebfs.IFSType {
                 return errors.badName();
             }
             i += 1;
+
+            log?.pn(`  Drive: ${drive}`);
         }
 
         // TODO... need to stop at the first space? This will surely eat too much sometimes.
         if (parseAsDir) {
-            dir = str.slice(i);
-            if (dir.length === 0) {
-                dir = undefined;
+            dirs = str.slice(i).split('.');
+            if (dirs.length === 1 && dirs[0] === '') {
+                dirs = undefined;
             }
         } else {
             const lastSeparatorIndex = str.lastIndexOf('.');
             if (lastSeparatorIndex < i) {
                 name = str.slice(i);
             } else {
-                dir = str.slice(i, lastSeparatorIndex - i);
+                dirs = str.slice(i, lastSeparatorIndex - i).split('.');
                 name = str.slice(lastSeparatorIndex + 1);
                 if (name.length === 0) {
                     name = undefined;
@@ -690,20 +840,56 @@ class ADFSType implements beebfs.IFSType {
         }
 
         let dirExplicit: boolean;
-        if (dir === undefined) {
+        if (dirs === undefined) {
             if (adfsState !== undefined) {
-                dir = adfsState.getCurrentDir();
+                dirs = adfsState.getCurrent().dir.slice();
             } else {
-                dir = gDefaultTransientSettings.current.dir;
+                dirs = gDefaultTransientSettings.current.dir.slice();
             }
 
             dirExplicit = false;
         } else {
+            if (dirs.length > 0 && dirs[0] !== '$') {
+                if (adfsState !== undefined) {
+                    dirs = adfsState.getCurrent().dir.concat(dirs);
+                } else {
+                    return errors.badName();
+                }
+            }
+
             dirExplicit = true;
         }
 
+        // Fix up the directory names.
+        log?.pn(`Fix up directories:`);
+        let dirIndex = 0;
+        while (dirIndex < dirs.length) {
+            log?.pn(`  dirs[${dirIndex}]="${dirs[dirIndex]}"`);
+            if (dirs[dirIndex] === '$' && dirIndex > 0) {
+                dirs = dirs.slice(dirIndex);
+                dirIndex = 1;//skip the $
+            } else if (dirs[dirIndex] === '^') {
+                // Remove 2 items - this one, and the previous (if there is one).
+                if (dirIndex === 0) {
+                    dirs.splice(dirIndex);
+                } else {
+                    --dirIndex;
+                    dirs.splice(dirIndex, 2);
+                }
+            } else if (!ADFSType.isValidBeebDirectoryName(dirs[dirIndex])) {
+                return errors.badName();
+            } else {
+                ++dirIndex;
+            }
+        }
+
+        // The whole point of an FQN is that it's FQ.
+        if (dirs.length === 0 || dirs[0] !== '$') {
+            dirs.unshift('$');
+        }
+
         return {
-            filePath: new ADFSFilePath(volume, volumeExplicit, drive, driveExplicit, dir, dirExplicit, undefined),
+            filePath: new beebfs.FilePath(volume, volumeExplicit, drive, driveExplicit, dirs.join('.'), dirExplicit),
             i,
             name,
         };
