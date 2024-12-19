@@ -1800,7 +1800,7 @@ export class Server {
 
                 let stats: fs.Stats | undefined;
                 if (needStat) {
-                    stats = await this.bfs.tryGetFileStats(foundFile);
+                    stats = await foundFile.tryGetStats();
                 }
 
                 for (const c of format) {

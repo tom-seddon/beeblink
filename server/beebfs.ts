@@ -319,6 +319,10 @@ export class FSObject {
         this.fqn = fqn;
         this.attr = attr;
     }
+
+    public async tryGetStats(): Promise<fs.Stats | undefined> {
+        return await utils.tryStat(this.serverPath);
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -337,6 +341,17 @@ export class File extends FSObject {
 
     public override toString(): string {
         return 'File(serverPath=``' + this.serverPath + '\'\' name=``' + this.fqn + '\'\' load=0x' + utils.hex8(this.load) + ' exec=0x' + utils.hex8(this.exec) + ' attr=0x' + utils.hex8(this.attr);
+    }
+
+    // This is never used anywhere where the error case is particularly
+    // important.
+    public async tryGetSize(): Promise<number> {
+        const stats = await this.tryGetStats();
+        if (stats === undefined) {
+            return 0;
+        }
+
+        return stats.size;
     }
 }
 
@@ -1252,7 +1267,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async getInfoText(file: File): Promise<string> {
-        const fileSize = await this.tryGetFileSize(file);
+        const fileSize = await file.tryGetSize();
 
         return file.fqn.filePath.volume.type.getInfoText(file, fileSize);
     }
@@ -1261,7 +1276,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async getWideInfoText(file: File): Promise<string> {
-        const stats = await this.tryGetFileStats(file);
+        const stats = await file.tryGetStats();
 
         if (stats === undefined) {
             return file.fqn.filePath.volume.type.getInfoText(file, 0);
@@ -1323,29 +1338,6 @@ export class FS {
         }
 
         return foundFiles;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public async tryGetFileStats(file: File): Promise<fs.Stats | undefined> {
-        return await utils.tryStat(file.serverPath);
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // This is never used anywhere where the error case is particularly
-    // important.
-    //
-    // TODO: should this info be part of the File type?
-    public async tryGetFileSize(file: File): Promise<number> {
-        const fileStat = await this.tryGetFileStats(file);
-        if (fileStat === undefined) {
-            return 0;
-        }
-
-        return fileStat.size;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2035,7 +2027,7 @@ export class FS {
             attr = file.attr;
         }
 
-        const fileSize = await this.tryGetFileSize(file);
+        const fileSize = await file.tryGetSize();
 
         await this.writeBeebMetadata(file.serverPath, file.fqn, load, exec, attr);
 
@@ -2050,7 +2042,7 @@ export class FS {
         if (file === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         } else {
-            const fileSize = await this.tryGetFileSize(file);
+            const fileSize = await file.tryGetSize();
 
             return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, fileSize, file.attr), undefined, undefined);
         }
@@ -2064,7 +2056,7 @@ export class FS {
         if (file === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         } else {
-            const fileSize = await this.tryGetFileSize(file);
+            const fileSize = await file.tryGetSize();
 
             await this.deleteFile(file);
 
