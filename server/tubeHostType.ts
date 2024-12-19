@@ -619,7 +619,7 @@ class TubeHostState implements beebfs.IFSState {
     public async readNames(): Promise<string[]> {
         const filePath = new TubeHostFilePath(this.volume, false, this.current.drive, true, this.current.dir, true, this.mustGetDriveFolder(this.current.drive));
         const fqn = new beebfs.FQN(filePath, '*');
-        const files = await this.volume.type.findBeebFilesMatching(fqn, undefined);
+        const files = await this.volume.type.findObjectsMatching(fqn, undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -981,7 +981,7 @@ class TubeHostType implements beebfs.IFSType {
         return files;
     }
 
-    public async findBeebFilesMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    public async findObjectsMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
         // The recurse flag is ignored. TubeHost disks don't nest.
 
         const tubeHostFilePath = mustBeTubeHostFilePath(fqn.filePath);
@@ -1013,7 +1013,7 @@ class TubeHostType implements beebfs.IFSType {
         const catFQN = new beebfs.FQN(new TubeHostFilePath(tubeHostCatFilePath.volume, tubeHostCatFilePath.volumeExplicit, tubeHostCatFilePath.drive, tubeHostCatFilePath.driveExplicit, '*', false, tubeHostCatFilePath.serverFolder), '*');
         log?.pn(`Tht: getCAT: catFQN=${catFQN}`);
 
-        const beebFiles = await this.findBeebFilesMatching(catFQN, undefined);
+        const beebFiles = await this.findObjectsMatching(catFQN, undefined);
 
         log?.pn(`THt: getCAT: got ${beebFiles.length} files matching ${catFQN}`);
 

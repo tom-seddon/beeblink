@@ -1434,7 +1434,7 @@ export class Server {
     }
 
     private async filesInfoResponse(afsp: beebfs.FQN): Promise<string> {
-        const files = await this.bfs.findFilesMatching(afsp);
+        const files = await this.bfs.findObjectsMatching(afsp);
 
         if (files.length === 0) {
             return errors.notFound();
@@ -1631,7 +1631,7 @@ export class Server {
         }
 
         const afsp = await this.bfs.parseFileString(commandLine.parts[1]);
-        const files = await this.bfs.findFilesMatching(afsp);
+        const files = await this.bfs.findObjectsMatching(afsp);
 
         if (files.length === 0) {
             return errors.notFound();
@@ -1657,7 +1657,7 @@ export class Server {
         }
 
         const fqn = await this.bfs.parseFileString(commandLine.parts[1]);
-        const beebFiles = await this.bfs.findFilesMatching(fqn);
+        const beebFiles = await this.bfs.findObjectsMatching(fqn);
         for (const beebFile of beebFiles) {
             // the validity of `attrString' will be checked over and over again,
             // which is kind of stupid.
@@ -2246,7 +2246,7 @@ export class Server {
         }
 
         const srcFQN = await this.bfs.parseFileString(commandLine.parts[1]);
-        const srcFiles = await this.bfs.findFilesMatching(srcFQN);
+        const srcFiles = await this.bfs.findObjectsMatching(srcFQN);
         if (srcFiles.length === 0) {
             return errors.notFound();
         }

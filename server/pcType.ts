@@ -134,7 +134,7 @@ class PCState implements beebfs.IFSState {
     }
 
     public async readNames(): Promise<string[]> {
-        const files = await this.volume.type.findBeebFilesMatching(new beebfs.FQN(new beebfs.FilePath(this.volume, true, '', true, '', true), '*'), undefined);
+        const files = await this.volume.type.findObjectsMatching(new beebfs.FQN(new beebfs.FilePath(this.volume, true, '', true, '', true), '*'), undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -228,7 +228,7 @@ class PCType implements beebfs.IFSType {
         return await this.findFiles(fqn.filePath.volume, nameRegExp, log);
     }
 
-    public async findBeebFilesMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    public async findObjectsMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
         const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
         return await this.findFiles(fqn.filePath.volume, nameRegExp, log);
@@ -239,7 +239,7 @@ class PCType implements beebfs.IFSType {
 
         text += `Volume: ${filePath.volume.path}${utils.BNL}${utils.BNL}`;
 
-        const beebFiles = await this.findBeebFilesMatching(new beebfs.FQN(filePath, '*'), log);
+        const beebFiles = await this.findObjectsMatching(new beebfs.FQN(filePath, '*'), log);
 
         beebFiles.sort((a, b) => {
             return utils.stricmp(a.fqn.name, b.fqn.name);

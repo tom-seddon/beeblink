@@ -302,7 +302,9 @@ export class FQN {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export class DirEntry {
+// "FSObject" - ugh. But there doesn't seem to be any easy way to make
+// Typescript let you have a class called "Object".
+export class FSObject {
     // Path of the corresponding file or folder on the server filing system.
     public readonly serverPath: string;
 
@@ -322,7 +324,7 @@ export class DirEntry {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export class File extends DirEntry {
+export class File extends FSObject {
     // BBC-style attributes.
     public readonly load: FileAddress;
     public readonly exec: FileAddress;
@@ -341,7 +343,7 @@ export class File extends DirEntry {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export class Dir extends DirEntry {
+export class Dir extends FSObject {
     public constructor(serverPath: string, fqn: FQN, attr: FileAttributes) {
         super(serverPath, fqn, attr);
     }
@@ -606,13 +608,13 @@ export interface IFSType {
     // become so by arrangement. TubeHost files are like this.)
     locateBeebFiles: (fqn: FQN, log: utils.Log | undefined) => Promise<File[]>;
 
-    // get list of Beeb files matching FQN. Used for generally finding files in
+    // get list of Beeb files/dirs matching FQN. Used for generally finding files in
     // a specific drive/directory, non-recursively, e.g., for finding the file
     // that matches a name, or handling *CAT.
     //
     // The volume will be of the right type. Drive and directory wildcards don't
     // have to work.
-    findBeebFilesMatching: (fqn: FQN, log: utils.Log | undefined) => Promise<File[]>;
+    findObjectsMatching: (fqn: FQN, log: utils.Log | undefined) => Promise<File[]>;
 
     // parse file/dir string, starting at index i. 
     parseFileString: (str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean) => FQN;
@@ -671,7 +673,7 @@ async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log: utils.Lo
         }
     }
 
-    const files = await fqn.filePath.volume.type.findBeebFilesMatching(fqn, log);
+    const files = await fqn.filePath.volume.type.findObjectsMatching(fqn, log);
     log?.pn(`found ${files.length} file(s)`);
 
     if (files.length === 0) {
@@ -1242,8 +1244,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async findFilesMatching(fqn: FQN): Promise<File[]> {
-        return await fqn.filePath.volume.type.findBeebFilesMatching(fqn, this.log);
+    public async findObjectsMatching(fqn: FQN): Promise<File[]> {
+        return await fqn.filePath.volume.type.findObjectsMatching(fqn, this.log);
     }
 
     /////////////////////////////////////////////////////////////////////////

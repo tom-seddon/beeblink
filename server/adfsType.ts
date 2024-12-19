@@ -392,7 +392,7 @@ class ADFSState implements beebfs.IFSState {
 
     public async readNames(): Promise<string[]> {
         const fqn = new beebfs.FQN(new beebfs.FilePath(this.volume, false, this.current.drive, true, this.getCurrentDir(), true), utils.MATCH_N_CHAR);
-        const files = await this.volume.type.findBeebFilesMatching(fqn, undefined);
+        const files = await this.volume.type.findObjectsMatching(fqn, undefined);
 
         const names: string[] = [];
         for (const file of files) {
@@ -533,7 +533,7 @@ class ADFSType implements beebfs.IFSType {
         return await this.findFiles(fqn.filePath.volume, driveRegExp, dirRegExp, utils.getRegExpFromAFSP(fqn.name), log);
     }
 
-    public async findBeebFilesMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    public async findObjectsMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
         const filePath = await this.mustFindADFSFilePath(fqn.filePath, log);
         const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
@@ -728,8 +728,8 @@ class ADFSType implements beebfs.IFSType {
         return currentFilePath;
     }
 
-    private async findDirEntries(filePath: ADFSFilePath, log: utils.Log | undefined): Promise<beebfs.DirEntry[]> {
-        const entries: beebfs.DirEntry[] = [];
+    private async findDirEntries(filePath: ADFSFilePath, log: utils.Log | undefined): Promise<beebfs.FSObject[]> {
+        const entries: beebfs.FSObject[] = [];
 
         const infos: inf.IINF[] = await inf.getINFsForFolder(filePath.serverFolder, true, log);
         for (const info of infos) {
