@@ -302,32 +302,52 @@ export class FQN {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-export class File {
-    // Path of this file on the PC filing system.
+export class DirEntry {
+    // Path of the corresponding file or folder on the server filing system.
     public readonly serverPath: string;
 
-    // Actual BBC file name. 
+    // Actual BBC file or directory name. 
     public readonly fqn: FQN;
 
     // BBC-style attributes.
-    public readonly load: FileAddress;
-    public readonly exec: FileAddress;
     public readonly attr: FileAttributes;
 
-    // // could perhaps be part of the attr field, but I'm a bit reluctant to
-    // // fiddle around with that.
-    // public readonly text: boolean;
-
-    public constructor(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes) {
+    public constructor(serverPath: string, fqn: FQN, attr: FileAttributes) {
         this.serverPath = serverPath;
         this.fqn = fqn;
-        this.load = load;
-        this.exec = exec;
         this.attr = attr;
     }
+}
 
-    public toString(): string {
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export class File extends DirEntry {
+    // BBC-style attributes.
+    public readonly load: FileAddress;
+    public readonly exec: FileAddress;
+
+    public constructor(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes) {
+        super(serverPath, fqn, attr);
+        this.load = load;
+        this.exec = exec;
+    }
+
+    public override toString(): string {
         return 'File(serverPath=``' + this.serverPath + '\'\' name=``' + this.fqn + '\'\' load=0x' + utils.hex8(this.load) + ' exec=0x' + utils.hex8(this.exec) + ' attr=0x' + utils.hex8(this.attr);
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+export class Dir extends DirEntry {
+    public constructor(serverPath: string, fqn: FQN, attr: FileAttributes) {
+        super(serverPath, fqn, attr);
+    }
+
+    public override toString(): string {
+        return `Dir(serverPath=\`\`${this.serverPath}'' name=\`\`${this.fqn}'' attr=0x${utils.hex8(this.attr)}`;
     }
 }
 

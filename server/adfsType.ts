@@ -69,9 +69,9 @@ function todoError(what: string): never {
     return errors.generic(`TODO: ${what}`);
 }
 
-function getAbsPath(volume: beebfs.Volume, volRelPath: VolRelPath): AbsPath {
-    return path.join(volume.path, volRelPath) as AbsPath;
-}
+// function getAbsPath(volume: beebfs.Volume, volRelPath: VolRelPath): AbsPath {
+//     return path.join(volume.path, volRelPath) as AbsPath;
+// }
 
 function getAttributesString(attr: beebfs.FileAttributes, isDirectory: boolean): string {
     let str = '';
@@ -136,25 +136,25 @@ interface IADFSDrive {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-// Similar to beebfs.File, but for an ADFS directory.
-class Dir {
-    // Actual path to the folder on the server.
-    public readonly serverPath: string;
+// // Similar to beebfs.File, but for an ADFS directory.
+// class Dir {
+//     // Actual path to the folder on the server.
+//     public readonly serverPath: string;
 
-    public readonly fqn: beebfs.FQN;
+//     public readonly fqn: beebfs.FQN;
 
-    public readonly attr: beebfs.FileAttributes;
+//     public readonly attr: beebfs.FileAttributes;
 
-    public constructor(serverPath: string, fqn: beebfs.FQN, attr: beebfs.FileAttributes) {
-        this.serverPath = serverPath;
-        this.fqn = fqn;
-        this.attr = attr;
-    }
+//     public constructor(serverPath: string, fqn: beebfs.FQN, attr: beebfs.FileAttributes) {
+//         this.serverPath = serverPath;
+//         this.fqn = fqn;
+//         this.attr = attr;
+//     }
 
-    public toString(): string {
-        return `Dir(serverPath=\`\`${this.serverPath}'' fqn=\`\`${this.fqn}'' attr = 0x${utils.hex8(this.attr)})`;
-    }
-}
+//     public toString(): string {
+//         return `Dir(serverPath=\`\`${this.serverPath}'' fqn=\`\`${this.fqn}'' attr = 0x${utils.hex8(this.attr)})`;
+//     }
+// }
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -197,7 +197,7 @@ class ADFSTransientSettings {
 
 const gDefaultTransientSettings = new ADFSTransientSettings(new ADFSPath('0', ['$']), new ADFSPath('0', ['$']));
 
-function getDirString(dir: string[]): string {
+function getDirString(dir: ReadonlyArray<string>): string {
     return dir.join('.');
 }
 
@@ -249,7 +249,7 @@ class ADFSState implements beebfs.IFSState {
     }
 
     public getCurrentDir(): string {
-        return this.current.dir.join('.');
+        return getDirString(this.current.dir);
     }
 
     public getLibraryDrive(): string {
@@ -257,7 +257,7 @@ class ADFSState implements beebfs.IFSState {
     }
 
     public getLibraryDir(): string {
-        return this.library.dir.join('.');
+        return getDirString(this.library.dir);
     }
 
     public getTransientSettings(): ADFSTransientSettings {
@@ -572,7 +572,7 @@ class ADFSType implements beebfs.IFSType {
             if (beebEntry instanceof beebfs.File) {
                 text += getAttributesString(beebEntry.attr, false).padEnd(attributesWidth);
                 text += beebEntry.fqn.name;
-            } else if (beebEntry instanceof Dir) {
+            } else if (beebEntry instanceof beebfs.Dir) {
                 text += getAttributesString(beebEntry.attr, true).padEnd(attributesWidth);
                 text += beebEntry.fqn.name;
             }
@@ -670,7 +670,7 @@ class ADFSType implements beebfs.IFSType {
 
     private getCommonInfoText(file: beebfs.File, fileSize: number): string {
         // The normal ADFS *INFO doesn't bother to fit into Mode 7, so this doesn't either.
-        return `${file.fqn.name.padEnd(15)} ${getAttributesString(file.attr, false).padEnd(6)} ${utils.hex8(file.load)} ${utils.hex8(file.exec)} ${fileSize}`;
+        return `${file.fqn.name.padEnd(15)} ${getAttributesString(file.attr, false).padEnd(6)} ${utils.hex8(file.load)} ${utils.hex8(file.exec)} ${utils.hex8(fileSize)}`;
     }
 
     private async mustFindADFSFilePath(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<ADFSFilePath> {
@@ -705,9 +705,9 @@ class ADFSType implements beebfs.IFSType {
         while (dirIndex < dirs.length) {
             const entries = await this.findDirEntries(currentFilePath, log);
             const nameRegExp = utils.getRegExpFromAFSP(dirs[dirIndex]);
-            let foundEntry: Dir | undefined;
+            let foundEntry: beebfs.Dir | undefined;
             for (const entry of entries) {
-                if (entry instanceof Dir) {
+                if (entry instanceof beebfs.Dir) {
                     if (nameRegExp.exec(entry.fqn.name) !== null) {
                         if (foundEntry !== undefined) {
                             return errors.ambiguousName();
@@ -728,15 +728,15 @@ class ADFSType implements beebfs.IFSType {
         return currentFilePath;
     }
 
-    private async findDirEntries(filePath: ADFSFilePath, log: utils.Log | undefined): Promise<(beebfs.File | Dir)[]> {
-        const entries: (beebfs.File | Dir)[] = [];
+    private async findDirEntries(filePath: ADFSFilePath, log: utils.Log | undefined): Promise<beebfs.DirEntry[]> {
+        const entries: beebfs.DirEntry[] = [];
 
         const infos: inf.IINF[] = await inf.getINFsForFolder(filePath.serverFolder, true, log);
         for (const info of infos) {
             const fqn = new beebfs.FQN(filePath, info.name);
             log?.pn(`${fqn} - ${info.serverPath}`);
             if (info.extra !== undefined && info.extra.dir) {
-                entries.push(new Dir(info.serverPath, fqn, info.attr));
+                entries.push(new beebfs.Dir(info.serverPath, fqn, info.attr));
             } else {
                 entries.push(new beebfs.File(info.serverPath, fqn, info.load, info.exec, info.attr));
             }
@@ -755,7 +755,7 @@ class ADFSType implements beebfs.IFSType {
                     if (utils.matchesOptionalRegExp(entry.fqn.filePath.dir, dirRegExp) && utils.matchesOptionalRegExp(entry.fqn.name, nameRegExp)) {
                         files.push(entry);
                     }
-                } else if (entry instanceof Dir) {
+                } else if (entry instanceof beebfs.Dir) {
                     const newFilePath = new ADFSFilePath(entry.fqn.filePath.volume, entry.fqn.filePath.volumeExplicit, entry.fqn.filePath.drive, entry.fqn.filePath.driveExplicit, `${entry.fqn.filePath.dir}.${entry.fqn.name}`, true, entry.serverPath as AbsPath);
                     await recurse(newFilePath);
                 }
