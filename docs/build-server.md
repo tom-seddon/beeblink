@@ -2,7 +2,7 @@
 
 Prerequisites:
 
-* [node.js 16.8.0 or later](https://nodejs.org/en/download/)
+* [node.js 18.20 or later](https://nodejs.org/en/download/)
 
 I only use even-numbered node.js releases, but odd-numbered releases
 may work!
@@ -11,7 +11,7 @@ If you get errors with node.js 20.x, try node.js 18.x.
 
 # Build and run on Windows
 
-Additional rerequisites:
+Additional prerequisites:
 
 * Visual Studio
 
