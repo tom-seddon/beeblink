@@ -22,7 +22,6 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as beebfs from './beebfs';
@@ -519,12 +518,17 @@ class DFSType implements beebfs.IFSType {
         return buffer[0] & 3;//ugh.
     }
 
-    public getInfoText(file: beebfs.File, fileSize: number): string {
-        return this.getCommonInfoText(file, fileSize);
+    public async getInfoText(file: beebfs.File): Promise<string> {
+        return this.getCommonInfoText(file, await file.tryGetSize());
     }
 
-    public getWideInfoText(file: beebfs.File, stats: fs.Stats): string {
-        return `${this.getCommonInfoText(file, stats.size)} ${utils.getDateString(stats.mtime)}`;
+    public async getWideInfoText(file: beebfs.File): Promise<string> {
+        const stats = await file.tryGetStats();
+        if (stats === undefined) {
+            return this.getCommonInfoText(file, 0);
+        } else {
+            return `${this.getCommonInfoText(file, stats.size)} ${utils.getDateString(stats.mtime)}`;
+        }
     }
 
     public getAttrString(file: beebfs.File): string | undefined {

@@ -663,11 +663,11 @@ export interface IFSType {
 
     // get *INFO/*EX text for the given file. Show name, attributes and
     // metadata. Don't append newline - that will be added automatically.
-    getInfoText: (file: File, fileSize: number) => string;
+    getInfoText: (file: File) => Promise<string>;
 
     // get *WINFO text for the given file. Don't append newline - that will be
     // added automatically.
-    getWideInfoText: (file: File, stats: fs.Stats) => string;
+    getWideInfoText: (file: File) => Promise<string>;
 
     // get *INFO/*EX-style attributes string for the given file.
     //
@@ -1267,22 +1267,14 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async getInfoText(file: File): Promise<string> {
-        const fileSize = await file.tryGetSize();
-
-        return file.fqn.filePath.volume.type.getInfoText(file, fileSize);
+        return await file.fqn.filePath.volume.type.getInfoText(file);
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
     public async getWideInfoText(file: File): Promise<string> {
-        const stats = await file.tryGetStats();
-
-        if (stats === undefined) {
-            return file.fqn.filePath.volume.type.getInfoText(file, 0);
-        } else {
-            return file.fqn.filePath.volume.type.getWideInfoText(file, stats);
-        }
+        return await file.fqn.filePath.volume.type.getWideInfoText(file);
     }
 
     /////////////////////////////////////////////////////////////////////////
