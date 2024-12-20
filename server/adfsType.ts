@@ -424,6 +424,16 @@ class ADFSState implements beebfs.IFSState {
 
 const DRIVE_NAMES: ReadonlyArray<string> = ['0', '1', '2', '3', '4', '5', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',];
 
+const NAME_CHARS_VALID: boolean[] = ((): boolean[] => {
+    const valid: boolean[] = [];
+
+    for (let i = 0; i < 128; ++i) {
+        valid.push(i >= 32 && '#*.:$&@ '.indexOf(String.fromCharCode(i)) < 0);
+    }
+
+    return valid;
+})();
+
 class ADFSType implements beebfs.IFSType {
     public readonly name = 'BeebLink/ADFS';
 
@@ -461,8 +471,11 @@ class ADFSType implements beebfs.IFSType {
 
     private static isValidFileNameChar(char: string): boolean {
         const c = char.charCodeAt(0);
-        // 46='.'
-        return c >= 32 && c < 127 && c !== 46;
+        if (c >= NAME_CHARS_VALID.length) {
+            return false;
+        } else {
+            return NAME_CHARS_VALID[c];
+        }
     }
 
     public async createState(volume: beebfs.Volume, transientSettings: unknown, persistentSettings: unknown, log: utils.Log | undefined): Promise<beebfs.IFSState> {
