@@ -1002,7 +1002,7 @@ export class Server {
 
         const fqn = await this.bfs.parseFileString(commandLine.parts[0]);
 
-        return await this.filesInfoResponse(fqn);
+        return await this.filesInfoResponse(fqn, false);
     };
 
     private readonly handleStarEx = async (handler: Handler, p: Buffer): Promise<string> => {
@@ -1015,7 +1015,7 @@ export class Server {
             fqn = await this.bfs.parseFileString(commandLine.parts[0]);
         }
 
-        return await this.filesInfoResponse(fqn);
+        return await this.filesInfoResponse(fqn, false);
     };
 
     private readonly handleOSGBPB = async (handler: Handler, p: Buffer): Promise<Response> => {
@@ -1433,7 +1433,7 @@ export class Server {
         }
     }
 
-    private async filesInfoResponse(afsp: beebfs.FQN): Promise<string> {
+    private async filesInfoResponse(afsp: beebfs.FQN, wide: boolean): Promise<string> {
         const files = await this.bfs.findObjectsMatching(afsp);
 
         if (files.length === 0) {
@@ -1443,7 +1443,7 @@ export class Server {
         let text = '';
 
         for (const file of files) {
-            text += `${await this.bfs.getInfoText(file, false)}${BNL}`;
+            text += `${await this.bfs.getInfoText(file, wide)}${BNL}`;
         }
 
         return text;
@@ -1622,7 +1622,7 @@ export class Server {
         }
 
         const fqn = await this.bfs.parseFileString(commandLine.parts[1]);
-        return await this.filesInfoResponse(fqn);
+        return await this.filesInfoResponse(fqn, false);
     };
 
     private readonly winfoCommand = async (commandLine: CommandLine): Promise<string> => {
@@ -1630,20 +1630,8 @@ export class Server {
             return errors.syntax();
         }
 
-        const afsp = await this.bfs.parseFileString(commandLine.parts[1]);
-        const files = await this.bfs.findObjectsMatching(afsp);
-
-        if (files.length === 0) {
-            return errors.notFound();
-        }
-
-        let text = '';
-
-        for (const file of files) {
-            text += `${await this.bfs.getInfoText(file, true)}${BNL}`;
-        }
-
-        return text;
+        const fqn = await this.bfs.parseFileString(commandLine.parts[1]);
+        return await this.filesInfoResponse(fqn, true);
     };
 
     private readonly accessCommand = async (commandLine: CommandLine): Promise<void> => {
