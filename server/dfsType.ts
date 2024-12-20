@@ -514,17 +514,31 @@ class DFSType implements beebfs.IFSType {
         return buffer[0] & 3;//ugh.
     }
 
-    public async getInfoText(file: beebfs.File): Promise<string> {
-        return this.getCommonInfoText(file, await file.tryGetSize());
-    }
-
-    public async getWideInfoText(file: beebfs.File): Promise<string> {
+    public async getInfoText(object: beebfs.FSObject, wide: boolean): Promise<string> {
+        const file = beebfs.mustBeFile(object);
         const stats = await file.tryGetStats();
-        if (stats === undefined) {
-            return this.getCommonInfoText(file, 0);
+
+        const attr = this.getAttrString(file);
+        const load = utils.hex8(file.load).toUpperCase();
+        const exec = utils.hex8(file.exec).toUpperCase();
+
+        let size: string;
+        if (stats !== undefined) {
+            size = utils.hex(stats.size & 0x00ffffff, 6).toUpperCase();
         } else {
-            return `${this.getCommonInfoText(file, stats.size)} ${utils.getDateString(stats.mtime)}`;
+            size = '??????';
         }
+
+        // 0123456789012345678901234567890123456789
+        // _.__________ L 12345678 12345678 123456
+        let text = `${file.fqn.filePath.dir}.${file.fqn.name.padEnd(10)} ${attr} ${load} ${exec} ${size}`;
+        if (wide) {
+            if (stats !== undefined) {
+                text += ` ${utils.getDateString(stats.mtime)}`;
+            }
+        }
+
+        return text;
     }
 
     public getAttrString(file: beebfs.File): string | undefined {
@@ -603,17 +617,6 @@ class DFSType implements beebfs.IFSType {
         }
 
         return beebFiles;
-    }
-
-    private getCommonInfoText(file: beebfs.File, fileSize: number): string {
-        const attr = this.getAttrString(file);
-        const load = utils.hex8(file.load).toUpperCase();
-        const exec = utils.hex8(file.exec).toUpperCase();
-        const size = utils.hex(fileSize & 0x00ffffff, 6).toUpperCase();
-
-        // 0123456789012345678901234567890123456789
-        // _.__________ L 12345678 12345678 123456
-        return `${file.fqn.filePath.dir}.${file.fqn.name.padEnd(10)} ${attr} ${load} ${exec} ${size}`;
     }
 
     private parseFileOrDirString(

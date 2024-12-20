@@ -90,6 +90,7 @@ export const badCommand = createErrorFactory(254, 'Bad command');
 export const dataLost = createErrorFactory(0xca, 'Data lost');
 
 export const wont = createErrorFactory(0x93, 'Won\'t');
+export const notAFile = createErrorFactory(0x93, 'Not a file');
 
 // Message is mandatory for generic errors.
 //

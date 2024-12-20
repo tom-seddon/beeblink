@@ -355,6 +355,16 @@ export class File extends FSObject {
     }
 }
 
+// Helper function for the benefit of the DFS and TubeHost types, for which
+// (well, in theory...) the Dir type will never occur.
+export function mustBeFile(object: FSObject): File {
+    if (!(object instanceof File)) {
+        return errors.notAFile();
+    }
+
+    return object;
+}
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -609,7 +619,8 @@ export interface IFSType {
 
     // Handle *LOCATE: get list of all Beeb files in volume matching explicit
     // parts of FQN. Treat implicit drive/dir values as matching anything.
-    // Always recursive when appropriate.
+    // Always recursive when appropriate. Does not return information about
+    // directories.
     //
     // (As well as being recursive, this entry point differs from
     // findObjectsMatching in that it may discover files that aren't directly
@@ -628,9 +639,6 @@ export interface IFSType {
     // parse file/dir string, starting at index i. 
     parseFileString: (str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean) => FQN;
     parseDirString: (str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean) => FilePath;
-
-    // create appropriate FSFQN from FSFSP, filling in defaults from the given State as appropriate.
-    //createFQN:(fsp: IFSFSP, state: IFSState | undefined)=> IFSFQN;
 
     // get ideal server path for FQN, relative to whichever volume it's in. Used
     // when creating a new file.
@@ -655,13 +663,9 @@ export interface IFSType {
     // get new attributes from attribute string. Return undefined if invalid.
     getNewAttributes: (oldAttr: FileAttributes, attrString: string) => FileAttributes | undefined;
 
-    // get *INFO/*EX text for the given file. Show name, attributes and
+    // get *INFO/*EX/*WINFO text for the given file. Show name, attributes and
     // metadata. Don't append newline - that will be added automatically.
-    getInfoText: (file: File) => Promise<string>;
-
-    // get *WINFO text for the given file. Don't append newline - that will be
-    // added automatically.
-    getWideInfoText: (file: File) => Promise<string>;
+    getInfoText: (object: FSObject, wide: boolean) => Promise<string>;
 
     // get *INFO/*EX-style attributes string for the given file.
     //
@@ -1260,15 +1264,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async getInfoText(file: File): Promise<string> {
-        return await file.fqn.filePath.volume.type.getInfoText(file);
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public async getWideInfoText(file: File): Promise<string> {
-        return await file.fqn.filePath.volume.type.getWideInfoText(file);
+    public async getInfoText(file: File, wide: boolean): Promise<string> {
+        return await file.fqn.filePath.volume.type.getInfoText(file, wide);
     }
 
     /////////////////////////////////////////////////////////////////////////

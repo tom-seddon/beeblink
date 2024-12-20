@@ -265,25 +265,30 @@ class PCType implements beebfs.IFSType {
         return notSupported();
     }
 
-    public async getInfoText(file: beebfs.File): Promise<string> {
-        return this.getCommonInfoText(file, await file.tryGetSize());
-    }
+    public async getInfoText(object: beebfs.FSObject, wide: boolean): Promise<string> {
+        const file = beebfs.mustBeFile(object);
 
-    public async getWideInfoText(file: beebfs.File): Promise<string> {
         const stats = await file.tryGetStats();
-        if (stats === undefined) {
-            return this.getCommonInfoText(file, 0);
+
+        let fileSize: string;
+        if (stats !== undefined) {
+            fileSize = utils.hex(stats.size, 6);
         } else {
-            return `${this.getCommonInfoText(file, stats.size)} ${utils.getDateString(stats.mtime)}`;
+            fileSize = '??????';
         }
+
+        let text = `${file.fqn.name.padEnd(MAX_NAME_LENGTH)}  ${fileSize}`;
+        if (wide) {
+            if (stats !== undefined) {
+                text += ` ${utils.getDateString(stats.mtime)}`;
+            }
+        }
+
+        return text;
     }
 
     public getAttrString(_file: beebfs.File): string | undefined {
         return undefined;
-    }
-
-    private getCommonInfoText(file: beebfs.File, fileSize: number): string {
-        return `${file.fqn.name.padEnd(MAX_NAME_LENGTH)}  ${utils.hex(fileSize, 6)}`;
     }
 
     private async findFiles(volume: beebfs.Volume, nameRegExp: RegExp | undefined, _log: utils.Log | undefined): Promise<beebfs.File[]> {

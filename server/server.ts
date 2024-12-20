@@ -1443,7 +1443,7 @@ export class Server {
         let text = '';
 
         for (const file of files) {
-            text += `${await this.bfs.getInfoText(file)}${BNL}`;
+            text += `${await this.bfs.getInfoText(file, false)}${BNL}`;
         }
 
         return text;
@@ -1640,7 +1640,7 @@ export class Server {
         let text = '';
 
         for (const file of files) {
-            text += `${await this.bfs.getWideInfoText(file)}${BNL}`;
+            text += `${await this.bfs.getInfoText(file, true)}${BNL}`;
         }
 
         return text;

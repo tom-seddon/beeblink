@@ -652,26 +652,31 @@ class ADFSType implements beebfs.IFSType {
         return newAttr;
     }
 
-    public async getInfoText(file: beebfs.File): Promise<string> {
-        return this.getCommonInfoText(file, await file.tryGetSize());
-    }
+    // The normal ADFS *INFO doesn't bother to fit into Mode 7, so this doesn't either.
+    public async getInfoText(object: beebfs.FSObject, wide: boolean): Promise<string> {
+        const stats = await object.tryGetStats();
 
-    public async getWideInfoText(file: beebfs.File): Promise<string> {
-        const stats = await file.tryGetStats();
-        if (stats === undefined) {
-            return this.getCommonInfoText(file, 0);
-        } else {
-            return `${this.getCommonInfoText(file, stats.size)} ${utils.getDateString(stats.mtime)}`;
+        let text = `${object.fqn.name.padEnd(15)} ${getAttributesString(object.attr, false).padEnd(6)}`;
+        if (object instanceof beebfs.File) {
+            text += ` ${utils.hex8(object.load)} ${utils.hex8(object.exec)} `;
+            if (stats !== undefined) {
+                text += utils.hex8(stats.size);
+            } else {
+                text += `????????`;
+            }
         }
+
+        if (wide) {
+            if (stats !== undefined) {
+                text += ` ${utils.getDateString(stats.mtime)}`;
+            }
+        }
+
+        return text;
     }
 
     public getAttrString(file: beebfs.File): string | undefined {
         return getAttributesString(file.attr, false);
-    }
-
-    private getCommonInfoText(file: beebfs.File, fileSize: number): string {
-        // The normal ADFS *INFO doesn't bother to fit into Mode 7, so this doesn't either.
-        return `${file.fqn.name.padEnd(15)} ${getAttributesString(file.attr, false).padEnd(6)} ${utils.hex8(file.load)} ${utils.hex8(file.exec)} ${utils.hex8(fileSize)}`;
     }
 
     private async mustFindADFSFilePath(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<ADFSFilePath> {
@@ -735,7 +740,7 @@ class ADFSType implements beebfs.IFSType {
         const infos: inf.IINF[] = await inf.getINFsForFolder(filePath.serverFolder, true, log);
         for (const info of infos) {
             const fqn = new beebfs.FQN(filePath, info.name);
-            log?.pn(`${fqn} - ${info.serverPath}`);
+            log?.pn(`${fqn} - ${info.serverPath} `);
             if (info.extra !== undefined && info.extra.dir) {
                 entries.push(new beebfs.Dir(info.serverPath, fqn, info.attr));
             } else {
@@ -757,7 +762,7 @@ class ADFSType implements beebfs.IFSType {
                         files.push(entry);
                     }
                 } else if (entry instanceof beebfs.Dir) {
-                    const newFilePath = new ADFSFilePath(entry.fqn.filePath.volume, entry.fqn.filePath.volumeExplicit, entry.fqn.filePath.drive, entry.fqn.filePath.driveExplicit, `${entry.fqn.filePath.dir}.${entry.fqn.name}`, true, entry.serverPath as AbsPath);
+                    const newFilePath = new ADFSFilePath(entry.fqn.filePath.volume, entry.fqn.filePath.volumeExplicit, entry.fqn.filePath.drive, entry.fqn.filePath.driveExplicit, `${entry.fqn.filePath.dir}.${entry.fqn.name} `, true, entry.serverPath as AbsPath);
                     await recurse(newFilePath);
                 }
             }
@@ -777,7 +782,7 @@ class ADFSType implements beebfs.IFSType {
 
         const log: utils.Log | undefined = adfsState?.log;
 
-        //log?.pn(`ADFSType.parseFileOrDirString: str="${str}"; i=${i}; parseAsDir=${parseAsDir}; volume=${volume.name}`);
+        //log?.pn(`ADFSType.parseFileOrDirString: str = "${str}"; i = ${ i }; parseAsDir = ${ parseAsDir }; volume = ${ volume.name } `);
 
         if (i === str.length) {
             //log?.pn(`ADFSType.parseFileOrDirString: default properties`);
@@ -805,7 +810,7 @@ class ADFSType implements beebfs.IFSType {
             }
             i += 1;
 
-            log?.pn(`  Drive: ${drive}`);
+            log?.pn(`  Drive: ${drive} `);
         }
 
         // TODO... need to stop at the first space? This will surely eat too much sometimes.
@@ -862,7 +867,7 @@ class ADFSType implements beebfs.IFSType {
         }
 
         // Fix up the directory names.
-        log?.pn(`Fix up directories:`);
+        log?.pn(`Fix up directories: `);
         let dirIndex = 0;
         while (dirIndex < dirs.length) {
             log?.pn(`  dirs[${dirIndex}]="${dirs[dirIndex]}"`);
