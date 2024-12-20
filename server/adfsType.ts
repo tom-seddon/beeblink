@@ -507,7 +507,7 @@ class ADFSType implements beebfs.IFSType {
         const filePath = await this.mustFindADFSFilePath(fqn.filePath, log);
         const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
 
-        const entries = await this.findDirEntries(filePath, log);
+        const entries = await this.findObjects(filePath, log);
 
         const files: beebfs.File[] = [];
 
@@ -525,7 +525,7 @@ class ADFSType implements beebfs.IFSType {
     public async getCAT(filePath: beebfs.FilePath, state: beebfs.IFSState | undefined, _log: utils.Log | undefined): Promise<string> {
         const adfsFilePath = await this.mustFindADFSFilePath(filePath, _log);
 
-        const beebEntries = await this.findDirEntries(adfsFilePath, _log);
+        const beebEntries = await this.findObjects(adfsFilePath, _log);
 
         //const beebEntries = await this.findDirEntries(filePath.volume, utils.getRegExpFromAFSP(filePath.drive), utils.getRegExpFromAFSP(filePath.dir), utils.MATCH_ANY_REG_EXP, false, true, _log);
 
@@ -700,7 +700,7 @@ class ADFSType implements beebfs.IFSType {
         ++dirIndex;
 
         while (dirIndex < dirs.length) {
-            const entries = await this.findDirEntries(currentFilePath, log);
+            const entries = await this.findObjects(currentFilePath, log);
             const nameRegExp = utils.getRegExpFromAFSP(dirs[dirIndex]);
             let foundEntry: beebfs.Dir | undefined;
             for (const entry of entries) {
@@ -725,7 +725,7 @@ class ADFSType implements beebfs.IFSType {
         return currentFilePath;
     }
 
-    private async findDirEntries(filePath: ADFSFilePath, log: utils.Log | undefined): Promise<beebfs.FSObject[]> {
+    private async findObjects(filePath: ADFSFilePath, log: utils.Log | undefined): Promise<beebfs.FSObject[]> {
         const entries: beebfs.FSObject[] = [];
 
         const infos: inf.IINF[] = await inf.getINFsForFolder(filePath.serverFolder, true, log);
@@ -746,7 +746,7 @@ class ADFSType implements beebfs.IFSType {
         const files: beebfs.File[] = [];
 
         const recurse = async (filePath: ADFSFilePath): Promise<void> => {
-            const entries = await this.findDirEntries(filePath, log);
+            const entries = await this.findObjects(filePath, log);
             for (const entry of entries) {
                 if (entry instanceof beebfs.File) {
                     if (utils.matchesOptionalRegExp(entry.fqn.filePath.dir, dirRegExp) && utils.matchesOptionalRegExp(entry.fqn.name, nameRegExp)) {
