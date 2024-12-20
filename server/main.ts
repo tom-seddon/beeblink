@@ -1004,7 +1004,7 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
     }
 
     gaManipulator.whenQuiescent(() => {
-        process.stderr.write('gitattributes: finished scanning for BASIC files.\n');
+        process.stderr.write(`gitattributes: scanned ${gaManipulator.getNumFilesScannedForBASIC()} files. Found ${gaManipulator.getNumBASICFiles()} BASIC files.\n`);
     });
 
     return gaManipulator;

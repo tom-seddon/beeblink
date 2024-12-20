@@ -958,14 +958,6 @@ class TubeHostType implements beebfs.IFSType {
         return path.join(tubeHostFilePath.serverFolder, beebfs.getServerCharsForNamePart(fqn.filePath.dir) + '.' + beebfs.getServerCharsForNamePart(fqn.name)) as VolRelPath;
     }
 
-    public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        const files: beebfs.File[] = [];
-
-        await this.findBeebFilesInVolumeRecurse(volume, log, files, undefined, undefined, '' as VolRelPath);
-
-        return files;
-    }
-
     public async locateBeebFiles(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
         // TubeHost volume files have unknowable drives, but that will still
         // match an explicit # or *.
@@ -973,8 +965,8 @@ class TubeHostType implements beebfs.IFSType {
             return [];
         }
 
-        const dirRegExp = fqn.filePath.dirExplicit ? utils.getRegExpFromAFSP(fqn.filePath.dir) : utils.MATCH_ANY_REG_EXP;
-        const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
+        const dirRegExp = fqn.filePath.dirExplicit ? utils.getOptionalRegExpFromAFSP(fqn.filePath.dir) : undefined;
+        const nameRegExp = utils.getOptionalRegExpFromAFSP(fqn.name);
 
         const files: beebfs.File[] = [];
         await this.findBeebFilesInVolumeRecurse(fqn.filePath.volume, log, files, dirRegExp, nameRegExp, '' as VolRelPath);

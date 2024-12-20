@@ -520,10 +520,6 @@ class ADFSType implements beebfs.IFSType {
         return path.join(adfsFilePath.serverFolder, beebfs.getServerCharsForName(fqn.name)) as VolRelPath;
     }
 
-    public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        return await this.findFiles(volume, undefined, undefined, undefined, log);
-    }
-
     // The dir matching is a bit weird - the entire dir string is matched, and
     // regexp-style, so * matches any number of directories. But this is
     // (probably) actually what you want.

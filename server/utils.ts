@@ -810,12 +810,17 @@ export function isAmbiguousAFSP(afsp: string): boolean {
     return false;
 }
 
-// The regexp is actually a bit cleverer than the afsp, at least compared to
-// how DFS does it, in that a * will match chars in the middle of a string,
-// not just at the end.
-export function getRegExpFromAFSP(afsp: string): RegExp {
+// The generated regexp is actually a bit cleverer than the afsp, at least
+// compared to how DFS does it, in that a * will match chars in the middle of a
+// string, not just at the end.
+//
+// getOptionalRegExp is for cases where there's a fast path that lets all items
+// through when the regexp is undefined. getRegExp will return a match-any
+// regexp in that case.
+
+export function getOptionalRegExpFromAFSP(afsp: string): RegExp | undefined {
     if (afsp === '*') {
-        return MATCH_ANY_REG_EXP;
+        return undefined;
     } else {
         let r = '^';
 
@@ -835,6 +840,15 @@ export function getRegExpFromAFSP(afsp: string): RegExp {
 
         return new RegExp(r, 'i');
     }
+}
+
+export function getRegExpFromAFSP(afsp: string): RegExp {
+    let regExp = getOptionalRegExpFromAFSP(afsp);
+    if (regExp === undefined) {
+        regExp = MATCH_ANY_REG_EXP;
+    }
+
+    return regExp;
 }
 
 /////////////////////////////////////////////////////////////////////////

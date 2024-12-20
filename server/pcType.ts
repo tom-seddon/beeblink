@@ -217,18 +217,14 @@ class PCType implements beebfs.IFSType {
         return fqn.name;
     }
 
-    public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        return await this.findFiles(volume, undefined, log);
-    }
-
     public async locateBeebFiles(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
+        const nameRegExp = utils.getOptionalRegExpFromAFSP(fqn.name);
 
         return await this.findFiles(fqn.filePath.volume, nameRegExp, log);
     }
 
     public async findObjectsMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
+        const nameRegExp = utils.getOptionalRegExpFromAFSP(fqn.name);
 
         return await this.findFiles(fqn.filePath.volume, nameRegExp, log);
     }

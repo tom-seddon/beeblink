@@ -371,14 +371,10 @@ class DFSType implements beebfs.IFSType {
         return path.join(fqn.filePath.drive.toUpperCase(), beebfs.getServerCharsForNamePart(fqn.filePath.dir) + '.' + beebfs.getServerCharsForNamePart(fqn.name));
     }
 
-    public async findBeebFilesInVolume(volume: beebfs.Volume, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        return await this.findFiles(volume, undefined, undefined, undefined, log);
-    }
-
     public async locateBeebFiles(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        const driveRegExp = fqn.filePath.driveExplicit ? utils.getRegExpFromAFSP(fqn.filePath.drive) : utils.MATCH_ANY_REG_EXP;
-        const dirRegExp = fqn.filePath.driveExplicit ? utils.getRegExpFromAFSP(fqn.filePath.dir) : utils.MATCH_ANY_REG_EXP;
-        const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
+        const driveRegExp = fqn.filePath.driveExplicit ? utils.getOptionalRegExpFromAFSP(fqn.filePath.drive) : undefined;
+        const dirRegExp = fqn.filePath.driveExplicit ? utils.getOptionalRegExpFromAFSP(fqn.filePath.dir) : undefined;
+        const nameRegExp = utils.getOptionalRegExpFromAFSP(fqn.name);
         return await this.findFiles(fqn.filePath.volume, driveRegExp, dirRegExp, nameRegExp, log);
     }
 

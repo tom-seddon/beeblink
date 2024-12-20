@@ -34,6 +34,8 @@ export class Manipulator {
     private log: utils.Log | undefined;
     private extraVerbose = false;
     private quiescentCallbacks: (() => void)[];
+    private numFilesScanned = 0;
+    private numBASICFiles = 0;
 
     public constructor(verbose: boolean, extraVerbose: boolean) {
         this.queue = [];
@@ -77,23 +79,37 @@ export class Manipulator {
         }
     }
 
+    public getNumFilesScannedForBASIC(): number {
+        return this.numFilesScanned;
+    }
+
+    public getNumBASICFiles(): number {
+        return this.numBASICFiles;
+    }
+
     public scanForBASIC(volume: beebfs.Volume): void {
         if (volume.isReadOnly()) {
             return;
         }
 
         this.push(async (): Promise<void> => {
-            const beebFiles = await volume.type.findBeebFilesInVolume(volume, undefined);
+            // This is basically equivalent to "*LOCATE *", which will find
+            // everything.
+            const beebFiles = await volume.type.locateBeebFiles(new beebfs.FQN(new beebfs.FilePath(volume, true, '*', false, '*', false), '*'), undefined);
 
             //this.log?.pn(path.join(drive.volumePath, drive.name) + ': ' + beebFiles.length + ' Beeb file(s)\n');
 
             for (const beebFile of beebFiles) {
                 const data = await utils.tryReadFile(beebFile.serverPath);
+                ++this.numFilesScanned;
                 if (data === undefined) {
                     continue;
                 }
 
                 const isBASIC = utils.isBASIC(data);
+                if (isBASIC) {
+                    ++this.numBASICFiles;
+                }
 
                 //this.log?.pn(beebFile.hostPath + ': is BASIC: ' + (isBASIC ? 'yes' : 'no'));
 
