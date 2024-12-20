@@ -328,8 +328,8 @@ export abstract class FSObject {
 
     // Return placeholder values if the object does not have these properties.
     //
-    // This isn't terribly nice, but OSFILE kind of assumes that all objects
-    // have these properties, even though they don't.
+    // This isn't terribly nice, but OSFILE and the .inf format kind of assume
+    // that all objects have these properties, even though they don't.
     public abstract getLoad(): FileAddress;
     public abstract getExec(): FileAddress;
     public abstract tryGetSize(): Promise<number>;
@@ -434,8 +434,7 @@ export class Dir extends FSObject {
 
 class OpenFile {
     public readonly handle: number;
-    public readonly serverPath: string;
-    public readonly fqn: FQN;
+    public readonly file: File;
     public readonly read: boolean;
     public readonly write: boolean;
     public readonly openedAsText: boolean;
@@ -447,10 +446,9 @@ class OpenFile {
     // massively simplifies the error handling.
     public readonly contents: number[];
 
-    public constructor(handle: number, serverPath: string, fqn: FQN, read: boolean, write: boolean, openedAsText: boolean, contents: number[]) {
+    public constructor(handle: number, file: File, read: boolean, write: boolean, openedAsText: boolean, contents: number[]) {
         this.handle = handle;
-        this.serverPath = serverPath;
-        this.fqn = fqn;
+        this.file = file;
         this.read = read;
         this.write = write;
         this.openedAsText = openedAsText;
@@ -543,6 +541,7 @@ export class OSFILEResult {
 // Write a file to disk, creating the folder for it if required and throwing a
 // suitable BBC-friendly error if something goes wrong.
 export async function writeFile(filePath: string, data: Buffer): Promise<void> {
+    //console.trace(`writeFile: ${filePath}`);
     try {
         await utils.fsMkdirAndWriteFile(filePath, data);
     } catch (error) {
@@ -691,9 +690,9 @@ export interface IFSType {
     parseFileString: (str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean) => FQN;
     parseDirString: (str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean) => FilePath;
 
-    // get ideal server path for FQN, relative to whichever volume it's in. Used
-    // when creating a new file.
-    getIdealVolumeRelativeServerPath: (fqn: FQN) => Promise<string>;
+    // get ideal server path for FQN. Type must Prepend volume path. Used when
+    // creating a new file.
+    getIdealAbsoluteServerPath: (fqn: FQN) => Promise<string>;
 
     // get *CAT text.
     getCAT: (filePath: FilePath, state: IFSState | undefined, log: utils.Log | undefined) => Promise<string>;
@@ -709,7 +708,7 @@ export interface IFSType {
     rename: (oldFQN: FQN, newName: FQN) => Promise<IRenameFileResult | undefined>;
 
     // write the metadata for the given file.
-    writeBeebMetadata: (serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes) => Promise<void>;
+    writeBeebMetadata: (serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, size: number, attr: FileAttributes) => Promise<void>;
 
     // get new attributes from attribute string. Return undefined if invalid.
     getNewAttributes: (oldAttr: FileAttributes, attrString: string) => FileAttributes | undefined;
@@ -758,7 +757,7 @@ async function getObjectInternal(fqn: FQN, wildcardsOK: boolean, log: utils.Log 
 // File not found error.
 export async function getObject(fqn: FQN, wildcardsOK: boolean, log: utils.Log | undefined): Promise<FSObject | undefined> {
     log?.pn(`getObject: ${fqn}; wildCardsOK = ${wildcardsOK} `);
-    return getObject(fqn, wildcardsOK, log);
+    return getObjectInternal(fqn, wildcardsOK, log);
 }
 
 export async function mustGetObject(fqn: FQN, wildcardsOK: boolean, log: utils.Log | undefined): Promise<FSObject> {
@@ -1431,7 +1430,7 @@ export class FS {
                 text += ' (text)';
             }
 
-            text += ' PTR#=&' + utils.hex8(openFile.ptr) + ' EXT#=&' + utils.hex8(openFile.contents.length) + ' - ' + openFile.serverPath + utils.BNL;
+            text += ' PTR#=&' + utils.hex8(openFile.ptr) + ' EXT#=&' + utils.hex8(openFile.contents.length) + ' - ' + openFile.file.serverPath + utils.BNL;
         }
 
         if (!anyOpen) {
@@ -1642,14 +1641,18 @@ export class FS {
         }
 
         let contentsBuffer: Buffer | undefined;
-        const file = await getBeebFile(fqn, read && !write, this.log);
+        let file = await getBeebFile(fqn, read && !write, this.log);
         if (file !== undefined) {
+            if (!(file instanceof File)) {
+                return errors.notAFile();
+            }
+
             // Files can be opened once for write, or multiple times for read.
             {
                 for (let otherIndex = 0; otherIndex < this.openFiles.length; ++otherIndex) {
                     const otherOpenFile = this.openFiles[otherIndex];
                     if (otherOpenFile !== undefined) {
-                        if (otherOpenFile.serverPath === file.serverPath) {
+                        if (otherOpenFile.file.serverPath === file.serverPath) {
                             if (otherOpenFile.write || write) {
                                 this.log?.pn(`        already open: handle=0x${this.firstFileHandle + otherIndex}`);
                                 return errors.open();
@@ -1708,7 +1711,7 @@ export class FS {
             await inf.mustNotExist(serverPath);
 
             // Create file.
-            await this.OSFILECreate(fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, 0);
+            file = await this.saveFile(fqn, SHOULDNT_LOAD, SHOULDNT_EXEC, DEFAULT_ATTR, Buffer.alloc(0));
         }
 
         const contents: number[] = [];
@@ -1718,7 +1721,7 @@ export class FS {
             }
         }
 
-        const openFile = new OpenFile(this.firstFileHandle + index, serverPath, fqn, read, write, textPrefix !== undefined, contents);
+        const openFile = new OpenFile(this.firstFileHandle + index, file, read, write, textPrefix !== undefined, contents);
         this.openFiles[index] = openFile;
         this.log?.pn(`        handle=0x${openFile.handle}`);
         return openFile.handle;
@@ -1838,9 +1841,9 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async writeBeebFileMetadata(object: FSObject): Promise<void> {
+    public async writeObjectMetadata(object: FSObject): Promise<void> {
         try {
-            await this.writeBeebMetadata(object.serverPath, object.fqn, object.getLoad(), object.getExec(), object.attr);
+            await this.writeBeebMetadata(object.serverPath, object.fqn, object.getLoad(), object.getExec(), await object.tryGetSize(), object.attr);
         } catch (error) {
             errors.nodeError(error);
         }
@@ -1970,7 +1973,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async getServerPath(fqn: FQN): Promise<string> {
-        return path.join(fqn.filePath.volume.path, await fqn.filePath.volume.type.getIdealVolumeRelativeServerPath(fqn));
+        return await fqn.filePath.volume.type.getIdealAbsoluteServerPath(fqn);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2018,14 +2021,14 @@ export class FS {
 
     private async OSFILESave(fqn: FQN, load: FileAddress, exec: FileAddress, data: Buffer): Promise<OSFILEResult> {
         const attr = DEFAULT_ATTR;
-        await this.saveFile(fqn, load, exec, attr, data);
-        return new OSFILEResult(1, this.createOSFILEBlock(load, exec, data.length, attr), undefined, undefined);
+        const file = await this.saveFile(fqn, load, exec, attr, data);
+        return new OSFILEResult(file.getObjectType(), this.createOSFILEBlock(load, exec, data.length, attr), undefined, undefined);
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async saveFile(fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes, data: Buffer): Promise<void> {
+    private async saveFile(fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes, data: Buffer): Promise<File> {
         FS.mustBeWriteableVolume(fqn.filePath.volume);
         FS.mustNotBeTooBig(data.length);
 
@@ -2044,7 +2047,9 @@ export class FS {
         }
 
         await this.writeBeebData(serverPath, fqn, data);
-        await this.writeBeebMetadata(serverPath, fqn, load, exec, attr);
+        await this.writeBeebMetadata(serverPath, fqn, load, exec, data.length, attr);
+
+        return new File(serverPath, fqn, load, exec, attr);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2064,8 +2069,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async writeBeebMetadata(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, attr: FileAttributes): Promise<void> {
-        await fqn.filePath.volume.type.writeBeebMetadata(serverPath, fqn, load, exec, attr);
+    private async writeBeebMetadata(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, size: number, attr: FileAttributes): Promise<void> {
+        await fqn.filePath.volume.type.writeBeebMetadata(serverPath, fqn, load, exec, size, attr);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2098,7 +2103,7 @@ export class FS {
 
         const size = await object.tryGetSize();
 
-        await this.writeBeebMetadata(object.serverPath, object.fqn, load, exec, attr);
+        await this.writeBeebMetadata(object.serverPath, object.fqn, load, exec, size, attr);
 
         return new OSFILEResult(object.getObjectType(), this.createOSFILEBlock(load, exec, size, attr), undefined, undefined);
     }
@@ -2169,7 +2174,7 @@ export class FS {
         if (object instanceof File) {
             for (const openFile of this.openFiles) {
                 if (openFile !== undefined) {
-                    if (openFile.serverPath === object.serverPath) {
+                    if (openFile.file.serverPath === object.serverPath) {
                         return errors.open();
                     }
                 }
@@ -2256,7 +2261,8 @@ export class FS {
         if (openFile.dirty) {
             const data = Buffer.from(openFile.contents);
 
-            await this.writeBeebData(openFile.serverPath, openFile.fqn, data);
+            await this.writeBeebData(openFile.file.serverPath, openFile.file.fqn, data);
+            await this.writeBeebMetadata(openFile.file.serverPath, openFile.file.fqn, openFile.file.getLoad(), openFile.file.getExec(), await openFile.file.tryGetSize(), openFile.file.attr);
 
             openFile.dirty = false;
         }

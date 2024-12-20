@@ -486,12 +486,12 @@ class ADFSType implements beebfs.IFSType {
         return this.parseFileOrDirString(str, i, state, true, volume, volumeExplicit).filePath;
     }
 
-    public async getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): Promise<VolRelPath> {
+    public async getIdealAbsoluteServerPath(fqn: beebfs.FQN): Promise<AbsPath> {
         // The directory structure must be present when creating a file. *CDIR
         // has its own handling.
         const adfsFilePath = await this.mustFindADFSFilePath(fqn.filePath, undefined);
 
-        return path.join(adfsFilePath.serverFolder, beebfs.getServerCharsForName(fqn.name)) as VolRelPath;
+        return path.join(adfsFilePath.serverFolder, beebfs.getServerCharsForName(fqn.name)) as AbsPath;
     }
 
     // The dir matching is a bit weird - the entire dir string is matched, and
@@ -596,9 +596,8 @@ class ADFSType implements beebfs.IFSType {
         return errors.generic('TODO: rename');
     }
 
-    public async writeBeebMetadata(serverPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, attr: beebfs.FileAttributes): Promise<void> {
-        // TODO... fill out the size! Though BeebLink does ignore it.
-        await inf.writeStandardINFFile(serverPath, fqn.name, load, exec, 0, attr, undefined);
+    public async writeBeebMetadata(serverPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, size: number, attr: beebfs.FileAttributes): Promise<void> {
+        await inf.writeStandardINFFile(serverPath, fqn.name, load, exec, size, attr, undefined);
     }
 
     public getNewAttributes(_oldAttr: beebfs.FileAttributes, attrString: string): beebfs.FileAttributes | undefined {

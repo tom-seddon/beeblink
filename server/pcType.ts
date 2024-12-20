@@ -213,8 +213,8 @@ class PCType implements beebfs.IFSType {
         }
     }
 
-    public async getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): Promise<string> {
-        return fqn.name;
+    public async getIdealAbsoluteServerPath(fqn: beebfs.FQN): Promise<string> {
+        return path.join(fqn.filePath.volume.path, fqn.name);
     }
 
     public async locateBeebFiles(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
@@ -257,7 +257,7 @@ class PCType implements beebfs.IFSType {
         return notSupported();
     }
 
-    public async writeBeebMetadata(_serverPath: string, _fqn: beebfs.FQN, _load: beebfs.FileAddress, _exec: beebfs.FileAddress, _attr: beebfs.FileAttributes): Promise<void> {
+    public async writeBeebMetadata(_serverPath: string, _fqn: beebfs.FQN, _load: beebfs.FileAddress, _exec: beebfs.FileAddress, _size: number, _attr: beebfs.FileAttributes): Promise<void> {
         return notSupported();
     }
 

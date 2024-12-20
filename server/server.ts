@@ -1655,7 +1655,7 @@ export class Server {
             }
 
             const newObject = object.withModifiedAttributes(newAttr);
-            await this.bfs.writeBeebFileMetadata(newObject);
+            await this.bfs.writeObjectMetadata(newObject);
         }
     };
 

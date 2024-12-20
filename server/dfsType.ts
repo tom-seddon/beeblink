@@ -367,8 +367,8 @@ class DFSType implements beebfs.IFSType {
         return this.parseFileOrDirString(str, i, state, true, volume, volumeExplicit).filePath;
     }
 
-    public async getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): Promise<string> {
-        return path.join(fqn.filePath.drive.toUpperCase(), beebfs.getServerCharsForNamePart(fqn.filePath.dir) + '.' + beebfs.getServerCharsForNamePart(fqn.name));
+    public async getIdealAbsoluteServerPath(fqn: beebfs.FQN): Promise<string> {
+        return path.join(fqn.filePath.volume.path, fqn.filePath.drive.toUpperCase(), beebfs.getServerCharsForNamePart(fqn.filePath.dir) + '.' + beebfs.getServerCharsForNamePart(fqn.name));
     }
 
     public async locateBeebFiles(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
@@ -464,12 +464,12 @@ class DFSType implements beebfs.IFSType {
     public async rename(oldFQN: beebfs.FQN, newFQN: beebfs.FQN): Promise<beebfs.IRenameFileResult> {
         const oldFile = await beebfs.mustGetBeebFile(oldFQN, false, undefined);
 
-        const newServerPath = path.join(newFQN.filePath.volume.path, await this.getIdealVolumeRelativeServerPath(newFQN));
+        const newServerPath = await this.getIdealAbsoluteServerPath(newFQN);
         await inf.mustNotExist(newServerPath);
 
         const newFile = new beebfs.File(newServerPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr);
 
-        await this.writeBeebMetadata(newFile.serverPath, newFQN, newFile.load, newFile.exec, newFile.attr);
+        await this.writeBeebMetadata(newFile.serverPath, newFQN, newFile.load, newFile.exec, await newFile.tryGetSize(), newFile.attr);
 
         try {
             await utils.fsRename(oldFile.serverPath, newFile.serverPath);
@@ -482,7 +482,7 @@ class DFSType implements beebfs.IFSType {
         return { oldServerPath: oldFile.serverPath, newServerPath };
     }
 
-    public async writeBeebMetadata(serverPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, attr: beebfs.FileAttributes): Promise<void> {
+    public async writeBeebMetadata(serverPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, size: number, attr: beebfs.FileAttributes): Promise<void> {
         await inf.writeNonStandardINFFile(serverPath, `${fqn.filePath.dir}.${fqn.name}`, load, exec, (attr & beebfs.L_ATTR) !== 0);
     }
 

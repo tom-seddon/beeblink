@@ -947,7 +947,7 @@ class TubeHostType implements beebfs.IFSType {
         return parseResult.filePath;
     }
 
-    public async getIdealVolumeRelativeServerPath(fqn: beebfs.FQN): Promise<VolRelPath> {
+    public async getIdealAbsoluteServerPath(fqn: beebfs.FQN): Promise<AbsPath> {
         const tubeHostFilePath = mustBeTubeHostFilePath(fqn.filePath);
 
         if (tubeHostFilePath.serverFolder === undefined) {
@@ -955,7 +955,7 @@ class TubeHostType implements beebfs.IFSType {
             return driveEmptyError('Drive empty (?)');
         }
 
-        return path.join(tubeHostFilePath.serverFolder, beebfs.getServerCharsForNamePart(fqn.filePath.dir) + '.' + beebfs.getServerCharsForNamePart(fqn.name)) as VolRelPath;
+        return path.join(tubeHostFilePath.volume.path, tubeHostFilePath.serverFolder, beebfs.getServerCharsForNamePart(fqn.filePath.dir) + '.' + beebfs.getServerCharsForNamePart(fqn.name)) as AbsPath;
     }
 
     public async locateBeebFiles(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
@@ -1097,12 +1097,10 @@ class TubeHostType implements beebfs.IFSType {
     public async rename(oldFQN: beebfs.FQN, newFQN: beebfs.FQN): Promise<beebfs.IRenameFileResult> {
         const oldFile = await beebfs.mustGetBeebFile(oldFQN, false, undefined);
 
-        const newServerPath = getAbsPath(newFQN.filePath.volume, await this.getIdealVolumeRelativeServerPath(newFQN));
+        const newServerPath = await this.getIdealAbsoluteServerPath(newFQN);
         await inf.mustNotExist(newServerPath);
 
         const newFile = new beebfs.File(newServerPath, newFQN, oldFile.load, oldFile.exec, oldFile.attr);
-
-        await this.writeBeebMetadata(newFile.serverPath, newFQN, newFile.load, newFile.exec, newFile.attr);
 
         try {
             await utils.fsRename(oldFile.serverPath, newFile.serverPath);
@@ -1110,12 +1108,14 @@ class TubeHostType implements beebfs.IFSType {
             return errors.nodeError(error);
         }
 
+        await this.writeBeebMetadata(newFile.serverPath, newFQN, newFile.load, newFile.exec, await newFile.tryGetSize(), newFile.attr);
+
         await utils.forceFsUnlink(oldFile.serverPath + inf.ext);
 
         return { oldServerPath: oldFile.serverPath, newServerPath };
     }
 
-    public async writeBeebMetadata(serverPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, attr: beebfs.FileAttributes): Promise<void> {
+    public async writeBeebMetadata(serverPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, size: number, attr: beebfs.FileAttributes): Promise<void> {
         await inf.writeNonStandardINFFile(serverPath, `${fqn.filePath.dir}.${fqn.name}`, load, exec, (attr & beebfs.L_ATTR) !== 0);
     }
 
