@@ -671,7 +671,7 @@ export interface IFSType {
     //
     // A return value of undefined indicates that attributes aren't relevant for
     // the current FS. (What's the value of distinguishing this from ''? TBC...)
-    getAttrString: (file: File) => string | undefined;
+    getAttrString: (object: FSObject) => string | undefined;
 }
 
 /////////////////////////////////////////////////////////////////////////

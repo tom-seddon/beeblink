@@ -73,32 +73,6 @@ function todoError(what: string): never {
 //     return path.join(volume.path, volRelPath) as AbsPath;
 // }
 
-function getAttributesString(attr: beebfs.FileAttributes, isDirectory: boolean): string {
-    let str = '';
-
-    if (attr & beebfs.R_ATTR) {
-        str += 'R';
-    }
-
-    if (attr & beebfs.W_ATTR) {
-        str += 'W';
-    }
-
-    if (attr & beebfs.L_ATTR) {
-        str += 'L';
-    }
-
-    if (attr & beebfs.E_ATTR) {
-        str += 'E';
-    }
-
-    if (isDirectory) {
-        str += 'D';
-    }
-
-    return str;
-}
-
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
@@ -565,13 +539,8 @@ class ADFSType implements beebfs.IFSType {
         const catStartIndex = text.length;
         for (const beebEntry of beebEntries) {
             const attributesWidth = 6;
-            if (beebEntry instanceof beebfs.File) {
-                text += getAttributesString(beebEntry.attr, false).padEnd(attributesWidth);
-                text += beebEntry.fqn.name;
-            } else if (beebEntry instanceof beebfs.Dir) {
-                text += getAttributesString(beebEntry.attr, true).padEnd(attributesWidth);
-                text += beebEntry.fqn.name;
-            }
+            text += this.getAttrString(beebEntry).padEnd(attributesWidth);
+            text += beebEntry.fqn.name;
 
             while ((text.length - catStartIndex) % 20 !== 0) {
                 text += ' ';
@@ -656,7 +625,7 @@ class ADFSType implements beebfs.IFSType {
     public async getInfoText(object: beebfs.FSObject, wide: boolean): Promise<string> {
         const stats = await object.tryGetStats();
 
-        let text = `${object.fqn.name.padEnd(15)} ${getAttributesString(object.attr, false).padEnd(6)}`;
+        let text = `${object.fqn.name.padEnd(15)} ${this.getAttrString(object).padEnd(6)}`;
         if (object instanceof beebfs.File) {
             text += ` ${utils.hex8(object.load)} ${utils.hex8(object.exec)} `;
             if (stats !== undefined) {
@@ -675,9 +644,31 @@ class ADFSType implements beebfs.IFSType {
         return text;
     }
 
-    public getAttrString(file: beebfs.File): string | undefined {
-        return getAttributesString(file.attr, false);
-    }
+    public getAttrString(object: beebfs.FSObject): string  {
+        let str = '';
+
+        if (object.attr & beebfs.R_ATTR) {
+            str += 'R';
+        }
+    
+        if (object.attr & beebfs.W_ATTR) {
+            str += 'W';
+        }
+    
+        if (object.attr & beebfs.L_ATTR) {
+            str += 'L';
+        }
+    
+        if (object.attr & beebfs.E_ATTR) {
+            str += 'E';
+        }
+    
+        if (object instanceof beebfs.Dir) {
+            str += 'D';
+        }
+    
+        return str;
+        }
 
     private async mustFindADFSFilePath(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<ADFSFilePath> {
         const adfsFilePath = await this.findADFSFilePath(filePath, log);

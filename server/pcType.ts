@@ -287,7 +287,7 @@ class PCType implements beebfs.IFSType {
         return text;
     }
 
-    public getAttrString(_file: beebfs.File): string | undefined {
+    public getAttrString(_object: beebfs.FSObject): string | undefined {
         return undefined;
     }
 

@@ -1157,8 +1157,8 @@ class TubeHostType implements beebfs.IFSType {
         return text;
     }
 
-    public getAttrString(file: beebfs.File): string | undefined {
-        if ((file.attr & beebfs.L_ATTR) !== 0) {
+    public getAttrString(object: beebfs.FSObject): string {
+        if ((object.attr & beebfs.L_ATTR) !== 0) {
             return 'L';
         } else {
             return ' ';
