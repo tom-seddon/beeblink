@@ -634,7 +634,7 @@ export interface IFSType {
     //
     // The volume will be of the right type. Drive and directory wildcards don't
     // have to work.
-    findObjectsMatching: (fqn: FQN, log: utils.Log | undefined) => Promise<File[]>;
+    findObjectsMatching: (fqn: FQN, log: utils.Log | undefined) => Promise<FSObject[]>;
 
     // parse file/dir string, starting at index i. 
     parseFileString: (str: string, i: number, state: IFSState | undefined, volume: Volume, volumeExplicit: boolean) => FQN;
@@ -692,7 +692,7 @@ async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log: utils.Lo
     if (files.length === 0) {
         return undefined;
     } else if (files.length === 1) {
-        return files[0];
+        return mustBeFile(files[0]);
     } else {
         return errors.ambiguousName();
     }
@@ -1258,7 +1258,11 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async findObjectsMatching(fqn: FQN): Promise<File[]> {
-        return await fqn.filePath.volume.type.findObjectsMatching(fqn, this.log);
+        const files: File[] = [];
+        for (const object of await fqn.filePath.volume.type.findObjectsMatching(fqn, this.log)) {
+            files.push(mustBeFile(object));
+        }
+        return files;
     }
 
     /////////////////////////////////////////////////////////////////////////

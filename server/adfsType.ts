@@ -503,23 +503,24 @@ class ADFSType implements beebfs.IFSType {
         return await this.findFiles(fqn.filePath.volume, driveRegExp, dirRegExp, utils.getRegExpFromAFSP(fqn.name), log);
     }
 
-    public async findObjectsMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
+    public async findObjectsMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.FSObject[]> {
         const filePath = await this.mustFindADFSFilePath(fqn.filePath, log);
-        const nameRegExp = utils.getRegExpFromAFSP(fqn.name);
+        const nameRegExp = utils.getOptionalRegExpFromAFSP(fqn.name);
 
-        const entries = await this.findObjects(filePath, log);
+        const foundObjects = await this.findObjects(filePath, log);
+        if (nameRegExp === undefined) {
+            return foundObjects;
+        } else {
+            const matchingObjects: beebfs.FSObject[] = [];
 
-        const files: beebfs.File[] = [];
-
-        for (const entry of entries) {
-            if (entry instanceof beebfs.File) {
-                if (nameRegExp.exec(entry.fqn.name) !== null) {
-                    files.push(entry);
+            for (const foundObject of foundObjects) {
+                if (nameRegExp.exec(foundObject.fqn.name) !== null) {
+                    matchingObjects.push(foundObject);
                 }
             }
-        }
 
-        return files;
+            return matchingObjects;
+        }
     }
 
     public async getCAT(filePath: beebfs.FilePath, state: beebfs.IFSState | undefined, _log: utils.Log | undefined): Promise<string> {
@@ -644,31 +645,31 @@ class ADFSType implements beebfs.IFSType {
         return text;
     }
 
-    public getAttrString(object: beebfs.FSObject): string  {
+    public getAttrString(object: beebfs.FSObject): string {
         let str = '';
 
         if (object.attr & beebfs.R_ATTR) {
             str += 'R';
         }
-    
+
         if (object.attr & beebfs.W_ATTR) {
             str += 'W';
         }
-    
+
         if (object.attr & beebfs.L_ATTR) {
             str += 'L';
         }
-    
+
         if (object.attr & beebfs.E_ATTR) {
             str += 'E';
         }
-    
+
         if (object instanceof beebfs.Dir) {
             str += 'D';
         }
-    
+
         return str;
-        }
+    }
 
     private async mustFindADFSFilePath(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<ADFSFilePath> {
         const adfsFilePath = await this.findADFSFilePath(filePath, log);
