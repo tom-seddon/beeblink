@@ -1655,15 +1655,6 @@ export class Server {
             }
 
             const newObject = object.withModifiedAttributes(newAttr);
-            if (newObject === undefined) {
-                if (objects.length > 1) {
-                    // Just eat the error if it's a wildcard operation.
-                    continue;
-                }
-
-                return errors.accessViolation();//???
-            }
-
             await this.bfs.writeBeebFileMetadata(newObject);
         }
     };

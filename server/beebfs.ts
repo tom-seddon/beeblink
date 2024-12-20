@@ -304,7 +304,7 @@ export class FQN {
 
 // "FSObject" - ugh. But there doesn't seem to be any easy way to make
 // Typescript let you have a class called "Object".
-export class FSObject {
+export abstract class FSObject {
     // Path of the corresponding file or folder on the server filing system.
     public readonly serverPath: string;
 
@@ -324,9 +324,18 @@ export class FSObject {
         return await utils.tryStat(this.serverPath);
     }
 
-    public withModifiedAttributes(_attr: FileAttributes): FSObject | undefined {
-        return undefined;
-    }
+    public abstract withModifiedAttributes(_attr: FileAttributes): FSObject;
+
+    // Return placeholder values if the object does not have these properties.
+    //
+    // This isn't terribly nice, but OSFILE kind of assumes that all objects
+    // have these properties, even though they don't.
+    public abstract getLoad(): FileAddress;
+    public abstract getExec(): FileAddress;
+    public abstract tryGetSize(): Promise<number>;
+
+    // As returned by OSFILE.
+    public abstract getObjectType(): number;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -361,6 +370,18 @@ export class File extends FSObject {
     public override withModifiedAttributes(attr: FileAttributes): File {
         return new File(this.serverPath, this.fqn, this.load, this.exec, attr);
     }
+
+    public override getLoad(): FileAddress {
+        return this.load;
+    }
+
+    public override getExec(): FileAddress {
+        return this.exec;
+    }
+
+    public override getObjectType(): number {
+        return 1;
+    }
 }
 
 // Helper function for the benefit of the DFS and TubeHost types, for which
@@ -387,6 +408,24 @@ export class Dir extends FSObject {
 
     public override withModifiedAttributes(attr: FileAttributes): Dir {
         return new Dir(this.serverPath, this.fqn, attr);
+    }
+
+    public override getLoad(): FileAddress {
+        // This is what ADFS 2.03 returns.
+        return 0 as FileAddress;
+    }
+
+    public override getExec(): FileAddress {
+        // This is what ADFS 2.03 returns.
+        return 0 as FileAddress;
+    }
+
+    public override async tryGetSize(): Promise<number> {
+        return 0;
+    }
+
+    public override getObjectType(): number {
+        return 2;
     }
 }
 
@@ -689,7 +728,7 @@ export interface IFSType {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log: utils.Log | undefined): Promise<File | undefined> {
+async function getObjectInternal(fqn: FQN, wildcardsOK: boolean, log: utils.Log | undefined): Promise<FSObject | undefined> {
     if (!wildcardsOK) {
         if (utils.isAmbiguousAFSP(fqn.filePath.drive) ||
             utils.isAmbiguousAFSP(fqn.filePath.dir) ||
@@ -704,7 +743,7 @@ async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log: utils.Lo
     if (files.length === 0) {
         return undefined;
     } else if (files.length === 1) {
-        return mustBeFile(files[0]);
+        return files[0];
     } else {
         return errors.ambiguousName();
     }
@@ -717,14 +756,34 @@ async function getBeebFileInternal(fqn: FQN, wildcardsOK: boolean, log: utils.Lo
 //
 // If file not found: getBeebFile returns undefined, mustGetBeebFile raises a
 // File not found error.
+export async function getObject(fqn: FQN, wildcardsOK: boolean, log: utils.Log | undefined): Promise<FSObject | undefined> {
+    log?.pn(`getObject: ${fqn}; wildCardsOK = ${wildcardsOK} `);
+    return getObject(fqn, wildcardsOK, log);
+}
+
+export async function mustGetObject(fqn: FQN, wildcardsOK: boolean, log: utils.Log | undefined): Promise<FSObject> {
+    log?.pn(`mustGetObject: ${fqn}; wildCardsOK = ${wildcardsOK} `);
+    const object = await getObject(fqn, wildcardsOK, log);
+    if (object === undefined) {
+        return errors.notFound();
+    }
+
+    return object;
+}
+
 export async function getBeebFile(fqn: FQN, wildcardsOK: boolean, log: utils.Log | undefined): Promise<File | undefined> {
     log?.pn(`getBeebFile: ${fqn}; wildCardsOK = ${wildcardsOK} `);
-    return getBeebFileInternal(fqn, wildcardsOK, log);
+    const object = await getObjectInternal(fqn, wildcardsOK, log);
+    if (object === undefined || object instanceof File) {
+        return object;
+    } else {
+        return mustBeFile(object);
+    }
 }
 
 export async function mustGetBeebFile(fqn: FQN, wildcardsOK: boolean, log: utils.Log | undefined): Promise<File> {
     log?.pn(`mustGetBeebFile: ${fqn}; wildCardsOK = ${wildcardsOK} `);
-    const file = await getBeebFileInternal(fqn, wildcardsOK, log);
+    const file = await getBeebFile(fqn, wildcardsOK, log);
     if (file === undefined) {
         return errors.notFound();
     }
@@ -845,10 +904,16 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    // Causes a 'Locked' error if the file exists and is locked.
-    private static mustBeWriteableFile(file: File | undefined): void {
-        if (file !== undefined) {
-            if ((file.attr & L_ATTR) !== 0) {
+    // Object is a dir: 'Exists'
+    //
+    // Object is a locked file: 'Locked'
+    private static mustBeWriteableFile(object: FSObject | undefined): void {
+        if (object !== undefined) {
+            if (!(object instanceof File)) {
+                return errors.exists();
+            }
+
+            if ((object.attr & L_ATTR) !== 0) {
                 return errors.locked();
             }
         }
@@ -1775,16 +1840,7 @@ export class FS {
 
     public async writeBeebFileMetadata(object: FSObject): Promise<void> {
         try {
-            let load: FileAddress;
-            let exec: FileAddress;
-            if (object instanceof File) {
-                load = object.load;
-                exec = object.exec;
-            } else {
-                load = SHOULDNT_LOAD;
-                exec = SHOULDNT_EXEC;
-            }
-            await this.writeBeebMetadata(object.serverPath, object.fqn, load, exec, object.attr);
+            await this.writeBeebMetadata(object.serverPath, object.fqn, object.getLoad(), object.getExec(), object.attr);
         } catch (error) {
             errors.nodeError(error);
         }
@@ -1814,9 +1870,9 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async delete(fqn: FQN): Promise<void> {
-        const file = await mustGetBeebFile(fqn, false, this.log);
+        const object = await mustGetObject(fqn, false, this.log);
 
-        await this.deleteFile(file);
+        await this.deleteObject(object);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1975,12 +2031,12 @@ export class FS {
 
         let serverPath: string;
 
-        const file = await getBeebFile(fqn, false, this.log);
-        if (file !== undefined) {
-            this.mustNotBeOpen(file);
-            FS.mustBeWriteableFile(file);
+        const object = await getObject(fqn, false, this.log);
+        if (object !== undefined) {
+            this.mustNotBeOpen(object);
+            FS.mustBeWriteableFile(object);
 
-            serverPath = file.serverPath;
+            serverPath = object.serverPath;
         } else {
             serverPath = await this.getServerPath(fqn);
 
@@ -2015,6 +2071,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    // You can set the metadata for a 
     private async OSFILEWriteMetadata(
         fqn: FQN,
         load: FileAddress | undefined,
@@ -2022,41 +2079,39 @@ export class FS {
         attr: FileAttributes | undefined): Promise<OSFILEResult> {
         FS.mustBeWriteableVolume(fqn.filePath.volume);
 
-        const file = await getBeebFile(fqn, false, this.log);
-        if (file === undefined) {
+        const object = await getObject(fqn, false, this.log);
+        if (object === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         }
 
         if (load === undefined) {
-            load = file.load;
+            load = object.getLoad();
         }
 
         if (exec === undefined) {
-            exec = file.exec;
+            exec = object.getExec();
         }
 
         if (attr === undefined) {
-            attr = file.attr;
+            attr = object.attr;
         }
 
-        const fileSize = await file.tryGetSize();
+        const size = await object.tryGetSize();
 
-        await this.writeBeebMetadata(file.serverPath, file.fqn, load, exec, attr);
+        await this.writeBeebMetadata(object.serverPath, object.fqn, load, exec, attr);
 
-        return new OSFILEResult(1, this.createOSFILEBlock(load, exec, fileSize, attr), undefined, undefined);
+        return new OSFILEResult(object.getObjectType(), this.createOSFILEBlock(load, exec, size, attr), undefined, undefined);
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILEReadMetadata(fqn: FQN): Promise<OSFILEResult> {
-        const file = await getBeebFile(fqn, true, this.log);
-        if (file === undefined) {
+        const object = await getObject(fqn, true, this.log);
+        if (object === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         } else {
-            const fileSize = await file.tryGetSize();
-
-            return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, fileSize, file.attr), undefined, undefined);
+            return new OSFILEResult(1, this.createOSFILEBlock(object.getLoad(), object.getExec(), await object.tryGetSize(), object.attr), undefined, undefined);
         }
     }
 
@@ -2064,30 +2119,34 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async OSFILEDelete(fqn: FQN): Promise<OSFILEResult> {
-        const file = await getBeebFile(fqn, false, this.log);
-        if (file === undefined) {
+        const object = await getObject(fqn, false, this.log);
+        if (object === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
-        } else {
-            const fileSize = await file.tryGetSize();
-
-            await this.deleteFile(file);
-
-            return new OSFILEResult(1, this.createOSFILEBlock(file.load, file.exec, fileSize, file.attr), undefined, undefined);
         }
+
+        const size = await object.tryGetSize();
+
+        await this.deleteObject(object);
+
+        return new OSFILEResult(object.getObjectType(), this.createOSFILEBlock(object.getLoad(), object.getExec(), size, object.attr), undefined, undefined);
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private async deleteFile(file: File): Promise<void> {
-        FS.mustBeWriteableVolume(file.fqn.filePath.volume);
-        this.mustNotBeOpen(file);
-        FS.mustBeWriteableFile(file);
+    private async deleteObject(object: FSObject): Promise<void> {
+        if (!(object instanceof File)) {
+            return errors.notAFile();//TODO...
+        }
 
-        await file.fqn.filePath.volume.type.deleteFile(file);
+        FS.mustBeWriteableVolume(object.fqn.filePath.volume);
+        this.mustNotBeOpen(object);
+        FS.mustBeWriteableFile(object);
+
+        await object.fqn.filePath.volume.type.deleteFile(object);
 
         if (this.gaManipulator !== undefined) {
-            this.gaManipulator.deleteFile(file.serverPath);
+            this.gaManipulator.deleteFile(object.serverPath);
         }
     }
 
@@ -2105,12 +2164,14 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    // Causes a 'Open' error if the file appears to be open.
-    private mustNotBeOpen(file: File): void {
-        for (const openFile of this.openFiles) {
-            if (openFile !== undefined) {
-                if (openFile.serverPath === file.serverPath) {
-                    return errors.open();
+    // Causes a 'Open' error if the object is a file and appears to be open.
+    private mustNotBeOpen(object: FSObject): void {
+        if (object instanceof File) {
+            for (const openFile of this.openFiles) {
+                if (openFile !== undefined) {
+                    if (openFile.serverPath === object.serverPath) {
+                        return errors.open();
+                    }
                 }
             }
         }
