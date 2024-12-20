@@ -1433,16 +1433,16 @@ export class Server {
 
     private async filesInfoResponse(afsp: string, wide: boolean): Promise<string> {
         const fqn = await this.bfs.parseFileString(afsp);
-        const files = await this.bfs.findObjectsMatching(fqn);
+        const objects = await this.bfs.findObjectsMatching(fqn);
 
-        if (files.length === 0) {
+        if (objects.length === 0) {
             return errors.notFound();
         }
 
         let text = '';
 
-        for (const file of files) {
-            text += `${await this.bfs.getInfoText(file, wide)}${BNL}`;
+        for (const object of objects) {
+            text += `${await this.bfs.getInfoText(object, wide)}${BNL}`;
         }
 
         return text;
@@ -1642,13 +1642,29 @@ export class Server {
         }
 
         const fqn = await this.bfs.parseFileString(commandLine.parts[1]);
-        const beebFiles = await this.bfs.findObjectsMatching(fqn);
-        for (const beebFile of beebFiles) {
-            // the validity of `attrString' will be checked over and over again,
-            // which is kind of stupid.
-            const newFile = this.bfs.getFileWithModifiedAttributes(beebFile, attrString);
+        const objects = await this.bfs.findObjectsMatching(fqn);
+        for (const object of objects) {
+            const newAttr = this.bfs.getModifiedAttributesForObject(object, attrString);
+            if (newAttr === undefined) {
+                if (objects.length > 1) {
+                    // Just eat the error if it's a wildcard operation.
+                    continue;
+                }
 
-            await this.bfs.writeBeebFileMetadata(newFile);
+                return errors.badAttribute();
+            }
+
+            const newObject = object.withModifiedAttributes(newAttr);
+            if (newObject === undefined) {
+                if (objects.length > 1) {
+                    // Just eat the error if it's a wildcard operation.
+                    continue;
+                }
+
+                return errors.accessViolation();//???
+            }
+
+            await this.bfs.writeBeebFileMetadata(newObject);
         }
     };
 
@@ -2231,19 +2247,28 @@ export class Server {
         }
 
         const srcFQN = await this.bfs.parseFileString(commandLine.parts[1]);
-        const srcFiles = await this.bfs.findObjectsMatching(srcFQN);
-        if (srcFiles.length === 0) {
+        const srcObjects = await this.bfs.findObjectsMatching(srcFQN);
+        if (srcObjects.length === 0) {
             return errors.notFound();
         }
 
         const destFilePath = await this.bfs.parseDirString(commandLine.parts[2]);
 
         let result = '';
-        for (const srcFile of srcFiles) {
+        for (const srcObject of srcObjects) {
+            if (!(srcObject instanceof beebfs.File)) {
+                if (srcObjects.length > 1) {
+                    continue;
+                }
+
+                return errors.notAFile();
+            }
+
             try {
-                const destFQN = new beebfs.FQN(destFilePath, srcFile.fqn.name);
-                result += `${srcFile.fqn} -> ${destFQN}${BNL}`;
-                await this.bfs.copy(srcFile, destFQN);
+                const destFQN = new beebfs.FQN(destFilePath, srcObject.fqn.name);
+                result += `${srcObject.fqn} -> ${destFQN}${BNL}`;
+
+                await this.bfs.copy(srcObject, destFQN);
             } catch (error) {
                 if (error instanceof errors.BeebError) {
                     return new StringWithError(result, error);

@@ -323,6 +323,10 @@ export class FSObject {
     public async tryGetStats(): Promise<fs.Stats | undefined> {
         return await utils.tryStat(this.serverPath);
     }
+
+    public withModifiedAttributes(_attr: FileAttributes): FSObject | undefined {
+        return undefined;
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -353,6 +357,10 @@ export class File extends FSObject {
 
         return stats.size;
     }
+
+    public override withModifiedAttributes(attr: FileAttributes): File {
+        return new File(this.serverPath, this.fqn, this.load, this.exec, attr);
+    }
 }
 
 // Helper function for the benefit of the DFS and TubeHost types, for which
@@ -375,6 +383,10 @@ export class Dir extends FSObject {
 
     public override toString(): string {
         return `Dir(serverPath=\`\`${this.serverPath}'' name=\`\`${this.fqn}'' attr=0x${utils.hex8(this.attr)}`;
+    }
+
+    public override withModifiedAttributes(attr: FileAttributes): Dir {
+        return new Dir(this.serverPath, this.fqn, attr);
     }
 }
 
@@ -1257,19 +1269,15 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async findObjectsMatching(fqn: FQN): Promise<File[]> {
-        const files: File[] = [];
-        for (const object of await fqn.filePath.volume.type.findObjectsMatching(fqn, this.log)) {
-            files.push(mustBeFile(object));
-        }
-        return files;
+    public async findObjectsMatching(fqn: FQN): Promise<FSObject[]> {
+        return fqn.filePath.volume.type.findObjectsMatching(fqn, this.log);
     }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async getInfoText(file: File, wide: boolean): Promise<string> {
-        return await file.fqn.filePath.volume.type.getInfoText(file, wide);
+    public async getInfoText(object: FSObject, wide: boolean): Promise<string> {
+        return await object.fqn.filePath.volume.type.getInfoText(object, wide);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1765,9 +1773,18 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async writeBeebFileMetadata(file: File): Promise<void> {
+    public async writeBeebFileMetadata(object: FSObject): Promise<void> {
         try {
-            await this.writeBeebMetadata(file.serverPath, file.fqn, file.load, file.exec, file.attr);
+            let load: FileAddress;
+            let exec: FileAddress;
+            if (object instanceof File) {
+                load = object.load;
+                exec = object.exec;
+            } else {
+                load = SHOULDNT_LOAD;
+                exec = SHOULDNT_EXEC;
+            }
+            await this.writeBeebMetadata(object.serverPath, object.fqn, load, exec, object.attr);
         } catch (error) {
             errors.nodeError(error);
         }
@@ -1776,13 +1793,21 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public getFileWithModifiedAttributes(file: File, attributeString: string): File {
-        const newAttr = file.fqn.filePath.volume.type.getNewAttributes(file.attr, attributeString);
-        if (newAttr === undefined) {
-            return errors.badAttribute();
-        }
+    public getModifiedAttributesForObject(object: FSObject, attributeString: string): FileAttributes | undefined {
+        return object.fqn.filePath.volume.type.getNewAttributes(object.attr, attributeString);
+        // if (newAttr === undefined) {
+        //     return errors.badAttribute();
+        // }
 
-        return new File(file.serverPath, file.fqn, file.load, file.exec, newAttr);
+        // // const newObject=
+
+        // // if (object instanceof File) {
+        // //     return new File(object.serverPath, object.fqn, object.load, object.exec, newAttr);
+        // // } else if (object instanceof Dir) {
+        // //     return new Dir(object.serverPath, object.fqn, newAttr);
+        // // } else {
+        // //     return errors.notAFile();//TODO...
+        // // }
     }
 
     /////////////////////////////////////////////////////////////////////////

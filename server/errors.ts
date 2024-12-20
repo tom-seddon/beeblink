@@ -47,8 +47,10 @@ function createErrorFactory(code: number, defaultMessage: string): (message?: st
     };
 }
 
-export const tooManyOpen = createErrorFactory(192, 'Too many open');
+export const accessViolation = createErrorFactory(189, 'Access violation');
+export const notAFile = createErrorFactory(189, 'Not a file');
 
+export const tooManyOpen = createErrorFactory(192, 'Too many open');
 
 export const readOnly = createErrorFactory(193, 'Read only');
 
@@ -90,7 +92,6 @@ export const badCommand = createErrorFactory(254, 'Bad command');
 export const dataLost = createErrorFactory(0xca, 'Data lost');
 
 export const wont = createErrorFactory(0x93, 'Won\'t');
-export const notAFile = createErrorFactory(0x93, 'Not a file');
 
 // Message is mandatory for generic errors.
 //
