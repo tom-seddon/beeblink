@@ -22,6 +22,11 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+import * as utils from './utils';
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 export class BeebError extends Error {
     public readonly code: number;
     public readonly text: string;
@@ -41,8 +46,21 @@ export class BeebError extends Error {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+let gTraceOnBeebError = false;
+
+export function setTraceOnBeebError(traceOnBeebError: boolean): void {
+    gTraceOnBeebError = traceOnBeebError;
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 function createErrorFactory(code: number, defaultMessage: string): (message?: string) => never {
     return (message?: string): never => {
+        if (gTraceOnBeebError) {
+            console.trace(`Error ${utils.hex2(code)}: ${defaultMessage}`);//eslint-disable-line no-console
+        }
+
         throw new BeebError(code, message === undefined ? defaultMessage : message);
     };
 }
@@ -101,11 +119,11 @@ export function generic(message: string): never {
 }
 
 export function notOpenForUpdate(handle: number): never {
-    throw new BeebError(193, `Not open for update on channel ${handle}`);
+    throw new BeebError(193, `Not open for update on channel ${handle} `);
 }
 
 export function outsideFile(handle: number): never {
-    throw new BeebError(183, `Outside file on channel ${handle}`);
+    throw new BeebError(183, `Outside file on channel ${handle} `);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -118,9 +136,9 @@ export function nodeError(error: unknown): never {
     if (errno === 'ENOENT') {
         return notFound();
     } else if (errno !== undefined) {
-        return discFault(`POSIX error: ${errno}`);
+        return discFault(`POSIX error: ${errno} `);
     } else {
-        return discFault(`Node error: ${error}`);
+        return discFault(`Node error: ${error} `);
     }
 }
 

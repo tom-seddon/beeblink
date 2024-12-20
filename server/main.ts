@@ -41,6 +41,7 @@ import dfsType from './dfsType';
 import pcType from './pcType';
 import tubeHostType from './tubeHostType';
 import adfsType from './adfsType';
+import * as errors from './errors';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -183,6 +184,7 @@ interface ICommandLineOptions {
     serial_test_send_file: string | null;
     excludeVolumeRegExps: string[];
     serial_exclude_all: boolean;
+    beeb_error_verbose: boolean;
 }
 
 // don't shift to do this!
@@ -1976,6 +1978,8 @@ async function main(options: ICommandLineOptions) {
 
     beebfs.setFSTypes(dfsType, pcType, tubeHostType, adfsType);
 
+    errors.setTraceOnBeebError(options.beeb_error_verbose);
+
     const log = utils.Log.create('', process.stdout, options.verbose);
 
     if (!await handleCommandLineOptions(options, log)) {
@@ -2101,6 +2105,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     fullHelpOnly(['--libusb-debug-level'], { type: integer, metavar: 'LEVEL', help: 'if provided, set libusb debug logging level to %(metavar)s' });
     fullHelpOnly(['--fatal-verbose'], { action: 'storeTrue', help: 'print debugging info on a fatal error' });
     fullHelpOnly(['--locate-verbose'], { action: 'storeTrue', help: 'extra *LOCATE output (requires --server-verbose)' });
+    fullHelpOnly(['--beeb-error-verbose'], { action: 'storeTrue', help: 'print server code stack trace when raising a BRK error' });
 
     // Git
     always(['--git'], { action: 'storeTrue', help: 'look after .gitattributes for BBC volumes' });

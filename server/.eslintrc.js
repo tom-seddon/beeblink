@@ -261,7 +261,6 @@ module.exports = {
         "no-bitwise": "off",
         "no-caller": "error",
         "no-cond-assign": "error",
-        "no-console": "error",
         "no-debugger": "error",
         "no-empty": "error",
         "no-empty-function": "off",
@@ -330,7 +329,14 @@ module.exports = {
         "radix": "off",
 
         // Doesn't seem worth enforcing.
-        "arrow-body-style": "off"
+        "arrow-body-style": "off",
+
+        // https://eslint.org/docs/latest/rules/no-console
+        //
+        // Mostly don't want console calls as BeebLink has its own logging
+        // stuff.
+        "no-console": "warn",
+
     },
     ignorePatterns: ['.eslintrc.js'],
 };
