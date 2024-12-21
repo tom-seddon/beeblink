@@ -782,14 +782,14 @@ class ADFSType implements beebfs.IFSType {
         return files;
     }
 
-    private parseFileOrDirString(str: string, i: number, state: beebfs.IFSState | undefined, parseAsDir: boolean, volume: beebfs.Volume, volumeExplicit: boolean): { filePath: beebfs.FilePath; name: string | undefined; i: number; } {
+    private parseFileOrDirString(str: string, strIndex: number, state: beebfs.IFSState | undefined, parseAsDir: boolean, volume: beebfs.Volume, volumeExplicit: boolean): { filePath: beebfs.FilePath; name: string | undefined; i: number; } {
         const adfsState = mustBeADFSState(state);
 
         const log: utils.Log | undefined = adfsState?.log;
 
         //log?.pn(`ADFSType.parseFileOrDirString: str = "${str}"; i = ${ i }; parseAsDir = ${ parseAsDir }; volume = ${ volume.name } `);
 
-        if (i === str.length) {
+        if (strIndex === str.length) {
             //log?.pn(`ADFSType.parseFileOrDirString: default properties`);
             if (adfsState === undefined) {
                 return errors.badName();
@@ -806,33 +806,42 @@ class ADFSType implements beebfs.IFSType {
         let dirs: string[] | undefined;
         let name: string | undefined;
 
-        if (str[i] === ':' && i + 1 < str.length) {
-            drive = str[i + 1];
-            i += 2;
+        if (str[strIndex] === ':' && strIndex + 1 < str.length) {
+            drive = str[strIndex + 1];
+            strIndex += 2;
 
-            if (str[i] !== '.') {
+            if (str[strIndex] !== '.') {
                 return errors.badName();
             }
-            i += 1;
+            strIndex += 1;
 
             log?.pn(`  Drive: ${drive} `);
         }
 
-        // TODO... need to stop at the first space? This will surely eat too much sometimes.
         if (parseAsDir) {
-            dirs = str.slice(i).split('.');
+            dirs = str.slice(strIndex).split('.');
             if (dirs.length === 1 && dirs[0] === '') {
                 dirs = undefined;
             }
         } else {
             const lastSeparatorIndex = str.lastIndexOf('.');
-            if (lastSeparatorIndex < i) {
-                name = str.slice(i);
+            if (lastSeparatorIndex < strIndex) {
+                name = str.slice(strIndex);
             } else {
-                dirs = str.slice(i, lastSeparatorIndex - i).split('.');
+                dirs = str.slice(strIndex, lastSeparatorIndex - strIndex).split('.');
                 name = str.slice(lastSeparatorIndex + 1);
                 if (name.length === 0) {
                     name = undefined;
+                }
+            }
+        }
+
+        // For some reason, & is a synonym for $. Fix that up here. Don't try to
+        // handle it everywhere.
+        if (dirs !== undefined) {
+            for (let i = 0; i < dirs.length; ++i) {
+                if (dirs[i] === '&') {
+                    dirs[i] = '$';
                 }
             }
         }
@@ -901,7 +910,7 @@ class ADFSType implements beebfs.IFSType {
 
         return {
             filePath: new beebfs.FilePath(volume, volumeExplicit, drive, driveExplicit, dirs.join('.'), dirExplicit),
-            i,
+            i: strIndex,
             name,
         };
     }
