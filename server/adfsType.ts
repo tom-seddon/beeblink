@@ -249,6 +249,16 @@ class ADFSState implements beebfs.IFSState {
         return text;
     }
 
+    public getCurrentSettingsString(): string {
+        let text = ``;
+
+        text += `Current dir :${this.current.drive}.${this.getCurrentDir()}${utils.BNL}`;
+        text += `Previous dir :${this.previous.drive}.${getDirString(this.previous.dir)}${utils.BNL}`;
+        text += `Current lib :${this.library.drive}.${this.getLibraryDir()}${utils.BNL}`;
+
+        return text;
+    }
+
     public getPersistentSettings(): undefined {
         return undefined;
     }
@@ -416,7 +426,8 @@ const NAME_CHARS_VALID: boolean[] = ((): boolean[] => {
     const valid: boolean[] = [];
 
     for (let i = 0; i < 128; ++i) {
-        valid.push(i >= 32 && '#*.:$&@ '.indexOf(String.fromCharCode(i)) < 0);
+        // '#*.:$&@ '
+        valid.push(i >= 32 && '#*.: '.indexOf(String.fromCharCode(i)) < 0);
     }
 
     return valid;

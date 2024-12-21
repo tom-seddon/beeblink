@@ -71,6 +71,10 @@ class PCState implements beebfs.IFSState {
         return '';
     }
 
+    public getCurrentSettingsString(): string {
+        return '';
+    }
+
     public getTransientSettings(): unknown {
         return undefined;
     }

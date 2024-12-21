@@ -576,6 +576,9 @@ export interface IFSState {
     // interface.)
     getLibraryDir: () => string;
 
+    // get human-readable string for printing on the BBC.
+    getCurrentSettingsString: () => string;
+
     // get object holding current transient settings that would be reset on
     // Ctrl+Break - drive/dir, lib drive/dir, and so on. Use when recreating the
     // state, to restore the current settings.
@@ -1191,11 +1194,11 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public getDefaultsString(): string {
+    public getStateString(): string {
         if (this.state === undefined) {
             return errors.discFault('No volume');
         } else {
-            return this.state.getTransientSettingsString(this.defaultTransientSettings);
+            return this.state.getCurrentSettingsString() + this.state.getTransientSettingsString(this.defaultTransientSettings);
         }
     }
 

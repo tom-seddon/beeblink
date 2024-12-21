@@ -144,6 +144,15 @@ class DFSState implements beebfs.IFSState {
         return this.library.dir;
     }
 
+    public getCurrentSettingsString(): string {
+        let text = ``;
+
+        text += `Current dir :${this.current.drive}.${this.current.dir}${utils.BNL}`;
+        text += `Current lib :${this.library.drive}.${this.library.dir}${utils.BNL}`;
+
+        return text;
+    }
+
     public getTransientSettings(): DFSTransientSettings {
         return new DFSTransientSettings(this.current, this.library);
     }

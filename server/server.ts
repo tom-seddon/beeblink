@@ -1570,7 +1570,7 @@ export class Server {
 
             try {
                 text += this.getVolumeInfoString(this.bfs.getVolume());
-                text += this.bfs.getDefaultsString();
+                text += this.bfs.getStateString();
             } catch (error) {
                 // getVolume throws if no volume, and this is the 1% of times
                 // where that's a bit annoying.
@@ -2196,7 +2196,7 @@ export class Server {
             return errors.syntax();
         }
 
-        return this.bfs.getDefaultsString();
+        return this.bfs.getStateString();
     };
 
     private readonly execTextCommand = async (commandLine: CommandLine): Promise<Response> => {
