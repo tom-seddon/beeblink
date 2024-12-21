@@ -560,6 +560,8 @@ class ADFSType implements beebfs.IFSType {
             }
         }
 
+        text += utils.BNL;
+
         return text;
     }
 
