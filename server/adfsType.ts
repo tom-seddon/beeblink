@@ -364,18 +364,6 @@ class ADFSState implements beebfs.IFSState {
         return DEFAULT_TITLE;
     }
 
-    public async readNames(): Promise<string[]> {
-        const fqn = new beebfs.FQN(new beebfs.FilePath(this.volume, false, this.current.drive, true, this.getCurrentDir(), true), utils.MATCH_N_CHAR);
-        const files = await this.volume.type.findObjectsMatching(fqn, undefined);
-
-        const names: string[] = [];
-        for (const file of files) {
-            names.push(file.fqn.name);
-        }
-
-        return names;
-    }
-
     //private readonly fun: (commandLine: CommandLine) => Promise<void | string | StringWithError | Response>;
     public getCommands(): server.Command[] {
         return [

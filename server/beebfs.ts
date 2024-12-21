@@ -635,9 +635,6 @@ export interface IFSState {
     // read title, for OSGBPB 5.
     getTitle: () => Promise<string>;
 
-    // read names, for OSGBPB 6.
-    readNames: () => Promise<string[]>;
-
     // return list of type-specific commands.
     //
     // This is only called when the FS type potentially changes, so it's OK if
@@ -2457,20 +2454,21 @@ export class FS {
     private async OSGBPBReadNames(numBytes: number, newPtr: number): Promise<OSGBPBResult> {
         const state = this.getState();
 
+        const fqn = new FQN(new FilePath(state.volume, false, state.getCurrentDrive(), true, state.getCurrentDir(), true), utils.MATCH_N_CHAR);
+        const objects = await fqn.filePath.volume.type.findObjectsMatching(fqn, undefined);
+
         const builder = new utils.BufferBuilder();
 
-        const names = await state.readNames();
+        let objectIndex = newPtr;
 
-        let nameIdx = newPtr;
-
-        while (numBytes > 0 && nameIdx < names.length) {
-            builder.writePascalString(names[nameIdx]);
+        while (numBytes > 0 && objectIndex < objects.length) {
+            builder.writePascalString(objects[objectIndex].fqn.name);
 
             --numBytes;
-            ++nameIdx;
+            ++objectIndex;
         }
 
-        return new OSGBPBResult(numBytes > 0, numBytes, nameIdx, builder.createBuffer());
+        return new OSGBPBResult(numBytes > 0, numBytes, objectIndex, builder.createBuffer());
     }
 
     /////////////////////////////////////////////////////////////////////////

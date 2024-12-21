@@ -132,17 +132,6 @@ class PCState implements beebfs.IFSState {
         return '';
     }
 
-    public async readNames(): Promise<string[]> {
-        const files = await this.volume.type.findObjectsMatching(new beebfs.FQN(new beebfs.FilePath(this.volume, true, '', true, '', true), '*'), undefined);
-
-        const names: string[] = [];
-        for (const file of files) {
-            names.push(file.fqn.name);
-        }
-
-        return names;
-    }
-
     public getCommands(): server.Command[] {
         return [];
     }

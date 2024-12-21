@@ -274,18 +274,6 @@ class DFSState implements beebfs.IFSState {
         return await dfsType.loadTitle(this.volume, this.current.drive);
     }
 
-    public async readNames(): Promise<string[]> {
-        const fqn = new beebfs.FQN(new beebfs.FilePath(this.volume, false, this.current.drive, true, this.current.dir, true), utils.MATCH_N_CHAR);
-        const files = await this.volume.type.findObjectsMatching(fqn, undefined);
-
-        const names: string[] = [];
-        for (const file of files) {
-            names.push(file.fqn.name);
-        }
-
-        return names;
-    }
-
     public getCommands(): server.Command[] {
         return [
             //new server.Command('TEST', undefined, this.testCommand),

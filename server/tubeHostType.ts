@@ -616,19 +616,6 @@ class TubeHostState implements beebfs.IFSState {
         return await loadFolderTitle(this.mustGetDriveFolderAbsPath(this.current.drive));
     }
 
-    public async readNames(): Promise<string[]> {
-        const filePath = new TubeHostFilePath(this.volume, false, this.current.drive, true, this.current.dir, true, this.mustGetDriveFolder(this.current.drive));
-        const fqn = new beebfs.FQN(filePath, '*');
-        const files = await this.volume.type.findObjectsMatching(fqn, undefined);
-
-        const names: string[] = [];
-        for (const file of files) {
-            names.push(file.fqn.name);
-        }
-
-        return names;
-    }
-
     public getCommands(): server.Command[] {
         return [
             new server.Command('DCAT', '(<ahsp>)', this.dcatCommand),
