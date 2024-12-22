@@ -549,15 +549,17 @@ class ADFSType implements beebfs.IFSType {
         text += `Dir: ${filePath.dir}${utils.BNL}`;
         text += utils.BNL;
 
-        const catStartIndex = text.length;
         for (const beebEntry of beebEntries) {
-            const attributesWidth = 6;
-            text += this.getAttrString(beebEntry).padEnd(attributesWidth);
+            const startIndex = text.length;
             text += beebEntry.fqn.name;
 
-            while ((text.length - catStartIndex) % 20 !== 0) {
+            const attributesWidth = 6;
+            while ((text.length - startIndex) % 20 !== (20 - attributesWidth)) {
                 text += ' ';
             }
+
+            text += this.getAttrString(beebEntry).padEnd(attributesWidth);
+
         }
 
         text += utils.BNL;
