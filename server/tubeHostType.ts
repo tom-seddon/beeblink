@@ -46,7 +46,6 @@ const MAX_TITLE_LENGTH = 39;
 const OPT4_FILE_NAME = '.opt4';
 const TITLE_FILE_NAME = '.title';
 
-const DEFAULT_TITLE = '';
 const DEFAULT_BOOT_OPTION = 0;
 
 /////////////////////////////////////////////////////////////////////////
@@ -93,10 +92,10 @@ function getAbsPath(volume: beebfs.Volume, volRelPath: VolRelPath): AbsPath {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function loadFolderTitle(folderPath: AbsPath): Promise<string> {
+async function loadFolderTitle(folderPath: AbsPath): Promise<string | undefined> {
     const buffer = await utils.tryReadFile(path.join(folderPath, TITLE_FILE_NAME));
     if (buffer === undefined) {
-        return DEFAULT_TITLE;
+        return undefined;
     }
 
     return utils.getFirstLine(buffer).substring(0, MAX_TITLE_LENGTH);
@@ -621,7 +620,7 @@ class TubeHostState implements beebfs.IFSState {
         await saveFolderTitle(this.mustGetDriveFolderAbsPath(this.current.drive), title);
     }
 
-    public async getTitle(): Promise<string> {
+    public async getTitle(): Promise<string | undefined> {
         return await loadFolderTitle(this.mustGetDriveFolderAbsPath(this.current.drive));
     }
 

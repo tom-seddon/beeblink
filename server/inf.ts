@@ -76,8 +76,10 @@ export interface IExtraData {
     // suggestive), and is instead a property of whichever object shares the
     // name stem in the server's folder.
     //
-    // As the load/exec/size fields are mandatory in the .INF syntax,
+    // As the load/exec/size fields are near-mandatory in the .INF syntax,
     // directories have all 3 properties.
+    //
+    // BeebLink doesn't use this flag when writing 
     dir: boolean;
 
     // OPT=
@@ -110,7 +112,7 @@ export async function writeNonStandardINFFile(serverPath: string, name: string, 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-// Write standard .inf file. If attr is a string, it will be written verbatim.
+// Write standard .inf file. If attr is a string, it will be written verbatim. If 
 export async function writeStandardINFFile(servorPath: string, name: string, load: beebfs.FileAddress, exec: beebfs.FileAddress, length: number, attr: beebfs.FileAttributes | string, extra: IExtraData | undefined): Promise<void> {
     let inf = `${name} ${utils.hex8(load)} ${utils.hex8(exec)} ${utils.hex8(length)} `;
     if (typeof (attr) === 'string') {
@@ -125,7 +127,7 @@ export async function writeStandardINFFile(servorPath: string, name: string, loa
         }
 
         if (extra.title !== undefined) {
-            inf += `${TITLE_KEY}="${extra.title}"`;
+            inf += ` ${TITLE_KEY}="${extra.title}"`;
         }
 
         if (extra.opt !== undefined) {
@@ -216,18 +218,27 @@ const ATTR_CHARS_MAP = makeAttrCharsMap();
 // Try to parse a .inf file. infBuffer is the contents, or undefined if no .inf
 // file; serverName is the basename of the server file.
 //
-// serverName should be path.basename(serverPath); this could be computed, but
-// since the caller will already have it, might as well have it supply it.
+// serverName should be path.basename(serverPath). (This could be computed
+// always, but since the caller will already have it, might as well have it
+// supply it.)
 function tryParse2(
     infBuffer: Buffer | undefined,
     serverPath: string,
-    serverName: string,
+    serverName: string | undefined,
     serverIsDirectory: boolean,
     log: utils.Log | undefined): IINF | undefined {
 
+    function getServerName(): string {
+        if (serverName !== undefined) {
+            return serverName;
+        } else {
+            return path.basename(serverPath);
+        }
+    }
+
     if (infBuffer === undefined || infBuffer.length === 0) {
         const inf: IINF = {
-            name: serverName,
+            name: getServerName(),
             serverPath,
             load: beebfs.DEFAULT_LOAD,
             exec: beebfs.DEFAULT_EXEC,
@@ -336,77 +347,100 @@ function tryParse2(
         return undefined;
     }
 
+    let load: beebfs.FileAddress;
+    let exec: beebfs.FileAddress;
+    let attr: beebfs.FileAttributes;
     const loadBegin = i;
     consumeUntil(SPACE_CHAR);
-    const load = tryParseAddress(infBuffer.toString('binary', loadBegin, i));
-    if (load === undefined) {
-        log?.pn(' - invalid load address');
-        return undefined;
-    }
-
-    if (!consume(SPACE_CHAR)) {
-        log?.pn(' - missing exec address');
-        return undefined;
-    }
-
-    const execBegin = i;
-    consumeUntil(SPACE_CHAR);
-    const exec = tryParseAddress(infBuffer.toString('binary', execBegin, i));
-    if (exec === undefined) {
-        log?.pn(' - invalid exec address');
-        return undefined;
-    }
-
-    if (!consume(SPACE_CHAR)) {
-        // BeebLink/TubeHost-style non-standard .INF file with no
-        // attributes.
-        log?.p(` (non-std)`);
-        return { name, serverPath, load, exec, attr: beebfs.DEFAULT_ATTR, noINF, extra };
-    }
-
-    const attrsOrLengthBegin = i;
-    consumeUntil(SPACE_CHAR);
-
-    const attrsOrLength = infBuffer.toString('binary', attrsOrLengthBegin, i);
-    if (DFS_LOCKED_ATTRS_LC.indexOf(attrsOrLength.toLowerCase()) >= 0) {
-        // BeebLink/TubeHost-style non-standard .INF file with locked
-        // attributes.
-        log?.p(` (non-std+locked)`);
-        return { name, serverPath, load, exec, attr: beebfs.DFS_LOCKED_ATTR, noINF, extra };
-    }
-
-    // The length is ignored, but it does have to be valid.
-    if (tryParseHexNumber(attrsOrLength) === undefined) {
-        log?.pn(' - invalid length');
-        return undefined;
-    }
-
-    if (!consume(SPACE_CHAR)) {
-        // No attributes or extra info.
-        log?.p(` (std)`);
-        return { name, serverPath, load, exec, attr: beebfs.DEFAULT_ATTR, noINF, extra };
-    }
-
-    const attrsBegin = i;
-    consumeUntil(SPACE_CHAR);
-    const attrString = infBuffer.toString('binary', attrsBegin, i);
-    let attr: beebfs.FileAttributes = parseInt(attrString, 16) as beebfs.FileAttributes;
-    if (Number.isNaN(attr)) {
-        let attrNumber = 0;
-        while (i < n && infBuffer[i] !== 32) {
-            if (infBuffer[i] < ATTR_CHARS_MAP.length) {
-                const attrMask = ATTR_CHARS_MAP[infBuffer[i]];
-                if (attrMask === undefined) {
-                    log?.pn(` - invalid attr char ${infBuffer[i]}`);
-                    return undefined;
-                }
-
-                attrNumber |= attrMask;
-            }
-            ++i;
+    const loadString = infBuffer.toString('binary', loadBegin, i);
+    if (loadString.length > 0 && Number.isNaN(Number.parseInt(loadString[0], 16))) {
+        // It's (probably) a Disc Image Manager root directory .INF. No load,
+        // exec, size or attr fields.
+        //
+        // Ignore the name, which is probably $, and either irrelevant (the root
+        // directory is always $) or invalid (non-root directories can't be
+        // called $).
+        //
+        // Do the key/value pairs.
+        name = getServerName();
+        load = beebfs.SHOULDNT_LOAD;
+        exec = beebfs.SHOULDNT_EXEC;
+        attr = beebfs.DEFAULT_ATTR;
+    } else {
+        const parsedLoad = tryParseAddress(loadString);
+        if (parsedLoad === undefined) {
+            log?.pn(' - invalid load address');
+            return undefined;
         }
 
-        attr = attrNumber as beebfs.FileAttributes;
+        load = parsedLoad;
+
+        if (!consume(SPACE_CHAR)) {
+            log?.pn(' - missing exec address');
+            return undefined;
+        }
+
+        const execBegin = i;
+        consumeUntil(SPACE_CHAR);
+        const parsedExec = tryParseAddress(infBuffer.toString('binary', execBegin, i));
+        if (parsedExec === undefined) {
+            log?.pn(' - invalid exec address');
+            return undefined;
+        }
+
+        exec = parsedExec;
+
+        if (!consume(SPACE_CHAR)) {
+            // BeebLink/TubeHost-style non-standard .INF file with no
+            // attributes.
+            log?.p(` (non-std)`);
+            return { name, serverPath, load, exec, attr: beebfs.DEFAULT_ATTR, noINF, extra };
+        }
+
+        const attrsOrLengthBegin = i;
+        consumeUntil(SPACE_CHAR);
+
+        const attrsOrLength = infBuffer.toString('binary', attrsOrLengthBegin, i);
+        if (DFS_LOCKED_ATTRS_LC.indexOf(attrsOrLength.toLowerCase()) >= 0) {
+            // BeebLink/TubeHost-style non-standard .INF file with locked
+            // attributes.
+            log?.p(` (non-std+locked)`);
+            return { name, serverPath, load, exec, attr: beebfs.DFS_LOCKED_ATTR, noINF, extra };
+        }
+
+        // The length is ignored, but it does have to be valid.
+        if (tryParseHexNumber(attrsOrLength) === undefined) {
+            log?.pn(' - invalid length');
+            return undefined;
+        }
+
+        if (!consume(SPACE_CHAR)) {
+            // No attributes or extra info.
+            log?.p(` (std)`);
+            return { name, serverPath, load, exec, attr: beebfs.DEFAULT_ATTR, noINF, extra };
+        }
+
+        const attrsBegin = i;
+        consumeUntil(SPACE_CHAR);
+        const attrString = infBuffer.toString('binary', attrsBegin, i);
+        attr = parseInt(attrString, 16) as beebfs.FileAttributes;
+        if (Number.isNaN(attr)) {
+            let attrNumber = 0;
+            while (i < n && infBuffer[i] !== 32) {
+                if (infBuffer[i] < ATTR_CHARS_MAP.length) {
+                    const attrMask = ATTR_CHARS_MAP[infBuffer[i]];
+                    if (attrMask === undefined) {
+                        log?.pn(` - invalid attr char ${infBuffer[i]}`);
+                        return undefined;
+                    }
+
+                    attrNumber |= attrMask;
+                }
+                ++i;
+            }
+
+            attr = attrNumber as beebfs.FileAttributes;
+        }
     }
 
     while (consume(SPACE_CHAR)) {
@@ -468,14 +502,14 @@ function tryParse2(
 function tryParse(
     infBuffer: Buffer | undefined,
     serverPath: string,
-    serverName: string,
+    serverName: string | undefined,
     serverIsDirectory: boolean,
     log: utils.Log | undefined): IINF | undefined {
 
     const inf = tryParse2(infBuffer, serverPath, serverName, serverIsDirectory, log);
     if (inf !== undefined && log !== undefined) {
 
-        log.p(` - name=\`\`${inf.name}'' load=0x${inf.load.toString(16)} exec=0x${inf.exec.toString(16)} attr=0x${inf.attr.toString(16)}`);
+        log.p(` - name=\`\`${inf.name}'' (noINF=${inf.noINF}) load=0x${inf.load.toString(16)} exec=0x${inf.exec.toString(16)} attr=0x${inf.attr.toString(16)}`);
 
         if (inf.extra !== undefined) {
             log.p(` (Extra info:`);
@@ -505,6 +539,16 @@ function tryParse(
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
+
+export async function tryLoadINF(serverPath: string, log: utils.Log | undefined): Promise<IINF | undefined> {
+    const stats = await utils.tryStat(serverPath);
+    if (stats === undefined) {
+        return undefined;
+    }
+
+    const infBuffer = await utils.tryReadFile(`${serverPath}${ext}`);
+    return tryParse(infBuffer, serverPath, undefined, stats.isDirectory(), log);
+}
 
 // Find all .inf files in the given folder, call tryParse as
 // appropriate, and return an array of the results.

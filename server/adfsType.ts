@@ -101,10 +101,17 @@ function mustBeADFSState(state: beebfs.IFSState | undefined): ADFSState | undefi
 //////////////////////////////////////////////////////////////////////////
 
 interface IADFSDrive {
-    readonly serverFolder: VolRelPath;
     readonly beebName: string;
     readonly option: number;
-    readonly title: string;
+    readonly title: string | undefined;
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+interface IADFSDirectoryMetadata {
+    readonly title: string | undefined;
+    readonly option: number;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -292,6 +299,7 @@ class ADFSState implements beebfs.IFSState {
     public async getCAT(commandLine: string | undefined): Promise<string | undefined> {
         let filePath: beebfs.FilePath;
         if (commandLine === undefined) {
+            filePath = this.getFilePathFromADFSPath(this.current);
             filePath = new beebfs.FilePath(this.volume, false, this.current.drive, false, this.getCurrentDir(), false);
         } else {
             // TODO... handle <obspec>
@@ -337,14 +345,14 @@ class ADFSState implements beebfs.IFSState {
     }
 
     public async getDrivesOutput(): Promise<string> {
-        const drives = await mustBeADFSType(this.volume.type).findDrivesForVolume(this.volume, undefined);
+        const drives = await mustBeADFSType(this.volume.type).findDrivesForVolume(this.volume, undefined, this.log);
 
         let text = '';
 
         for (const drive of drives) {
             text += `${drive.beebName} - ${beebfs.getBootOptionDescription(drive.option).padEnd(4)}: `;
 
-            if (drive.title.length > 0) {
+            if (drive.title !== undefined) {
                 text += drive.title;
             } else {
                 text += '(no title)';
@@ -357,21 +365,27 @@ class ADFSState implements beebfs.IFSState {
     }
 
     public async getBootOption(): Promise<number> {
-        // TODO...
-        return DEFAULT_BOOT_OPTION;
+        const metadata = await this.loadCurrentDirectoryMetadata();
+        if (metadata === undefined) {
+            return DEFAULT_BOOT_OPTION;
+        }
+        return metadata.option;
     }
 
-    public async setBootOption(_option: number): Promise<void> {
-        // TODO...
+    public async setBootOption(option: number): Promise<void> {
+        await this.setCurrentDirectoryMetadata(undefined, option);
     }
 
-    public async setTitle(_title: string): Promise<void> {
-        // TODO...
+    public async setTitle(title: string): Promise<void> {
+        await this.setCurrentDirectoryMetadata(title, undefined);
     }
 
-    public async getTitle(): Promise<string> {
-        // TODO...
-        return DEFAULT_TITLE;
+    public async getTitle(): Promise<string | undefined> {
+        const metadata = await this.loadCurrentDirectoryMetadata();
+        if (metadata === undefined) {
+            return undefined;
+        }
+        return metadata.title;
     }
 
     //private readonly fun: (commandLine: CommandLine) => Promise<void | string | StringWithError | Response>;
@@ -411,9 +425,44 @@ class ADFSState implements beebfs.IFSState {
         return new ADFSPath(filePath.drive, filePath.dir.split('.'));
     }
 
+    private getFilePathFromADFSPath(adfsPath: ADFSPath): beebfs.FilePath {
+        return new beebfs.FilePath(this.volume, false, adfsPath.drive, false, getDirString(adfsPath.dir), false);
+    }
+
     private setCurrentDir(newCurrent: ADFSPath): void {
         this.previous = this.current;
         this.current = newCurrent;
+    }
+
+    private async loadCurrentDirectoryMetadata(): Promise<IADFSDirectoryMetadata | undefined> {
+        return mustBeADFSType(this.volume.type).loadFilePathMetadata(this.getFilePathFromADFSPath(this.current), this.log);
+    }
+
+    private async setCurrentDirectoryMetadata(title: string | undefined, option: number | undefined): Promise<void> {
+        const filePath = await mustBeADFSType(this.volume.type).findADFSFilePath(this.getFilePathFromADFSPath(this.current), this.log);
+        if (filePath === undefined) {
+            return;
+        }
+
+        const info = await inf.tryLoadINF(filePath.serverFolder, this.log);
+        if (info === undefined) {
+            return;
+        }
+
+        if (info.extra === undefined || !info.extra.dir) {
+            // This shouldn't happen! Should really log it or something.
+            return;
+        }
+
+        if (title !== undefined) {
+            info.extra.dirTitle = title;
+        }
+
+        if (option !== undefined) {
+            info.extra.opt = option;
+        }
+
+        await inf.writeStandardINFFile(filePath.serverFolder, path.basename(filePath.serverFolder), info.load, info.exec, 0, info.attr, info.extra);
     }
 }
 
@@ -544,9 +593,16 @@ class ADFSType implements beebfs.IFSType {
 
         let text = '';
 
+        let option = 0;
+        const metadata = await this.loadFilePathMetadata(filePath, _log);
+        if (metadata !== undefined && metadata.title !== undefined) {
+            text += metadata.title;
+            option = metadata.option;
+        }
+
         text += `Volume: ${filePath.volume.name}${utils.BNL}`;
-        text += `Drive: ${filePath.drive}${utils.BNL}`;
-        text += `Dir: ${filePath.dir}${utils.BNL}`;
+        text += `Directory :${filePath.drive}.${filePath.dir}${utils.BNL}`;
+        text += `Option ${option} (${beebfs.getBootOptionDescription(option)})${utils.BNL}`;
         text += utils.BNL;
 
         for (const beebEntry of beebEntries) {
@@ -567,7 +623,7 @@ class ADFSType implements beebfs.IFSType {
         return text;
     }
 
-    public async findDrivesForVolume(volume: beebfs.Volume, driveRegExp: RegExp | undefined): Promise<IADFSDrive[]> {
+    public async findDrivesForVolume(volume: beebfs.Volume, driveRegExp: RegExp | undefined, log: utils.Log | undefined): Promise<IADFSDrive[]> {
         let entries: fs.Dirent[];
         try {
             entries = await utils.fsReaddir(volume.path, { withFileTypes: true });
@@ -584,14 +640,12 @@ class ADFSType implements beebfs.IFSType {
                     if (utils.matchesOptionalRegExp(entry.name, driveRegExp)) {
                         const beebName = entry.name.toUpperCase();
                         if (!beebNamesSeen.has(beebName)) {
-                            const option = DEFAULT_BOOT_OPTION;//TODO... await this.loadBootOption(volume, name);
-                            const title = DEFAULT_TITLE;//TODO...await this.loadTitle(volume, name);
+                            const metadata = await this.loadDirectoryMetadata(path.join(volume.path, entry.name), log);
 
                             drives.push({
-                                serverFolder: entry.name as VolRelPath,
                                 beebName: entry.name.toUpperCase(),
-                                option,
-                                title
+                                option: metadata !== undefined ? metadata.option : DEFAULT_BOOT_OPTION,
+                                title: metadata !== undefined ? metadata.title : undefined,
                             });
 
                             beebNamesSeen.add(beebName);
@@ -686,7 +740,43 @@ class ADFSType implements beebfs.IFSType {
         return str;
     }
 
-    private async mustFindADFSFilePath(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<ADFSFilePath> {
+    public async loadFilePathMetadata(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<IADFSDirectoryMetadata | undefined> {
+        const adfsFilePath = await this.findADFSFilePath(filePath, log);
+        if (adfsFilePath === undefined) {
+            log?.pn(`loadTitle: failed to find ADFS path: ${filePath}`);
+            return undefined;
+        }
+
+        return this.loadDirectoryMetadata(adfsFilePath.serverFolder, log);
+    }
+
+    public async loadDirectoryMetadata(serverFolder: string, log: utils.Log | undefined): Promise<IADFSDirectoryMetadata | undefined> {
+        const info = await inf.tryLoadINF(serverFolder, log);
+
+        let title: string | undefined;
+        let option = 0;
+
+        if (info !== undefined) {
+            if (info.extra !== undefined) {
+                if (info.extra.dirTitle !== undefined) {
+                    title = info.extra.dirTitle;
+                }
+                if (title === undefined) {
+                    if (info.extra.title !== undefined) {
+                        title = info.extra.title;
+                    }
+                }
+
+                if (info.extra.opt !== undefined) {
+                    option = info.extra.opt;
+                }
+            }
+        }
+
+        return { title, option };
+    }
+
+    public async mustFindADFSFilePath(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<ADFSFilePath> {
         const adfsFilePath = await this.findADFSFilePath(filePath, log);
         if (adfsFilePath === undefined) {
             return errors.badDir();
@@ -696,7 +786,7 @@ class ADFSType implements beebfs.IFSType {
     }
 
     // Returns undefined if the directory tree doesn't exist.
-    private async findADFSFilePath(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<ADFSFilePath | undefined> {
+    public async findADFSFilePath(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<ADFSFilePath | undefined> {
         if (filePath instanceof ADFSFilePath) {
             return filePath;
         }

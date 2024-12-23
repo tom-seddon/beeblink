@@ -636,7 +636,7 @@ export interface IFSState {
     setTitle: (title: string) => Promise<void>;
 
     // read title, for OSGBPB 5.
-    getTitle: () => Promise<string>;
+    getTitle: () => Promise<string | undefined>;
 
     // return list of type-specific commands.
     //
@@ -1162,6 +1162,7 @@ export class FS {
             }
         }
 
+        this.log?.pn(`Create state for type: ${volume.type.name}`);
         this.setState(await volume.type.createState(volume, undefined, undefined, this.log));
         this.resetDefaults();
     }
@@ -2421,7 +2422,7 @@ export class FS {
         const title = await state.getTitle();
         const bootOption = await state.getBootOption();
 
-        builder.writePascalString(title);
+        builder.writePascalString(title !== undefined ? title : '');
         builder.writeUInt8(bootOption);
 
         // What are you supposed to return for count and pointer in this case?

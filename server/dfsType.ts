@@ -43,7 +43,6 @@ const MAX_TITLE_LENGTH = 39;
 const OPT4_FILE_NAME = '.opt4';
 const TITLE_FILE_NAME = '.title';
 
-const DEFAULT_TITLE = '';
 const DEFAULT_BOOT_OPTION = 0;
 
 /////////////////////////////////////////////////////////////////////////
@@ -74,7 +73,7 @@ interface IDFSDrive {
     readonly serverFolder: string;
     readonly beebName: string;
     readonly option: number;
-    readonly title: string;
+    readonly title: string | undefined;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -251,7 +250,7 @@ class DFSState implements beebfs.IFSState {
         for (const drive of drives) {
             text += `${drive.beebName} - ${beebfs.getBootOptionDescription(drive.option).padEnd(4)}: `;
 
-            if (drive.title.length > 0) {
+            if (drive.title !== undefined) {
                 text += drive.title;
             } else {
                 text += '(no title)';
@@ -278,7 +277,7 @@ class DFSState implements beebfs.IFSState {
         await beebfs.writeFile(path.join(this.volume.path, this.current.drive, TITLE_FILE_NAME), buffer);
     }
 
-    public async getTitle(): Promise<string> {
+    public async getTitle(): Promise<string | undefined> {
         const dfsType = mustBeDFSType(this.volume.type);
         return await dfsType.loadTitle(this.volume, this.current.drive);
     }
@@ -493,10 +492,10 @@ class DFSType implements beebfs.IFSType {
         }
     }
 
-    public async loadTitle(volume: beebfs.Volume, drive: string): Promise<string> {
+    public async loadTitle(volume: beebfs.Volume, drive: string): Promise<string | undefined> {
         const buffer = await utils.tryReadFile(path.join(volume.path, drive, TITLE_FILE_NAME));
         if (buffer === undefined) {
-            return DEFAULT_TITLE;
+            return undefined;
         }
 
         return utils.getFirstLine(buffer).substring(0, MAX_TITLE_LENGTH);

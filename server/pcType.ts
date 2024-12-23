@@ -132,8 +132,8 @@ class PCState implements beebfs.IFSState {
         return notSupported();
     }
 
-    public async getTitle(): Promise<string> {
-        return '';
+    public async getTitle(): Promise<string|undefined> {
+        return undefined;
     }
 
     public getCommands(): server.Command[] {
