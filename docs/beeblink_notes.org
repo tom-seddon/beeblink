@@ -1333,23 +1333,39 @@ properly.
 
 * ADFS stuff
 
-** TODO some other things I noticed...
+** DONE some other things I noticed...
+CLOSED: [2024-12-22 Sun 21:33]
 
-*** TODO =getPersistentSettingsString= is never called
+*** DONE =getPersistentSettingsString= is never called
+CLOSED: [2024-12-21 Sat 01:36]
 
 =*HSTATUS= should print it out?
 
-*** TODO Previous directory is not shown anywhere
+It's OK(ish) for now as only the TubeHost type has meaningful
+persistent state, and it's covered by the *HSTATUS D output. See
+IFSState.getDrivesOutput.
+
+Still feels a little untidy.
+
+*** DONE Previous directory is not shown anywhere
+CLOSED: [2024-12-21 Sat 12:26]
 
 Again, should be something that =*HSTATUS= prints. More hooks
 needed...
 
-*** TODO =IFSType.findBeebFilesInVolume= might be pointless
+*** DONE =IFSType.findBeebFilesInVolume= might be pointless
+CLOSED: [2024-12-20 Fri 22:21]
 
 The =*LOCATE= handling could cover this - right?
 
 I think every FS type already funnels both entry points into the same
 shared routine.
+
+** DONE wildcards don't work
+CLOSED: [2024-12-24 Tue 14:19]
+
+I imagine this broke due to overenthusiastic testing names for
+validity at the parse stage.
 
 ** TODO Current directory can include wildcards
 
@@ -1364,38 +1380,56 @@ annoying?
 
 Maybe require =*CDIR :1= or whatever.
 
-** TODO no .INF handling for root directory
+** DONE no .INF handling for root directory
+CLOSED: [2024-12-23 Mon 17:28]
 
 Want to put the =OPT4\== in there at least. Make it the slightly
 different root directory format, for better DIM interop.
 
-** TODO Should ROM respond to *ADFS and *FADFS?
+** DONE Should ROM respond to *ADFS and *FADFS?
+CLOSED: [2024-12-20 Fri 22:21]
 
 Can't decide about this one.
 
-** TODO might need to adjust =beebfs.File=...
+Decided: no. Not enough stuff does =*ADFS=.
+
+** DONE might need to adjust =beebfs.File=...
+CLOSED: [2024-12-20 Fri 14:41]
 
 Currently there's a separate =Dir= type in the ADFS-type code for
 representing directories separately from files.
 
 But there's some stuff at the top level that (possibly prematurely?)
 turns FQNs into File objects. Or maybe the Dir type needs to be at the
-top level too?
+top level too? That might simplify fixing things up...
 
 Most stuff passes FQNs around so that should be fine.
 
-Affects at least these commands:
+Affects at least this stuff:
 
-*** TODO =*ACCESS=
+*** DONE OSFILE
+CLOSED: [2024-12-20 Fri 15:04]
+
+Should return A=2 if directory found
+
+*** DONE OSGBPB
+CLOSED: [2024-12-21 Sat 00:45]
+
+Read names must return dir names too
+
+*** DONE =*ACCESS=
+CLOSED: [2024-12-20 Fri 14:41]
 
 Needs fixing... probably? I wasn't planning on being super careful
 about directory attributes.
 
-*** TODO =*COPY=
+*** DONE =*COPY=
+CLOSED: [2024-12-20 Fri 14:41]
 
 Might be OK. 8-bit ADFS doesn't copy directories.
 
-*** TODO =*INFO=, =*WINFO=
+*** DONE =*INFO=, =*WINFO=
+CLOSED: [2024-12-20 Fri 14:41]
 
 Needs fixing. 8-bit ADFS will show some (admittedly not super useful)
 info for directories: attributes and start sector.
@@ -1423,7 +1457,8 @@ equivalents) be useful?
 
 *** DONE =BACK=
 CLOSED: [2024-12-18 Wed 16:52]
-*** TODO =CDIR <Ob Spec>=
+*** DONE =CDIR <Ob Spec>=
+CLOSED: [2024-12-24 Tue 14:19]
 *** DONE =DISMOUNT (<Drive>)=
 CLOSED: [2024-12-18 Wed 16:52]
 
@@ -1436,5 +1471,37 @@ Not going to do this.
 CLOSED: [2024-12-18 Wed 16:52]
 
 Not going to do this.
+
+** TODO follow through due to getIdealAbsoluteServerPath
+
+Could any other stuff be simplified now that this returns absolute
+paths?
+
+** DONE dir boot options
+CLOSED: [2024-12-23 Mon 17:26]
+
+** DONE dir title
+CLOSED: [2024-12-23 Mon 17:26]
+
+** DONE root dir is also known as =&=
+CLOSED: [2024-12-22 Sun 13:08]
+
+** TODO current dir is also known as =@=
+
+** TODO separate FS number when in a hierarchical volume?
+
+The FS does behave rather differently in this situation.
+
+** DONE print an extra newline after ADFS-type =*CAT=
+CLOSED: [2024-12-22 Sun 13:08]
+
+** DONE Should =DEFAULT_TITLE= even exist?
+CLOSED: [2024-12-23 Mon 02:20]
+
+Would =undefined= be better?
+
+** TODO Drive letter alone doesn't parse
+
+=*CAT 0= gives =Bad dir=. Can't do =*CAT ::WELCOME80:0= and the like.
 
 * eof.
