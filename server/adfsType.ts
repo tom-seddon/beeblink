@@ -503,7 +503,7 @@ class ADFSType implements beebfs.IFSType {
     }
 
     public static isValidBeebDirectoryName(str: string): boolean {
-        if (str.length > MAX_NAME_LENGTH) {
+        if (str.length === 0 || str.length > MAX_NAME_LENGTH) {
             return false;
         }
 
