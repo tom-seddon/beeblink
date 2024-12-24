@@ -1019,9 +1019,8 @@ function findDefaultVolume(options: ICommandLineOptions, volumes: beebfs.Volume[
     let defaultVolume: beebfs.Volume | undefined;
 
     if (options.default_volume !== null) {
-        const defaultVolumeNameUC = options.default_volume.toUpperCase();
         for (const volume of volumes) {
-            if (volume.name.toUpperCase() === defaultVolumeNameUC) {
+            if (utils.stricmp(volume.name, options.default_volume) === 0) {
                 defaultVolume = volume;
                 break;
             }
