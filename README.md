@@ -3,9 +3,10 @@
 A file storage system for the BBC Micro. Make your PC do something
 useful for a change: have it act as a file server for your BBC.
 
-No more swapping discs, no more noisy drives, no more 31 file limit,
-file access is very fast, and it's super-easy to share BBC files with
-your PC.
+No more swapping discs, no more noisy drives, no more file count
+limits, and file access is very fast. You get very quick turnaround
+when developing BBC software using your PC, and it's super-easy to get
+access to you BBC files. Also: very easy backups!
 
 If you've got multiple BBCs, they can all connect at once and share
 files.
@@ -85,10 +86,11 @@ and USB serial adapter, connect USB serial adapter to PC.
 If using Windows, you'll need to
 [tweak one of the device settings](./docs/ftdi_latency_timer.md).
 
-If using macOS 10.15 Catalina, you'll need to install
-[the FTDI virtual COM port driver](https://www.ftdichip.com/Drivers/VCP.htm).
-[**UPURS BeebLink does not currently work on macOS 11 Big Sur**](https://github.com/tom-seddon/beeblink/issues/79) -
-apologies.
+If using macOS, [UPURS is currently
+unsupported](https://github.com/tom-seddon/beeblink/issues/79), but
+reports are welcome.
+
+If using Linux, there should be nothing to do!
 
 There's no bootstrap process for the UPURS cable. Use the UPURS tools
 to get `beeblink_upurs_fe60.rom` copied onto your BBC.
@@ -97,7 +99,7 @@ to get `beeblink_upurs_fe60.rom` copied onto your BBC.
 
 # Setting up the Electron (experimental!)
 
-**Electron support is experimental! DIY required**
+**DIY required**
 
 You'll need an Electron with Plus 1 (or equivalent - I'm uing an Acorn
 Plus 1) and Advanced Plus 5 (or equivalent - I'm using the Retro
@@ -117,8 +119,6 @@ If using Windows, you'll need to
 There's not currently a bootstrap process for the Electron. I used my
 Master to get [the appropriate ROM image](./docs/tube_serial_roms.md)
 onto a cartridge, then plugged the cartridge into the Electron.
-
-**Electron support is experimental! DIY required**
 
 # Use
 
@@ -165,9 +165,16 @@ or
 [post in the StarDot BeebLink thread](https://stardot.org.uk/forums/viewtopic.php?f=53&t=15605)
 if you run into any difficulties!
 
-# Licence
+# Credits
 
-Copyright (C) 2018-2023 by Tom Seddon
+Copyright (C) 2018-2024 by Tom Seddon
+
+Many thanks are due to [Chris
+Morley](https://www.stardot.org.uk/forums/memberlist.php?mode=viewprofile&u=10711)
+for the development of the Tube Serial board, and for providing some
+excellent suggestions and comments.
+
+# Licence
 
 Licence: GPL v3
 
