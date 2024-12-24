@@ -404,8 +404,62 @@ class ADFSState implements beebfs.IFSState {
         // this.previous = temp;
     };
 
-    private readonly cdirCommand = async (_commandLine: CommandLine): Promise<void> => {
-        return todoError('CDIR');
+    private readonly cdirCommand = async (commandLine: CommandLine): Promise<void> => {
+        //return todoError('CDIR');
+        if (commandLine.parts.length < 2) {
+            return errors.syntax();
+        }
+
+        const adfsType = mustBeADFSType(this.volume.type);
+        const filePath = adfsType.parseDirString(commandLine.parts[1], 0, this, this.volume, false);
+
+        const dirs = filePath.dir.split('.');
+        for (const dir of dirs) {
+            if (utils.isAmbiguousAFSP(dir)) {
+                return errors.badName();
+            }
+        }
+
+        let currentFilePath = new ADFSFilePath(filePath.volume, true, filePath.drive, true, '$', true, path.join(filePath.volume.path, filePath.drive) as AbsPath);
+
+        // start at 1 to skip the $
+        for (let dirIndex = 1; dirIndex < dirs.length; ++dirIndex) {
+            const objects = await adfsType.findObjects(currentFilePath, this.log);
+            const nameUC = dirs[dirIndex].toUpperCase();
+            let foundObject: beebfs.FSObject | undefined;
+            for (const object of objects) {
+                if (object.fqn.name.toUpperCase() === nameUC) {
+                    foundObject = object;
+                    break;
+                }
+            }
+
+            let newDirName: string;
+            let newServerFolder: AbsPath;
+            if (foundObject !== undefined) {
+                if (dirIndex < dirs.length - 1) {
+                    // Intermediate entry already present. OK provided it's
+                    // a directory.
+                    if (!(foundObject instanceof beebfs.Dir)) {
+                        return errors.exists();
+                    }
+                } else {
+                    // Final entry already present. Always raise the Exists
+                    // error.
+                    return errors.exists();
+                }
+
+                newDirName = foundObject.fqn.name;
+                newServerFolder = foundObject.serverPath as AbsPath;
+            } else {
+                newDirName = dirs[dirIndex];
+                newServerFolder = path.join(currentFilePath.serverFolder, utils.getCaseNormalizedPath(dirs[dirIndex])) as AbsPath;
+                await utils.fsMkdir(newServerFolder);
+                await inf.writeStandardINFFile(newServerFolder, dirs[dirIndex], beebfs.SHOULDNT_LOAD, beebfs.SHOULDNT_EXEC, 0, beebfs.DEFAULT_ATTR, undefined);
+            }
+
+            currentFilePath = new ADFSFilePath(currentFilePath.volume, true, currentFilePath.drive, true, currentFilePath.dir + '.' + newDirName, true, newServerFolder);
+        }
     };
 
     private readonly lcatCommand = async (_commandLine: CommandLine): Promise<void> => {
@@ -809,13 +863,13 @@ class ADFSType implements beebfs.IFSType {
             const nameRegExp = utils.getRegExpFromAFSP(dirs[dirIndex]);
             let foundEntry: beebfs.Dir | undefined;
             for (const entry of entries) {
-                if (entry instanceof beebfs.Dir) {
-                    if (nameRegExp.exec(entry.fqn.name) !== null) {
-                        if (foundEntry !== undefined) {
-                            return errors.ambiguousName();
-                        } else {
-                            foundEntry = entry;
-                        }
+                if (nameRegExp.exec(entry.fqn.name) !== null) {
+                    if (foundEntry !== undefined) {
+                        return errors.ambiguousName();
+                    } else if (!(entry instanceof beebfs.Dir)) {
+                        return errors.notADirectory();
+                    } else {
+                        foundEntry = entry;
                     }
                 }
             }
@@ -830,7 +884,7 @@ class ADFSType implements beebfs.IFSType {
         return currentFilePath;
     }
 
-    private async findObjects(filePath: ADFSFilePath, log: utils.Log | undefined): Promise<beebfs.FSObject[]> {
+    public async findObjects(filePath: ADFSFilePath, log: utils.Log | undefined): Promise<beebfs.FSObject[]> {
         const entries: beebfs.FSObject[] = [];
 
         const infos: inf.IINF[] = await inf.getINFsForFolder(filePath.serverFolder, true, log);

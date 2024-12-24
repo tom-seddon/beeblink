@@ -67,6 +67,7 @@ function createErrorFactory(code: number, defaultMessage: string): (message?: st
 
 export const accessViolation = createErrorFactory(189, 'Access violation');
 export const notAFile = createErrorFactory(189, 'Not a file');
+export const notADirectory = createErrorFactory(189, 'Not a directory');
 
 export const tooManyOpen = createErrorFactory(192, 'Too many open');
 
