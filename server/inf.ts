@@ -113,7 +113,7 @@ export async function writeNonStandardINFFile(serverPath: string, name: string, 
 /////////////////////////////////////////////////////////////////////////
 
 // Write standard .inf file. If attr is a string, it will be written verbatim. If 
-export async function writeStandardINFFile(servorPath: string, name: string, load: beebfs.FileAddress, exec: beebfs.FileAddress, length: number, attr: beebfs.FileAttributes | string, extra: IExtraData | undefined): Promise<void> {
+export async function writeStandardINFFile(serverPath: string, name: string, load: beebfs.FileAddress, exec: beebfs.FileAddress, length: number, attr: beebfs.FileAttributes | string, extra: IExtraData | undefined): Promise<void> {
     let inf = `${name} ${utils.hex8(load)} ${utils.hex8(exec)} ${utils.hex8(length)} `;
     if (typeof (attr) === 'string') {
         inf += attr;
@@ -137,7 +137,7 @@ export async function writeStandardINFFile(servorPath: string, name: string, loa
 
     inf += os.EOL;//stop git moaning
 
-    await utils.fsMkdirAndWriteFile(servorPath + ext, Buffer.from(inf, 'binary'));
+    await utils.fsMkdirAndWriteFile(serverPath + ext, Buffer.from(inf, 'binary'));
 }
 
 /////////////////////////////////////////////////////////////////////////
