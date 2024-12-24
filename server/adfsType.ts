@@ -475,7 +475,7 @@ const NAME_CHARS_VALID: boolean[] = ((): boolean[] => {
 
     for (let i = 0; i < 128; ++i) {
         // '#*.:$&@ '
-        valid.push(i >= 32 && '#*.: '.indexOf(String.fromCharCode(i)) < 0);
+        valid.push(i >= 32 && ': '.indexOf(String.fromCharCode(i)) < 0);
     }
 
     return valid;
