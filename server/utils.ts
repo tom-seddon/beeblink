@@ -643,8 +643,8 @@ export function struieq(a: string | undefined, b: string | undefined): boolean {
 /////////////////////////////////////////////////////////////////////////
 
 export function stricmp(a: string, b: string): number {
-    const al = a.toLowerCase();
-    const bl = b.toLowerCase();
+    const al = a.toUpperCase();
+    const bl = b.toUpperCase();
 
     if (al < bl) {
         return -1;
