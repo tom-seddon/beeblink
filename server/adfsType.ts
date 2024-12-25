@@ -856,6 +856,15 @@ class ADFSType implements beebfs.IFSType {
             return filePath;
         }
 
+        //log?.pn(`findADFSFilePath: filePath=${filePath.toString()}`);
+        log?.pn(`findADFSFilePath: volume: \`\`${filePath.volume.name}'' (explicit=${filePath.volumeExplicit})`);
+        log?.pn(`findADFSFilePath: drive: \`\`${filePath.drive}'' (explicit=${filePath.driveExplicit})`);
+        log?.pn(`findADFSFilePath: dir: \`\`${filePath.dir}'' (explicit=${filePath.dirExplicit})`);
+
+        if (!ADFSType.isValidDrive(filePath.drive)) {
+            return errors.badDrive();
+        }
+
         // Bleargh.
         let currentFilePath = new ADFSFilePath(filePath.volume, true, filePath.drive, true, '$', true, path.join(filePath.volume.path, filePath.drive) as AbsPath);
 
@@ -863,6 +872,7 @@ class ADFSType implements beebfs.IFSType {
         //
         // The server path and dir parts are mutually exclusive.
         const dirs = filePath.dir.split('.');
+        log?.pn(`findADFSFilePath: dirs=[${dirs}]`);
 
         let dirIndex = 0;
         if (dirs[dirIndex] !== '$') {
@@ -889,7 +899,7 @@ class ADFSType implements beebfs.IFSType {
                 return undefined;
             }
 
-            currentFilePath = new ADFSFilePath(currentFilePath.volume, true, currentFilePath.drive, true, currentFilePath + '.' + foundEntry.fqn.name, true, foundEntry.serverPath as AbsPath);
+            currentFilePath = new ADFSFilePath(currentFilePath.volume, true, currentFilePath.drive, true, currentFilePath.dir + '.' + foundEntry.fqn.name, true, foundEntry.serverPath as AbsPath);
             ++dirIndex;
         }
 
