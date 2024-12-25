@@ -461,7 +461,12 @@ class ADFSState implements beebfs.IFSState {
             } else {
                 newDirName = dirs[dirIndex];
                 newServerFolder = path.join(currentFilePath.serverFolder, utils.getCaseNormalizedPath(dirs[dirIndex])) as AbsPath;
-                await utils.fsMkdir(newServerFolder);
+                try {
+                    await utils.fsMkdir(newServerFolder);
+                } catch (error) {
+                    return errors.nodeError(error);
+                }
+
                 await inf.writeStandardINFFile(newServerFolder, dirs[dirIndex], beebfs.SHOULDNT_LOAD, beebfs.SHOULDNT_EXEC, 0, beebfs.DEFAULT_ATTR, undefined);
             }
 
