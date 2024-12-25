@@ -27,11 +27,24 @@ import * as utils from './utils';
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+let gTraceOnBeebError = false;
+
+export function setTraceOnBeebError(traceOnBeebError: boolean): void {
+    gTraceOnBeebError = traceOnBeebError;
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 export class BeebError extends Error {
     public readonly code: number;
     public readonly text: string;
 
     public constructor(code: number, text: string) {
+        if (gTraceOnBeebError) {
+            console.trace(`Error 0x${utils.hex2(code)}: ${text}`);//eslint-disable-line no-console
+        }
+
         super(text + ' (' + code + ')');
 
         this.code = code;
@@ -46,21 +59,8 @@ export class BeebError extends Error {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-let gTraceOnBeebError = false;
-
-export function setTraceOnBeebError(traceOnBeebError: boolean): void {
-    gTraceOnBeebError = traceOnBeebError;
-}
-
-//////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////
-
 function createErrorFactory(code: number, defaultMessage: string): (message?: string) => never {
     return (message?: string): never => {
-        if (gTraceOnBeebError) {
-            console.trace(`Error ${utils.hex2(code)}: ${defaultMessage}`);//eslint-disable-line no-console
-        }
-
         throw new BeebError(code, message === undefined ? defaultMessage : message);
     };
 }
