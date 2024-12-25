@@ -932,7 +932,7 @@ class ADFSType implements beebfs.IFSType {
 
         const log: utils.Log | undefined = adfsState?.log;
 
-        //log?.pn(`ADFSType.parseFileOrDirString: str = "${str}"; i = ${ i }; parseAsDir = ${ parseAsDir }; volume = ${ volume.name } `);
+        log?.pn(`ADFSType.parseFileOrDirString: str = "${str}"; i = ${strIndex}; parseAsDir = ${parseAsDir}; volume = ${volume.name} `);
 
         if (strIndex === str.length) {
             //log?.pn(`ADFSType.parseFileOrDirString: default properties`);
@@ -955,18 +955,22 @@ class ADFSType implements beebfs.IFSType {
             drive = str[strIndex + 1];
             strIndex += 2;
 
-            if (str[strIndex] !== '.') {
-                return errors.badName();
+            if (strIndex < str.length) {
+                if (str[strIndex] !== '.') {
+                    return errors.badName();
+                }
+                strIndex += 1;
             }
-            strIndex += 1;
 
             log?.pn(`  Drive: ${drive} `);
         }
 
         if (parseAsDir) {
-            dirs = str.slice(strIndex).split('.');
-            if (dirs.length === 1 && dirs[0] === '') {
-                dirs = undefined;
+            if (strIndex < str.length) {
+                dirs = str.slice(strIndex).split('.');
+                if (dirs.length === 1 && dirs[0] === '') {
+                    dirs = undefined;
+                }
             }
         } else {
             const lastSeparatorIndex = str.lastIndexOf('.');
