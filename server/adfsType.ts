@@ -413,6 +413,13 @@ class ADFSState implements beebfs.IFSState {
         const adfsType = mustBeADFSType(this.volume.type);
         const filePath = adfsType.parseDirString(commandLine.parts[1], 0, this, this.volume, false);
 
+        // Annoying special case handling for something like *CDIR $. Maybe the
+        // $ shouldn't have been included in the parseDirString result after
+        // all.
+        if (filePath.dir === '$') {
+            return errors.exists();
+        }
+
         const dirs = filePath.dir.split('.');
         for (const dir of dirs) {
             if (utils.isAmbiguousAFSP(dir)) {
