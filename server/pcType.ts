@@ -104,15 +104,15 @@ class PCState implements beebfs.IFSState {
         }
     }
 
-    public starDrive(_arg: string | undefined): boolean {
+    public async starDrive(_arg: string | undefined): Promise<void> {
         return errors.badDrive();
     }
 
-    public starDir(_filePath: beebfs.FilePath | undefined): void {
+    public async starDir(_filePath: beebfs.FilePath | undefined): Promise<void> {
         return notSupported();
     }
 
-    public starLib(_filePath: beebfs.FilePath | undefined): void {
+    public async starLib(_filePath: beebfs.FilePath | undefined): Promise<void> {
         return notSupported();
     }
 
@@ -132,7 +132,7 @@ class PCState implements beebfs.IFSState {
         return notSupported();
     }
 
-    public async getTitle(): Promise<string|undefined> {
+    public async getTitle(): Promise<string | undefined> {
         return undefined;
     }
 

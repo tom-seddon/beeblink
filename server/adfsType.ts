@@ -166,6 +166,18 @@ class ADFSFilePath extends beebfs.FilePath {
 
 class ADFSPath {
     public constructor(public readonly drive: string, public readonly dir: ReadonlyArray<string>) { }
+
+    public toString(): string {
+        let s = `ADFSPath(drive="${this.drive}", dir=[`;
+        for (let i = 0; i < this.dir.length; ++i) {
+            if (i > 0) {
+                s += `,`;
+            }
+            s += `"${this.dir[i]}"`;
+        }
+
+        return s;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -299,7 +311,6 @@ class ADFSState implements beebfs.IFSState {
         let filePath: beebfs.FilePath;
         if (commandLine === undefined) {
             filePath = this.getFilePathFromADFSPath(this.current);
-            filePath = new beebfs.FilePath(this.volume, false, this.current.drive, false, this.getCurrentDir(), false);
         } else {
             // TODO... handle <obspec>
             return undefined;
@@ -308,7 +319,7 @@ class ADFSState implements beebfs.IFSState {
         return await this.volume.type.getCAT(filePath, this, this.log);
     }
 
-    public starDrive(arg: string | undefined): boolean {
+    public async starDrive(arg: string | undefined): Promise<void> {
         if (arg === undefined) {
             return errors.badDrive();
         }
@@ -323,21 +334,19 @@ class ADFSState implements beebfs.IFSState {
 
             this.setCurrentDir(new ADFSPath(filePath.drive, this.current.dir));
         }
-
-        return true;
     }
 
-    public starDir(filePath: beebfs.FilePath | undefined): void {
+    public async starDir(filePath: beebfs.FilePath | undefined): Promise<void> {
         if (filePath !== undefined) {
-            this.setCurrentDir(this.getADFSPathFromFilePath(filePath));
+            this.setCurrentDir(await this.getADFSPathFromFilePath(filePath));
         } else {
             this.setCurrentDir(new ADFSPath(this.current.drive, gDefaultTransientSettings.current.dir));
         }
     }
 
-    public starLib(filePath: beebfs.FilePath | undefined): void {
+    public async starLib(filePath: beebfs.FilePath | undefined): Promise<void> {
         if (filePath !== undefined) {
-            this.library = this.getADFSPathFromFilePath(filePath);
+            this.library = await this.getADFSPathFromFilePath(filePath);
         } else {
             this.library = new ADFSPath(this.current.drive, gDefaultTransientSettings.library.dir);
         }
@@ -482,12 +491,19 @@ class ADFSState implements beebfs.IFSState {
         return todoError('LEX');
     };
 
-    private getADFSPathFromFilePath(filePath: beebfs.FilePath): ADFSPath {
+    private async getADFSPathFromFilePath(filePath: beebfs.FilePath): Promise<ADFSPath> {
         if (filePath.volumeExplicit) {
             return errors.badDir();
         }
 
-        return new ADFSPath(filePath.drive, filePath.dir.split('.'));
+        const adfsState = mustBeADFSType(this.volume.type);
+        const adfsFilePath = await adfsState.findADFSFilePath(filePath, this.log);
+        if (adfsFilePath === undefined) {
+            return errors.notFound();
+        }
+
+        this.log?.pn(`getADFSPathFromFilePath: filePath=${filePath}; adfsFilePath=${adfsFilePath}`);
+        return new ADFSPath(filePath.drive, adfsFilePath.dir.split('.'));
     }
 
     private getFilePathFromADFSPath(adfsPath: ADFSPath): beebfs.FilePath {
@@ -497,6 +513,8 @@ class ADFSState implements beebfs.IFSState {
     private setCurrentDir(newCurrent: ADFSPath): void {
         this.previous = this.current;
         this.current = newCurrent;
+
+        this.log?.pn(`setCurrentDir: previous=${this.previous} current=${this.current}`);
     }
 
     private async loadCurrentDirectoryMetadata(): Promise<IADFSDirectoryMetadata | undefined> {

@@ -207,7 +207,7 @@ class DFSState implements beebfs.IFSState {
         return await this.volume.type.getCAT(filePath, this, this.log);
     }
 
-    public starDrive(arg: string | undefined): boolean {
+    public async starDrive(arg: string | undefined): Promise<void> {
         if (arg === undefined) {
             return errors.badDrive();
         }
@@ -222,17 +222,15 @@ class DFSState implements beebfs.IFSState {
 
             this.current = new DFSPath(filePath.drive, this.current.dir);
         }
-
-        return true;
     }
 
-    public starDir(filePath: beebfs.FilePath | undefined): void {
+    public async starDir(filePath: beebfs.FilePath | undefined): Promise<void> {
         if (filePath !== undefined) {
             this.current = this.getDFSPathFromFilePath(filePath);
         }
     }
 
-    public starLib(filePath: beebfs.FilePath | undefined): void {
+    public async starLib(filePath: beebfs.FilePath | undefined): Promise<void> {
         if (filePath !== undefined) {
             this.library = this.getDFSPathFromFilePath(filePath);
         } else {

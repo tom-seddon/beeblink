@@ -615,13 +615,13 @@ export interface IFSState {
     getCAT: (commandLine: string | undefined) => Promise<string | undefined>;
 
     // handle *DRIVE/*MOUNT.
-    starDrive: (arg: string | undefined) => void;
+    starDrive: (arg: string | undefined) => Promise<void>;
 
     // handle *DIR.
-    starDir: (filePath: FilePath | undefined) => void;
+    starDir: (filePath: FilePath | undefined) => Promise<void>;
 
     // handle *LIB.
-    starLib: (filePath: FilePath | undefined) => void;
+    starLib: (filePath: FilePath | undefined) => Promise<void>;
 
     // handle *HSTATUS drives output.
     getDrivesOutput: () => Promise<string>;
@@ -1231,7 +1231,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async starDrive(arg: string | undefined): Promise<void> {
-        this.getState().starDrive(arg);
+        await this.getState().starDrive(arg);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1248,7 +1248,7 @@ export class FS {
             }
         }
 
-        this.getState().starDir(filePath);
+        await this.getState().starDir(filePath);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1265,7 +1265,7 @@ export class FS {
             }
         }
 
-        this.getState().starLib(filePath);
+        await this.getState().starLib(filePath);
     }
 
     /////////////////////////////////////////////////////////////////////////
