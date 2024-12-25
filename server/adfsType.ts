@@ -471,7 +471,13 @@ class ADFSState implements beebfs.IFSState {
                 newDirName = dirs[dirIndex];
                 newServerFolder = path.join(currentFilePath.serverFolder, utils.getCaseNormalizedPath(dirs[dirIndex])) as AbsPath;
                 try {
-                    await utils.fsMkdir(newServerFolder);
+                    // Do a recursive folder create to accommodate the case
+                    // where the drive folder needs to be created.
+                    //
+                    // In all other cases, only the leaf folder needs creating.
+                    // The code needs to work through the folders one by one so
+                    // it can look up in the .inf files each time.
+                    await utils.fsMkdir(newServerFolder, { recursive: true });
                 } catch (error) {
                     return errors.nodeError(error);
                 }
@@ -559,7 +565,7 @@ const NAME_CHARS_VALID: boolean[] = ((): boolean[] => {
 
     for (let i = 0; i < 128; ++i) {
         // '#*.:$&@ '
-        valid.push(i >= 32 && ': '.indexOf(String.fromCharCode(i)) < 0);
+        valid.push(i >= 32 && ': $@&'.indexOf(String.fromCharCode(i)) < 0);
     }
 
     return valid;
@@ -972,7 +978,7 @@ class ADFSType implements beebfs.IFSType {
 
         const log: utils.Log | undefined = adfsState?.log;
 
-        log?.pn(`ADFSType.parseFileOrDirString: str = "${str}"; i = ${strIndex}; parseAsDir = ${parseAsDir}; volume = ${volume.name} `);
+        log?.pn(`ADFSType.parseFileOrDirString: str = "${str}"; i = ${strIndex}; parseAsDir = ${parseAsDir}; volume = ${volume.name}; adfsState=${(adfsState === undefined ? 'undefined' : 'defined')}`);
 
         if (strIndex === str.length) {
             //log?.pn(`ADFSType.parseFileOrDirString: default properties`);
@@ -1071,12 +1077,23 @@ class ADFSType implements beebfs.IFSType {
 
         // Fix up the directory names.
         log?.pn(`Fix up directories: `);
+        for (let i = 0; i < dirs.length; ++i) {
+            log?.pn(`  dirs[${i}]: \`\`${dirs[i]}''`);
+        }
+
         let dirIndex = 0;
         while (dirIndex < dirs.length) {
             log?.pn(`  dirs[${dirIndex}]="${dirs[dirIndex]}"`);
-            if (dirs[dirIndex] === '$' && dirIndex > 0) {
-                dirs = dirs.slice(dirIndex);
-                dirIndex = 1;//skip the $
+            if (dirs[dirIndex] === '$') {
+                if (dirIndex > 0) {
+                    dirs = dirs.slice(dirIndex);
+                }
+
+                dirIndex = 1;//skip the $ either way
+            } else if (dirs[dirIndex] === '@' && adfsState !== undefined) {
+                const current = adfsState.getCurrent().dir;
+                dirs = current.concat(dirs.slice(dirIndex + 1));//+1 to skip the @
+                dirIndex = current.length;
             } else if (dirs[dirIndex] === '^') {
                 // Remove 2 items - this one, and the previous (if there is one).
                 if (dirIndex === 0) {
