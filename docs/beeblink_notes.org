@@ -1367,18 +1367,21 @@ CLOSED: [2024-12-24 Tue 14:19]
 I imagine this broke due to overenthusiastic testing names for
 validity at the parse stage.
 
-** TODO Current directory can include wildcards
+** DONE Current directory can include wildcards
+CLOSED: [2024-12-25 Wed 22:21]
 
 e.g., if you do =*DIR LIB*= then the current directory is literally
 =$.LIB*= or whatever! Should resolve the wildcards and set it to the
 result.
 
-** TODO Non-existent drives
+** DONE Non-existent drives
+CLOSED: [2024-12-25 Wed 22:31]
 
 Nothing in there for creating them on demand yet. Will the logic get
-annoying?
+annoying? Maybe require =*CDIR :1= or whatever.
 
-Maybe require =*CDIR :1= or whatever.
+Saving a file will create the root directory. But trying to create a
+directory won't...
 
 ** DONE no .INF handling for root directory
 CLOSED: [2024-12-23 Mon 17:28]
@@ -1442,7 +1445,8 @@ Needs fixing. You need to be able to rename directories!
 - =renameFile= now called =rename=
 - Returns a result struct with old/new server paths
 
-** TODO ADFS commands that will need implementing
+** DONE ADFS commands that will need implementing
+CLOSED: [2024-12-27 Fri 22:18]
 
 Already covered in BeebLink: ACCESS, COPY, DIR, DRIVE, LIB, RENAME,
 TITLE
@@ -1464,15 +1468,18 @@ CLOSED: [2024-12-18 Wed 16:52]
 
 Not going to do this.
 
-*** TODO =LCAT=
-*** TODO =LEX=
+*** DONE =LCAT=
+CLOSED: [2024-12-27 Fri 22:18]
+*** DONE =LEX=
+CLOSED: [2024-12-27 Fri 22:18]
 
 *** DONE =MOUNT (<Drive>)=
 CLOSED: [2024-12-18 Wed 16:52]
 
 Not going to do this.
 
-** TODO follow through due to getIdealAbsoluteServerPath
+** DONE follow through due to getIdealAbsoluteServerPath
+CLOSED: [2024-12-27 Fri 22:18]
 
 Could any other stuff be simplified now that this returns absolute
 paths?
@@ -1486,11 +1493,15 @@ CLOSED: [2024-12-23 Mon 17:26]
 ** DONE root dir is also known as =&=
 CLOSED: [2024-12-22 Sun 13:08]
 
-** TODO current dir is also known as =@=
+** DONE current dir is also known as =@=
+CLOSED: [2024-12-25 Wed 22:51]
 
-** TODO separate FS number when in a hierarchical volume?
+** DONE separate FS number when in a hierarchical volume?
+CLOSED: [2024-12-26 Thu 18:27]
 
 The FS does behave rather differently in this situation.
+
+No, leave it as it is. BLFS is just weird in this respect.
 
 ** DONE print an extra newline after ADFS-type =*CAT=
 CLOSED: [2024-12-22 Sun 13:08]
@@ -1500,8 +1511,18 @@ CLOSED: [2024-12-23 Mon 02:20]
 
 Would =undefined= be better?
 
-** TODO Drive letter alone doesn't parse
+** DONE Drive letter alone doesn't parse
+CLOSED: [2024-12-25 Wed 21:18]
 
 =*CAT 0= gives =Bad dir=. Can't do =*CAT ::WELCOME80:0= and the like.
+
+** DONE =$= is part of the parsed dir
+CLOSED: [2024-12-27 Fri 21:58]
+
+And then *CDIR needs to skip it. Does it really want to work like
+this?
+
+(Of course, if it's not part of the dir there, it'll have to be added
+when printing!)
 
 * eof.
