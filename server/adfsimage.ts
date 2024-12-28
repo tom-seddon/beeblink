@@ -44,8 +44,6 @@ const MAX_PART_SIZE_BYTES = MAX_PART_SIZE_SECTORS * SECTOR_SIZE_BYTES;
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-const S_SIZE_BYTES = 1 * 40 * TRACK_SIZE_BYTES;
-const M_SIZE_BYTES = 1 * 80 * TRACK_SIZE_BYTES;
 const L_SIZE_BYTES = 2 * 80 * TRACK_SIZE_BYTES;
 
 //////////////////////////////////////////////////////////////////////////
@@ -95,7 +93,7 @@ function checkCat(image: Buffer): void {
 }
 
 function checkImage(image: Buffer): void {
-    if (image.length !== S_SIZE_BYTES && image.length !== M_SIZE_BYTES && image.length !== L_SIZE_BYTES) {
+    if (image.length % SECTOR_SIZE_BYTES !== 0) {
         return errors.generic(`Bad ADFS image (bad size)`);
     }
 

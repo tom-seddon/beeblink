@@ -17,9 +17,14 @@ the used areas.
 
 Pick the drive to read from or write to.
 
-Select the disk type - Acorn DFS, ADFS, or Opus DDOS/Challenger. ADFS
-can detect the disk type automatically; for DFS or Opus you'll need to
-specify single or double sided.
+Select the disk type - Acorn DFS, ADFS, or Opus DDOS/Challenger.
+
+For DFS or Opus you'll need to specify single or double sided.
+
+For ADFS, BeebLink will detect the disk type automatically: ADFS L if
+640 KB, or some other ADFS type if not. (For historical reasons, ADFS
+L images are special. And this also means that 640 KB hard disk images
+are not currently supported.)
 
 Finally, specify the image to read from or write to. (You can also
 enter * commands at this point by entering a line starting with `*` -
