@@ -401,8 +401,8 @@ class ADFSState implements beebfs.IFSState {
         return [
             new server.Command('BACK', undefined, this.backCommand),
             new server.Command('CDIR', '<Ob Spec>', this.cdirCommand),
-            new server.Command('LCAT', undefined, this.lcatCommand),
-            new server.Command('LEX', undefined, this.lexCommand),
+            // new server.Command('LCAT', undefined, this.lcatCommand),
+            // new server.Command('LEX', undefined, this.lexCommand),
         ];
     }
 

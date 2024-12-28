@@ -3,8 +3,9 @@
 **ADFS volumes are experimental!**
 
 BeebLink supports hierarchical ADFS-like volumes. To create one,
-create an ordinary volume, and create a file called `.adfs` (contents
-irrelevant) in its folder, next to the `0` folder.
+create an ordinary volume - a folder with the desired volume name,
+with a folder called `0` inside it - and create a file called `.adfs`
+(contents irrelevant) in its folder, next to the `0` folder.
 
 ADFS volumes deliberately behave a lot like an ordinary ADFS floppy
 disk or hard disk.
@@ -19,9 +20,11 @@ disk or hard disk.
 
 ## Missing ADFS features
 
+- The following ADFS commands are not yet supported: `DESTROY`, `EX`
+  on B/B+, `LCAT`, `LEX`
+  
 - The following ADFS commands are not supported: `BACKUP`, `COMPACT`,
-  `BYE`, `DESTROY`, `DISMOUNT`, `FREE`, `FORMAT`, `MAP`, `MOUNT`,
-  `VERIFY`
+  `BYE`, `DISMOUNT`, `FREE`, `FORMAT`, `MAP`, `MOUNT`, `VERIFY`
 
 - Directory attributes are ignored
 
