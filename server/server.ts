@@ -1166,6 +1166,13 @@ export class Server {
                 this.prepareForTextResponse(builder.createBuffer());
 
                 return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, responseType);
+            } else if (result.refreshVolumes) {
+                await this.bfs.refreshKnownVolumesList();
+                this.volumeBrowser.setVolumes(await this.bfs.findVolumesMatching('*'));
+
+                this.prepareForTextResponse(this.volumeBrowser.getInitialString());
+
+                return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER);
             } else if (result.text.length > 0) {
                 this.prepareForTextResponse(result.text);
 

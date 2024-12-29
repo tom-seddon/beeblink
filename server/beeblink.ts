@@ -481,17 +481,15 @@ export const REQUEST_AVR_ERROR = 1;
 // Response is TEXT.
 //
 // P = 1 byte, display memory type (as per &34f); 1 byte, text display width; 1
-// byte, text display height
+// byte, text display height; 1 byte, machine type
+//
+// (The machine type is used to decide whether to draw boxes with +|- or use the
+// extended Master character set.)
 export const REQUEST_VOLUME_BROWSER_RESET = 0;
 
 // A key was pressed, so do something.
 //
 // Response is VOLUME_BROWSER with additional info.
-//
-// As a bit of a hack, if the response is TEXT, the first byte of the payload -
-// ordinarily unused - is 0 if the keyboard buffer should be flushed, and non-0
-// otherwise. Sometimes when updating the UI it's best to flush the keyboard
-// buffer, and sometimes it isn't.
 //
 // P = 1 byte, SHIFT pressed flag (0=no, yes otherwise); 1 byte, the ASCII key
 // value assuming *FX4,1

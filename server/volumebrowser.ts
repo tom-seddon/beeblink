@@ -42,14 +42,16 @@ export class Result {
     public readonly boot: boolean;
     public readonly flushKeyboardBuffer: boolean;
     public readonly newDefaultFilters: string[] | undefined;
+    public readonly refreshVolumes: boolean;
 
-    public constructor(done: boolean, text: Buffer, volume: beebfs.Volume | undefined, boot: boolean, flushKeyboardBuffer: boolean, newDefaultFilters: string[] | undefined) {
+    public constructor(done: boolean, text: Buffer, volume: beebfs.Volume | undefined, boot: boolean, flushKeyboardBuffer: boolean, newDefaultFilters: string[] | undefined, refreshVolumes: boolean) {
         this.done = done;
         this.text = text;
         this.volume = volume;
         this.boot = boot;
         this.flushKeyboardBuffer = flushKeyboardBuffer;
         this.newDefaultFilters = newDefaultFilters;
+        this.refreshVolumes = refreshVolumes;
     }
 }
 
@@ -60,6 +62,15 @@ enum BrowserMode {
     Browse,
     EditFilter,
     ShowInfo,
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+enum BrowserKeyAction {
+    None,
+    SaveDefaultFilters,
+    RefreshVolumes,
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -101,14 +112,11 @@ export class Browser {
     // used in filter edit mode
     private filterEditY: number;
 
-    public constructor(charSizeBytes: number, width: number, height: number, m128: boolean, volumes: beebfs.Volume[], initialFilters: string[] | undefined) {
+    public constructor(charSizeBytes: number, width: number, height: number, m128: boolean, volumes: ReadonlyArray<beebfs.Volume>, initialFilters: string[] | undefined) {
         this.log = utils.Log.create('BROWSER', process.stdout, true);
 
         this.width = width;
         this.height = height;
-
-        this.volumes = volumes;
-        this.volumes.sort((a, b) => utils.stricmp(a.name, b.name));
 
         if (charSizeBytes === 32) {
             this.normal = this.createString(17, 128, 17, 7);
@@ -168,15 +176,24 @@ export class Browser {
             }
         }
 
-        this.columns = [];
-        this.numFilteredVolumes = 0;
-        this.updateColumns(undefined);
-
         this.prints = new utils.BufferBuilder();
         this.done = false;
         this.boot = false;
 
         this.filterEditY = -1;
+
+        this.columns = [];
+        this.numFilteredVolumes = 0;
+        this.volumes = [];
+
+        this.setVolumes(volumes);
+    }
+
+    public setVolumes(volumes: ReadonlyArray<beebfs.Volume>): void {
+        const oldVolume = this.getSelectedVolume();
+        this.volumes = volumes.slice();
+        this.volumes.sort((a, b) => utils.stricmp(a.name, b.name));
+        this.updateColumns(oldVolume);
     }
 
     public getInitialString(): Buffer {
@@ -209,10 +226,18 @@ export class Browser {
         // let flushKeyboardBuffer;
 
         let newDefaultFilters: string[] | undefined;
+        let refreshVolumes = false;
 
         if (this.mode === BrowserMode.Browse) {
-            if (this.handleBrowserKey(key, shift)) {
-                newDefaultFilters = this.filterLCs.slice();
+            const action = this.handleBrowserKey(key, shift);
+            switch (action) {
+                case BrowserKeyAction.SaveDefaultFilters:
+                    newDefaultFilters = this.filterLCs.slice();
+                    break;
+
+                case BrowserKeyAction.RefreshVolumes:
+                    refreshVolumes = true;
+                    break;
             }
         } else if (this.mode === BrowserMode.EditFilter) {
             this.handleEditFilterKey(key);
@@ -220,7 +245,7 @@ export class Browser {
             this.handleShowInfoKey();
         }
 
-        return new Result(this.done, this.createPrintsBuffer(), this.selectedVolume, this.boot, this.flushKeyboardBuffer, newDefaultFilters);
+        return new Result(this.done, this.createPrintsBuffer(), this.selectedVolume, this.boot, this.flushKeyboardBuffer, newDefaultFilters, refreshVolumes);
     }
 
     private clearPrints(): void {
@@ -299,7 +324,9 @@ export class Browser {
                 const column = this.columns[colIdx];
 
                 for (let rowIdx = 0; rowIdx < column.rows.length; ++rowIdx) {
-                    if (column.rows[rowIdx] === oldVolume) {
+                    const newVolume = column.rows[rowIdx];
+
+                    if (newVolume.matchesName(oldVolume.name) && newVolume.path === oldVolume.path) {
                         this.colIdx = colIdx;
                         this.rowIdx = rowIdx;
                         this.x = column.x;
@@ -317,8 +344,8 @@ export class Browser {
         }
     }
 
-    private handleBrowserKey(key: number, shift: boolean): boolean {
-        let saveDefaultFilters = false;
+    private handleBrowserKey(key: number, shift: boolean): BrowserKeyAction {
+        let action = BrowserKeyAction.None;
 
         if (key === 0x88) {
             this.printCursorMovement(-1, 0);
@@ -344,13 +371,16 @@ export class Browser {
             }
         } else if (key === 19) {
             // Ctrl+S
-            saveDefaultFilters = true;
+            action = BrowserKeyAction.SaveDefaultFilters;
             const y = this.printBox('Info', 1);
             this.printTAB(2, y);
             // 01234567890123456789
             // Default saved
             this.print('Default saved');
             this.mode = BrowserMode.ShowInfo;
+        } else if (key === 18) {
+            // CTrl+R
+            action = BrowserKeyAction.RefreshVolumes;
         } else if (key === 32) {
             this.printProperties();
             this.mode = BrowserMode.ShowInfo;
@@ -362,7 +392,7 @@ export class Browser {
             this.flushKeyboardBuffer = false;
         }
 
-        return saveDefaultFilters;
+        return action;
     }
 
     private handleEditFilterKey(key: number): void {

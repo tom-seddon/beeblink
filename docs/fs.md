@@ -428,6 +428,10 @@ Press CTRL+S to save the current filter as the default for the current
 session. The default filter will be used if you don't supply one on
 the command line.
 
+Press CTRL+R to refresh the known volumes list. Use this if you added
+one on the server and it's not showing up. (For technical reasons,
+there's currently no progress indicator.)
+
 The volume browser isn't recommended in 20-column modes.
 
 ### `WDUMP <fsp>`
