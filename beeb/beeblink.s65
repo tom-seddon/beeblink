@@ -2139,7 +2139,7 @@ link_ok:
                 jsr send_payload_byte
 
                 ; caps1 flags
-                lda #CAPS1_SUPPORT_TEXT_EXEC
+                lda #CAPS1_SUPPORT_TEXT_EXEC|CAPS1_UPDATED_VOLUME_BROWSER
                 jsr send_payload_byte
 
                 jsr recv_response_and_discard_payload
@@ -3900,16 +3900,34 @@ volumes_browser_special: .proc
                 
                 .section volumes_browser_workspace
 old_cursors_mode: .fill 1
-old_escape_mode: .fill 1                
+old_escape_mode: .fill 1
+reset_type: .fill 1
                 .send volumes_browser_workspace
                 
                 jsr discard_remaining_payload
+
+                lda #REQUEST_VOLUME_BROWSER_RESET
+                sta reset_type
 
                 lda #3          ;switch off printer
                 jsr oswrch
 
                 lda #$77        ;close SPOOL/EXEC files
                 jsr osbyte
+
+                ; Disable cursor editing and make cursor keys return
+                ; key codes.
+                lda #4
+                ldx #1
+                jsr osbyte
+                stx old_cursors_mode
+
+                ; Make Escape return 27.
+                lda #229
+                jsr osbyte_x00_yff
+                stx old_escape_mode
+                
+volume_browser_loop:
 
                 jsr pcprint
                 .text 26        ;restore default text+graphics windows
@@ -3923,7 +3941,7 @@ old_escape_mode: .fill 1
                 lda #REQUEST_VOLUME_BROWSER
                 jsr send_request_n_with_restart
 
-                lda #REQUEST_VOLUME_BROWSER_RESET
+                lda reset_type
                 jsr send_payload_byte
 
                 lda $34f        ;screen mode layout type
@@ -3944,33 +3962,15 @@ old_escape_mode: .fill 1
                 jsr osbyte
                 txa
                 jsr send_payload_byte
-                
-                ldy #3
-send_text_window_loop:
-                lda $308,y
-                jsr send_payload_byte
-                dey
-                bpl send_text_window_loop
 
                 jsr recv_response_and_discard_payload
 
-                ; Disable cursor editing and make cursor keys return
-                ; key codes.
-                lda #4
-                ldx #1
-                jsr osbyte
-                stx old_cursors_mode
+                ; If the server doesn't handle
+                ; CAPS1_UPDATED_VOLUME_BROWSER, this request will
+                ; never be made, so it's quite safe.
+                lda #REQUEST_VOLUME_BROWSER_SOFT_RESET
+                sta reset_type
 
-                ; Make Escape return 27.
-                lda #229
-                jsr osbyte_x00_yff
-                stx old_escape_mode
-                
-                lda #229
-                ldx #1
-                ldy #0
-                jsr osbyte      ;make Escape return 27.
-                
 print_string_and_flush:
                 jsr print_server_string
                 jsr flush_keyboard_buffer
@@ -4027,6 +4027,9 @@ getch:
 
                 cmp #RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER
                 beq print_string_and_flush
+
+                cmp #RESPONSE_VOLUME_BROWSER_REFRESHED
+                beq volume_browser_loop
 
 done:
                 pha

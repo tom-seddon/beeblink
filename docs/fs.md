@@ -169,17 +169,17 @@ than one volume.
 
 ## Wildcard names
 
-Unlike the DFS, wildcard names are supported in most cases where a
-file is going to be read: `OSFILE` (`LOAD`, `*LOAD`, etc.), `OSFILE`
-when opening for read (`OPENIN`), and various OS/FS commands (`*DUMP`,
-`*TYPE`, etc.).
+Unlike the DFS, but like ADFS, wildcard names are supported in most
+cases where a file is going to be read: `OSFILE` (`LOAD`, `*LOAD`,
+etc.), `OSFILE` when opening for read (`OPENIN`), and various OS/FS
+commands (`*DUMP`, `*TYPE`, etc.).
 
 This doesn't do anything clever, and is intended purely to save typing
-on the command line. The wildcard name must match exactly one file,
-and an `Ambiguous name` error will be given if multiple files match.
-(If no names match, the behaviour is the same as if a non-wildcard
-name was given: `File not found` for `*LOAD`, a result of 0 from
-`OPENIN`, etc.)
+on the command line. Unlike ADFS, the wildcard name must match exactly
+one file, and an `Ambiguous name` error will be given if multiple
+files match. (If no names match, the behaviour is the same as if a
+non-wildcard name was given: `File not found` for `*LOAD`, a result of
+0 from `OPENIN`, etc.)
 
 Wildcards are not permitted when saving, deleting or renaming files.
 
@@ -220,7 +220,7 @@ if you prefer. See the `BLCONFIG options` section.)
 ## Commands available with BLFS selected ##
 
 If another ROM is stealing a command, you can also access it by
-spelling it out in full with a `BLFS_` prefix, e.g., `*BLFS_FILES`.
+spelling it out in full with a `BLFS_` prefix, e.g., `*BLFS_SRLOAD`.
 
 It's usual for BBC DFSs to make `*DUMP`, `*TYPE*` and `*LIST`
 available in all filing systems, but the BLFS versions of these
@@ -429,8 +429,9 @@ session. The default filter will be used if you don't supply one on
 the command line.
 
 Press CTRL+R to refresh the known volumes list. Use this if you added
-one on the server and it's not showing up. (For technical reasons,
-there's currently no progress indicator.)
+one on the server and it's not showing up in the volume browser. (If
+using a pre-2025 ROM, there is no progress indicator for this process,
+which can take a little while if you have a lot of volumes.)
 
 The volume browser isn't recommended in 20-column modes.
 

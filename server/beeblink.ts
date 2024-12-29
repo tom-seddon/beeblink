@@ -54,7 +54,11 @@ export const LINK_BEEB_TYPE_UNSPECIFIED = 5;
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+// if set, support *EXECTEXT.
 export const CAPS1_SUPPORT_TEXT_EXEC = 1;
+
+// if set, include some tweaks to the volume browser requests/responses.
+export const CAPS1_UPDATED_VOLUME_BROWSER = 2;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -495,6 +499,13 @@ export const REQUEST_VOLUME_BROWSER_RESET = 0;
 // value assuming *FX4,1
 export const REQUEST_VOLUME_BROWSER_KEYPRESS = 1;
 
+// Soft reset the volume browser.
+//
+// Soft reset retains properties set by normal reset.
+//
+// (CAPS1_UPDATED_VOLUME_BROWSER only)
+export const REQUEST_VOLUME_BROWSER_SOFT_RESET = 2;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
@@ -685,6 +696,11 @@ export const RESPONSE_VOLUME_BROWSER_PRINT_STRING = 4;
 
 // ROM should print the server's string and flush the keyboard buffer.
 export const RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER = 5;
+
+// ROM should print 'please wait' then restart volume browser with a soft reset.
+//
+// (CAPS1_UPDATED_VOLUME_BROWSER only)
+export const RESPONSE_VOLUME_BROWSER_REFRESHED = 6;
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////

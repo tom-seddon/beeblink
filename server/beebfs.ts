@@ -1284,7 +1284,8 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async refreshKnownVolumesList(): Promise<void> {
+    // Force the known volumes list to be refreshed next time it's queried.
+    public resetKnownVolumesList(): void {
         this.volumes = undefined;
     }
 

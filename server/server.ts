@@ -1111,6 +1111,7 @@ export class Server {
         if (p[0] === beeblink.REQUEST_VOLUME_BROWSER_RESET) {
             this.log?.pn('REQUEST_VOLUME_BROWSER_RESET');
 
+            // 
             this.payloadMustBe(handler, p, 5);
 
             const charSizeBytes = p[1];
@@ -1125,9 +1126,12 @@ export class Server {
 
             const text = this.volumeBrowser.getInitialString();
 
-            //this.log?.pn('Browser initial string: ' + this.getBASICStringExpr(text));
-
             this.prepareForTextResponse(text);
+            return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING);
+        } else if (p[0] === beeblink.REQUEST_VOLUME_BROWSER_SOFT_RESET && this.volumeBrowser !== undefined) {
+            const volumes = await this.bfs.findVolumesMatching('*');
+            this.volumeBrowser.setVolumes(volumes);
+            this.prepareForTextResponse(this.volumeBrowser.getInitialString());
             return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING);
         } else if (p[0] === beeblink.REQUEST_VOLUME_BROWSER_KEYPRESS && this.volumeBrowser !== undefined) {
             this.log?.pn('REQUEST_VOLUME_BROWSER_KEYPRESS');
@@ -1167,12 +1171,17 @@ export class Server {
 
                 return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, responseType);
             } else if (result.refreshVolumes) {
-                await this.bfs.refreshKnownVolumesList();
-                this.volumeBrowser.setVolumes(await this.bfs.findVolumesMatching('*'));
+                this.bfs.resetKnownVolumesList();
 
-                this.prepareForTextResponse(this.volumeBrowser.getInitialString());
+                if ((this.caps1 & beeblink.CAPS1_UPDATED_VOLUME_BROWSER) !== 0) {
+                    return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_REFRESHED);
+                } else {
+                    this.volumeBrowser.setVolumes(await this.bfs.findVolumesMatching('*'));
 
-                return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER);
+                    this.prepareForTextResponse(this.volumeBrowser.getInitialString());
+
+                    return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING_AND_FLUSH_KEYBOARD_BUFFER);
+                }
             } else if (result.text.length > 0) {
                 this.prepareForTextResponse(result.text);
 
