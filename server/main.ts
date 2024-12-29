@@ -1015,28 +1015,6 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function findDefaultVolume(options: ICommandLineOptions, volumes: beebfs.Volume[]): beebfs.Volume | undefined {
-    let defaultVolume: beebfs.Volume | undefined;
-
-    if (options.default_volume !== null) {
-        for (const volume of volumes) {
-            if (utils.stricmp(volume.name, options.default_volume) === 0) {
-                defaultVolume = volume;
-                break;
-            }
-        }
-
-        if (defaultVolume === undefined) {
-            process.stderr.write(`Default volume not found: ${options.default_volume}\n`);
-        }
-    }
-
-    return defaultVolume;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
 function getRomPaths(options: ICommandLineOptions): Map<number, string> {
     const map = new Map<number, string>();
 
@@ -2006,7 +1984,10 @@ async function main(options: ICommandLineOptions) {
 
     const gaManipulator = await createGitattributesManipulator(options, volumes);
 
-    const defaultVolume = findDefaultVolume(options, volumes);
+    let defaultVolumes: beebfs.Volume[] = [];
+    if (options.default_volume !== null) {
+        defaultVolumes = beebfs.findVolumesMatching(volumes, options.default_volume);
+    }
 
     // 
     const logPalette = [
@@ -2032,10 +2013,11 @@ async function main(options: ICommandLineOptions) {
         const serverLogPrefix = options.server_verbose ? additionalPrefix + 'SRV' + connectionId : undefined;
         const serverLog = utils.Log.create(serverLogPrefix !== undefined ? serverLogPrefix : '', process.stdout, serverLogPrefix !== undefined);
 
-        const bfs = new beebfs.FS(searchFolders, gaManipulator, bfsLog, options.locate_verbose);
+        const bfs = new beebfs.FS(searchFolders, volumes, gaManipulator, bfsLog, options.locate_verbose);
 
-        if (defaultVolume !== undefined) {
-            await bfs.mount(defaultVolume);
+        if (defaultVolumes.length > 0) {
+            // Adopt the *VOL policy of using the first match.
+            await bfs.mount(defaultVolumes[0]);
         }
 
         const srv = new server.Server(romPathByLinkSubtype, bfs, serverLog, options.server_data_verbose, linkSupportsFireAndForgetRequests);

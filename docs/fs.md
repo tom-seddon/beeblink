@@ -63,13 +63,6 @@ Create new volumes from the BBC using the `*NEWVOL` command.
 The new volume is automatically loaded, so you can start using it
 straight away.
 
-You can also create volumes on the server. Look in the server's
-folder, and find the `volumes` folder. Create a new folder there
-called `newvol2` (the folder name on the PC is how you'll refer to it
-from the BBC), and create a folder inside it called `0` (this is where
-the files for drive 0 will go, and it's how the server distingushes a
-volume from just an ordinary folder).
-
 On the BBC, type `*VOLS` to see the list of available volumes. The new
 volume will be included.
 
@@ -77,7 +70,17 @@ volume will be included.
 	Matching volumes: beeblink newvol newvol2
 	>
 	
-Use `*VOL` to load `newvol2`.
+You can also create volumes on the server. Look in the server's
+folder, and find the `volumes` folder. Create a new folder there
+called `newvol2` (the folder name on the PC is how you'll refer to it
+from the BBC), and create a folder inside it called `0` (this is where
+the files for drive 0 will go, and it's how the server distingushes a
+volume from just an ordinary folder).
+
+If you create a volume on the server like this, it won't appear in the
+`*VOLS` list straight away, but you can still switch to it using
+`*VOL`. The server will know to check on disk if it doesn't find the
+name in its list of known volumes.
 
     >*VOL newvol2
 	Volume: newvol2
@@ -381,7 +384,7 @@ Set current drive's title.
 
 Show contents of text file.
 
-### `VOL (<avsp>) ([QR]+)`
+### `VOL (<avsp>) (R)`
 
 With no argument, prints the name and path of the current volume.
 
@@ -390,10 +393,6 @@ names that match more than one volume - the first matching volume
 found will be selected.
 
 Specify `R` to mount the volume read-only.
-
-Specify `Q` to mount quickly, by assuming the name refers to the last
-volume mounted by that name. Wildcards are not acceptable in this
-mode.
 
 ### `VOLS (<avsp>)`
 
@@ -405,9 +404,9 @@ down.
 Activate the volume browser: an interactive method of loading a
 volume.
 
-The list of available volumes is shown. Use the cursor keys to
-navigate. Press ESCAPE to cancel, RETURN to load that volume, or
-SHIFT+RETURN to load that volume and attempt to auto-boot it.
+The list of known volumes is shown. Use the cursor keys to navigate.
+Press ESCAPE to cancel, RETURN to load that volume, or SHIFT+RETURN to
+load that volume and attempt to auto-boot it.
 
 Press SPACE to display the volume's properties: name, type, and path
 on the server. (If you have multiple volumes with the same name, this

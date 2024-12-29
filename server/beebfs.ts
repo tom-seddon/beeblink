@@ -499,6 +499,28 @@ export class Volume {
         // No need to check the name.
         return this.path === oth.path;
     }
+
+    public matchesName(name: string | RegExp | undefined): boolean {
+        if (name === undefined) {
+            return true;
+        } else if (name instanceof RegExp) {
+            return name.exec(this.name) !== null;
+        } else {
+            return utils.stricmp(this.name, name) === 0;
+        }
+    }
+}
+
+export function findVolumesMatching(volumes: ReadonlyArray<Volume>, name: string | RegExp | undefined): Volume[] {
+    const foundVolumes: Volume[] = [];
+
+    for (const volume of volumes) {
+        if (volume.matchesName(name)) {
+            foundVolumes.push(volume);
+        }
+    }
+
+    return foundVolumes;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -818,6 +840,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private searchFolders: IFSSearchFolders;
+    private volumes: Volume[] | undefined;
 
     //private currentVolume: BeebVolume | undefined;
 
@@ -839,12 +862,14 @@ export class FS {
 
     public constructor(
         searchFolders: IFSSearchFolders,
+        volumesHint: Volume[] | undefined,
         gaManipulator: gitattributes.Manipulator | undefined,
         log: utils.Log | undefined,
         locateVerbose: boolean) {
         this.log = log;
 
         this.searchFolders = searchFolders;
+        this.volumes = volumesHint;
 
         //this.resetDirs();
 
@@ -862,7 +887,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public static async findAllVolumes(searchFolders: IFSSearchFolders, log: utils.Log | undefined): Promise<Volume[]> {
-        return await FS.findVolumes('*', false, searchFolders, log);
+        return await FS.findVolumes('*', searchFolders, log);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -932,17 +957,10 @@ export class FS {
 
     // Logging for this probably isn't proving especially useful. Maybe it
     // should go away?
-    //
-    // If findFirstMatchingVolume is true, the search will early out once the
-    // result is clear: that is, is if the volume spec is unambiguous, when the
-    // first matching volume is found, indicating the search is complete; or, if
-    // the volume spec is ambiguous, when the second matching volume is found,
-    // indicating the search is ambiguous.
-    private static async findVolumes(afsp: string, findFirstMatchingVolume: boolean, searchFolders: IFSSearchFolders, log: utils.Log | undefined): Promise<Volume[]> {
+    private static async findVolumes(afsp: string, searchFolders: IFSSearchFolders, log: utils.Log | undefined): Promise<Volume[]> {
         const volumes: Volume[] = [];
 
         const volumeNameRegExp = utils.getRegExpFromAFSP(afsp);
-        const ambiguous = utils.isAmbiguousAFSP(afsp);
 
         const beebLinkIgnoreFolders = new Set<string>();
         const addIgnoreFolders = (folders: string[]) => {
@@ -972,18 +990,6 @@ export class FS {
             }
 
             volumes.push(new Volume(volumePath, volumeName, volumeType));
-
-            if (findFirstMatchingVolume) {
-                if (ambiguous) {
-                    if (volumes.length === 2) {
-                        return true;
-                    }
-                } else {
-                    if (volumes.length === 1) {
-                        return true;
-                    }
-                }
-            }
 
             return false;
         }
@@ -1279,19 +1285,32 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     // Finds all volumes matching the given afsp.
-    public async findAllVolumesMatching(afsp: string): Promise<Volume[]> {
-        return await FS.findVolumes(afsp, false, this.searchFolders, undefined);
-    }
+    public async findVolumesMatching(afsp: string): Promise<Volume[]> {
+        const regExp = utils.getRegExpFromAFSP(afsp);
+        this.log?.pn(`findVolumesMatching: ${afsp}`);
 
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
+        let fresh = false;
+        if (this.volumes === undefined) {
+            this.log?.p(`findVolumesMatching: rebuilding volumes list...`);
+            this.volumes = await FS.findAllVolumes(this.searchFolders, undefined);
+            this.log?.pn(` found ${this.volumes.length}`);
+            fresh = true;
+        }
 
-    // If afsp is unambiguous, finds first volume matching, if any.
-    //
-    // If afsp is ambiguous, finds single volume matching it, or two volumes
-    // that match it (no matter how many other volumes might also match).
-    public async findFirstVolumeMatching(afsp: string): Promise<Volume[]> {
-        return await FS.findVolumes(afsp, true, this.searchFolders, undefined);
+        let foundVolumes = findVolumesMatching(this.volumes, regExp);
+        this.log?.pn(`findVolumesMatching: found ${foundVolumes.length} matching volume(s)`);
+        if (foundVolumes.length === 0) {
+            if (!fresh) {
+                // make another attempt.
+                this.log?.p(`findVolumesMatching: none found. Rebuilding volumes list...`);
+                this.volumes = await FS.findAllVolumes(this.searchFolders, undefined);
+                this.log?.pn(` found ${this.volumes.length}`);
+                foundVolumes = findVolumesMatching(this.volumes, regExp);
+                this.log?.pn(`findVolumesMatching: found ${foundVolumes.length} matching volume(s) in updated list`);
+            }
+        }
+
+        return foundVolumes;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1327,6 +1346,9 @@ export class FS {
             errors.nodeError(error);
         }
 
+        // Easiest just to invalidate the list entirely.
+        this.volumes = undefined;
+
         const newVolume = new Volume(volumePath, name, getFSType(gDFSType));
         return newVolume;
     }
@@ -1356,7 +1378,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async starLocate(arg: string): Promise<File[]> {
-        const volumes = await this.findAllVolumesMatching('*');
+        const volumes = await this.findVolumesMatching('*');
 
         const foundFiles: File[] = [];
 
@@ -2521,7 +2543,7 @@ export class FS {
 
             this.log?.pn(`volume name: ${volumeName}`);
 
-            const volumes = await this.findFirstVolumeMatching(volumeName);
+            const volumes = await this.findVolumesMatching(volumeName);
 
             if (volumes.length === 0) {
                 return errors.notFound();

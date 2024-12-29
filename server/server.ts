@@ -289,7 +289,6 @@ export class Server {
     private diskImageFlow: diskimage.Flow | undefined;
     private linkSupportsFireAndForgetRequests: boolean;
     private lastOSBPUTHandle: number | undefined;
-    private recentVolumes: beebfs.Volume[];
     private numOSBGETReadaheadBytes: number;
 
     public constructor(romPathByLinkBeebType: Map<number, string>, bfs: beebfs.FS, log: utils.Log | undefined, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
@@ -320,7 +319,7 @@ export class Server {
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
             new Command('VOLBROWSER', '(<filters>)', this.volbrowserCommand),
-            new Command('VOL', '(<avsp>) ([QR]+)', this.volCommand),
+            new Command('VOL', '(<avsp>) (R)', this.volCommand),
             new Command('VOLS', '(<avsp>)', this.volsCommand),
             new Command('WDUMP', '<fsp>', this.wdumpCommand),
             new Command('WINFO', '<afsp>', this.winfoCommand),
@@ -367,8 +366,6 @@ export class Server {
 
         this.log = log;
         this.dumpPackets = dumpPackets;
-
-        this.recentVolumes = [];
 
         // Tested a bunch of values on my system, and this looked like a good
         // tradeoff.
@@ -1121,7 +1118,7 @@ export class Server {
             const height = p[3];
             const m128 = p[4] >= 3;
 
-            const volumePaths = await this.bfs.findAllVolumesMatching('*');
+            const volumePaths = await this.bfs.findVolumesMatching('*');
 
             this.volumeBrowser = new volumebrowser.Browser(charSizeBytes, width, height, m128, volumePaths, this.volumeBrowserInitialFilters || this.volumeBrowserDefaultFilters);
             this.volumeBrowserInitialFilters = undefined;
@@ -1534,7 +1531,7 @@ export class Server {
     private readonly volsCommand = async (commandLine: CommandLine): Promise<string> => {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : '*';
 
-        const volumes = await this.bfs.findAllVolumesMatching(arg);
+        const volumes = await this.bfs.findVolumesMatching(arg);
 
         let text = 'Matching volumes:';
 
@@ -2011,29 +2008,17 @@ export class Server {
         let volume: beebfs.Volume | undefined;
         if (commandLine.parts.length >= 2) {
             let readOnly = false;
-            let quick = false;
             if (commandLine.parts.length >= 3) {
                 const flags = commandLine.parts[2].toLowerCase();
                 readOnly = flags.indexOf('r') >= 0;
-                quick = flags.indexOf('q') >= 0;
             }
 
-            if (quick) {
-                if (utils.isAmbiguousAFSP(commandLine.parts[1])) {
-                    return errors.ambiguousName();
-                }
-
-                volume = this.findRecentVolume(commandLine.parts[1], readOnly);
+            const volumes = await this.bfs.findVolumesMatching(commandLine.parts[1]);
+            if (volumes.length === 0) {
+                return errors.notFound();
             }
 
-            if (volume === undefined) {
-                const volumes = await this.bfs.findFirstVolumeMatching(commandLine.parts[1]);
-                if (volumes.length === 0) {
-                    return errors.notFound();
-                }
-
-                volume = volumes[0];
-            }
+            volume = volumes[0];
 
             await this.mountVolume(volume, readOnly);
         } else {
@@ -2043,33 +2028,12 @@ export class Server {
         return this.getVolumeInfoString(volume);
     };
 
-    private findRecentVolume = (name: string, readOnly: boolean): beebfs.Volume | undefined => {
-        const nameLC = name.toLowerCase();
-        for (const volume of this.recentVolumes) {
-            if (volume.name.toLowerCase() === nameLC) {
-                if (volume.isReadOnly() === readOnly) {
-                    return volume;
-                }
-            }
-        }
-
-        return undefined;
-    };
-
     private readonly mountVolume = async (volume: beebfs.Volume, readOnly: boolean): Promise<void> => {
         if (readOnly) {
             volume = volume.asReadOnly();
         }
 
         await this.bfs.mount(volume);
-
-        if (this.findRecentVolume(volume.name, volume.isReadOnly()) === undefined) {
-            this.recentVolumes.push(volume);
-
-            if (this.recentVolumes.length > 20) {
-                this.recentVolumes.slice(0, 1);
-            }
-        }
     };
 
     private getDiskImageFlowDetailsFromRequestPayload(p: Buffer): IDiskImageFlowDetails {
