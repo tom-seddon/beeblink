@@ -2139,7 +2139,11 @@ link_ok:
                 jsr send_payload_byte
 
                 ; caps1 flags
-                lda #CAPS1_SUPPORT_TEXT_EXEC|CAPS1_UPDATED_VOLUME_BROWSER
+caps1_flags:=CAPS1_SUPPORT_TEXT_EXEC|CAPS1_UPDATED_VOLUME_BROWSER
+                .if target_electron
+caps1_flags|=CAPS1_NO_SRLOAD
+                .endif
+                lda #caps1_flags
                 jsr send_payload_byte
 
                 jsr recv_response_and_discard_payload

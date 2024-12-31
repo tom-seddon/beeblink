@@ -116,33 +116,30 @@ export class Command {
     public readonly nameUC: string;
     private readonly syntax: string | undefined;
     private readonly fun: (commandLine: CommandLine) => Promise<void | string | StringWithError | Response>;
-    private unsupportedMachineTypes: Set<number> | undefined;
-    private caps1: number;
+    private caps1: number | undefined;
+    private notCaps1: number | undefined;
 
     public constructor(name: string, syntax: string | undefined, fun: (commandLine: CommandLine) => Promise<void | string | StringWithError | Response>) {
         this.nameUC = name.toUpperCase();
         this.syntax = syntax;
         this.fun = fun;
-        this.caps1 = 0;
     }
 
     public async call(commandLine: CommandLine): Promise<void | string | StringWithError | Response> {
         return this.fun(commandLine);
     }
 
-    public isSupportedMachineType(machineType: number): boolean {
-        if (this.unsupportedMachineTypes !== undefined) {
-            if (this.unsupportedMachineTypes.has(machineType)) {
+    public isSupportedCaps1(caps1: number): boolean {
+        if (this.caps1 !== undefined) {
+            if ((this.caps1 & caps1) === 0) {
                 return false;
             }
         }
 
-        return true;
-    }
-
-    public isSupportedCaps1(caps1: number): boolean {
-        if (this.caps1 !== 0 && (this.caps1 & caps1) === 0) {
-            return false;
+        if (this.notCaps1 !== undefined) {
+            if ((this.notCaps1 & caps1) !== 0) {
+                return false;
+            }
         }
 
         return true;
@@ -159,17 +156,21 @@ export class Command {
     }
 
     public whenCaps1(caps1: number): Command {
+        if (this.caps1 === undefined) {
+            this.caps1 = 0;
+        }
+
         this.caps1 |= caps1;
 
         return this;
     }
 
-    public unlessMachineType(machineType: number): Command {
-        if (this.unsupportedMachineTypes === undefined) {
-            this.unsupportedMachineTypes = new Set<number>();
+    public unlessCaps1(caps1: number): Command {
+        if (this.notCaps1 === undefined) {
+            this.notCaps1 = 0;
         }
 
-        this.unsupportedMachineTypes.add(machineType);
+        this.notCaps1 |= caps1;
 
         return this;
     }
@@ -272,7 +273,6 @@ function encodeForOSCLI(command: string): Buffer {
 export class Server {
     private bfs: beebfs.FS;
     private linkBeebType: number | undefined;
-    private machineType: number | undefined;
     private caps1: number;
     private romPathByLinkBeebType: Map<number, string>;
     private stringBuffer: Buffer | undefined;
@@ -294,7 +294,6 @@ export class Server {
     public constructor(romPathByLinkBeebType: Map<number, string>, bfs: beebfs.FS, log: utils.Log | undefined, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
         this.romPathByLinkBeebType = romPathByLinkBeebType;
         this.linkBeebType = undefined;
-        this.machineType = undefined;
         this.bfs = bfs;
         this.stringBufferIdx = 0;
         this.linkSupportsFireAndForgetRequests = linkSupportsFireAndForgetRequests;
@@ -315,7 +314,7 @@ export class Server {
             new Command('LOCATE', '<afsp> (<format>)', this.locateCommand),
             new Command('NEWVOL', '<vsp>', this.newvolCommand),
             new Command('RENAME', '<old fsp> <new fsp>', this.renameCommand),
-            new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand).unlessMachineType(1),
+            new Command('SRLOAD', '<fsp> <addr> <bank> (Q)', this.srloadCommand).unlessCaps1(beeblink.CAPS1_NO_SRLOAD),
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
             new Command('VOLBROWSER', '(<filters>)', this.volbrowserCommand),
@@ -564,13 +563,7 @@ export class Server {
             this.log?.pn(`link Beeb type=${this.linkBeebType} (inferred)`);
         }
 
-        if (p.length > 2) {
-            this.machineType = p[2];
-            this.log?.pn(`machine type=0x${utils.hex2(this.machineType)}`);
-        } else {
-            this.machineType = undefined;
-            this.log?.pn(`machine type=unknown`);
-        }
+        // p[2] is the machine type, now ignored.
 
         if (p.length > 3) {
             this.caps1 = p[3];
@@ -670,12 +663,6 @@ export class Server {
     }
 
     private isSupportedCommand(command: Command): boolean {
-        if (this.machineType !== undefined) {
-            if (!command.isSupportedMachineType(this.machineType)) {
-                return false;
-            }
-        }
-
         if (!command.isSupportedCaps1(this.caps1)) {
             return false;
         }

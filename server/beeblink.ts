@@ -60,6 +60,10 @@ export const CAPS1_SUPPORT_TEXT_EXEC = 1;
 // if set, include some tweaks to the volume browser requests/responses.
 export const CAPS1_UPDATED_VOLUME_BROWSER = 2;
 
+// if set, *SRLOAD not supported. (The flag logic is inverted so that older ROMs
+// still have *SRLOAD.)
+export const CAPS1_NO_SRLOAD = 4;
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
