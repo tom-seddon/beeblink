@@ -254,7 +254,7 @@ export class Log {
     private blankPrefix: boolean;
     private buffer: string;
 
-    public constructor(prefix: string, f: { write(buffer: Buffer | string, cb?: () => void): boolean; } | undefined, enabled = true) {
+    private constructor(prefix: string, f: { write(buffer: Buffer | string, cb?: () => void): boolean; } | undefined, enabled = true) {
         this.f = f;
         this.prefix = prefix;
         this.indentStack = [];

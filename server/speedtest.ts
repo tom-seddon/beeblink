@@ -35,7 +35,7 @@ export class SpeedTest {
 
     public gotTestData(parasite: boolean, data: Buffer, log: utils.Log | undefined): Buffer {
         const diff = process.hrtime(this.lastHRTime);
-        
+
         const stats = parasite ? this.parasiteStats : this.serverStats;
 
         if (stats.originalData === undefined) {
@@ -66,17 +66,20 @@ export class SpeedTest {
                 } else {
                     for (let i = 0; i < data.length; ++i) {
                         if (data[i] !== stats.expectedData[i]) {
-                            const stderr = new utils.Log('', process.stderr, true);
+                            const stderr = utils.Log.create('', process.stderr, true);
 
-                            stderr.pn(`Speed test first mismatch at +${i} (0x${utils.hex8(i)}) - expected 0x${utils.hex2(stats.expectedData[i])}, got 0x${utils.hex2(data[i])}`);
+                            if (stderr !== undefined) {
 
-                            stderr.pn(`Expected:`);
-                            stderr.dumpBuffer(stats.expectedData);
-                            stderr.pn(``);
+                                stderr.pn(`Speed test first mismatch at +${i} (0x${utils.hex8(i)}) - expected 0x${utils.hex2(stats.expectedData[i])}, got 0x${utils.hex2(data[i])}`);
 
-                            stderr.pn(`Got:`);
-                            stderr.dumpBuffer(data);
-                            stderr.pn(``);
+                                stderr.pn(`Expected:`);
+                                stderr.dumpBuffer(stats.expectedData);
+                                stderr.pn(``);
+
+                                stderr.pn(`Got:`);
+                                stderr.dumpBuffer(data);
+                                stderr.pn(``);
+                            }
 
                             break;
                         }
