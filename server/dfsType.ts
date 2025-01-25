@@ -392,7 +392,7 @@ class DFSType implements beebfs.IFSType {
         let text = '';
 
         const title = await this.loadTitle(filePath.volume, filePath.drive);
-        if (title !== '') {
+        if (title !=='' && title !== undefined) {
             text += title + utils.BNL;
         }
 
