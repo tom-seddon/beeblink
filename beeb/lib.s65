@@ -406,11 +406,11 @@ addyz16_done:
 ; entry: A = OSBYTE to call
 ; exit: as per whichever OSBYTE it was
 ; 
-osbyte_x00_yff: .proc
+osbyte_x00_yff:
                 ldx #0
+osbyte_yff:
                 ldy #$ff
                 jmp osbyte
-                .pend
 
 ;-------------------------------------------------------------------------
 ;

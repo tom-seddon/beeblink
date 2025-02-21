@@ -127,7 +127,8 @@ brkthunk_max_size=$128-brkthunk
 roms_table=$DF0
 
 ; Key to hold down to select this filing system on BREAK (AUG p143)
-boot_key=100                    ;100=B
+boot_key=key_b
+boot_tools_key=key_t
 
 ; Tube claimant ID.
 tube_claimant_id=35
@@ -795,20 +796,32 @@ svc_boot: .proc
                 lda #$7a        ;keyboard scan, AUG 143
                 jsr osbyte
                 
+                lda #0          ; indicate ordinary BLFS boot
                 cpx #$ff
                 beq boot_fs     ;taken if no key pressed
-                
-                cpx #boot_key
-                bne pass_on     ;taken if something other than the
-                                ;special key was held down
 
+                cpx #boot_key
+                beq boot_fs_with_key ;taken if B+BREAK
+
+                cpx #boot_tools_key
+                bne pass_on     ; taken if not T+BREAK
+
+                lda #1          ; indicate tools boot
+
+boot_fs_with_key:
+                pha             ; save tools/ordinary flag
+                
                 ; Clear boot key pressed status. Don't let it end up
                 ; in the keyboard buffer.
                 lda #$78        ;write current keys pressed
                                 ;information, AUG 142
+                ldy #$00 ; https://www.stardot.org.uk/forums/viewtopic.php?p=441827#p441827
                 jsr osbyte
 
+                pla             ; restore tools/ordinary flag
 boot_fs:
+                pha             ; save tools/ordinary flag
+                
                 ldx #<rom_name
                 ldy #rom_version_string-rom_name
                 jsr print_rom_header_text
@@ -853,8 +866,12 @@ show_avr_status:
                 jsr boot_init_blfs
                 bcs pass_on
 
+                pla             ; restore tools/ordinary flag
+                cmp #1          ; C=1 if tools
+
                 pla             ;restore autoboot flag
-                bne booted
+                bcs boot.tools  ; taken if tools...
+                bne booted      ; taken if not autoboot
 
                 jsr boot
 
@@ -892,7 +909,7 @@ boot: .proc
                 beq done
 
                 and #3
-                
+boot2:
                 tax
                 ldy command_lines.h,x
                 lda command_lines.l,x
@@ -900,8 +917,12 @@ boot: .proc
                 jsr oscli
 done:
                 rts
+
+tools:
+                ldx #4
+                bne boot2
                 
-command_lines: .strings_list ["","LOAD !BOOT\r","RUN !BOOT\r","EXEC !BOOT\r"]
+command_lines: .strings_list ["","LOAD !BOOT\r","RUN !BOOT\r","EXEC !BOOT\r","EXEC ::BEEBLINK:0.$.!BOOT\r"]
                 .pend
 
 ;-------------------------------------------------------------------------
