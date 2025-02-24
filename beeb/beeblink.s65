@@ -793,31 +793,46 @@ svc_boot: .proc
                 tya
                 pha             ;save autoboot flag
 
-                lda #$7a        ;keyboard scan, AUG 143
+                ; Check for any keys pressed. Doesn't matter which.
+                ; Ordinary boot if none pressed.
+                lda #$7a
                 jsr osbyte
-                
-                lda #0          ; indicate ordinary BLFS boot
+                lda #0          ; indicate ordinary boot
                 cpx #$ff
-                beq boot_fs     ;taken if no key pressed
+                beq boot_fs     ; taken if no key pressed - ordinary boot
 
-                cpx #boot_key
-                beq boot_fs_with_key ;taken if B+BREAK
+                ; Check for boot key. If not down, pass on to some
+                ; other FS.
+                lda #$81
+                ldx #inkey(boot_key)
+                ldy #$ff
+                jsr osbyte
 
-                cpx #boot_tools_key
-                bne pass_on     ; taken if not T+BREAK
+                cpx #$ff
+                bne pass_on     ; taken if not boot key+BREAK
 
-                lda #1          ; indicate tools boot
+                ; Check for tools key. If not down, ordinary boot; if
+                ; down, tools boot.
+                lda #$81
+                ldx #inkey(boot_tools_key)
+                ldy #$ff
+                jsr osbyte
+
+                lda #0          ; indicate ordinary boot
+                ldx #boot_key   ; and cancel the boot key
+                cpy #$ff
+                ldy #0               ; assume no tools boot key
+                bcc boot_fs_with_key ; taken if FS key only - ordinary boot
+                lda #1               ; indicate tools boot
+                ldy #boot_tools_key  ; cancel tools boot key too
 
 boot_fs_with_key:
                 pha             ; save tools/ordinary flag
-                
-                ; Clear boot key pressed status. Don't let it end up
-                ; in the keyboard buffer.
-                lda #$78        ;write current keys pressed
-                                ;information, AUG 142
-                ldy #$00 ; https://www.stardot.org.uk/forums/viewtopic.php?p=441827#p441827
-                jsr osbyte
 
+                ; Clear keys pressed status as appropriate.
+                lda #$78
+                jsr osbyte
+                
                 pla             ; restore tools/ordinary flag
 boot_fs:
                 pha             ; save tools/ordinary flag
@@ -864,13 +879,13 @@ show_avr_status:
                 .text " - ",255
 
                 jsr boot_init_blfs
+                pla             ; restore tools/ordinary flag
                 bcs pass_on
 
-                pla             ; restore tools/ordinary flag
                 cmp #1          ; C=1 if tools
 
                 pla             ;restore autoboot flag
-                bcs boot.tools  ; taken if tools...
+                bcs boot_tools  ; taken if tools
                 bne booted      ; taken if not autoboot
 
                 jsr boot
@@ -878,6 +893,10 @@ show_avr_status:
 booted:
                 lda #0
                 jmp svc.done
+
+boot_tools:
+                jsr boot.tools
+                jmp booted
 
 pass_on:
                 pla             ;restore autoboot flag
@@ -909,8 +928,8 @@ boot: .proc
                 beq done
 
                 and #3
-boot2:
                 tax
+boot2:
                 ldy command_lines.h,x
                 lda command_lines.l,x
                 tax
@@ -921,8 +940,8 @@ done:
 tools:
                 ldx #4
                 bne boot2
-                
-command_lines: .strings_list ["","LOAD !BOOT\r","RUN !BOOT\r","EXEC !BOOT\r","EXEC ::BEEBLINK:0.$.!BOOT\r"]
+
+command_lines: .strings_list ["","LOAD !BOOT","RUN !BOOT","EXEC !BOOT","EXEC ::BEEBLINK:0.$.!BOOT"],13
                 .pend
 
 ;-------------------------------------------------------------------------

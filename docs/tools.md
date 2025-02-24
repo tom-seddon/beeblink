@@ -1,7 +1,11 @@
 # BeebLink Tools
 
-The BeebLink tools can be found in the `beeblink` volume. Do a
-SHIFT+BREAK to run the menu, and select the tool of interest.
+The BeebLink tools can be found in the `beeblink` volume. You can
+select this volume and do a SHIFT+BREAK to run the menu.
+
+For quick access, do a B+T+BREAK (hold B and T, and tap BREAK) to run
+the menu. (This doesn't change the current volume, handy if there's a
+file on it you want to use with Disk Imager or ROM Tool.)
 
 ## Disk Imager
 

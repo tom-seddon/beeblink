@@ -262,13 +262,14 @@ debug_print .macro items,enabled=true
 ;
 ;
 
-strings_list .macro strings
+strings_list .macro strings,terminator
 
 addresses:=[]
 strings:
                 .for i=0,i<len(\strings),i+=1
 addresses:=addresses..[*]
-                .text \strings[i],255
+                .text \strings[i]
+                .byte \terminator
                 .next
 
 l:
