@@ -448,6 +448,14 @@ export const REQUEST_WRITE_DISK_IMAGE = 0x22;
 // P = 1 byte, handle
 export const REQUEST_OSBGET_WITH_READAHEAD = 0x23;
 
+// Indicate that an additional boot shortcut key was held.
+//
+// Response is RESPONSE_DATA, 1 byte, the handle of the now open file to *EXEC -
+// or 0 if no such.
+//
+// P = 1 byte, the ASCII value of the boot shortcut key
+export const REQUEST_BOOT_WITH_ADDITIONAL_KEY = 0x24;
+
 // Do an OSBPUT that definitely won't produce an error.
 //
 // (If an error is produced, that's a bug. The server logs the error and

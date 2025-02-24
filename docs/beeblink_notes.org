@@ -1525,4 +1525,26 @@ this?
 (Of course, if it's not part of the dir there, it'll have to be added
 when printing!)
 
+* Additional boot keys
+
+Hold B+(other key) for some special thing. Current option: *EXEC a
+file, file depending on key pressed. This is used to handle B+T+BREAK,
+and in some vaguely extensible fashion. Code driven at the moment.
+
+Other likely options:
+
+- B+I+BREAK - run Disk Imager
+- B+R+BREAK - run RTOOL
+
+At the moment you need to have a file on disk with a name. But the
+server could easily synthesize one on demand.
+
+This should all be configurable.
+
+A generic * command is probably impractical as there's nowhere really
+to store the command line (unless it's super tiny and would fit on the
+stack - which it probably won't if you're using the `::VOLUME` syntax.
+This pretty much has to be something that the server can largely
+organise itself given just the additional boot key.
+
 * eof.

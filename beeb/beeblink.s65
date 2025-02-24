@@ -797,7 +797,7 @@ svc_boot: .proc
                 ; Ordinary boot if none pressed.
                 lda #$7a
                 jsr osbyte
-                lda #0          ; indicate ordinary boot
+                lda #0          ; indicate no additional key
                 cpx #$ff
                 beq boot_fs     ; taken if no key pressed - ordinary boot
 
@@ -811,31 +811,36 @@ svc_boot: .proc
                 cpx #$ff
                 bne pass_on     ; taken if not boot key+BREAK
 
-                ; Check for tools key. If not down, ordinary boot; if
-                ; down, tools boot.
-                lda #$81
-                ldx #inkey(boot_tools_key)
-                ldy #$ff
-                jsr osbyte
+                ; Check for additional digit key.
+                ldx #'0'
+                lda #10
+                jsr check_extra_keys
+                bcs checked_extra_keys
 
+                ; Check for additional alpha key. The OS keyboard
+                ; translation table stores lower-case ASCII values.
+                ldx #'a'
+                lda #26
+                jsr check_extra_keys
+                
+checked_extra_keys:
+                txa
+                ldx #boot_key   ; cancel the default boot key
+                bcs +           ; taken if extra key pressed - A/Y valid
                 lda #0          ; indicate ordinary boot
-                ldx #boot_key   ; and cancel the boot key
-                cpy #$ff
-                ldy #0               ; assume no tools boot key
-                bcc boot_fs_with_key ; taken if FS key only - ordinary boot
-                lda #1               ; indicate tools boot
-                ldy #boot_tools_key  ; cancel tools boot key too
+                ldy #0          ; reset Y
++
 
 boot_fs_with_key:
-                pha             ; save tools/ordinary flag
+                pha             ; save additional key ASCII value
 
                 ; Clear keys pressed status as appropriate.
                 lda #$78
                 jsr osbyte
                 
-                pla             ; restore tools/ordinary flag
+                pla             ; restore additional key ASCII value
 boot_fs:
-                pha             ; save tools/ordinary flag
+                pha             ; save additional key ASCII value
                 
                 ldx #<rom_name
                 ldy #rom_version_string-rom_name
@@ -879,13 +884,15 @@ show_avr_status:
                 .text " - ",255
 
                 jsr boot_init_blfs
-                pla             ; restore tools/ordinary flag
-                bcs pass_on
+                pla             ; restore additional key ASCII value
+                tax             ; X = additional key ASCII value
+                bcs pass_on     ; taken if init failed
 
-                cmp #1          ; C=1 if tools
+                cmp #1          ; C=1 if addditional key held
 
                 pla             ;restore autoboot flag
-                bcs boot_tools  ; taken if tools
+                bcs boot_with_additional_key ; taken if additional key
+                                             ; held
                 bne booted      ; taken if not autoboot
 
                 jsr boot
@@ -894,10 +901,17 @@ booted:
                 lda #0
                 jmp svc.done
 
-boot_tools:
-                jsr boot.tools
-                jmp booted
+boot_with_additional_key:
+                lda #REQUEST_BOOT_WITH_ADDITIONAL_KEY
+                jsr send_request_1_recv_response_1_without_restart
 
+                cmp #0
+                beq booted      ; quietly forget it happened
+
+                jsr handle_exec ; set up the *EXEC
+
+                jmp booted
+                
 pass_on:
                 pla             ;restore autoboot flag
                 tay
@@ -911,6 +925,73 @@ print_rom_status_flag:
                 jsr oswrch
 +
                 rts
+
+; exit: C=0 = none pressed
+;       C=1 = key pressed, X = ASCII value, Y = internal key number
+check_extra_keys: .proc
+loop:
+                pha             ; save counter
+                txa
+                pha             ; save ASCII
+                jsr find_internal_key_for_ascii
+                bcc next_key
+                cpy #boot_key
+                clc             ; don't take the bcs done below
+                beq next_key    ; taken if boot key - already pressed!
+                tya             ; A = internal key number
+                pha             ; save internal key number
+                eor #$ff        ; form INKEY value
+                tax             ; X = INKEY value
+                ldy #$ff
+                lda #$81
+                jsr osbyte      ; test key
+                cpx #$ff        ; C=1 if key was pressed
+                pla             ; restore internal key number
+                tay             ; Y = internal key number
+next_key:
+                pla
+                tax             ; X = ASCII value
+                pla             ; A = counter
+                bcs done        ; done if key was pressed
+                inx             ; next ASCII value
+                ; C=0 at this point
+                sbc #0          ; decrement counter
+                bne loop
+                
+                clc             ; indicate key not pressed
+done:
+                rts
+                .endproc
+
+; entry: A = ASCII value
+; exit: C=0 = not found; C=1 = Y = internal key number
+find_internal_key_for_ascii: .proc
+ptr=$b0
+                pha             ; save ASCII value
+                lda #$ac        ; read keyboard table addr, AUG p183
+                jsr osbyte_x00_yff
+                stx ptr+0
+                sty ptr+1
+                pla             ; restore ASCII value
+                tax             ; X = ASCII value
+                ldy #$10        ; ignore row 0
+loop:
+                txa             ; A = ASCII value
+                cmp (ptr),y
+                beq done
+
+                tya
+                clc
+                sed
+                adc #$01
+                cld
+                tay
+                bpl loop
+not_found:
+                clc
+done:
+                rts
+                .endproc
 
                 .pend
 
@@ -929,7 +1010,6 @@ boot: .proc
 
                 and #3
                 tax
-boot2:
                 ldy command_lines.h,x
                 lda command_lines.l,x
                 tax
@@ -937,11 +1017,7 @@ boot2:
 done:
                 rts
 
-tools:
-                ldx #4
-                bne boot2
-
-command_lines: .strings_list ["","LOAD !BOOT","RUN !BOOT","EXEC !BOOT","EXEC ::BEEBLINK:0.$.!BOOT"],13
+command_lines: .strings_list ["","LOAD !BOOT","RUN !BOOT","EXEC !BOOT"],13
                 .pend
 
 ;-------------------------------------------------------------------------
@@ -4422,12 +4498,14 @@ version_cmd: .proc
 ;
 ; Handle *EXECTEXT.
 ;
-exectext_special: .proc
+exectext_special:
                 jsr recv_payload_byte
                 pha             ; save new *EXEC file handle
-
                 jsr discard_remaining_payload
+                pla             ; restore new *EXEC file handle
 
+handle_exec: .proc
+                pha             ; save *EXEC file handle
                 lda #198        ; read EXEC file handle (AUG p203)
                 jsr osbyte_x00_yff
                 txa

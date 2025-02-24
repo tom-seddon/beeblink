@@ -357,6 +357,7 @@ export class Server {
         this.handlers[beeblink.REQUEST_READ_DISK_IMAGE] = new Handler('READ_DISK_IMAGE', this.handleReadDiskImage);
         this.handlers[beeblink.REQUEST_WRITE_DISK_IMAGE] = new Handler('WRITE_DISK_IMAGE', this.handleWriteDiskImage);
         this.handlers[beeblink.REQUEST_OSBGET_WITH_READAHEAD] = new Handler('OSBGET_WITH_READAHEAD', this.handleOSBGETWithReadahead);
+        this.handlers[beeblink.REQUEST_BOOT_WITH_ADDITIONAL_KEY] = new Handler('BOOT_WITH_ADDITIONAL_KEY', this.bootWithAdditionalKey);
 
         if (this.linkSupportsFireAndForgetRequests) {
             this.handlers[beeblink.REQUEST_OSBPUT_FNF] = new Handler('OSBPUT_FNF', this.handleOSBPUTFNF).withoutResetLastOSBPUTHandle();//.withNoLogging();
@@ -924,6 +925,32 @@ export class Server {
 
             return response;
         }
+    };
+
+    private readonly bootWithAdditionalKey = async (handler: Handler, p: Buffer): Promise<Response> => {
+        this.payloadMustBe(handler, p, 1);
+
+        const char = String.fromCharCode(p[0]).toUpperCase();
+
+        this.log?.pn(`Additional key char: '${char}' (${char.charCodeAt(0)}, 0x${utils.hex2(char.charCodeAt(0))})`);
+
+        // There's the basis of a customisable mechanism in here, so far
+        // completely ignored.
+        let path: string | undefined;
+        if (char === 'T') {
+            path = '::BEEBLINK:0.$.!BOOT';
+        }
+
+        let handle: number;
+        if (path === undefined) {
+            handle = 0;
+        } else {
+            this.log?.pn(`Path: ${path}`);
+            handle = await this.bfs.OSFINDOpen(0x40, path, undefined);
+            this.log?.pn(`Handle: 0x${utils.hex2(handle)}`);
+        }
+
+        return newResponse(beeblink.RESPONSE_DATA, handle);
     };
 
     private readonly handleOSBGETReadaheadConsumedFNF = async (handler: Handler, p: Buffer): Promise<void> => {
