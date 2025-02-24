@@ -125,7 +125,7 @@ folder to make available as a read-only PC volume. This doesn't make
 any great effort to work like any existing type of BBC filing system,
 nor does it make any real effort at being super-useful in general:
 it's designed for getting quick access to PC files for use with
-`*WRITE`, `*EXEC`, and BASIC's `LOAD` - nothing more.
+`*EXEC`, `*EXECTEXT`, and BASIC's `LOAD`. Anything else is a bonus!
 
 Limitations and oddities of PC volumes:
 
