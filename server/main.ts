@@ -42,6 +42,8 @@ import pcType from './pcType';
 import tubeHostType from './tubeHostType';
 import adfsType from './adfsType';
 import * as errors from './errors';
+import * as https from 'node:https';
+import * as net from 'net';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -84,6 +86,7 @@ const DEFAULT_BEEBLINK_TUBE_SERIAL_SAFE_ELECTRON_ROM = './beeblink_tube_serial_s
 const DEFAULT_CONFIG_FILE_NAME = "beeblink_config.json";
 
 const HTTP_LISTEN_PORT = 48875;//0xbeeb;
+const HTTPS_LISTEN_PORT = 48876;//0xbeec
 
 const BEEBLINK_SENDER_ID = 'beeblink-sender-id';
 
@@ -166,8 +169,10 @@ interface ICommandLineOptions {
     git_verbose: boolean;
     git_extra_verbose: boolean;
     http: boolean;
+    https: boolean;
     server_data_verbose: boolean;
     http_all_interfaces: boolean;
+    https_all_interfaces: boolean;
     http_verbose: boolean;
     libusb_debug_level: number | null;
     serial_verbose: string[] | null;
@@ -1036,11 +1041,7 @@ function getRomPaths(options: ICommandLineOptions): Map<number, string> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<server.Server>): void {
-    if (!options.http) {
-        return;
-    }
-
+function handleHTTPAndHTTPS(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<server.Server>): void {
     // "srv" :( - but "server" is taken...
     const srvBySenderId = new Map<string, server.Server>();
 
@@ -1196,21 +1197,31 @@ function handleHTTP(options: ICommandLineOptions, createServer: (additionalPrefi
 
             await endResponse();
         } else {
-            return await errorResponse(404, undefined);
+            return await errorResponse(404, `not found: ${httpRequest.url}`);
         }
     }
 
-    const httpServer = http.createServer((httpRequest, httpResponse): void => {
+    const init = (name: string, enable: boolean, allInterfaces: boolean, port: number, netServer: net.Server) => {
+        if (!enable) {
+            return;
+        }
+
+        let listenHost: string | undefined = '127.0.0.1';
+        if (allInterfaces) {
+            listenHost = undefined;
+        }
+
+        netServer.listen(port, listenHost);
+        process.stderr.write(`${name} server listening on ${(listenHost === undefined ? 'all interfaces' : listenHost)}, port ${port}\n`);
+    };
+
+    const handleHTTPRequestThunk = (httpRequest: http.IncomingMessage, httpResponse: http.ServerResponse): void => {
         void handleHTTPRequest(httpRequest, httpResponse);
-    });
+    };
 
-    let listenHost: string | undefined = '127.0.0.1';
-    if (options.http_all_interfaces) {
-        listenHost = undefined;
-    }
+    init('HTTP', options.http, options.http_all_interfaces, HTTP_LISTEN_PORT, http.createServer(handleHTTPRequestThunk));
 
-    httpServer.listen(HTTP_LISTEN_PORT, listenHost);
-    process.stderr.write('HTTP server listening on ' + (listenHost === undefined ? 'all interfaces' : listenHost) + ', port ' + HTTP_LISTEN_PORT + '\n');
+    init('HTTPS', options.https, options.https_all_interfaces, HTTPS_LISTEN_PORT, https.createServer(handleHTTPRequestThunk));
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -2024,7 +2035,7 @@ async function main(options: ICommandLineOptions) {
         return srv;
     }
 
-    handleHTTP(options, createServer);
+    handleHTTPAndHTTPS(options, createServer);
 
     void handleSerial(options, createServer);
 }
@@ -2108,8 +2119,16 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
 
     // HTTP server (for b2)
     always(['--http'], { action: 'storeTrue', help: 'enable HTTP server' });
+    
+    // https works... I think... but I discovered too late that there's a whole
+    // pile of extra stuff you'll  need to make it work, that BeebLink will need
+    // some command line parameters for. So, for now, it's off.
+    
+    //always(['--https'], { action: 'storeTrue', help: 'enable HTTPS server' });
+    
     fullHelpOnly(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
-    fullHelpOnly(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output' });
+    fullHelpOnly(['--https-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTPS server listen on all interfaces, not just localhost' });
+    fullHelpOnly(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output for HTTP or HTTPS server' });
 
     // Config file
     always(['--load-config'], { metavar: 'FILE', help: 'load config from %(metavar)s' });
