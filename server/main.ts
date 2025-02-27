@@ -1058,7 +1058,9 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, createServer: (additio
     // enough to future versions.
     const V2_URL = '/request/2';
 
-    async function handleHTTPRequest(httpRequest: http.IncomingMessage, httpResponse: http.ServerResponse): Promise<void> {
+    const ADMIN_URL = '/admin';
+
+    async function handleHTTPRequest(enableBeebLink: boolean, enableAdmin: boolean, httpRequest: http.IncomingMessage, httpResponse: http.ServerResponse): Promise<void> {
         httpLog?.pn(`HTTP request: ${httpRequest.method} ${httpRequest.url}`);
 
         async function endResponse(): Promise<void> {
@@ -1083,9 +1085,12 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, createServer: (additio
             await endResponse();
         }
 
-        if (httpRequest.url === V1_URL || httpRequest.url === V2_URL) {
+        const isPOST = httpRequest.method === 'POST';
+        const isGET = httpRequest.method === 'GET';
+
+        if (enableBeebLink && (httpRequest.url === V1_URL || httpRequest.url === V2_URL)) {
             //process.stderr.write('method: ' + httpRequest.method + '\n');
-            if (httpRequest.method !== 'POST') {
+            if (!isPOST) {
                 return await errorResponse(405, 'only POST is permitted');
             }
 
@@ -1196,32 +1201,49 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, createServer: (additio
             }
 
             await endResponse();
+        } else if (enableAdmin && httpRequest.url === ADMIN_URL) {
+            if (isPOST) {
+                return await errorResponse(501, `POST admin=TODO`);
+            } else if (isGET) {
+                return await errorResponse(501, `GET admin=TODO`);
+            } else {
+                return await errorResponse(405, `method not supported: ${httpRequest.method}`);
+            }
         } else {
             return await errorResponse(404, `not found: ${httpRequest.url}`);
         }
     }
 
-    const init = (name: string, enable: boolean, allInterfaces: boolean, port: number, netServer: net.Server) => {
+    const init = (name: string,
+        enable: boolean,
+        allInterfaces: boolean,
+        port: number,
+        createNetServer: (fun: (httpRequest: http.IncomingMessage, httpResponse: http.ServerResponse) => void) => net.Server) => {
+        // TODO: this logic needs improvement. You might want the HTTP admin
+        // interface even if not using the BeebLink HTTP interface.
         if (!enable) {
             return;
         }
 
+        let enableAdmin = true;
         let listenHost: string | undefined = '127.0.0.1';
         if (allInterfaces) {
             listenHost = undefined;
+            enableAdmin = false;
         }
 
+        const handleHTTPRequestThunk = (httpRequest: http.IncomingMessage, httpResponse: http.ServerResponse): void => {
+            void handleHTTPRequest(enable, enableAdmin, httpRequest, httpResponse);
+        };
+
+        const netServer = createNetServer(handleHTTPRequestThunk);
         netServer.listen(port, listenHost);
         process.stderr.write(`${name} server listening on ${(listenHost === undefined ? 'all interfaces' : listenHost)}, port ${port}\n`);
     };
 
-    const handleHTTPRequestThunk = (httpRequest: http.IncomingMessage, httpResponse: http.ServerResponse): void => {
-        void handleHTTPRequest(httpRequest, httpResponse);
-    };
+    init('HTTP', options.http, options.http_all_interfaces, HTTP_LISTEN_PORT, http.createServer);
 
-    init('HTTP', options.http, options.http_all_interfaces, HTTP_LISTEN_PORT, http.createServer(handleHTTPRequestThunk));
-
-    init('HTTPS', options.https, options.https_all_interfaces, HTTPS_LISTEN_PORT, https.createServer(handleHTTPRequestThunk));
+    init('HTTPS', options.https, options.https_all_interfaces, HTTPS_LISTEN_PORT, https.createServer);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -2119,13 +2141,13 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
 
     // HTTP server (for b2)
     always(['--http'], { action: 'storeTrue', help: 'enable HTTP server' });
-    
+
     // https works... I think... but I discovered too late that there's a whole
     // pile of extra stuff you'll  need to make it work, that BeebLink will need
     // some command line parameters for. So, for now, it's off.
-    
+
     //always(['--https'], { action: 'storeTrue', help: 'enable HTTPS server' });
-    
+
     fullHelpOnly(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
     fullHelpOnly(['--https-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTPS server listen on all interfaces, not just localhost' });
     fullHelpOnly(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output for HTTP or HTTPS server' });
