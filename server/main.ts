@@ -1041,24 +1041,42 @@ function getRomPaths(options: ICommandLineOptions): Map<number, string> {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function handleHTTPAndHTTPS(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<server.Server>): void {
+// All stuff that the admin interface needs to be able to see.
+
+interface IServer {
+    server: server.Server;
+
+    // Only relevant for some types of device.
+    active: boolean;
+}
+
+interface IGlobalState {
+    serverByDeviceName: Map<string, IServer>;
+
+    searchFolders: beebfs.IFSSearchFolders;
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+function handleHTTPAndHTTPS(options: ICommandLineOptions, globals: IGlobalState, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<server.Server>): void {
     // "srv" :( - but "server" is taken...
-    const srvBySenderId = new Map<string, server.Server>();
+    //const srvBySenderId = new Map<string, server.Server>();
 
     let httpLog: utils.Log | undefined;
     if (options.http_verbose) {
         httpLog = utils.Log.create("HTTP", process.stdout);
     }
 
-    const V1_URL = '/request';
+    const V1_PATHNAME = '/request';
 
     // The V2 URL needs to have the V1 URL as a prefix, because I didn't think
     // through this properly when setting up the b2 options. But the BeebLink
     // versioning is a bit scrappy anyway. And this will extend conveniently
     // enough to future versions.
-    const V2_URL = '/request/2';
+    const V2_PATHNAME = '/request/2';
 
-    const ADMIN_URL = '/admin';
+    const ADMIN_PATHNAME = '/admin';
 
     async function handleHTTPRequest(enableBeebLink: boolean, enableAdmin: boolean, httpRequest: http.IncomingMessage, httpResponse: http.ServerResponse): Promise<void> {
         httpLog?.pn(`HTTP request: ${httpRequest.method} ${httpRequest.url}`);
@@ -1075,6 +1093,15 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, createServer: (additio
             });
         }
 
+        async function jsonResponse(statusCode: number, value: unknown): Promise<void> {
+            httpResponse.statusCode = statusCode;
+            httpResponse.setHeader('Content-Type', 'application/json');
+            httpResponse.setHeader('Content-Encoding', 'utf-8');
+            // TODO: won't always want the JSON to be pretty printed.
+            await writeData(Buffer.from(JSON.stringify(value, undefined, 4), 'utf-8'));
+            await endResponse();
+        }
+
         async function errorResponse(statusCode: number, message: string | undefined): Promise<void> {
             httpResponse.statusCode = statusCode;
             httpResponse.setHeader('Content-Type', 'text/plain');
@@ -1085,16 +1112,25 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, createServer: (additio
             await endResponse();
         }
 
+        if (httpRequest.url === undefined) {
+            return errorResponse(400, `missing URL`);
+        }
+
+        if (httpRequest.headers.host === undefined) {
+            return errorResponse(400, `missing header: host`);
+        }
+
         const isPOST = httpRequest.method === 'POST';
         const isGET = httpRequest.method === 'GET';
+        const url = new URL(httpRequest.url, `http://${httpRequest.headers.host}`);
 
-        if (enableBeebLink && (httpRequest.url === V1_URL || httpRequest.url === V2_URL)) {
+        if (enableBeebLink && (url.pathname === V1_PATHNAME || url.pathname === V2_PATHNAME)) {
             //process.stderr.write('method: ' + httpRequest.method + '\n');
             if (!isPOST) {
                 return await errorResponse(405, 'only POST is permitted');
             }
 
-            const v2 = httpRequest.url === V2_URL;
+            const v2 = url.pathname === V2_PATHNAME;
 
             httpLog?.pn(`v2: ${v2}`);
 
@@ -1129,14 +1165,18 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, createServer: (additio
             }
 
             // Find the Server for this sender id.
-            let srv = srvBySenderId.get(senderId);
+            const deviceName = `http:${senderId}`;
+            let srv = globals.serverByDeviceName.get(deviceName);
             if (srv === undefined) {
                 // If this is accessed via the V1 endpoint, fire-and-forget
                 // requests are not actually supported. But the fire-and-forget
                 // requests always send a HTTP response anyway, and it's the
                 // client's job to discard this, so no problem.
-                srv = await createServer('HTTP', getRomPaths(options), true);
-                srvBySenderId.set(senderId, srv);
+                srv = {
+                    server: await createServer('HTTP', getRomPaths(options), true),
+                    active: true,
+                };
+                globals.serverByDeviceName.set(deviceName, srv);
             }
 
             let request: Request;
@@ -1185,7 +1225,7 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, createServer: (additio
             // Every HTTP request gets a response, even if it was a FNF request.
             // Given the fixed HTTP overhead there's hardly any point discarding
             // the RESPONSE_YES that gets made up in getResponseForResult.
-            const serverResponse: server.IServerResponse = await srv.handleRequest(request);
+            const serverResponse: server.IServerResponse = await srv.server.handleRequest(request);
             httpLog?.pn(`Response (for ${senderId}): ${serverResponse.response.c} (${utils.getResponseTypeName(serverResponse.response.c)} (${serverResponse.response.p.length} bytes payload)` + (serverResponse.speculativeResponses === undefined ? '' : ` (+${serverResponse.speculativeResponses.length} speculative responses)`));
 
             httpResponse.setHeader('Content-Type', 'application/binary');
@@ -1201,11 +1241,40 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, createServer: (additio
             }
 
             await endResponse();
-        } else if (enableAdmin && httpRequest.url === ADMIN_URL) {
+        } else if (enableAdmin && url.pathname === ADMIN_PATHNAME) {
             if (isPOST) {
                 return await errorResponse(501, `POST admin=TODO`);
             } else if (isGET) {
-                return await errorResponse(501, `GET admin=TODO`);
+                httpLog?.pn(`searchParams=${url.searchParams}`);
+
+                if (url.searchParams.get('servers') !== null) {
+                    interface IServersResponseServer {
+                        deviceName: string;
+                        active: boolean;
+                    }
+
+                    const servers: IServersResponseServer[] = [];
+                    globals.serverByDeviceName.forEach((value: IServer, key: string): void => {
+                        servers.push({ deviceName: key, active: value.active });
+                    });
+                    return await jsonResponse(200, servers);
+                } else if (url.searchParams.get('folders') !== null) {
+                    // interface IFoldersResponse {
+                    //     folders: string[];
+                    //     pcFolders: string[];
+                    //     tubeHostFolders: string[];
+                    // };
+
+                    const response = {
+                        folders: globals.searchFolders.beebLinkSearchFolders,
+                        pcFolders: globals.searchFolders.pcFolders,
+                        tubeHostFolders: globals.searchFolders.tubeHostFolders,
+                    };
+
+                    return await jsonResponse(200, response);
+                } else {
+                    return await errorResponse(404, `not found: ${httpRequest.url}`);
+                }
             } else {
                 return await errorResponse(405, `method not supported: ${httpRequest.method}`);
             }
@@ -1918,15 +1987,8 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
     }
 }
 
-interface IPortState {
-    server: server.Server;
-    active: boolean;
-}
-
-async function handleSerial(options: ICommandLineOptions, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<server.Server>): Promise<void> {
+async function handleSerial(options: ICommandLineOptions, globals: IGlobalState, createServer: (additionalPrefix: string, romPathByLinkSubtype: Map<number, string>, linkSupportsFireAndForgetRequests: boolean) => Promise<server.Server>): Promise<void> {
     const log = utils.Log.create('SERIAL-DEVICES', process.stdout, options.serial_verbose !== null);
-
-    const portStateByPortPath = new Map<string, IPortState>();
 
     let autoDetectMessageShown = false;
 
@@ -1938,34 +2000,35 @@ async function handleSerial(options: ICommandLineOptions, createServer: (additio
             }
 
             const portPath = getSerialPortPath(device.portInfo);
+            const deviceName = `serial:${portPath}`;
 
-            let value = portStateByPortPath.get(portPath);
-            if (value === undefined) {
+            let maybeServer: IServer | undefined = globals.serverByDeviceName.get(deviceName);
+            if (maybeServer === undefined) {
                 log?.pn(`${portPath}: new serial port`);
-                value = {
+                maybeServer = {
                     server: await createServer('SERIAL', getRomPaths(options), true),
                     active: false,//not quite active just yet!
                 };
-                portStateByPortPath.set(portPath, value);
+                globals.serverByDeviceName.set(deviceName, maybeServer);
             }
 
             // Some JS nonsense here ? For some reason, the compiler can't tell
-            // that 'value' can no longer be undefined by the time it's used by
+            // that 'srv' can no longer be undefined by the time it's used by
             // the 'then' and 'error' callbacks below, even though it's captured
             // by them after its active field was set to true, suggesting that
             // it can tell it wasn't undefined by that point at least. Create a
             // new variable of the right type here though and it's fine...
-            const portState: IPortState = value;
+            const srv: IServer = maybeServer;
 
-            if (!portState.active) {
-                portState.active = true;
-                handleSerialDevice(options, device.portInfo, portState.server).then(() => {
+            if (!srv.active) {
+                srv.active = true;
+                handleSerialDevice(options, device.portInfo, srv.server).then(() => {
                     process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed.\n`);
-                    portState.active = false;
+                    srv.active = false;
                 }).catch((error) => {
                     process.stderr.write(`${(error as { stack: string; }).stack} `);
                     process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed due to error: ${error} \n`);
-                    portState.active = false;
+                    srv.active = false;
                 });
             }
         }
@@ -2057,9 +2120,14 @@ async function main(options: ICommandLineOptions) {
         return srv;
     }
 
-    handleHTTPAndHTTPS(options, createServer);
+    const globals: IGlobalState = {
+        serverByDeviceName: new Map<string, IServer>(),
+        searchFolders,
+    };
 
-    void handleSerial(options, createServer);
+    handleHTTPAndHTTPS(options, globals, createServer);
+
+    void handleSerial(options, globals, createServer);
 }
 
 /////////////////////////////////////////////////////////////////////////
