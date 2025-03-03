@@ -272,6 +272,7 @@ function encodeForOSCLI(command: string): Buffer {
 
 export class Server {
     private bfs: beebfs.FS;
+    private volumesList: beebfs.VolumesList;
     private linkBeebType: number | undefined;
     private caps1: number;
     private romPathByLinkBeebType: Map<number, string>;
@@ -291,10 +292,11 @@ export class Server {
     private lastOSBPUTHandle: number | undefined;
     private numOSBGETReadaheadBytes: number;
 
-    public constructor(romPathByLinkBeebType: Map<number, string>, bfs: beebfs.FS, log: utils.Log | undefined, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
+    public constructor(romPathByLinkBeebType: Map<number, string>, volumesList: beebfs.VolumesList, bfs: beebfs.FS, log: utils.Log | undefined, dumpPackets: boolean, linkSupportsFireAndForgetRequests: boolean) {
         this.romPathByLinkBeebType = romPathByLinkBeebType;
         this.linkBeebType = undefined;
         this.bfs = bfs;
+        this.volumesList = volumesList;
         this.stringBufferIdx = 0;
         this.linkSupportsFireAndForgetRequests = linkSupportsFireAndForgetRequests;
 
@@ -1133,9 +1135,9 @@ export class Server {
             const height = p[3];
             const m128 = p[4] >= 3;
 
-            const volumePaths = await this.bfs.findVolumesMatching('*');
+            const volumes = await this.volumesList.findAllVolumes();
 
-            this.volumeBrowser = new volumebrowser.Browser(charSizeBytes, width, height, m128, volumePaths, this.volumeBrowserInitialFilters || this.volumeBrowserDefaultFilters);
+            this.volumeBrowser = new volumebrowser.Browser(charSizeBytes, width, height, m128, volumes, this.volumeBrowserInitialFilters || this.volumeBrowserDefaultFilters);
             this.volumeBrowserInitialFilters = undefined;
 
             const text = this.volumeBrowser.getInitialString();
@@ -1143,7 +1145,7 @@ export class Server {
             this.prepareForTextResponse(text);
             return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING);
         } else if (p[0] === beeblink.REQUEST_VOLUME_BROWSER_SOFT_RESET && this.volumeBrowser !== undefined) {
-            const volumes = await this.bfs.findVolumesMatching('*');
+            const volumes = await this.volumesList.findAllVolumes();
             this.volumeBrowser.setVolumes(volumes);
             this.prepareForTextResponse(this.volumeBrowser.getInitialString());
             return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_PRINT_STRING);
@@ -1185,12 +1187,12 @@ export class Server {
 
                 return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, responseType);
             } else if (result.refreshVolumes) {
-                this.bfs.resetKnownVolumesList();
+                this.volumesList.resetKnownVolumes();
 
                 if ((this.caps1 & beeblink.CAPS1_UPDATED_VOLUME_BROWSER) !== 0) {
                     return newResponse(beeblink.RESPONSE_VOLUME_BROWSER, beeblink.RESPONSE_VOLUME_BROWSER_REFRESHED);
                 } else {
-                    this.volumeBrowser.setVolumes(await this.bfs.findVolumesMatching('*'));
+                    this.volumeBrowser.setVolumes(await this.volumesList.findAllVolumes());
 
                     this.prepareForTextResponse(this.volumeBrowser.getInitialString());
 
@@ -1561,7 +1563,7 @@ export class Server {
     private readonly volsCommand = async (commandLine: CommandLine): Promise<string> => {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : '*';
 
-        const volumes = await this.bfs.findVolumesMatching(arg);
+        const volumes = await this.volumesList.findVolumesMatching(arg);
 
         let text = 'Matching volumes:';
 
@@ -2043,7 +2045,7 @@ export class Server {
                 readOnly = flags.indexOf('r') >= 0;
             }
 
-            const volumes = await this.bfs.findVolumesMatching(commandLine.parts[1]);
+            const volumes = await this.volumesList.findVolumesMatching(commandLine.parts[1]);
             if (volumes.length === 0) {
                 return errors.notFound();
             }

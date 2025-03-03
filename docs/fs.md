@@ -551,6 +551,11 @@ or pick a different name...)
 The default volume was not found, so there is no volume currently
 loaded. Use `*VOL` to load one.
 
+## `No volume search path set` (same code as `Disc fault`)
+
+There is no BeebLink volume search path set, so `*NEWVOL` can't create
+a new volume.
+
 ## `POSIX error: XXX` (same code as `Disc fault`)
 
 The server encountered an unexpected error while doing something.

@@ -987,7 +987,7 @@ function createSearchFolders(options: ICommandLineOptions): beebfs.IFSSearchFold
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function createGitattributesManipulator(options: ICommandLineOptions, volumes: beebfs.Volume[]): Promise<gitattributes.Manipulator | undefined> {
+async function createGitattributesManipulator(options: ICommandLineOptions, volumesList: beebfs.VolumesList): Promise<gitattributes.Manipulator | undefined> {
     if (!options.git) {
         return undefined;
     }
@@ -999,18 +999,24 @@ async function createGitattributesManipulator(options: ICommandLineOptions, volu
     // thing at a time. (Noticeably faster startup on OS X with lots of
     // volumes, even on an SSD.)
 
-    const oldNumVolumes = volumes.length;
-
-    volumes = volumes.filter((volume) => !volume.isReadOnly());
-    volumes = volumes.filter(async (volume) => !(await isGit(volume.path)));
-    process.stderr.write(`gitattributes: found ${volumes.length}/${oldNumVolumes} writeable git-controlled volumes.\n`);
-
-    for (const volume of volumes) {
-        gaManipulator.makeVolumeNotText(volume);
-        gaManipulator.scanForBASIC(volume);
+    const allVolumes = await volumesList.findAllVolumes();
+    const gitVolumes: beebfs.Volume[] = [];
+    for (const volume of allVolumes) {
+        if (!volume.isReadOnly()) {
+            if (await isGit(volume.path)) {
+                gitVolumes.push(volume);
+            }
+        }
     }
 
-    gaManipulator.whenQuiescent(() => {
+    process.stderr.write(`gitattributes: found ${gitVolumes.length}/${allVolumes.length} writeable git-controlled volumes.\n`);
+
+    for (const gitVolume of gitVolumes) {
+        gaManipulator.makeVolumeNotText(gitVolume);
+        gaManipulator.scanForBASIC(gitVolume);
+    }
+
+    gaManipulator.whenIdle(() => {
         process.stderr.write(`gitattributes: scanned ${gaManipulator.getNumFilesScannedForBASIC()} files. Found ${gaManipulator.getNumBASICFiles()} BASIC files.\n`);
     });
 
@@ -2076,13 +2082,15 @@ async function main(options: ICommandLineOptions) {
     printSearchFolders(`TubeHost`, searchFolders.tubeHostFolders);
     printSearchFolders(`PC`, searchFolders.pcFolders);
 
-    const volumes = await beebfs.FS.findAllVolumes(searchFolders, log);
+    const volumesList = new beebfs.VolumesList(searchFolders, log);
 
-    const gaManipulator = await createGitattributesManipulator(options, volumes);
+    //const volumes = await beebfs.FS.findAllVolumes(searchFolders, log);
+
+    const gaManipulator = await createGitattributesManipulator(options, volumesList);
 
     let defaultVolumes: beebfs.Volume[] = [];
     if (options.default_volume !== null) {
-        defaultVolumes = beebfs.findVolumesMatching(volumes, options.default_volume);
+        defaultVolumes = await volumesList.findVolumesMatching(options.default_volume);
     }
 
     // 
@@ -2109,14 +2117,14 @@ async function main(options: ICommandLineOptions) {
         const serverLogPrefix = options.server_verbose ? additionalPrefix + 'SRV' + connectionId : undefined;
         const serverLog = utils.Log.create(serverLogPrefix !== undefined ? serverLogPrefix : '', process.stdout, serverLogPrefix !== undefined);
 
-        const bfs = new beebfs.FS(searchFolders, volumes, gaManipulator, bfsLog, options.locate_verbose);
+        const bfs = new beebfs.FS(volumesList, gaManipulator, bfsLog, options.locate_verbose);
 
         if (defaultVolumes.length > 0) {
             // Adopt the *VOL policy of using the first match.
             await bfs.mount(defaultVolumes[0]);
         }
 
-        const srv = new server.Server(romPathByLinkSubtype, bfs, serverLog, options.server_data_verbose, linkSupportsFireAndForgetRequests);
+        const srv = new server.Server(romPathByLinkSubtype, volumesList, bfs, serverLog, options.server_data_verbose, linkSupportsFireAndForgetRequests);
         return srv;
     }
 

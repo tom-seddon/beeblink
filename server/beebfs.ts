@@ -31,6 +31,7 @@ import * as errors from './errors';
 import CommandLine from './CommandLine';
 import * as server from './server';
 import * as inf from './inf';
+import * as events from 'events';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -185,6 +186,36 @@ export function getServerCharsForNamePart(str: string): string {
 
     return result;
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+// Valid volume names are 7-bit ASCII, no spaces, no '/' or ':'. If you want
+// £, use `.
+function isValidVolumeName(name: string): boolean {
+    // Ignore empty string, as might be found in a .volume file.
+    if (name.length === 0) {
+        return false;
+    }
+
+    // Ignore dot folders.
+    if (name[0] === '.') {
+        return false;
+    }
+
+    for (let i = 0; i < name.length; ++i) {
+        const c = name.charCodeAt(i);
+
+        if (!(c >= 32 && c < 127)) {
+            return false;
+        } else if (name[i] === ':' || name[i] === '/') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -526,6 +557,247 @@ export function findVolumesMatching(volumes: ReadonlyArray<Volume>, name: string
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+// Logging for this probably isn't proving especially useful, and it's fiddly to
+// ensure it definitely doesn't happen when it would probably be annoying. Maybe it
+// should go away?
+export class VolumesList {
+    private searchFolders: IFSSearchFolders;
+    private verboseLog: utils.Log | undefined;
+    private knownVolumes: Volume[] | undefined;
+    private log: utils.Log | undefined;
+    private verbose: boolean;
+    private findAllVolumesInProgress: boolean;
+    private findAllVolumesDoneEmitter: events.EventEmitter;
+
+    public constructor(searchFolders: IFSSearchFolders, log: utils.Log | undefined) {
+        this.searchFolders = searchFolders;
+        this.verboseLog = log;
+        this.verbose = false;
+        this.findAllVolumesInProgress = false;
+
+        this.findAllVolumesDoneEmitter = new events.EventEmitter();
+
+        this.setVerbose(false);
+    }
+
+    public resetKnownVolumes = () => {
+        this.knownVolumes = undefined;
+    };
+
+    public setVerbose(verbose: boolean): boolean {
+        const wasVerbose: boolean = this.verbose;
+
+        this.verbose = verbose;
+
+        if (this.verbose) {
+            this.log = this.verboseLog;
+        } else {
+            this.log = undefined;
+        }
+
+        return wasVerbose;
+    }
+
+    public getPathForNewVolume = (): string | undefined => {
+        if (this.searchFolders.beebLinkSearchFolders.length === 0) {
+            return undefined;
+        } else {
+            return this.searchFolders.beebLinkSearchFolders[0];
+        }
+    };
+
+    public findAllVolumes = async (): Promise<Volume[]> => {
+        if (this.knownVolumes === undefined) {
+            if (this.findAllVolumesInProgress) {
+                return new Promise((resolve) => {
+                    this.findAllVolumesDoneEmitter.once('done', (knownVolumes: Volume[]) => {
+                        resolve(knownVolumes);
+                    });
+                });
+            } else {
+                this.findAllVolumesInProgress = true;
+                this.knownVolumes = await this.findVolumes('*', undefined);
+                this.findAllVolumesInProgress = false;
+                this.findAllVolumesDoneEmitter.emit('done', this.knownVolumes);
+            }
+        }
+
+        return this.knownVolumes;
+    };
+
+    // Finds all volumes matching the given afsp.
+    public findVolumesMatching = async (afsp: string): Promise<Volume[]> => {
+        const regExp = utils.getRegExpFromAFSP(afsp);
+        this.log?.pn(`findVolumesMatching: ${afsp}`);
+
+        let fresh = false;
+        if (this.knownVolumes === undefined) {
+            this.log?.p(`findVolumesMatching: rebuilding volumes list...`);
+
+            this.knownVolumes = await this.findAllVolumes();
+            this.log?.pn(` found ${this.knownVolumes.length}`);
+            fresh = true;
+        }
+
+        let foundVolumes = findVolumesMatching(this.knownVolumes, regExp);
+        this.log?.pn(`findVolumesMatching: found ${foundVolumes.length} matching volume(s)`);
+        if (foundVolumes.length === 0) {
+            if (!fresh) {
+                // make another attempt.
+                this.log?.p(`findVolumesMatching: none found. Rebuilding volumes list...`);
+                this.knownVolumes = await this.findAllVolumes();
+                this.log?.pn(` found ${this.knownVolumes.length}`);
+                foundVolumes = findVolumesMatching(this.knownVolumes, regExp);
+                this.log?.pn(`findVolumesMatching: found ${foundVolumes.length} matching volume(s) in updated list`);
+            }
+        }
+
+        return foundVolumes;
+    };
+
+    private findVolumes = async (afsp: string, log: utils.Log | undefined): Promise<Volume[]> => {
+        const volumes: Volume[] = [];
+
+        const volumeNameRegExp = utils.getRegExpFromAFSP(afsp);
+
+        const beebLinkIgnoreFolders = new Set<string>();
+        const addIgnoreFolders = (folders: string[]) => {
+            for (const folder of folders) {
+                beebLinkIgnoreFolders.add(utils.getSeparatorAndCaseNormalizedPath(folder));
+            }
+        };
+        addIgnoreFolders(this.searchFolders.pcFolders);
+        addIgnoreFolders(this.searchFolders.tubeHostFolders);
+
+        // Adds volume with given properties, if it looks valid and fulfils the criteria.
+        //
+        // Returns true if the find process should finish early.
+        const addVolume = (volumePath: string, volumeName: string, volumeType: IFSType): boolean => {
+            if (!isValidVolumeName(volumeName)) {
+                return false;
+            }
+
+            if (volumeNameRegExp.exec(volumeName) === null) {
+                return false;
+            }
+
+            for (const regExp of this.searchFolders.pathExcludeRegExps) {
+                if (regExp.exec(volumePath) !== null) {
+                    return false;
+                }
+            }
+
+            volumes.push(new Volume(volumePath, volumeName, volumeType));
+
+            return false;
+        };
+
+        const findBeebLinkVolumesMatchingRecursive = async (folderPath: string, indent: string): Promise<boolean> => {
+            log?.pn(indent + 'Looking in: ' + folderPath + '...');
+
+            let names: string[];
+            try {
+                names = await utils.fsReaddir(folderPath);
+            } catch (error) {
+                process.stderr.write('WARNING: failed to read files in folder: ' + folderPath + '\n');
+                log?.pn('Error was: ' + error);
+                return false;
+            }
+
+            const subfolderPaths: string[] = [];
+
+            let useDir = true;
+            for (const name of names) {
+                if (utils.getCaseNormalizedPath(name) === IGNORE_DIR_FILE_NAME) {
+                    useDir = false;
+                    break;
+                }
+            }
+
+            if (useDir) {
+                for (const name of names) {
+                    if (name[0] === '.') {
+                        continue;
+                    }
+
+                    const volumePath = path.join(folderPath, name);
+
+                    if (beebLinkIgnoreFolders.has(utils.getSeparatorAndCaseNormalizedPath(volumePath))) {
+                        // Folder explicitly added as some other type - don't look inside.
+                        continue;
+                    }
+
+                    const stat = await utils.tryStat(volumePath);
+                    if (stat !== undefined && stat.isDirectory()) {
+                        const stat0 = await utils.tryStat(path.join(volumePath, '0'));
+                        if (stat0 === undefined) {
+                            // obviously not a BeebLink volume, so save for later.
+                            subfolderPaths.push(volumePath);
+                        } else if (stat0.isDirectory()) {
+                            let volumeName: string;
+                            const buffer = await utils.tryReadFile(path.join(volumePath, VOLUME_FILE_NAME));
+                            if (buffer !== undefined) {
+                                volumeName = utils.getFirstLine(buffer);
+                            } else {
+                                volumeName = name;
+                            }
+
+                            let volumeType: IFSType;
+                            if (await utils.tryReadFile(path.join(volumePath, ADFS_FILE_NAME)) !== undefined) {
+                                volumeType = getFSType(gADFSType);
+                            } else {
+                                volumeType = getFSType(gDFSType);
+                            }
+
+                            if (addVolume(volumePath, volumeName, volumeType)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                for (const subfolderPath of subfolderPaths) {
+                    if (await findBeebLinkVolumesMatchingRecursive(subfolderPath, indent + '    ')) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        };
+
+        for (const folder of this.searchFolders.beebLinkSearchFolders) {
+            if (await findBeebLinkVolumesMatchingRecursive(folder, '')) {
+                return volumes;
+            }
+        }
+
+        // returns true if done.
+        function addFolders(folders: string[], type: IFSType): boolean {
+            for (const folder of folders) {
+                if (addVolume(folder, path.basename(folder), type)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (addFolders(this.searchFolders.pcFolders, getFSType(gPCType))) {
+            return volumes;
+        }
+
+        if (addFolders(this.searchFolders.tubeHostFolders, getFSType(gTubeHostType))) {
+            return volumes;
+        }
+
+        return volumes;
+    };
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
 export class OSGBPBResult {
     public readonly c: boolean;
     public readonly numBytesLeft: number | undefined;
@@ -839,10 +1111,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    private searchFolders: IFSSearchFolders;
-    private volumes: Volume[] | undefined;
-
-    //private currentVolume: BeebVolume | undefined;
+    private volumesList: VolumesList;
 
     private firstFileHandle: number;
     private openFiles: (OpenFile | undefined)[];
@@ -861,15 +1130,13 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public constructor(
-        searchFolders: IFSSearchFolders,
-        volumesHint: Volume[] | undefined,
+        volumesList: VolumesList,
         gaManipulator: gitattributes.Manipulator | undefined,
         log: utils.Log | undefined,
         locateVerbose: boolean) {
         this.log = log;
 
-        this.searchFolders = searchFolders;
-        this.volumes = volumesHint;
+        this.volumesList = volumesList;
 
         //this.resetDirs();
 
@@ -881,13 +1148,6 @@ export class FS {
 
         this.gaManipulator = gaManipulator;
         this.locateVerbose = locateVerbose;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    public static async findAllVolumes(searchFolders: IFSSearchFolders, log: utils.Log | undefined): Promise<Volume[]> {
-        return await FS.findVolumes('*', searchFolders, log);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -950,179 +1210,6 @@ export class FS {
         if (volume.isReadOnly()) {
             return errors.volumeReadOnly();
         }
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // Logging for this probably isn't proving especially useful. Maybe it
-    // should go away?
-    private static async findVolumes(afsp: string, searchFolders: IFSSearchFolders, log: utils.Log | undefined): Promise<Volume[]> {
-        const volumes: Volume[] = [];
-
-        const volumeNameRegExp = utils.getRegExpFromAFSP(afsp);
-
-        const beebLinkIgnoreFolders = new Set<string>();
-        const addIgnoreFolders = (folders: string[]) => {
-            for (const folder of folders) {
-                beebLinkIgnoreFolders.add(utils.getSeparatorAndCaseNormalizedPath(folder));
-            }
-        };
-        addIgnoreFolders(searchFolders.pcFolders);
-        addIgnoreFolders(searchFolders.tubeHostFolders);
-
-        // Adds volume with given properties, if it looks valid and fulfils the criteria.
-        //
-        // Returns true if the find process should finish early.
-        function addVolume(volumePath: string, volumeName: string, volumeType: IFSType): boolean {
-            if (!FS.isValidVolumeName(volumeName)) {
-                return false;
-            }
-
-            if (volumeNameRegExp.exec(volumeName) === null) {
-                return false;
-            }
-
-            for (const regExp of searchFolders.pathExcludeRegExps) {
-                if (regExp.exec(volumePath) !== null) {
-                    return false;
-                }
-            }
-
-            volumes.push(new Volume(volumePath, volumeName, volumeType));
-
-            return false;
-        }
-
-        const findBeebLinkVolumesMatchingRecursive = async (folderPath: string, indent: string): Promise<boolean> => {
-            log?.pn(indent + 'Looking in: ' + folderPath + '...');
-
-            let names: string[];
-            try {
-                names = await utils.fsReaddir(folderPath);
-            } catch (error) {
-                process.stderr.write('WARNING: failed to read files in folder: ' + folderPath + '\n');
-                log?.pn('Error was: ' + error);
-                return false;
-            }
-
-            const subfolderPaths: string[] = [];
-
-            let useDir = true;
-            for (const name of names) {
-                if (utils.getCaseNormalizedPath(name) === IGNORE_DIR_FILE_NAME) {
-                    useDir = false;
-                    break;
-                }
-            }
-
-            if (useDir) {
-                for (const name of names) {
-                    if (name[0] === '.') {
-                        continue;
-                    }
-
-                    const volumePath = path.join(folderPath, name);
-
-                    if (beebLinkIgnoreFolders.has(utils.getSeparatorAndCaseNormalizedPath(volumePath))) {
-                        // Folder explicitly added as some other type - don't look inside.
-                        continue;
-                    }
-
-                    const stat = await utils.tryStat(volumePath);
-                    if (stat !== undefined && stat.isDirectory()) {
-                        const stat0 = await utils.tryStat(path.join(volumePath, '0'));
-                        if (stat0 === undefined) {
-                            // obviously not a BeebLink volume, so save for later.
-                            subfolderPaths.push(volumePath);
-                        } else if (stat0.isDirectory()) {
-                            let volumeName: string;
-                            const buffer = await utils.tryReadFile(path.join(volumePath, VOLUME_FILE_NAME));
-                            if (buffer !== undefined) {
-                                volumeName = utils.getFirstLine(buffer);
-                            } else {
-                                volumeName = name;
-                            }
-
-                            let volumeType: IFSType;
-                            if (await utils.tryReadFile(path.join(volumePath, ADFS_FILE_NAME)) !== undefined) {
-                                volumeType = getFSType(gADFSType);
-                            } else {
-                                volumeType = getFSType(gDFSType);
-                            }
-
-                            if (addVolume(volumePath, volumeName, volumeType)) {
-                                return true;
-                            }
-                        }
-                    }
-                }
-
-                for (const subfolderPath of subfolderPaths) {
-                    if (await findBeebLinkVolumesMatchingRecursive(subfolderPath, indent + '    ')) {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        };
-
-        for (const folder of searchFolders.beebLinkSearchFolders) {
-            if (await findBeebLinkVolumesMatchingRecursive(folder, '')) {
-                return volumes;
-            }
-        }
-
-        // returns true if done.
-        function addFolders(folders: string[], type: IFSType): boolean {
-            for (const folder of folders) {
-                if (addVolume(folder, path.basename(folder), type)) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        if (addFolders(searchFolders.pcFolders, getFSType(gPCType))) {
-            return volumes;
-        }
-
-        if (addFolders(searchFolders.tubeHostFolders, getFSType(gTubeHostType))) {
-            return volumes;
-        }
-
-        return volumes;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // Valid volume names are 7-bit ASCII, no spaces, no '/' or ':'. If you want
-    // £, use `.
-    private static isValidVolumeName(name: string): boolean {
-        // Ignore empty string, as might be found in a .volume file.
-        if (name.length === 0) {
-            return false;
-        }
-
-        // Ignore dot folders.
-        if (name[0] === '.') {
-            return false;
-        }
-
-        for (let i = 0; i < name.length; ++i) {
-            const c = name.charCodeAt(i);
-
-            if (!(c >= 32 && c < 127)) {
-                return false;
-            } else if (name[i] === ':' || name[i] === '/') {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1285,52 +1372,25 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     // Force the known volumes list to be refreshed next time it's queried.
-    public resetKnownVolumesList(): void {
-        this.volumes = undefined;
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // Finds all volumes matching the given afsp.
-    public async findVolumesMatching(afsp: string): Promise<Volume[]> {
-        const regExp = utils.getRegExpFromAFSP(afsp);
-        this.log?.pn(`findVolumesMatching: ${afsp}`);
-
-        let fresh = false;
-        if (this.volumes === undefined) {
-            this.log?.p(`findVolumesMatching: rebuilding volumes list...`);
-            this.volumes = await FS.findAllVolumes(this.searchFolders, undefined);
-            this.log?.pn(` found ${this.volumes.length}`);
-            fresh = true;
-        }
-
-        let foundVolumes = findVolumesMatching(this.volumes, regExp);
-        this.log?.pn(`findVolumesMatching: found ${foundVolumes.length} matching volume(s)`);
-        if (foundVolumes.length === 0) {
-            if (!fresh) {
-                // make another attempt.
-                this.log?.p(`findVolumesMatching: none found. Rebuilding volumes list...`);
-                this.volumes = await FS.findAllVolumes(this.searchFolders, undefined);
-                this.log?.pn(` found ${this.volumes.length}`);
-                foundVolumes = findVolumesMatching(this.volumes, regExp);
-                this.log?.pn(`findVolumesMatching: found ${foundVolumes.length} matching volume(s) in updated list`);
-            }
-        }
-
-        return foundVolumes;
-    }
+    // public resetKnownVolumesList(): void {
+    //     this.volumesList.resetKnownVolumes();
+    // }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
     public async createVolume(name: string): Promise<Volume> {
-        if (!FS.isValidVolumeName(name)) {
+        if (!isValidVolumeName(name)) {
             return errors.badName();
         }
 
         // This check is a bit crude, but should catch obvious problems...
-        const volumePath = path.join(this.searchFolders.beebLinkSearchFolders[0], name);
+        const newVolumePath = this.volumesList.getPathForNewVolume();
+        if (newVolumePath === undefined) {
+            return errors.generic(`No volume search path set`);
+        }
+
+        const volumePath = path.join(newVolumePath, name);
         try {
             const stat0 = await utils.fsStat(path.join(volumePath, '0'));
             if (stat0.isDirectory()) {
@@ -1355,8 +1415,11 @@ export class FS {
         }
 
         // Easiest just to invalidate the list entirely.
-        this.volumes = undefined;
+        this.volumesList.resetKnownVolumes();
 
+        // TODO: should really rescan for volumes and pick the newly-created one
+        // out of the list, so there's only one Volume object for it. But I
+        // don't think it's a big deal.
         const newVolume = new Volume(volumePath, name, getFSType(gDFSType));
         return newVolume;
     }
@@ -1386,7 +1449,7 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     public async starLocate(arg: string): Promise<File[]> {
-        const volumes = await this.findVolumesMatching('*');
+        const volumes = await this.volumesList.findAllVolumes();
 
         const foundFiles: File[] = [];
 
@@ -2551,7 +2614,7 @@ export class FS {
 
             this.log?.pn(`volume name: ${volumeName}`);
 
-            const volumes = await this.findVolumesMatching(volumeName);
+            const volumes = await this.volumesList.findVolumesMatching(volumeName);
 
             if (volumes.length === 0) {
                 return errors.notFound();

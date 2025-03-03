@@ -33,14 +33,14 @@ export class Manipulator {
     private queue: (() => Promise<void>)[];
     private log: utils.Log | undefined;
     private extraVerbose = false;
-    private quiescentCallbacks: (() => void)[];
+    private idleCallbacks: (() => void)[];
     private numFilesScanned = 0;
     private numBASICFiles = 0;
 
     public constructor(verbose: boolean, extraVerbose: boolean) {
         this.queue = [];
         this.log = utils.Log.create('.gitattributes', process.stdout, verbose);
-        this.quiescentCallbacks = [];
+        this.idleCallbacks = [];
         this.extraVerbose = extraVerbose;
     }
 
@@ -48,8 +48,8 @@ export class Manipulator {
         //
     }
 
-    public whenQuiescent(callback: () => void): void {
-        this.quiescentCallbacks.push(callback);
+    public whenIdle(callback: () => void): void {
+        this.idleCallbacks.push(callback);
     }
 
     // Mark files in given volume as -text.
@@ -304,11 +304,11 @@ export class Manipulator {
                 this.next();
             });
         } else {
-            for (const callback of this.quiescentCallbacks) {
+            for (const callback of this.idleCallbacks) {
                 callback();
             }
 
-            this.quiescentCallbacks = [];
+            this.idleCallbacks = [];
         }
     }
 
