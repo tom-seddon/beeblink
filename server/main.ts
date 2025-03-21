@@ -2066,25 +2066,8 @@ async function main(options: ICommandLineOptions) {
     }
 
     const searchFolders = createSearchFolders(options);
-    log?.pn(`Search folders: `);
-    const printSearchFolders = (prefix: string, folders: string[]): void => {
-        log?.withIndent(`${prefix}: `, () => {
-            if (folders.length === 0) {
-                log?.pn(`None`);
-            } else {
-                for (let i = 0; i < folders.length; ++i) {
-                    log?.pn(`${i}. ${folders[i]} `);
-                }
-            }
-        });
-    };
-    printSearchFolders(`BeebLink`, searchFolders.beebLinkSearchFolders);
-    printSearchFolders(`TubeHost`, searchFolders.tubeHostFolders);
-    printSearchFolders(`PC`, searchFolders.pcFolders);
 
     const volumesList = new beebfs.VolumesList(searchFolders, log);
-
-    //const volumes = await beebfs.FS.findAllVolumes(searchFolders, log);
 
     const gaManipulator = await createGitattributesManipulator(options, volumesList);
 
