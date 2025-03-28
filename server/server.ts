@@ -936,22 +936,28 @@ export class Server {
 
         this.log?.pn(`Additional key char: '${char}' (${char.charCodeAt(0)}, 0x${utils.hex2(char.charCodeAt(0))})`);
 
-        // There's the basis of a customisable mechanism in here, so far
-        // completely ignored.
-        let path: string | undefined;
-        if (char === 'T') {
-            path = '::BEEBLINK:0.$.!BOOT';
+        if (!utils.isalnum(char)) {
+            // Not a valid additional key.
+            return newResponse(beeblink.RESPONSE_DATA, 0);
         }
 
-        let handle: number;
-        if (path === undefined) {
-            handle = 0;
-        } else {
-            this.log?.pn(`Path: ${path}`);
-            handle = await this.bfs.OSFINDOpen(0x40, path, undefined);
-            this.log?.pn(`Handle: 0x${utils.hex2(handle)}`);
+        const volumes: beebfs.Volume[] = this.bfs.findKnownVolumesMatching('beeblink');
+        if (volumes.length === 0) {
+            // No beeblink volume, so give up. All the default actions refer to
+            // it and it's where the custom actions would be found.
+            //
+            // (This is a cheesy workaround for the fact that all the filename
+            // parsing functions just go off and rescan the volumes list if no
+            // volumes match. Which is indeed what you want 99% of the time.)
+            return newResponse(beeblink.RESPONSE_DATA, 0);
         }
 
+        const name = `::BEEBLINK:B.$.!${char}`;
+
+        // Try to boot from the file.
+        this.log?.pn(`Additional key boot file: ${name}`);
+        const handle: number = await this.bfs.OSFINDOpen(0x40, name, undefined);
+        this.log?.pn(`Handle: 0x${utils.hex2(handle)}`);
         return newResponse(beeblink.RESPONSE_DATA, handle);
     };
 

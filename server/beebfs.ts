@@ -758,6 +758,14 @@ export class VolumesList {
         return this.knownVolumes;
     };
 
+    public findKnownVolumesMatching = (afsp: string): Volume[] => {
+        if (this.knownVolumes === undefined) {
+            return [];
+        } else {
+            return findVolumesMatching(this.knownVolumes, afsp);
+        }
+    };
+
     // Finds all volumes matching the given afsp.
     public findVolumesMatching = async (afsp: string): Promise<Volume[]> => {
         const regExp = utils.getRegExpFromAFSP(afsp);
@@ -1359,14 +1367,6 @@ export class FS {
     public async getDrivesOutput(): Promise<string> {
         return await this.getState().getDrivesOutput();
     }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    // Force the known volumes list to be refreshed next time it's queried.
-    // public resetKnownVolumesList(): void {
-    //     this.volumesList.resetKnownVolumes();
-    // }
 
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
@@ -2045,6 +2045,13 @@ export class FS {
         const data = await FS.readFile(src);
 
         await this.saveFile(dest, src.load, src.exec, src.attr, data);
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    public findKnownVolumesMatching(name: string): Volume[] {
+        return this.volumesList.findKnownVolumesMatching(name);
     }
 
     /////////////////////////////////////////////////////////////////////////

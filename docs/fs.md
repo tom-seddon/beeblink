@@ -183,6 +183,38 @@ non-wildcard name was given: `File not found` for `*LOAD`, a result of
 
 Wildcards are not permitted when saving, deleting or renaming files.
 
+# Boot keys
+
+Like many filing systems, BLFS has a key you can hold down in
+conjunction with BREAK to reset the BBC with it selected as the filing
+system: `B`. And as with other filing systems, this also works in
+combination with `CTRL` for a hard reset, and/or `SHIFT` to auto-boot.
+
+When not holding `SHIFT`, you can also hold down an additional letter
+or number key to have the BLFS `*EXEC` some alternative file on
+startup. The files for this are held in drive `B` of the `BEEBLINK`
+volume, named `!` followed by the letter or number in question. For
+example, holding `B`+`T`+`BREAK` will use the file `!T`.
+
+The current volume remains selected when you do this.
+
+Some predefined files are supplied, providing the following
+combinations:
+
+- `B`+`T`+`BREAK` - select BASIC and run BeebLink tools
+- `B`+`R`+`BREAK` - select BASIC and run ROM Tool
+- `B`+`I`+`BREAK` - select BASIC and run BeebLink disk imager
+
+If you'd like to add a custom boot key, you can create additional
+files - or overwrite the existing ones.
+
+Two notes:
+
+- If the file doesn't exist (or if there's no `BEEBLINK` volume), no
+  action will be taken and it's as if you pressed just `B`+`BREAK`.
+- `B`+`BREAK` always just selects BLFS and takes no further action, so
+  any `!B` file will always be ignored.
+
 # Command reference
 
 ## Commands available in any filing system
@@ -480,7 +512,7 @@ handy when working on the ROM, but you probably don't want it
 otherwise!
 
 **Debug verbosity is not designed for use in conjunction
-with `*SPOOL`.**
+with `*SPOOL`. Do that at your own risk**
 
 ## `*` - trap *DISC
 
