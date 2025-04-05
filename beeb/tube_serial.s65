@@ -1443,9 +1443,6 @@ transfer_wait_for_status: .macro dir
                 
                 lda #get_status_flag_for_dir(\dir)
 -
-                .if target_electron
-                lda #get_status_flag_for_dir(\dir)
-                .endif
                 bit status
                 beq -
                 .endmacro

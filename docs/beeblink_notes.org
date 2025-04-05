@@ -1547,4 +1547,44 @@ stack - which it probably won't if you're using the `::VOLUME` syntax.
 This pretty much has to be something that the server can largely
 organise itself given just the additional boot key.
 
+* Remove extra Electron cycles
+
+** Before
+
+#+begin_example
+  No Tube, Mode 4
+  Host<->server: 430,080 bytes in 20 tests
+      BBC->PC: 63.6 KBytes/sec
+      PC->BBC: 60.0 KBytes/sec
+
+  No Tube, Mode 3
+  Host<->server: 430,080 bytes in 20 tests
+      BBC->PC: 41.6 KBytes/sec
+      PC->BBC: 39.8 KBytes/sec
+
+  No Tube, Mode 0
+  Host<->server: 430,080 bytes in 20 tests
+      BBC->PC: 35.4 KBytes/sec
+      PC->BBC: 34.6 KBytes/sec
+#+end_example
+
+** After
+
+#+begin_example
+  No Tube, Mode 4
+  Host<->server: 430,080 bytes in 20 tests
+      BBC->PC: 68.0 KBytes/sec
+      PC->BBC: 62.7 KBytes/sec
+
+  No Tube, Mode 3
+  Host<->server: 430,080 bytes in 20 tests
+      BBC->PC: 43.5 KBytes/sec
+      PC->BBC: 41.1 KBytes/sec
+
+  No Tube, Mode 0
+  Host<->server: 430,080 bytes in 20 tests
+      BBC->PC: 36.1 KBytes/sec
+      PC->BBC: 35.0 KBytes/sec
+#+end_example
+
 * eof.
