@@ -1242,10 +1242,6 @@ sent_pages:
 link_beeb_name='UPURS '..format("%04x",upurs.via)
 link_beeb_type=LINK_BEEB_TYPE_UPURS
 
-;link_prepare=upurs.prepare
-;link_prepare_and_maybe_restart=upurs.prepare_and_maybe_restart
-; link_prepare_and_maybe_restart_unprepare=upurs.unprepare
-
 link_begin_send_with_restart=upurs.begin_send_with_restart
 link_begin_send_without_restart=upurs.begin_send_without_restart
 

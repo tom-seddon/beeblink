@@ -387,7 +387,6 @@ initiate_tube_transfer: .proc
 
 link_beeb_name='b2'
 
-link_prepare=b2.prepare
 link_unprepare=b2.unprepare
 
 link_begin_send_without_restart=b2.begin_send_without_restart
