@@ -2071,10 +2071,7 @@ async function main(options: ICommandLineOptions) {
 
     const gaManipulator = await createGitattributesManipulator(options, volumesList);
 
-    let defaultVolumes: beebfs.Volume[] = [];
-    if (options.default_volume !== null) {
-        defaultVolumes = await volumesList.findVolumesMatching(options.default_volume);
-    }
+    const defaultVolumes: beebfs.Volume[] = await volumesList.findVolumesMatching(options.default_volume ?? "beeblink");
 
     // 
     const logPalette = [
