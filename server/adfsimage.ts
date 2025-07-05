@@ -70,8 +70,8 @@ function getNumSectors(image: Buffer): number {
     return utils.readUInt24LE(image, 0xfc);
 }
 
-function getSectorOffset(image: Buffer, logicalSector: number): number {
-    if (image.length === L_SIZE_BYTES) {
+function getSectorOffset(image: Buffer, isSectorwiseImage: boolean, logicalSector: number): number {
+    if (!isSectorwiseImage && image.length === L_SIZE_BYTES) {
         let track = Math.floor(logicalSector / TRACK_SIZE_SECTORS);
         const side = Math.floor(track / 80);
         track %= 80;
@@ -209,18 +209,20 @@ export class WriteFlow extends diskimage.Flow {
     private drive: number;
     private allSectors: boolean;
     private image: Buffer;
+    private isSectorwiseImage: boolean;
     private log: utils.Log | undefined;// tslint:disable-line no-unused-variable
     private parts: ISectors[];
     private numSectorsUsed: number;
     private numSectorsWritten: number;
     private partIdx: number;
 
-    public constructor(drive: number, allSectors: boolean, image: Buffer, log: utils.Log | undefined) {
+    public constructor(drive: number, allSectors: boolean, image: Buffer, isSectorwiseImage: boolean, log: utils.Log | undefined) {
         super();
 
         this.drive = drive;
         this.allSectors = allSectors;
         this.image = image;
+        this.isSectorwiseImage = isSectorwiseImage;
         this.log = log;
 
         this.parts = getUsedSectors(this.image, MAX_PART_SIZE_SECTORS, this.allSectors);
@@ -272,7 +274,7 @@ export class WriteFlow extends diskimage.Flow {
         let destOffset = 0;
 
         for (let i = 0; i < part.numSectors; ++i) {
-            const offset = getSectorOffset(this.image, part.beginSector + i);
+            const offset = getSectorOffset(this.image, this.isSectorwiseImage, part.beginSector + i);
 
             for (let j = 0; j < SECTOR_SIZE_BYTES; ++j) {
                 data[destOffset++] = this.image[offset + j];
@@ -305,6 +307,7 @@ export class ReadFlow extends diskimage.Flow {
     private drive: number;
     private allSectors: boolean;
     private file: beebfs.File;
+    private isSectorwiseImage: boolean;
     private log: utils.Log | undefined;// tslint:disable-line no-unused-variable
     private parts: ISectors[];
     private partIdx: number;
@@ -312,12 +315,13 @@ export class ReadFlow extends diskimage.Flow {
     private numSectorsRead: number;
     private numSectorsUsed: number;
 
-    public constructor(drive: number, allSectors: boolean, file: beebfs.File, log: utils.Log | undefined) {
+    public constructor(drive: number, allSectors: boolean, file: beebfs.File, isSectorwiseImage: boolean, log: utils.Log | undefined) {
         super();
 
         this.drive = drive;
         this.allSectors = allSectors;
         this.file = file;
+        this.isSectorwiseImage = isSectorwiseImage;
         this.log = log;
         this.parts = [];
         this.partIdx = 0;
@@ -379,7 +383,7 @@ export class ReadFlow extends diskimage.Flow {
         let srcOffset = 0;
 
         for (let i = 0; i < part.numSectors; ++i) {
-            const destOffset = getSectorOffset(this.image, part.beginSector + i);
+            const destOffset = getSectorOffset(this.image, this.isSectorwiseImage, part.beginSector + i);
             for (let j = 0; j < SECTOR_SIZE_BYTES; ++j) {
                 this.image[destOffset + j] = data[srcOffset++];
             }

@@ -239,12 +239,16 @@ class Handler {
 /////////////////////////////////////////////////////////////////////////
 
 enum DiskImageType {
-    ADFS,
+    ADFSAutodetect,//Trackwise if exactly 640KB, else sectorwise
+    ADFSSectorwise,//Always sectworise
     SSD,
     DSD,
     SDD_DDOS,
     DDD_DDOS,
 }
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
 
 interface IDiskImageFlowDetails {
     bufferAddress: number;
@@ -2088,7 +2092,9 @@ export class Server {
 
         let type: DiskImageType;
         if (typeStr === 'adfs') {
-            type = DiskImageType.ADFS;
+            type = DiskImageType.ADFSAutodetect;
+        } else if (typeStr === 'adfsh') {
+            type = DiskImageType.ADFSSectorwise;
         } else if (typeStr === 'ssd') {
             type = DiskImageType.SSD;
         } else if (typeStr === 'dsd') {
@@ -2139,9 +2145,10 @@ export class Server {
         const file = await this.bfs.getBeebFileForWrite(await this.bfs.parseFileString(details.fileName));
 
         switch (details.type) {
-            case DiskImageType.ADFS:
+            case DiskImageType.ADFSAutodetect:
+            case DiskImageType.ADFSSectorwise:
                 this.checkDiskImageADFSDrive(details);
-                return new adfsimage.ReadFlow(details.drive, details.readAllSectors, file, this.log);
+                return new adfsimage.ReadFlow(details.drive, details.readAllSectors, file, details.type === DiskImageType.ADFSSectorwise, this.log);
 
             case DiskImageType.SSD:
                 return new dfsimage.ReadFlow(details.drive, false, details.readAllSectors, file, this.log);
@@ -2165,9 +2172,10 @@ export class Server {
         const data = await beebfs.FS.readFile(await this.bfs.getExistingBeebFileForRead(await this.bfs.parseFileString(details.fileName)));
 
         switch (details.type) {
-            case DiskImageType.ADFS:
+            case DiskImageType.ADFSAutodetect:
+            case DiskImageType.ADFSSectorwise:
                 this.checkDiskImageADFSDrive(details);
-                return new adfsimage.WriteFlow(details.drive, details.readAllSectors, data, this.log);
+                return new adfsimage.WriteFlow(details.drive, details.readAllSectors, data, details.type === DiskImageType.ADFSSectorwise, this.log);
 
             case DiskImageType.SSD:
                 return new dfsimage.WriteFlow(details.drive, false, details.readAllSectors, data, this.log);

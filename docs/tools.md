@@ -25,10 +25,10 @@ Select the disk type - Acorn DFS, ADFS, or Opus DDOS/Challenger.
 
 For DFS or Opus you'll need to specify single or double sided.
 
-For ADFS, BeebLink will detect the disk type automatically: ADFS L if
-640 KB, or some other ADFS type if not. (For historical reasons, ADFS
-L images are special. And this also means that 640 KB hard disk images
-are not currently supported.)
+For ADFS you'll need to specify the disk image type: auto-detect, or
+hard disk. Select auto-detect, which will do the right thing in every
+useful case. (The explicit hard disk option is there to accommodate
+the unlikely corner case of a hard disk formatted to 640 KB.)
 
 Finally, specify the image to read from or write to. (You can also
 enter * commands at this point by entering a line starting with `*` -
@@ -54,11 +54,11 @@ Notes:
   supported, but if you treat them as a DFS disk and read/write the
   whole disk it might work!
   
-- The used areas option writes whole tracks on DFS and 4 KB chunks on
-  ADFS. It always reads or writes the whole area even if only part of
-  it is used - so the disk image can end up with actually unused data
-  in it. This mode is intended as a timesaving measure, not a way of
-  creating a perfectly tidy disk image
+- The used areas option works in whole tracks on DFS and 4 KB chunks
+  on ADFS. It always reads or writes the whole area even if only part
+  of it is used - so the disk image can end up with actually unused
+  data in it. This mode is intended as a timesaving measure, not a way
+  of creating a perfectly tidy disk image
 
 ## Speed Test
 
