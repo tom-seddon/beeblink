@@ -837,6 +837,40 @@ boot_fs_with_key:
                 ; Clear keys pressed status as appropriate.
                 lda #$78
                 jsr osbyte
+
+                ; If only clearing 1 key, done.
+                cpx #0
+                beq boot_keys_done
+                cpy #0
+                beq boot_keys_done
+
+                ; Trying to clear 2 keys, so work around OS 1.20/OS
+                ; 2.00 bug. See
+                ; https://www.stardot.org.uk/forums/viewtopic.php?t=31514
+                lda #0          ; osbyte get machine type
+                ldx #1
+                jsr osbyte
+
+                cpx #1
+                beq flush ; taken if OS 1.20
+                cpx #2
+                bne boot_keys_done ; taken if not OS 2.00
+                
+flush:
+                lda #19         ; osbyte wait for vertical sync
+                jsr osbyte
+
+                lda #$7a        ; osbyte keyboard scan
+                jsr osbyte
+
+                cpx #$ff
+                bne flush       ; taken if any keys still pressed
+                
+                ; This is not really what you want. But it's better
+                ; than stray keys ending up in the input buffer.
+                jsr flush_keyboard_buffer
+
+boot_keys_done:
                 
                 pla             ; restore additional key ASCII value
 boot_fs:
@@ -4183,7 +4217,7 @@ done:
 ; 
 
 flush_keyboard_buffer: .proc
-                lda #21         ;flush buffer
+                lda #21         ;osbyte flush buffer
                 ldx #0          ;flush keyboard buffer
                 jmp osbyte
                 .pend

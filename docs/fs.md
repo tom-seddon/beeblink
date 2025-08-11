@@ -208,12 +208,16 @@ combinations:
 If you'd like to add a custom boot key, you can create additional
 files - or overwrite the existing ones.
 
-Two notes:
+Some notes:
 
 - If the file doesn't exist (or if there's no `BEEBLINK` volume), no
-  action will be taken and it's as if you pressed just `B`+`BREAK`.
+  action will be taken and it's as if you pressed just `B`+`BREAK`
 - `B`+`BREAK` always just selects BLFS and takes no further action, so
-  any `!B` file will always be ignored.
+  any `!B` file will always be ignored
+- When pressing 2 keys on OS 1.20 (B)/OS 2.00 (B+), the boot process
+  will pause until both keys are released before attempting to do the
+  `*EXEC`, and any soft key 10 (BREAK) expansion will be discarded.
+  This is a workaround for an OS bug
 
 # Command reference
 
