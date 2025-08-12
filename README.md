@@ -68,6 +68,10 @@ Connect the Tube serial board to the BBC's Tube connector, connect any
 second processor to the Tube serial board, use the jumper to select
 Comms mode, and connect the device to your PC.
 
+If you're able to reprogram the PLD, it's a good idea to update it to
+the latest code, as per the instructions here:
+[./devices/tube_serial](./devices/tube_serial)
+
 If using Windows, you'll need to
 [tweak one of the device settings](./docs/ftdi_latency_timer.md).
 
@@ -170,12 +174,12 @@ if you run into any difficulties!
 
 # Credits
 
-Copyright (C) 2018-2024 by Tom Seddon
+Copyright (C) 2018-2025 by Tom Seddon
 
 Many thanks are due to [Chris
 Morley](https://www.stardot.org.uk/forums/memberlist.php?mode=viewprofile&u=10711)
-for the development of the Tube Serial board, and for providing some
-excellent suggestions and comments.
+for the development of the Tube Serial board and associated PLD code,
+and for providing some excellent suggestions and comments.
 
 # Licence
 

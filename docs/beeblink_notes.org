@@ -1570,4 +1570,19 @@ sticks around...
       PC->BBC: 35.0 KBytes/sec
 #+end_example
 
+* Release notes WIP
+
+#+begin_src markdown
+  ,* Fix server crash when doing `*DIR` or `*LIB` with no arguments
+  ,* Fix potential problems when using OSWORD &9A with another filing system selected
+  ,* Simplify `*DEFAULTS` syntax
+  ,* Add new b2 ROM, for use with b2 versions dated October 2024 or newer
+  ,* Add some notes about the V3 PLD code
+  ,* Fix HTTP server issues
+  ,* Improve `SELFUPDATE` behaviour when used with ROM too old to support it
+  ,* Add experimental ADFS-like volumes
+  ,* Add additional customisable boot keys
+  ,* Improve speed of `*VOLS` and `*VOLBROWSER`
+#+end_src
+
 * eof.
