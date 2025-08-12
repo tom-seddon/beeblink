@@ -131,6 +131,10 @@ between BBC and PC.
 If you also use [TubeHost](https://github.com/sweharris/TubeHost), you
 can [access your TubeHost files via BeebLink](./docs/tubehost.md).
 
+There is experimental support for [ADFS-like hierarchical
+volumes](./docs/adfs.md) - a bit of DIY required. **ADFS-like volumes
+are experimental!**
+
 [If you use git, some notes on git interop](./docs/git.md).
 
 # Building it yourself

@@ -1,16 +1,16 @@
 # ADFS-like volume support
 
-**ADFS volumes are experimental!**
+**ADFS-like volumes are experimental!**
 
 BeebLink supports hierarchical ADFS-like volumes. To create one,
 create an ordinary volume - a folder with the desired volume name,
 with a folder called `0` inside it - and create a file called `.adfs`
 (contents irrelevant) in its folder, next to the `0` folder.
 
-ADFS volumes deliberately behave a lot like an ordinary ADFS floppy
-disk or hard disk.
+ADFS-like volumes deliberately behave a lot like an ordinary ADFS
+floppy disk or hard disk.
 
-**ADFS volumes are experimental!**
+**ADFS-like volumes are experimental!**
 
 ## Improvements over ADFS
 
