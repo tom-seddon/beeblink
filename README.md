@@ -1,7 +1,8 @@
 # BeebLink
 
-A file storage system for the BBC Micro. Make your PC do something
-useful for a change: have it act as a file server for your BBC.
+A file storage system for the BBC Micro and Acorn Electron. Make your
+PC do something useful for a change: have it act as a file server for
+your BBC.
 
 No more swapping discs, no more noisy drives, no more file count
 limits, and file access is very fast. You get very quick turnaround
@@ -12,8 +13,6 @@ If you've got multiple BBCs, they can all connect at once and share
 files.
 
 ["Action" screen grabs](./docs/screens.md)
-
-BeebLink also has experimental support for the Electron.
 
 # Installing the server
 
@@ -97,7 +96,7 @@ to get `beeblink_upurs_fe60.rom` copied onto your BBC.
 
 [There are some notes about using BeebLink with the UPURS cable](./docs/upurs.md).
 
-# Setting up the Electron (experimental!)
+# Setting up the Electron
 
 **DIY required**
 
