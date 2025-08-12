@@ -79,8 +79,8 @@ volume from just an ordinary folder).
 
 If you create a volume on the server like this, it won't appear in the
 `*VOLS` list straight away, but you can still switch to it using
-`*VOL`. The server will know to check on disk if it doesn't find the
-name in its list of known volumes.
+`*VOL`. The server will know to rebuild the volumes list if it doesn't
+find the name in its list of known volumes.
 
     >*VOL newvol2
 	Volume: newvol2
@@ -97,6 +97,22 @@ invalid name, it will just be ignored.
 
 (You can have the server find volumes from multiple folders. See the
 list of [server command line options](./server.md).)
+
+### Moving volumes
+
+If you move a volume's folder on the server without changing its name,
+the server won't know to rebuild the volumes list when you try to
+select it. The name is already in its internal list, so it'll assume
+it still exists at its old location.
+
+Supply `!` on the command line after the volume name in this case, to
+force it to rebuild the list. For example:
+
+    *VOL newvol2 !
+
+(Doing this will rebuild the entire volumes list. So if you've moved
+multiple volumes, you only need to force the volume list rebuild once,
+rather than each time you select one of the moved volumes.)
 
 ## Drives
 
@@ -420,7 +436,7 @@ Set current drive's title.
 
 Show contents of text file.
 
-### `VOL (<avsp>) (R)`
+### `VOL (<avsp>) (R!)`
 
 With no argument, prints the name and path of the current volume.
 
@@ -430,10 +446,16 @@ found will be selected.
 
 Specify `R` to mount the volume read-only.
 
-### `VOLS (<avsp>)`
+Specify `!` to force the server to rebuild the list of volumes first.
+
+### `VOLS (<avsp>) (!)`
 
 Show a list of available volumes. Use wildcards to narrow the list
 down.
+
+Specify `!` to force the server to rebuild the list of volumes first.
+The wildcards are mandatory in this case (supply `*` to find all
+volumes).
 
 ### `VOLBROWSER (<filters>)`
 

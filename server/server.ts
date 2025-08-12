@@ -324,8 +324,8 @@ export class Server {
             new Command('TITLE', '<title>', this.titleCommand),
             new Command('TYPE', '<fsp>', this.typeCommand),
             new Command('VOLBROWSER', '(<filters>)', this.volbrowserCommand),
-            new Command('VOL', '(<avsp>) (R)', this.volCommand),
-            new Command('VOLS', '(<avsp>)', this.volsCommand),
+            new Command('VOL', '(<avsp>) ([R!])', this.volCommand),
+            new Command('VOLS', '(<avsp>) (!)', this.volsCommand),
             new Command('WDUMP', '<fsp>', this.wdumpCommand),
             new Command('WINFO', '<afsp>', this.winfoCommand),
         ];
@@ -1573,6 +1573,10 @@ export class Server {
     private readonly volsCommand = async (commandLine: CommandLine): Promise<string> => {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : '*';
 
+        if (commandLine.parts.length > 2) {
+            this.handleCommonVolumeCommandFlags(commandLine.parts[2]);
+        }
+
         const volumes = await this.volumesList.findVolumesMatching(arg);
 
         let text = 'Matching volumes:';
@@ -2014,6 +2018,12 @@ export class Server {
         await this.bfs.setTitle(commandLine.parts[1]);
     };
 
+    private readonly handleCommonVolumeCommandFlags = (flags: string): void => {
+        if (flags.indexOf('!') >= 0) {
+            this.volumesList.resetKnownVolumes();
+        }
+    };
+
     private readonly volbrowserCommand = async (commandLine: CommandLine): Promise<Response> => {
         if (commandLine.parts.length > 1) {
             this.volumeBrowserInitialFilters = commandLine.parts.slice(1);
@@ -2053,6 +2063,8 @@ export class Server {
             if (commandLine.parts.length >= 3) {
                 const flags = commandLine.parts[2].toLowerCase();
                 readOnly = flags.indexOf('r') >= 0;
+
+                this.handleCommonVolumeCommandFlags(flags);
             }
 
             const volumes = await this.volumesList.findVolumesMatching(commandLine.parts[1]);
