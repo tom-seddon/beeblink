@@ -216,8 +216,8 @@ Some notes:
   any `!B` file will always be ignored
 - When pressing 2 keys on OS 1.20 (B)/OS 2.00 (B+), the boot process
   will pause until both keys are released before attempting to do the
-  `*EXEC`, and any soft key 10 (BREAK) expansion will be discarded.
-  This is a workaround for an OS bug
+  `*EXEC` (note on-screen message), and any soft key 10 (BREAK)
+  expansion will be discarded. This is a workaround for an OS bug
 
 # Command reference
 
