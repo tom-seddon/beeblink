@@ -83,7 +83,7 @@ build_script:
   - ps: cd .build
   - ps: 7z a $env:ZIP beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_tube_serial_safe.rom beeblink_upurs_fe60.rom beeblink_tube_serial_electron.rom beeblink_tube_serial_safe_electron.rom beeblink_b2.rom
   - ps: Pop-Location
-  - ps: 7z a $env:ZIP volumes
+  - ps: 7z a $env:ZIP volumes COPYING.txt
   - ps: Push-Location
   - ps: cd ./server
   - npm install

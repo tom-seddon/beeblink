@@ -2055,6 +2055,8 @@ async function handleSerial(options: ICommandLineOptions, globals: IGlobalState,
 async function main(options: ICommandLineOptions) {
     process.title = 'BeebLink Server';
 
+    process.stdout.write('BeebLink Server - Copyright (C) 2018-2025 Tom Seddon\nThis program comes with ABSOLUTELY NO WARRANTY. This is free software, and you are welcome to redistribute it under certain conditions. See the file COPYING.txt in the distribution zip\n\n');
+
     beebfs.setFSTypes(dfsType, pcType, tubeHostType, adfsType);
 
     errors.setTraceOnBeebError(options.beeb_error_verbose);
