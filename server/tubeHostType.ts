@@ -1006,7 +1006,7 @@ class TubeHostType implements beebfs.IFSType {
 
         if (tubeHostCatFilePath.serverFolder !== undefined) {
             const title = await loadFolderTitle(getAbsPath(tubeHostCatFilePath.volume, tubeHostCatFilePath.serverFolder));
-            if (title !== '') {
+            if (title !== '' && title !== undefined) {
                 text += title + utils.BNL;
             }
         }
@@ -1022,6 +1022,8 @@ class TubeHostType implements beebfs.IFSType {
                 text += ('Drive ' + tubeHostCatFilePath.drive + ' (' + boot + ' - ' + beebfs.getBootOptionDescription(boot) + ')').padEnd(20);
             }
         }
+
+        text += `${beebFiles.length} file(s)`.padEnd(20);
 
         if (tubeHostState !== undefined) {
             text += ('Dir :' + tubeHostState.getCurrentDrive() + '.' + tubeHostState.getCurrentDir()).padEnd(10);

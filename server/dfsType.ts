@@ -401,6 +401,8 @@ class DFSType implements beebfs.IFSType {
         const boot = await this.loadBootOption(filePath.volume, filePath.drive);
         text += ('Drive ' + filePath.drive + ' (' + boot + ' - ' + beebfs.getBootOptionDescription(boot) + ')').padEnd(20);
 
+        text+=`${beebFiles.length} file(s)`.padEnd(20);
+
         if (dfsState !== undefined) {
             text += ('Dir :' + dfsState.getCurrentDrive() + '.' + dfsState.getCurrentDir()).padEnd(10);
 

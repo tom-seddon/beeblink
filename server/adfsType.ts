@@ -691,7 +691,8 @@ class ADFSType implements beebfs.IFSType {
 
         text += `Volume: ${filePath.volume.name}${utils.BNL}`;
         text += `Directory :${filePath.drive}.${filePath.dir}${utils.BNL}`;
-        text += `Option ${option} (${beebfs.getBootOptionDescription(option)})${utils.BNL}`;
+        text += `Option ${option} (${beebfs.getBootOptionDescription(option)})`.padEnd(20);
+        text += `Entries: ${beebEntries.length}${utils.BNL}`;
         text += utils.BNL;
 
         for (const beebEntry of beebEntries) {
