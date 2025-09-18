@@ -1178,6 +1178,17 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
+    public static async writeObjectMetadata(object: FSObject): Promise<void> {
+        try {
+            await FS.writeBeebMetadata(object.serverPath, object.fqn, object.getLoad(), object.getExec(), await object.tryGetSize(), object.attr);
+        } catch (error) {
+            errors.nodeError(error);
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
     // Causes a 'Too big' error if the value is larger than the max file size.
     private static mustNotBeTooBig(amount: number): void {
         if (amount > MAX_FILE_SIZE) {
@@ -1201,6 +1212,13 @@ export class FS {
                 return errors.locked();
             }
         }
+    }
+
+    /////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////
+
+    private static async writeBeebMetadata(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, size: number, attr: FileAttributes): Promise<void> {
+        await fqn.filePath.volume.type.writeBeebMetadata(serverPath, fqn, load, exec, size, attr);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1927,17 +1945,6 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////
 
-    public async writeObjectMetadata(object: FSObject): Promise<void> {
-        try {
-            await this.writeBeebMetadata(object.serverPath, object.fqn, object.getLoad(), object.getExec(), await object.tryGetSize(), object.attr);
-        } catch (error) {
-            errors.nodeError(error);
-        }
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
     public getModifiedAttributesForObject(object: FSObject, attributeString: string): FileAttributes | undefined {
         return object.fqn.filePath.volume.type.getNewAttributes(object.attr, attributeString);
         // if (newAttr === undefined) {
@@ -2140,7 +2147,7 @@ export class FS {
         }
 
         await this.writeBeebData(serverPath, fqn, data);
-        await this.writeBeebMetadata(serverPath, fqn, load, exec, data.length, attr);
+        await FS.writeBeebMetadata(serverPath, fqn, load, exec, data.length, attr);
 
         return new File(serverPath, fqn, load, exec, attr);
     }
@@ -2157,13 +2164,6 @@ export class FS {
                 this.gaManipulator.makeFileBASIC(serverPath, utils.isBASIC(data));
             }
         }
-    }
-
-    /////////////////////////////////////////////////////////////////////////
-    /////////////////////////////////////////////////////////////////////////
-
-    private async writeBeebMetadata(serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, size: number, attr: FileAttributes): Promise<void> {
-        await fqn.filePath.volume.type.writeBeebMetadata(serverPath, fqn, load, exec, size, attr);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -2196,7 +2196,7 @@ export class FS {
 
         const size = await object.tryGetSize();
 
-        await this.writeBeebMetadata(object.serverPath, object.fqn, load, exec, size, attr);
+        await FS.writeBeebMetadata(object.serverPath, object.fqn, load, exec, size, attr);
 
         return new OSFILEResult(object.getObjectType(), this.createOSFILEBlock(load, exec, size, attr), undefined, undefined);
     }
@@ -2355,7 +2355,7 @@ export class FS {
             const data = Buffer.from(openFile.contents);
 
             await this.writeBeebData(openFile.file.serverPath, openFile.file.fqn, data);
-            await this.writeBeebMetadata(openFile.file.serverPath, openFile.file.fqn, openFile.file.getLoad(), openFile.file.getExec(), await openFile.file.tryGetSize(), openFile.file.attr);
+            await FS.writeBeebMetadata(openFile.file.serverPath, openFile.file.fqn, openFile.file.getLoad(), openFile.file.getExec(), await openFile.file.tryGetSize(), openFile.file.attr);
 
             openFile.dirty = false;
         }

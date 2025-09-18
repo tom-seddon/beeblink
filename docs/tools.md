@@ -11,7 +11,8 @@ file on it you want to use with Disk Imager or ROM Tool.)
 
 Create a disk image on a BeebLink volume from a disk, or write a disk
 image on a BeebLink volume to a formatted disk. Supports
-single-density DFS, ADFS, and Opus DDOS/Challenger.
+single-density DFS, ADFS, and double density disks from Opus
+DDOS/Challenger or Watford DDFS.
 
 Select `R` to read a disk, creating a disk image, or `W` to write a
 disk from a disk image.
@@ -21,44 +22,85 @@ the used areas.
 
 Pick the drive to read from or write to.
 
-Select the disk type - Acorn DFS, ADFS, or Opus DDOS/Challenger.
+Select the disk type (see below), then specify the image to read from
+or write to. (You can also enter * commands at this point by entering
+a line starting with `*` - e.g., to change volume, or get a
+catalogue.)
 
-For DFS or Opus you'll need to specify single or double sided.
+### Disk types
 
-For ADFS you'll need to specify the disk image type: auto-detect, or
-hard disk. Select auto-detect, which will do the right thing in every
-useful case. (The explicit hard disk option is there to accommodate
-the unlikely corner case of a hard disk formatted to 640 KB.)
+#### Acorn DFS
 
-Finally, specify the image to read from or write to. (You can also
-enter * commands at this point by entering a line starting with `*` -
-e.g., to change volume, or get a catalogue.)
+Use this for reading or writing ordinary single density Acorn
+DFS-style disks. DFS type shouldn't matter and this should hopefully
+work with just about everything.
 
-Notes:
+You'll need to specify single or double sided. The track count is
+detected by reading the disk.
+
+Watford DFS 62-file disks are not yet fully supported. If you have a
+62-file disk, be sure to read/write all of the disk to ensure all the
+data is transfercred.
+
+#### ADFS
+
+Use this for reading or writing ADFS disks or hard disks.
+
+You'll need to specify the disk type: auto-detect, or hard disk.
+Select auto-detect, which will do the right thing in every useful
+case. (The explicit hard disk option is there to accommodate the
+unlikely corner case of a hard disk formatted to 640 KB.)
+
+#### Opus DDOS
+
+Use this for reading or writing double density Opus DDOS or Challenger
+disks when you have the Opus DDOS ROM installed. (For single density
+disks, use the Acorn DFS option.)
+
+You'll need to specify single or double sided. The track count is
+detected by reading the disk.
+
+The used areas option is not yet supported, and the whole disk is
+always read or written.
+
+#### Opus Challenger
+
+Use this for reading or writing double density Opus DDOS or Challenger
+disks when you have the Challenger ROM installed. (For single density
+disks, use the Acorn DFS option.)
+
+You'll need to specify single or double sided. The track count is
+detected by reading the disk.
+
+The used areas option is not yet supported, and the whole disk is
+always read or written.
+
+#### Watford DDFS
+
+Use this for reading or writing double density Watford DDFS disks when
+you have Watford DDFS installed. (For single density disks, use the
+Acorn DFS option.)
+
+You'll need to specify single or double sided. The track count is
+detected by reading the disk.
+
+The used areas option is not yet supported, and the whole disk is
+always read or written. There's currently no special consideration
+required for 62-file disks.
+
+### Disk imager notes
 
 - protected disks are not supported
 
-- when writing a disk image, the target disk must be formatted and of
-  the appropriate capacity. There are some checks, but they aren't
-  particularly thorough
+- when writing a disk image to a disk, the target disk must be
+  formatted and of the appropriate capacity. There are some checks,
+  but they aren't particularly thorough
   
-- Opus DDOS/Challenger support is a bit flaky - if you get unexpected
-  disk faults, try doing a `*CAT` of the target disk then re-running
-  the imager. This is a BeebLink bug:
-  https://github.com/tom-seddon/beeblink/issues/42
-  
-- used areas mode isn't actually supported with Opus DDOS/Challenger
-  (yet?), and the whole disk is always read or written
-  
-- 62-file single-density Watford DFS disks aren't specifically
-  supported, but if you treat them as a DFS disk and read/write the
-  whole disk it might work!
-  
-- The used areas option works in whole tracks on DFS and 4 KB chunks
-  on ADFS. It always reads or writes the whole area even if only part
-  of it is used - so the disk image can end up with actually unused
-  data in it. This mode is intended as a timesaving measure, not a way
-  of creating a perfectly tidy disk image
+- The used areas option works in units of whole tracks on DFS, and
+  chunks of some number of KBytes on ADFS. It always reads or writes
+  the whole area, even if only part of it is used - so unused data can
+  end up being read or written. This mode is intended as a timesaving
+  measure, not a way of creating a perfectly tidy disk or disk image
 
 ## Speed Test
 

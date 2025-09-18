@@ -243,8 +243,12 @@ enum DiskImageType {
     ADFSSectorwise,//Always sectworise
     SSD,
     DSD,
-    SDD_DDOS,
-    DDD_DDOS,
+    SDD_OpusDDOS,
+    DDD_OpusDDOS,
+    SDD_OpusChallenger,
+    DDD_OpusChallenger,
+    SDD_WatfordDDFS,
+    DDD_WatfordDDFS,
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -1698,7 +1702,7 @@ export class Server {
             }
 
             const newObject = object.withModifiedAttributes(newAttr);
-            await this.bfs.writeObjectMetadata(newObject);
+            await beebfs.FS.writeObjectMetadata(newObject);
         }
     };
 
@@ -2112,9 +2116,17 @@ export class Server {
         } else if (typeStr === 'dsd') {
             type = DiskImageType.DSD;
         } else if (typeStr === 'sdd_ddos') {
-            type = DiskImageType.SDD_DDOS;
+            type = DiskImageType.SDD_OpusDDOS;
         } else if (typeStr === 'ddd_ddos') {
-            type = DiskImageType.DDD_DDOS;
+            type = DiskImageType.DDD_OpusDDOS;
+        } else if (typeStr === 'sdd_wddfs') {
+            type = DiskImageType.SDD_WatfordDDFS;
+        } else if (typeStr === 'ddd_wddfs') {
+            type = DiskImageType.DDD_WatfordDDFS;
+        } else if (typeStr === `sdd_chal`) {
+            type = DiskImageType.SDD_OpusChallenger;
+        } else if (typeStr === `ddd_chal`) {
+            type = DiskImageType.DDD_OpusChallenger;
         } else {
             return errors.generic('Unknown disk type');
         }
@@ -2140,7 +2152,7 @@ export class Server {
         };
     }
 
-    private checkDiskImageDSDDrive(details: IDiskImageFlowDetails): void {
+    private checkDoubleSidedDiskImageDrive(details: IDiskImageFlowDetails): void {
         if (details.drive !== 0 && details.drive !== 1) {
             return errors.badDrive();
         }
@@ -2163,17 +2175,32 @@ export class Server {
                 return new adfsimage.ReadFlow(details.drive, details.readAllSectors, file, details.type === DiskImageType.ADFSSectorwise, this.log);
 
             case DiskImageType.SSD:
-                return new dfsimage.ReadFlow(details.drive, false, details.readAllSectors, file, this.log);
+                return new dfsimage.ReadFlow(dfsimage.ACORN_DFS, details.drive, false, details.readAllSectors, file, this.log);
 
             case DiskImageType.DSD:
-                this.checkDiskImageDSDDrive(details);
-                return new dfsimage.ReadFlow(details.drive, true, details.readAllSectors, file, this.log);
+                this.checkDoubleSidedDiskImageDrive(details);
+                return new dfsimage.ReadFlow(dfsimage.ACORN_DFS, details.drive, true, details.readAllSectors, file, this.log);
 
-            case DiskImageType.SDD_DDOS:
-                return new ddosimage.ReadFlow(details.drive, false, file, this.log);
+            case DiskImageType.SDD_OpusDDOS:
+                return new ddosimage.ReadFlow(ddosimage.DDOS, details.drive, false, file, this.log);
 
-            case DiskImageType.DDD_DDOS:
-                return new ddosimage.ReadFlow(details.drive, true, file, this.log);
+            case DiskImageType.DDD_OpusDDOS:
+                this.checkDoubleSidedDiskImageDrive(details);
+                return new ddosimage.ReadFlow(ddosimage.DDOS, details.drive, true, file, this.log);
+
+            case DiskImageType.SDD_OpusChallenger:
+                return new ddosimage.ReadFlow(ddosimage.CHALLENGER, details.drive, false, file, this.log);
+
+            case DiskImageType.DDD_OpusChallenger:
+                this.checkDoubleSidedDiskImageDrive(details);
+                return new ddosimage.ReadFlow(ddosimage.CHALLENGER, details.drive, true, file, this.log);
+
+            case DiskImageType.SDD_WatfordDDFS:
+                return new dfsimage.ReadFlow(dfsimage.WATFORD_DDFS, details.drive, false, details.readAllSectors, file, this.log);
+
+            case DiskImageType.DDD_WatfordDDFS:
+                this.checkDoubleSidedDiskImageDrive(details);
+                return new dfsimage.ReadFlow(dfsimage.WATFORD_DDFS, details.drive, true, details.readAllSectors, file, this.log);
 
             default:
                 return errors.generic(`Unsupported type`);
@@ -2190,17 +2217,33 @@ export class Server {
                 return new adfsimage.WriteFlow(details.drive, details.readAllSectors, data, details.type === DiskImageType.ADFSSectorwise, this.log);
 
             case DiskImageType.SSD:
-                return new dfsimage.WriteFlow(details.drive, false, details.readAllSectors, data, this.log);
+                return new dfsimage.WriteFlow(dfsimage.ACORN_DFS, details.drive, false, details.readAllSectors, data, this.log);
 
             case DiskImageType.DSD:
-                this.checkDiskImageDSDDrive(details);
-                return new dfsimage.WriteFlow(details.drive, true, details.readAllSectors, data, this.log);
+                this.checkDoubleSidedDiskImageDrive(details);
+                return new dfsimage.WriteFlow(dfsimage.ACORN_DFS, details.drive, true, details.readAllSectors, data, this.log);
 
-            case DiskImageType.SDD_DDOS:
-                return new ddosimage.WriteFlow(details.drive, false, data, this.log);
+            case DiskImageType.SDD_OpusDDOS:
+                return new ddosimage.WriteFlow(ddosimage.DDOS, details.drive, false, data, this.log);
 
-            case DiskImageType.DDD_DDOS:
-                return new ddosimage.WriteFlow(details.drive, true, data, this.log);
+            case DiskImageType.DDD_OpusDDOS:
+                this.checkDoubleSidedDiskImageDrive(details);
+                return new ddosimage.WriteFlow(ddosimage.DDOS, details.drive, true, data, this.log);
+
+            case DiskImageType.SDD_OpusChallenger:
+                return new ddosimage.WriteFlow(ddosimage.CHALLENGER, details.drive, false, data, this.log);
+
+            case DiskImageType.DDD_OpusChallenger:
+                this.checkDoubleSidedDiskImageDrive(details);
+                return new ddosimage.WriteFlow(ddosimage.CHALLENGER, details.drive, true, data, this.log);
+
+            case DiskImageType.SDD_WatfordDDFS:
+                return new dfsimage.WriteFlow(dfsimage.WATFORD_DDFS, details.drive, false, details.readAllSectors, data, this.log);
+
+            case DiskImageType.DDD_WatfordDDFS:
+                this.checkDoubleSidedDiskImageDrive(details);
+                return new dfsimage.WriteFlow(dfsimage.WATFORD_DDFS, details.drive, true, details.readAllSectors, data, this.log);
+
 
             default:
                 return errors.generic(`Unsupported type`);

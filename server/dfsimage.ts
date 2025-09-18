@@ -4,17 +4,17 @@
 // BeebLink - BBC Micro file storage system
 //
 // Copyright (C) 2019, 2020 Tom Seddon
-// 
+//
 // This program is free software: you can redistribute it and/or
 // modify it under the terms of the GNU General Public License as
 // published by the Free Software Foundation, either version 3 of the
 // License, or (at your option) any later version.
-// 
+//
 // This program is distributed in the hope that it will be useful, but
 // WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 // General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
@@ -27,15 +27,50 @@ import * as beebfs from './beebfs';
 import * as errors from './errors';
 import * as diskimage from './diskimage';
 
+// OSWORD $7f stuff: https://beebwiki.mdfs.net/OSWORD_%267F
+//
+// DFS stuff (including Watford DDFS notes): https://mdfs.net/Docs/Comp/Disk/Format/DFS
+
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-const TRACK_SIZE_SECTORS = 10;
+//const TRACK_SIZE_SECTORS = 10;
 const SECTOR_SIZE_BYTES = 256;
-const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
+//const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
 const MAX_NUM_TRACKS = 80;
 
 export const DFS_FS = 4;
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+export interface ISubType {
+    // Number of sectors per track.
+    trackSizeSectors: number;
+
+    // Whether this is Watford DDFS. There's a few bits that just aren't very
+    // convenient to have data-driven.
+    isWatfordDDFS: boolean;
+
+    // Whether this subtype supports reading/writing used sectors only.
+    isUsedSectorsSupported: boolean;
+}
+
+export const ACORN_DFS: ISubType = {
+    trackSizeSectors: 10,
+    isWatfordDDFS: false,
+    isUsedSectorsSupported: true,
+};
+
+export const WATFORD_DDFS: ISubType = {
+    trackSizeSectors: 18,
+    isWatfordDDFS: true,
+    isUsedSectorsSupported: false,
+};
+
+function getTrackSizeBytes(subType: ISubType): number {
+    return subType.trackSizeSectors * SECTOR_SIZE_BYTES;
+}
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -49,7 +84,7 @@ function checkSize(data: Buffer, minSize: number): void {
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, log: utils.Log | undefined): number[] {
+function getUsedTracks(subType: ISubType, data: Buffer, track0Offset: number, allSectors: boolean, log: utils.Log | undefined): number[] {
     if (data[track0Offset + 0x105] % 8 !== 0) {
         return errors.generic('Bad DFS format (file count)');
     }
@@ -60,15 +95,22 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
     const cat0 = data.subarray(track0Offset, track0Offset + SECTOR_SIZE_BYTES);
     const cat1 = data.subarray(track0Offset + SECTOR_SIZE_BYTES, track0Offset + SECTOR_SIZE_BYTES + SECTOR_SIZE_BYTES);
 
-    if (allSectors) {
-        const numSectors = cat1[0x07] | ((cat1[0x06] & 0x03) << 8);
+    if (allSectors || !subType.isUsedSectorsSupported) {
+        let sectorCountMSBMask: number;
+        if (subType.isWatfordDDFS) {
+            sectorCountMSBMask = 7;
+        } else {
+            sectorCountMSBMask = 3;
+        }
 
-        if (numSectors % TRACK_SIZE_SECTORS !== 0) {
+        const numSectors = cat1[0x07] | ((cat1[0x06] & sectorCountMSBMask) << 8);
+
+        if (numSectors % subType.trackSizeSectors !== 0) {
             return errors.generic('Bad DFS format (sector count)');
         }
 
         const usedTracks: number[] = [];
-        for (let index = 0; index < Math.floor(numSectors / TRACK_SIZE_SECTORS); ++index) {
+        for (let index = 0; index < Math.floor(numSectors / subType.trackSizeSectors); ++index) {
             usedTracks.push(index);
         }
 
@@ -86,6 +128,14 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
             startSector |= cat1[offset + 7] << 0;
             startSector |= (cat1[offset + 6] & 3) << 8;
 
+            // TODO: isUsedSectorsSupported isn't handled, so this case isn't
+            // currently necessary.
+
+            // if (subType.isWatfordDDFS) {
+            //     size |= (cat0[offset + 5] >> 7 & 1) << 18;
+            //     startSector |= (cat0[offset + 6] >> 7 & 1) << 10;
+            // }
+
             if (log !== undefined) {
                 const name = `${String.fromCharCode(cat0[offset + 7])}.${cat0.toString('binary', offset + 0, offset + 7).trimRight()} `;
                 log.pn(`    ${name}: size = 0x${utils.hex8(size)}, start sector = ${startSector} (0x${utils.hex8(startSector)})`);
@@ -94,7 +144,7 @@ function getUsedTracks(data: Buffer, track0Offset: number, allSectors: boolean, 
             for (let i = 0; i < size; i += 256) {
                 const sector = startSector + Math.floor(i / SECTOR_SIZE_BYTES);
 
-                usedTracksSet.add(Math.floor(sector / TRACK_SIZE_SECTORS));
+                usedTracksSet.add(Math.floor(sector / subType.trackSizeSectors));
             }
         }
 
@@ -162,6 +212,20 @@ export function createWriteOSWORD(drive: number, track: number, data: Buffer): d
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+function getOSWORDDrive(subType: ISubType, drive: number, side: number): number {
+    let oswordDrive = drive + side * 2;
+
+    if (subType.isWatfordDDFS) {
+        // Force double density.
+        oswordDrive |= 0x30;
+    }
+
+    return oswordDrive;
+}
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 export interface ITrackAddress {
     side: number;
     track: number;
@@ -175,7 +239,7 @@ export function sortTrackAddresses(tracks: ITrackAddress[]): void {
         // Write side at a time - this means a re-seek to track 0 partway
         // through writing a dsd, but it avoids horrid noises with DFS 1.20 due
         // to some kind of head unload/reload when switching between heads. (Not
-        // an issue on the 1770 DFSs it seems? Might be 8271 specific.) 
+        // an issue on the 1770 DFSs it seems? Might be 8271 specific.)
         if (a.side < b.side) {
             return -1;
         } else if (a.side > b.side) {
@@ -196,6 +260,7 @@ export function sortTrackAddresses(tracks: ITrackAddress[]): void {
 //////////////////////////////////////////////////////////////////////////
 
 export class WriteFlow extends diskimage.Flow {
+    private subType: ISubType;
     private drive: number;
     private doubleSided: boolean;
     private tracks: ITrackAddress[];
@@ -205,9 +270,10 @@ export class WriteFlow extends diskimage.Flow {
     private padSize: number;
     private shownPadMessage: boolean;
 
-    public constructor(drive: number, doubleSided: boolean, allSectors: boolean, image: Buffer, log: utils.Log | undefined) {
+    public constructor(subType: ISubType, drive: number, doubleSided: boolean, allSectors: boolean, image: Buffer, log: utils.Log | undefined) {
         super();
 
+        this.subType = subType;
         this.drive = drive;
         this.doubleSided = doubleSided;
         this.partIdx = 0;
@@ -216,6 +282,8 @@ export class WriteFlow extends diskimage.Flow {
         this.image = image;
 
         this.tracks = [];
+
+        const TRACK_SIZE_BYTES = getTrackSizeBytes(this.subType);
 
         if (allSectors) {
             // Since the image size is available, no need to examine its
@@ -238,17 +306,17 @@ export class WriteFlow extends diskimage.Flow {
             if (this.doubleSided) {
                 checkSize(image, TRACK_SIZE_BYTES + 512);
 
-                for (const track of getUsedTracks(this.image, 0, false, this.log)) {
+                for (const track of getUsedTracks(this.subType, this.image, 0, false, this.log)) {
                     this.tracks.push({ side: 0, track });
                 }
 
-                for (const track of getUsedTracks(this.image, TRACK_SIZE_BYTES, false, this.log)) {
+                for (const track of getUsedTracks(this.subType, this.image, TRACK_SIZE_BYTES, false, this.log)) {
                     this.tracks.push({ side: 1, track });
                 }
             } else {
                 checkSize(image, 512);
 
-                for (const track of getUsedTracks(this.image, 0, false, this.log)) {
+                for (const track of getUsedTracks(this.subType, this.image, 0, false, this.log)) {
                     this.tracks.push({ side: 0, track });
                 }
             }
@@ -299,6 +367,7 @@ export class WriteFlow extends diskimage.Flow {
             return undefined;
         }
 
+        const TRACK_SIZE_BYTES = getTrackSizeBytes(this.subType);
         const addr = this.tracks[this.partIdx];
 
         let imageOffset: number;
@@ -323,7 +392,7 @@ export class WriteFlow extends diskimage.Flow {
 
         return {
             message,
-            osword: createWriteOSWORD(this.drive + addr.side * 2, addr.track, data),
+            osword: createWriteOSWORD(getOSWORDDrive(this.subType, this.drive, addr.side), addr.track, data),
         };
     }
 
@@ -344,6 +413,7 @@ export class WriteFlow extends diskimage.Flow {
 //////////////////////////////////////////////////////////////////////////
 
 export class ReadFlow extends diskimage.Flow {
+    private subType: ISubType;
     private drive: number;
     private doubleSided: boolean;
     private allSectors: boolean;
@@ -353,9 +423,10 @@ export class ReadFlow extends diskimage.Flow {
     private file: beebfs.File;
     private image: Buffer | undefined;
 
-    public constructor(drive: number, doubleSided: boolean, allSectors: boolean, file: beebfs.File, log: utils.Log | undefined) {
+    public constructor(subType: ISubType, drive: number, doubleSided: boolean, allSectors: boolean, file: beebfs.File, log: utils.Log | undefined) {
         super();
 
+        this.subType = subType;
         this.drive = drive;
         this.doubleSided = doubleSided;
         this.allSectors = allSectors;
@@ -367,11 +438,11 @@ export class ReadFlow extends diskimage.Flow {
     public start(bufferAddress: number, bufferSize: number): diskimage.IStartFlow {
         this.init(bufferAddress, bufferSize, 4096);
 
-        const osword1 = createReadOSWORD(this.drive, 0, 0, 2);
+        const osword1 = createReadOSWORD(getOSWORDDrive(this.subType, this.drive, 0), 0, 0, 2);
 
         let osword2: diskimage.IDiskOSWORD | undefined;
         if (this.doubleSided) {
-            osword2 = createReadOSWORD(this.drive | 2, 0, 0, 2);
+            osword2 = createReadOSWORD(getOSWORDDrive(this.subType, this.drive, 1), 0, 0, 2);
         }
 
         return { fs: DFS_FS, fsStarCommand: ``, starCommand: ``, osword1, osword2, };
@@ -393,11 +464,11 @@ export class ReadFlow extends diskimage.Flow {
                 return errors.generic(`Bad cat size`);
             }
 
-            for (const track of getUsedTracks(p, 0, this.allSectors, this.log)) {
+            for (const track of getUsedTracks(this.subType, p, 0, this.allSectors, this.log)) {
                 this.tracks.push({ side: 0, track });
             }
 
-            for (const track of getUsedTracks(p, 512, this.allSectors, this.log)) {
+            for (const track of getUsedTracks(this.subType, p, 512, this.allSectors, this.log)) {
                 this.tracks.push({ side: 1, track });
             }
         } else {
@@ -405,7 +476,7 @@ export class ReadFlow extends diskimage.Flow {
                 return errors.generic(`Bad cat size`);
             }
 
-            for (const track of getUsedTracks(p, 0, this.allSectors, this.log)) {
+            for (const track of getUsedTracks(this.subType, p, 0, this.allSectors, this.log)) {
                 this.tracks.push({ side: 0, track });
             }
         }
@@ -417,6 +488,8 @@ export class ReadFlow extends diskimage.Flow {
         for (const addr of this.tracks) {
             numTracks = Math.max(numTracks, addr.track + 1);
         }
+
+        const TRACK_SIZE_BYTES = getTrackSizeBytes(this.subType);
 
         if (this.doubleSided) {
             this.image = Buffer.alloc(numTracks * 2 * TRACK_SIZE_BYTES);
@@ -436,7 +509,7 @@ export class ReadFlow extends diskimage.Flow {
 
         return {
             message: `Read S${addr.side.toString()} ${getAddrString(addr.side, addr.track)} (${((this.partIdx + 1) / this.tracks.length * 100.0).toFixed(1)}%)`,
-            osword: createReadOSWORD(this.drive + addr.side * 2, addr.track, 0, TRACK_SIZE_SECTORS),
+            osword: createReadOSWORD(getOSWORDDrive(this.subType, this.drive, addr.side), addr.track, 0, this.subType.trackSizeSectors),
         };
     }
 
@@ -444,6 +517,8 @@ export class ReadFlow extends diskimage.Flow {
         if (this.tracks === undefined || this.partIdx >= this.tracks.length || this.image === undefined) {
             return errors.generic(`Invalid setLastOSWORDResult`);
         }
+
+        const TRACK_SIZE_BYTES = getTrackSizeBytes(this.subType);
 
         if (data.length !== TRACK_SIZE_BYTES) {
             return errors.generic(`Invalid track data (bad size)`);
@@ -469,6 +544,7 @@ export class ReadFlow extends diskimage.Flow {
         }
 
         await beebfs.FS.writeFile(this.file, this.image);
+        await beebfs.FS.writeObjectMetadata(this.file);
 
         // Leave BLFS active.
         return {

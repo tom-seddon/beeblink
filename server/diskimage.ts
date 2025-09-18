@@ -159,7 +159,7 @@ export abstract class Flow {
 
         this.bufferAddress = bufferAddress;
     }
-    
+
     // Start the flow. Determine buffer address, size and overall feasibility
     // based on supplied OSHWM and HIMEM values, and produce data for response.
     public abstract start(bufferAddress: number, bufferSize: number): IStartFlow;

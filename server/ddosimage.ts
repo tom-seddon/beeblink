@@ -38,6 +38,36 @@ const TRACK_SIZE_BYTES = TRACK_SIZE_SECTORS * SECTOR_SIZE_BYTES;
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+export interface ISubType {
+    // command to execute after the FS has been selected but before the
+    // operation starts.
+    startStarCommand: string;
+
+    // command to execute after the operation finishes.
+    finishStarCommand: string;
+}
+
+// The disk density is not autodetected on OSWORD $7f READ/WRITE. It'll
+// apparently do it on READ ID (unclear if the detected setting is stored
+// anywhere though), and there's an OSWORD you can use to set it, but I failed
+// to write the code in a way that would make using this particularly easy,
+// making the star command the easiest route.
+//
+// Unfortunately the commands are different on Challenger and DDOS, but nothing
+// a bit of documentation can't fix...
+export const CHALLENGER: ISubType = {
+    startStarCommand: `*OPT6 18`,//force double density
+    finishStarCommand: `*OPT6 0`,//select density autodetect
+};
+
+export const DDOS: ISubType = {
+    startStarCommand: `*DENSITY DOUBLE`,//force double density
+    finishStarCommand: `*DENSITY AUTO`,//select density autodetect
+};
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 function getNumTracks(image: Buffer, track0Offset: number): number {
     // DDOS manual says "Number of tracks on the disc - 1", but this doesn't
     // actually appear to be the case...
@@ -73,6 +103,7 @@ function getOffset(addr: dfsimage.ITrackAddress, doubleSided: boolean): number {
 //////////////////////////////////////////////////////////////////////////
 
 export class ReadFlow extends diskimage.Flow {
+    private subType: ISubType;
     private drive: number;
     private doubleSided: boolean;
     private tracks: dfsimage.ITrackAddress[] | undefined;
@@ -81,9 +112,10 @@ export class ReadFlow extends diskimage.Flow {
     private file: beebfs.File;
     private image: Buffer | undefined;
 
-    public constructor(drive: number, doubleSided: boolean, file: beebfs.File, log: utils.Log | undefined) {
+    public constructor(subType: ISubType, drive: number, doubleSided: boolean, file: beebfs.File, log: utils.Log | undefined) {
         super();
 
+        this.subType = subType;
         this.drive = drive;
         this.doubleSided = doubleSided;
         this.partIdx = 0;
@@ -101,7 +133,13 @@ export class ReadFlow extends diskimage.Flow {
             osword2 = dfsimage.createReadOSWORD(this.drive | 2, 0, 0, TRACK_SIZE_SECTORS);
         }
 
-        return { fs: dfsimage.DFS_FS, fsStarCommand: ``, starCommand: ``, osword1, osword2, };
+        return {
+            fs: dfsimage.DFS_FS,
+            fsStarCommand: ``,
+            starCommand: this.subType.startStarCommand,
+            osword1,
+            osword2,
+        };
     }
 
     public setCat(p: Buffer): void {
@@ -171,12 +209,13 @@ export class ReadFlow extends diskimage.Flow {
         }
 
         await beebfs.FS.writeFile(this.file, this.image);
+        await beebfs.FS.writeObjectMetadata(this.file);
 
         // Leave BLFS active.
         return {
             fs: 0,
             fsStarCommand: '',
-            starCommand: '',
+            starCommand: this.subType.finishStarCommand,
         };
     }
 }
@@ -185,6 +224,7 @@ export class ReadFlow extends diskimage.Flow {
 //////////////////////////////////////////////////////////////////////////
 
 export class WriteFlow extends diskimage.Flow {
+    private subType: ISubType;
     private drive: number;
     private doubleSided: boolean;
     private log: utils.Log | undefined;
@@ -192,9 +232,10 @@ export class WriteFlow extends diskimage.Flow {
     private tracks: dfsimage.ITrackAddress[];
     private partIdx: number;
 
-    public constructor(drive: number, doubleSided: boolean, image: Buffer, log: utils.Log | undefined) {
+    public constructor(subType: ISubType, drive: number, doubleSided: boolean, image: Buffer, log: utils.Log | undefined) {
         super();
 
+        this.subType = subType;
         this.drive = drive;
         this.doubleSided = doubleSided;
         this.log = log;
@@ -226,7 +267,13 @@ export class WriteFlow extends diskimage.Flow {
             osword2 = dfsimage.createReadOSWORD(this.drive | 2, 0, 0, TRACK_SIZE_SECTORS);
         }
 
-        return { fs: dfsimage.DFS_FS, fsStarCommand: ``, starCommand: ``, osword1, osword2, };
+        return {
+            fs: dfsimage.DFS_FS,
+            fsStarCommand: ``,
+            starCommand: this.subType.startStarCommand,
+            osword1,
+            osword2,
+        };
     }
 
     public setCat(p: Buffer): void {
@@ -271,7 +318,7 @@ export class WriteFlow extends diskimage.Flow {
         return {
             fs: dfsimage.DFS_FS,
             fsStarCommand: ``,
-            starCommand: ``,
+            starCommand: this.subType.finishStarCommand,
         };
     }
 }
