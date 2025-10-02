@@ -15,7 +15,7 @@
   "dependencies": {
     "argparse": "^1",
     "chalk": "^2.4.2",
-    "serialport": "^12",
+    "serialport": "^13",
     "usb": "^1.6.3"
   },
   "optionalDependencies": {
