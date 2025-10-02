@@ -84,8 +84,8 @@ function getSectorOffset(image: Buffer, isSectorwiseImage: boolean, logicalSecto
 }
 
 function checkCat(image: Buffer): void {
-    checkChecksum(Buffer.from(image, 0 * SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES), 0);
-    checkChecksum(Buffer.from(image, 1 * SECTOR_SIZE_BYTES, SECTOR_SIZE_BYTES), 1);
+    checkChecksum(image.subarray(0 * SECTOR_SIZE_BYTES, 1 * SECTOR_SIZE_BYTES), 0);
+    checkChecksum(image.subarray(1 * SECTOR_SIZE_BYTES, 2 * SECTOR_SIZE_BYTES), 1);
 
     if (getNumSectors(image) >= (1 << 21)) {
         return errors.generic(`Bad ADFS image (too many sectors)`);

@@ -459,9 +459,7 @@ export class Server {
             this.log?.withIndent(`${typeName}: `, () => {
                 // (the ?. is all wasted checks, but it shuts eslint up.)
                 this.log?.p(`Type: ${packet.c} (0x${utils.hex2(packet.c)})`);
-                if (desc !== undefined) {
-                    this.log?.p(` (${desc})`);
-                }
+                this.log?.p(` (${desc})`);
                 this.log?.p(` (${packet.p.length} (0x${utils.hex8(packet.p.length)}) byte(s)`);
                 this.log?.pn('');
 
