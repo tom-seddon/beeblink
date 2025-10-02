@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@types/argparse": "^1",
-    "@types/node": "^16",
+    "@types/node": "^20",
     "@types/usb": "^1.5.2",
     "@typescript-eslint/eslint-plugin": "^5.54.0",
     "@typescript-eslint/parser": "^5.54.0",
@@ -35,7 +35,7 @@
     "typescript": "^4.9"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=20"
   },
   "pkg": {
     "assets": [
