@@ -52,7 +52,7 @@ function getIOCTL(): ((fd: number, request: number, data?: Buffer | number) => v
     if (process.platform === 'linux') {
         try {
             // work around lack of type definitions.
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            // eslint-disable-next-line @typescript-eslint/no-require-imports,@typescript-eslint/no-var-requires
             return require('ioctl') as ((fd: number, request: number, data?: Buffer | number) => void);
         } catch {
             // Probably an error in the require. But whatever, it ain't
@@ -213,7 +213,7 @@ function UInt32(b0: number, b1: number, b2: number, b3: number): number {
 /////////////////////////////////////////////////////////////////////////
 
 async function delayMS(ms: number): Promise<void> {
-    await new Promise<void>((resolve, _reject) => setTimeout(() => resolve(), ms));
+    await new Promise<void>((resolve, _reject) => setTimeout(() => { resolve() }, ms));
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -446,7 +446,10 @@ function getOSXLocationId(d: usb.Device): string {
     let locationId = utils.hex2(d.busNumber);
 
     for (let i = 0; i < 6; ++i) {
-        //tslint:disable-next-line strict-type-predicates
+        // comment says portNumbers can be undefined, even though the TS type
+        // definitions doesn't include that.
+        //
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (d.portNumbers !== undefined && i < d.portNumbers.length) {
             locationId += d.portNumbers[i].toString(16);
         } else {
@@ -519,7 +522,7 @@ interface ISerialDevice {
 //
 // I still have no idea how to update TypeScript typings, so... this.
 function getSerialPortPath(portInfo: PortInfo): string {
-    return (portInfo as { path: string; }).path;// eslint-disable-line @typescript-eslint/no-unsafe-member-access
+    return (portInfo as { path: string; }).path;
 }
 
 function isSameDevice(a: PortInfo, b: PortInfo): boolean {
@@ -692,10 +695,7 @@ async function serialTestPCToBBC2(device: ISerialDevice): Promise<void> {
             //process.stderr.write(`${ getSerialPortPath(portInfo) }: ${ i }\n`);
 
             await new Promise<void>((resolve, reject): void => {
-                // Despite what the TypeScript definitions appear to say,
-                // the JS code actually only seems to call the callback with
-                // a single argument: an error, or undefined.
-                port.write(data, (error: unknown): void => {
+                port.write(data, (error: Error | null | undefined): void => {
                     if (error !== undefined && error !== null) {
                         reject(error);
                     } else {
@@ -723,8 +723,8 @@ async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
     //const log = utils.Log.create(getSerialPortPath(device.portInfo), process.stdout);
 
     await new Promise<void>((resolve, reject) => {
-        port.flush((error: unknown) => {
-            if (error !== undefined && error !== null) {
+        port.flush((error: Error | null) => {
+            if (error !== null) {
                 reject(error);
             } else {
                 resolve();
@@ -805,7 +805,7 @@ async function sendFile(device: ISerialDevice, filePath: string): Promise<void> 
     for (let chunkBegin = 0; chunkBegin < fileData.length; chunkBegin += maxChunkSize) {
         const chunkEnd = Math.min(chunkBegin + maxChunkSize, fileData.length);
 
-        const chunk = fileData.slice(chunkBegin, chunkEnd);
+        const chunk = fileData.subarray(chunkBegin, chunkEnd);
 
         process.stderr.write(`${portPath}: [${chunkBegin},${chunkEnd})\n`);
 
@@ -813,7 +813,7 @@ async function sendFile(device: ISerialDevice, filePath: string): Promise<void> 
             // Despite what the TypeScript definitions appear to say,
             // the JS code actually only seems to call the callback with
             // a single argument: an error, or undefined.
-            port.write(chunk, (error: unknown): void => {
+            port.write(chunk, (error: Error | null | undefined): void => {
                 if (error !== undefined && error !== null) {
                     reject(error);
                 } else {
@@ -1089,13 +1089,19 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, globals: IGlobalState,
 
         async function endResponse(): Promise<void> {
             await new Promise<void>((resolve, _reject) => {
-                httpResponse.end(() => resolve());
+                httpResponse.end(() => { resolve(); });
             });
         }
 
         async function writeData(data: Buffer): Promise<void> {
             await new Promise<void>((resolve, reject) => {
-                httpResponse.write(data, 'binary', (error) => error === undefined || error === null ? resolve() : reject(error));
+                httpResponse.write(data, 'binary', (error) => {
+                    if (error === undefined || error === null) {
+                        resolve();
+                    } else {
+                        reject(error);
+                    }
+                });
             });
         }
 
@@ -1133,7 +1139,7 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, globals: IGlobalState,
         if (enableBeebLink && (url.pathname === V1_PATHNAME || url.pathname === V2_PATHNAME)) {
             //process.stderr.write('method: ' + httpRequest.method + '\n');
             if (!isPOST) {
-                return await errorResponse(405, 'only POST is permitted');
+                return errorResponse(405, 'only POST is permitted');
             }
 
             const v2 = url.pathname === V2_PATHNAME;
@@ -1152,7 +1158,7 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, globals: IGlobalState,
 
             const senderId = httpRequest.headers[BEEBLINK_SENDER_ID];
             if (senderId === undefined || senderId.length === 0 || typeof (senderId) !== 'string') {
-                return await errorResponse(400, 'missing header: ' + BEEBLINK_SENDER_ID);
+                return errorResponse(400, 'missing header: ' + BEEBLINK_SENDER_ID);
             }
 
             const body = await new Promise<Buffer>((resolve, reject) => {
@@ -1167,7 +1173,7 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, globals: IGlobalState,
             });
 
             if (body.length === 0) {
-                return await errorResponse(400, 'missing body: ' + BEEBLINK_SENDER_ID);
+                return errorResponse(400, 'missing body: ' + BEEBLINK_SENDER_ID);
             }
 
             // Find the Server for this sender id.
@@ -1188,7 +1194,7 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, globals: IGlobalState,
             let request: Request;
             if (v2) {
                 if (body.length < 5) {
-                    return await errorResponse(400, 'body too small: ' + BEEBLINK_SENDER_ID);
+                    return errorResponse(400, 'body too small: ' + BEEBLINK_SENDER_ID);
                 }
 
                 const payloadSize = body.readUInt32LE(1);
@@ -1199,12 +1205,12 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, globals: IGlobalState,
                 // In theory, multiple BeebLink requests could be packed into
                 // one HTTP request, but that isn't currently supported.
                 if (body.length !== payloadSize + 5) {
-                    return await errorResponse(400, 'bad payload');
+                    return errorResponse(400, 'bad payload');
                 }
 
-                request = new Request(body[0] & 0x7f, body.slice(5));
+                request = new Request(body[0] & 0x7f, body.subarray(5));
             } else {
-                request = new Request(body[0] & 0x7f, body.slice(1));
+                request = new Request(body[0] & 0x7f, body.subarray(1));
             }
 
             httpLog?.pn(`Request (from ${senderId}) (v2=${v2}): ${request.c} (${utils.getRequestTypeName(request.c)}) (${request.p.length} bytes payload)`);
@@ -1249,7 +1255,7 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, globals: IGlobalState,
             await endResponse();
         } else if (enableAdmin && url.pathname === ADMIN_PATHNAME) {
             if (isPOST) {
-                return await errorResponse(501, `POST admin=TODO`);
+                return errorResponse(501, `POST admin=TODO`);
             } else if (isGET) {
                 httpLog?.pn(`searchParams=${url.searchParams}`);
 
@@ -1263,7 +1269,7 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, globals: IGlobalState,
                     globals.serverByDeviceName.forEach((value: IServer, key: string): void => {
                         servers.push({ deviceName: key, active: value.active });
                     });
-                    return await jsonResponse(200, servers);
+                    return jsonResponse(200, servers);
                 } else if (url.searchParams.get('folders') !== null) {
                     // interface IFoldersResponse {
                     //     folders: string[];
@@ -1277,15 +1283,15 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, globals: IGlobalState,
                         tubeHostFolders: globals.searchFolders.tubeHostFolders,
                     };
 
-                    return await jsonResponse(200, response);
+                    return jsonResponse(200, response);
                 } else {
-                    return await errorResponse(404, `not found: ${httpRequest.url}`);
+                    return errorResponse(404, `not found: ${httpRequest.url}`);
                 }
             } else {
-                return await errorResponse(405, `method not supported: ${httpRequest.method}`);
+                return errorResponse(405, `method not supported: ${httpRequest.method}`);
             }
         } else {
-            return await errorResponse(404, `not found: ${httpRequest.url}`);
+            return errorResponse(404, `not found: ${httpRequest.url}`);
         }
     }
 
@@ -1415,7 +1421,7 @@ async function setFTDILatencyTimer(portInfo: PortInfo, serialLog: utils.Log | un
                 try {
                     // 1 = INTERFACE_A.
                     serialLog?.pn(`Claiming USB device interface...`);
-                    usbDevice.__claimInterface(ftdiInterface);//eslint-disable-line no-underscore-dangle
+                    usbDevice.__claimInterface(ftdiInterface);
                 } catch (error) {
                     serialLog?.pn(`Ignoring claimInterface error: ${error}`);
                 }
@@ -1526,8 +1532,8 @@ function isSerialDeviceVerbose(portInfo: PortInfo, verboseOptions: string[] | nu
 
 async function flushPort(port: SerialPort): Promise<void> {
     await new Promise<void>((resolve, reject) => {
-        port.flush((error: unknown) => {
-            if (error !== undefined && error !== null) {
+        port.flush((error: Error | null) => {
+            if (error !== null) {
                 reject(error);
             } else {
                 resolve();
@@ -1538,8 +1544,8 @@ async function flushPort(port: SerialPort): Promise<void> {
 
 async function drainPort(port: SerialPort): Promise<void> {
     await new Promise<void>((resolve, reject) => {
-        port.drain((error: unknown) => {
-            if (error !== null && error !== undefined) {
+        port.drain((error: Error | null) => {
+            if (error !== null) {
                 reject(error);
             } else {
                 resolve();
@@ -1671,7 +1677,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
                 // Despite what the TypeScript definitions appear to say,
                 // the JS code actually only seems to call the callback with
                 // a single argument: an error, or undefined.
-                return port.write(syncData, (error: unknown): void => {
+                return port.write(syncData, (error: Error | null | undefined): void => {
                     if (error !== undefined && error !== null) {
                         reject(error);
                     } else {
@@ -1900,14 +1906,15 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
 
                                                 if (c !== 1) {
                                                     serialLog?.pn(`Received data while sending - returning to sync state`);
-                                                    return callResolveResult(false);
+                                                    callResolveResult(false);
+                                                    return;
                                                 }
                                             }
                                         },
                                     };
                                 }
 
-                                return port.write(chunk, (error: unknown): void => {
+                                return port.write(chunk, (error: Error | null | undefined): void => {
                                     readWaiter = undefined;
                                     if (error !== null && error !== undefined) {
                                         reject(error);
@@ -2031,7 +2038,7 @@ async function handleSerial(options: ICommandLineOptions, globals: IGlobalState,
                 handleSerialDevice(options, device.portInfo, srv.server).then(() => {
                     process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed.\n`);
                     srv.active = false;
-                }).catch((error) => {
+                }).catch((error: unknown) => {
                     process.stderr.write(`${(error as { stack: string; }).stack} `);
                     process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed due to error: ${error} \n`);
                     srv.active = false;
@@ -2243,7 +2250,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
 
     main(options).then(() => {
         //process.('main promise completed');
-    }).catch((error) => {
+    }).catch((error: unknown) => {
         if (options.fatal_verbose) {
             process.stderr.write('Stack trace:\n');
             process.stderr.write((error as { stack: string; }).stack + '\n');

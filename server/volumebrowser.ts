@@ -241,7 +241,7 @@ export class Browser {
             }
         } else if (this.mode === BrowserMode.EditFilter) {
             this.handleEditFilterKey(key);
-        } else if (this.mode === BrowserMode.ShowInfo) {
+        } else if (this.mode === BrowserMode.ShowInfo) {//eslint-disable-line @typescript-eslint/no-unnecessary-condition
             this.handleShowInfoKey();
         }
 

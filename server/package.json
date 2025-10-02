@@ -7,8 +7,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "compile": "tsc -p ./tsconfig.json --forceConsistentCasingInFileNames",
-    "lint": "eslint -f unix -c .eslintrc.js --ext .ts .",
-    "start": "npm run compile && node ./.build/main.js"
+    "start": "npm run compile && node ./.build/main.js",
+    "lint": "npx eslint --format ./eslint-formatter.js"
   },
   "author": "",
   "license": "GPL-3.0-or-later",
@@ -22,17 +22,14 @@
     "ioctl": "^2.0.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.36.0",
     "@types/argparse": "^1",
     "@types/node": "^20",
     "@types/usb": "^1.5.2",
-    "@typescript-eslint/eslint-plugin": "^5.54.0",
-    "@typescript-eslint/parser": "^5.54.0",
-    "eslint": "^8.35.0",
-    "eslint-plugin-import": "^2.27.5",
-    "eslint-plugin-jsdoc": "^40.0.1",
-    "eslint-plugin-prefer-arrow": "^1.2.3",
+    "eslint": "^9.36.0",
     "pkg": "^5",
-    "typescript": "^4.9"
+    "typescript": "^4.9.5",
+    "typescript-eslint": "^8.45.0"
   },
   "engines": {
     "node": ">=20"

@@ -212,7 +212,7 @@ export class Manipulator {
                                     if (parts[i] === remove) {
                                         parts.splice(i, 1);
                                         lineChanged = true;
-                                        removed = true;// eslint-disable-line @typescript-eslint/no-unused-vars
+                                        removed = true;
                                     } else {
                                         ++i;
                                     }
@@ -299,7 +299,7 @@ export class Manipulator {
         if (this.queue.length > 0) {
             this.queue[0]().then(() => {
                 this.next();
-            }).catch((error) => {
+            }).catch((error: unknown) => {
                 this.log?.pn('Error: ' + error);
                 this.next();
             });

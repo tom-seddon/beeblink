@@ -137,7 +137,7 @@ function getUsedTracks(subType: ISubType, data: Buffer, track0Offset: number, al
             // }
 
             if (log !== undefined) {
-                const name = `${String.fromCharCode(cat0[offset + 7])}.${cat0.toString('binary', offset + 0, offset + 7).trimRight()} `;
+                const name = `${String.fromCharCode(cat0[offset + 7])}.${cat0.toString('binary', offset + 0, offset + 7).trimEnd()} `;
                 log.pn(`    ${name}: size = 0x${utils.hex8(size)}, start sector = ${startSector} (0x${utils.hex8(startSector)})`);
             }
 

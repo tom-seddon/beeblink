@@ -155,7 +155,7 @@ export class Command {
         return syntax;
     }
 
-    public whenCaps1(caps1: number): Command {
+    public whenCaps1(caps1: number): this {
         if (this.caps1 === undefined) {
             this.caps1 = 0;
         }
@@ -165,7 +165,7 @@ export class Command {
         return this;
     }
 
-    public unlessCaps1(caps1: number): Command {
+    public unlessCaps1(caps1: number): this {
         if (this.notCaps1 === undefined) {
             this.notCaps1 = 0;
         }
@@ -206,7 +206,7 @@ class Handler {
         return !this.quiet;
     }
 
-    public withNoLogging(): Handler {
+    public withNoLogging(): this {
         this.quiet = true;
         return this;
     }
@@ -219,17 +219,17 @@ class Handler {
         return this.fullResponseDump;
     }
 
-    public withFullRequestDump(): Handler {
+    public withFullRequestDump(): this {
         this.fullRequestDump = true;
         return this;
     }
 
-    public withFullResponseDump(): Handler {
+    public withFullResponseDump(): this {
         this.fullResponseDump = true;
         return this;
     }
 
-    public withoutResetLastOSBPUTHandle(): Handler {
+    public withoutResetLastOSBPUTHandle(): this {
         this.resetLastOSBPUTHandle = false;
         return this;
     }
@@ -1511,7 +1511,7 @@ export class Server {
     //     this.stringBufferIdx = 0;
     // }
 
-    private prepareForTextResponse(value: string | Buffer, error?: errors.BeebError | undefined): void {
+    private prepareForTextResponse(value: string | Buffer, error?: errors.BeebError): void {
         if (typeof value === 'string') {
             value = Buffer.from(value, 'binary');
         }

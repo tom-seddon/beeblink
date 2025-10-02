@@ -755,7 +755,7 @@ export function splitTextFileLines(b: Buffer, encoding: BufferEncoding): string[
 export function isBASIC(b: Buffer): boolean {
     let i = 0;
 
-    while (true) {
+    for(;;) {
         if (i >= b.length) {
             // Hit EOF before end of program marker.
             return false;
