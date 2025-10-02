@@ -115,17 +115,17 @@ class StringWithError {
 export class Command {
     public readonly nameUC: string;
     private readonly syntax: string | undefined;
-    private readonly fun: (commandLine: CommandLine) => Promise<void | string | StringWithError | Response>;
+    private readonly fun: (commandLine: CommandLine) => Promise<undefined | string | StringWithError | Response>;
     private caps1: number | undefined;
     private notCaps1: number | undefined;
 
-    public constructor(name: string, syntax: string | undefined, fun: (commandLine: CommandLine) => Promise<void | string | StringWithError | Response>) {
+    public constructor(name: string, syntax: string | undefined, fun: (commandLine: CommandLine) => Promise<undefined | string | StringWithError | Response>) {
         this.nameUC = name.toUpperCase();
         this.syntax = syntax;
         this.fun = fun;
     }
 
-    public async call(commandLine: CommandLine): Promise<void | string | StringWithError | Response> {
+    public async call(commandLine: CommandLine): Promise<undefined | string | StringWithError | Response> {
         return this.fun(commandLine);
     }
 
@@ -181,20 +181,20 @@ export class Command {
 
 class Handler {
     public readonly name: string;
-    private readonly fun: (handler: Handler, p: Buffer) => Promise<void | string | StringWithError | Response | IServerResponse>;
+    private readonly fun: (handler: Handler, p: Buffer) => Promise<undefined | string | StringWithError | Response | IServerResponse>;
     private quiet: boolean;
     private fullRequestDump = false;
     private fullResponseDump = false;
     private resetLastOSBPUTHandle: boolean;
 
-    public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<void | string | StringWithError | Response | IServerResponse>) {
+    public constructor(name: string, fun: (handler: Handler, p: Buffer) => Promise<undefined | string | StringWithError | Response | IServerResponse>) {
         this.name = name;
         this.fun = fun;
         this.quiet = false;
         this.resetLastOSBPUTHandle = true;
     }
 
-    public async call(p: Buffer): Promise<void | string | StringWithError | Response | IServerResponse> {
+    public async call(p: Buffer): Promise<undefined | string | StringWithError | Response | IServerResponse> {
         return this.fun(this, p);
     }
 
@@ -470,7 +470,7 @@ export class Server {
         }
     }
 
-    private getResponseForResult(result: void | string | StringWithError | Response | IServerResponse): IServerResponse {
+    private getResponseForResult(result: undefined | string | StringWithError | Response | IServerResponse): IServerResponse {
         if (result === undefined) {
             return { response: newResponse(beeblink.RESPONSE_YES) };
         } else if (typeof (result) === 'string') {
@@ -548,7 +548,7 @@ export class Server {
         }
     };
 
-    private readonly handleReset = async (_handler: Handler, p: Buffer): Promise<void> => {
+    private readonly handleReset = async (_handler: Handler, p: Buffer): Promise<undefined> => {
         this.log?.pn('reset type=' + p[0]);
         if (p[0] === 1 || p[0] === 2) {
             // Power-on reset or CTRL+BREAK
@@ -582,6 +582,8 @@ export class Server {
             this.caps1 = 0;
         }
         this.log?.pn(`caps1=0x${utils.hex2(this.caps1)}`);
+
+        return undefined;
     };
 
     private readonly handleEchoData = async (_handler: Handler, p: Buffer): Promise<Response> => {
@@ -967,15 +969,18 @@ export class Server {
         const handle: number = await this.bfs.OSFINDOpen(0x40, name, undefined);
         this.log?.pn(`Handle: 0x${utils.hex2(handle)}`);
         return newResponse(beeblink.RESPONSE_DATA, handle);
+
     };
 
-    private readonly handleOSBGETReadaheadConsumedFNF = async (handler: Handler, p: Buffer): Promise<void> => {
+    private readonly handleOSBGETReadaheadConsumedFNF = async (handler: Handler, p: Buffer): Promise<undefined> => {
         this.payloadMustBe(handler, p, 1);
 
         this.bfs.OSBGETConsumeReadahead(p[0]);
+
+        return undefined;
     };
 
-    private readonly handleOSBPUTFNF = async (handler: Handler, p: Buffer): Promise<void> => {
+    private readonly handleOSBPUTFNF = async (handler: Handler, p: Buffer): Promise<undefined> => {
         let byte: number;
         let handle: number;
         if (p.length === 1) {
@@ -995,6 +1000,8 @@ export class Server {
         this.log?.pn('Input: handle=' + utils.hexdec(handle) + ', value=' + utils.hexdecch(byte));
         this.bfs.OSBPUT(handle, byte);
         this.lastOSBPUTHandle = handle;
+
+        return undefined;
     };
 
     private readonly handleOSBPUT = async (handler: Handler, p: Buffer): Promise<Response> => {
@@ -1111,7 +1118,7 @@ export class Server {
         return newResponse(beeblink.RESPONSE_OSGBPB, builder);
     };
 
-    private readonly handleOPT = async (handler: Handler, p: Buffer): Promise<void> => {
+    private readonly handleOPT = async (handler: Handler, p: Buffer): Promise<undefined> => {
         this.payloadMustBe(handler, p, 2);
 
         const x = p[0];
@@ -1124,6 +1131,8 @@ export class Server {
         } else {
             await this.bfs.OPT(x, y);
         }
+
+        return undefined;
     };
 
     private readonly handleGetBootOption = async (_handler: Handler, _p: Buffer): Promise<Response> => {
@@ -1275,8 +1284,10 @@ export class Server {
         }
     };
 
-    private readonly handleSetFileHandleRange = async (handler: Handler, p: Buffer): Promise<void> => {
+    private readonly handleSetFileHandleRange = async (handler: Handler, p: Buffer): Promise<undefined> => {
         await this.bfs.setFileHandleRange(p[0], p[1]);
+
+        return undefined;
     };
 
     private writeOSWORDBlock(osword: diskimage.IDiskOSWORD, builder: utils.BufferBuilder, blockAddressOffset: number, errorAddressOffset: number): number {
@@ -1335,12 +1346,14 @@ export class Server {
         return newResponse(beeblink.RESPONSE_DATA, builder.createBuffer());
     }
 
-    private readonly handleSetDiskImageCat = async (_handler: Handler, p: Buffer): Promise<void> => {
+    private readonly handleSetDiskImageCat = async (_handler: Handler, p: Buffer): Promise<undefined> => {
         if (this.diskImageFlow === undefined) {
             return errors.generic(`No disk image flow`);
         }
 
         this.diskImageFlow.setCat(p);
+
+        return undefined;
     };
 
     private readonly handleNextDiskImagePart = async (_handler: Handler, _p: Buffer): Promise<Response> => {
@@ -1383,12 +1396,14 @@ export class Server {
         }
     };
 
-    private readonly handleSetLastDiskImageOSWORDResult = async (_handler: Handler, p: Buffer): Promise<void> => {
+    private readonly handleSetLastDiskImageOSWORDResult = async (_handler: Handler, p: Buffer): Promise<undefined> => {
         if (this.diskImageFlow === undefined) {
             return errors.generic(`No disk image flow`);
         }
 
         this.diskImageFlow.setLastOSWORDResult(p);
+
+        return undefined;
     };
 
     private readonly handleFinishDiskImageFlow = async (_handler: Handler, _p: Buffer): Promise<Response> => {
@@ -1678,7 +1693,7 @@ export class Server {
         return await this.filesInfoResponse(commandLine.parts[1], true);
     };
 
-    private readonly accessCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly accessCommand = async (commandLine: CommandLine): Promise<undefined> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1704,9 +1719,11 @@ export class Server {
             const newObject = object.withModifiedAttributes(newAttr);
             await beebfs.FS.writeObjectMetadata(newObject);
         }
+
+        return undefined;
     };
 
-    private readonly deleteCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly deleteCommand = async (commandLine: CommandLine): Promise<undefined> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -1714,21 +1731,29 @@ export class Server {
         const fqn = await this.bfs.parseFileString(commandLine.parts[1]);
 
         await this.bfs.delete(fqn);
+
+        return undefined;
     };
 
-    private readonly dirCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly dirCommand = async (commandLine: CommandLine): Promise<undefined> => {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starDir(arg);
+
+        return undefined;
     };
 
-    private readonly driveCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly driveCommand = async (commandLine: CommandLine): Promise<undefined> => {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starDrive(arg);
+
+        return undefined;
     };
 
-    private readonly libCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly libCommand = async (commandLine: CommandLine): Promise<undefined> => {
         const arg = commandLine.parts.length >= 2 ? commandLine.parts[1] : undefined;
         await this.bfs.starLib(arg);
+
+        return undefined;
     };
 
     private readonly typeCommand = async (commandLine: CommandLine): Promise<string> => {
@@ -1962,7 +1987,7 @@ export class Server {
         return text;
     }
 
-    private readonly renameCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly renameCommand = async (commandLine: CommandLine): Promise<undefined> => {
         if (commandLine.parts.length < 3) {
             return errors.syntax();
         }
@@ -1971,6 +1996,8 @@ export class Server {
         const newFQN = await this.bfs.parseFileString(commandLine.parts[2]);
 
         await this.bfs.rename(oldFQN, newFQN);
+
+        return undefined;
     };
 
     private readonly srloadCommand = async (commandLine: CommandLine): Promise<Response> => {
@@ -2014,12 +2041,14 @@ export class Server {
         return newResponse(beeblink.RESPONSE_SPECIAL, builder);
     };
 
-    private readonly titleCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly titleCommand = async (commandLine: CommandLine): Promise<undefined> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
 
         await this.bfs.setTitle(commandLine.parts[1]);
+
+        return undefined;
     };
 
     private readonly handleCommonVolumeCommandFlags = (flags: string): void => {

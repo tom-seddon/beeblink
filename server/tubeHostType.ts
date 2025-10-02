@@ -658,7 +658,7 @@ class TubeHostState implements beebfs.IFSState {
     //     return this.drives[index];
     // }
 
-    private readonly dcreateCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly dcreateCommand = async (commandLine: CommandLine): Promise<undefined> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -679,9 +679,11 @@ class TubeHostState implements beebfs.IFSState {
         if (index !== undefined) {
             this.drives[index].folder = driveFolder;
         }
+
+        return undefined;
     };
 
-    private readonly dinCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly dinCommand = async (commandLine: CommandLine): Promise<undefined> => {
         if (commandLine.parts.length < 3) {
             return errors.syntax();
         }
@@ -711,19 +713,23 @@ class TubeHostState implements beebfs.IFSState {
         }
 
         this.din(drive, diskName);
+
+        return undefined;
     };
 
     private din(drive: ITubeHostDriveState, diskName: string): void {
         drive.folder = path.join(this.folderPath, diskName) as VolRelPath;
     }
 
-    private readonly doutCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly doutCommand = async (commandLine: CommandLine): Promise<undefined> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
 
         const drive = this.mustGetDriveStateByName(commandLine.parts[1]);
         drive.folder = undefined;
+
+        return undefined;
     };
 
     private checkDiskName(name: string): void {
@@ -780,7 +786,7 @@ class TubeHostState implements beebfs.IFSState {
         return `Current folder is: ${this.folderPath}${utils.BNL}`;
     };
 
-    private readonly hmkfCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly hmkfCommand = async (commandLine: CommandLine): Promise<undefined> => {
         if (commandLine.parts.length < 2) {
             return errors.syntax();
         }
@@ -790,6 +796,8 @@ class TubeHostState implements beebfs.IFSState {
         this.checkServerFolderName(f);
 
         await utils.fsMkdir(getAbsPath(this.volume, path.join(this.folderPath, f) as VolRelPath));
+
+        return undefined;
     };
 
     private async scanCurrentFolder(): Promise<ITubeHostFolder> {

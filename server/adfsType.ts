@@ -406,14 +406,16 @@ class ADFSState implements beebfs.IFSState {
         ];
     }
 
-    private readonly backCommand = async (_commandLine: CommandLine): Promise<void> => {
+    private readonly backCommand = async (_commandLine: CommandLine): Promise<undefined> => {
         [this.current, this.previous] = [this.previous, this.current];
         // const temp = this.current;
         // this.current = this.previous;
         // this.previous = temp;
+
+        return undefined;
     };
 
-    private readonly cdirCommand = async (commandLine: CommandLine): Promise<void> => {
+    private readonly cdirCommand = async (commandLine: CommandLine): Promise<undefined> => {
         //return todoError('CDIR');
         if (commandLine.parts.length < 2) {
             return errors.syntax();
@@ -487,6 +489,8 @@ class ADFSState implements beebfs.IFSState {
 
             currentFilePath = new ADFSFilePath(currentFilePath.volume, true, currentFilePath.drive, true, currentFilePath.dir + '.' + newDirName, true, newServerFolder);
         }
+
+        return undefined;
     };
 
     private readonly lcatCommand = async (_commandLine: CommandLine): Promise<void> => {
