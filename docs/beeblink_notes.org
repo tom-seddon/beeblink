@@ -1570,7 +1570,7 @@ sticks around...
       PC->BBC: 35.0 KBytes/sec
 #+end_example
 
-* Release notes WIP
+* DONE Release notes WIP
 
 #+begin_src markdown
   ,* Fix server crash when doing `*DIR` or `*LIB` with no arguments
@@ -1584,5 +1584,125 @@ sticks around...
   ,* Add additional customisable boot keys
   ,* Improve speed of `*VOLS` and `*VOLBROWSER`
 #+end_src
+
+* Dependencies spring clean
+
+** DONE npm warnings
+
+#+begin_example
+  c:\tom\github\beeblink\server>npm install
+  npm warn EBADENGINE Unsupported engine {
+  npm warn EBADENGINE   package: 'eslint-plugin-jsdoc@40.3.0',
+  npm warn EBADENGINE   required: { node: '^14 || ^16 || ^17 || ^18 || ^19' },
+  npm warn EBADENGINE   current: { node: 'v22.11.0', npm: '10.9.0' }
+  npm warn EBADENGINE }
+  npm warn EBADENGINE Unsupported engine {
+  npm warn EBADENGINE   package: '@es-joy/jsdoccomment@0.37.1',
+  npm warn EBADENGINE   required: { node: '^14 || ^16 || ^17 || ^18 || ^19 || ^20' },
+  npm warn EBADENGINE   current: { node: 'v22.11.0', npm: '10.9.0' }
+  npm warn EBADENGINE }
+  npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+  npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+  npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+  npm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead
+  npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+  npm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+
+  added 383 packages, and audited 384 packages in 33s
+
+  136 packages are looking for funding
+    run `npm fund` for details
+
+  1 moderate severity vulnerability
+
+  Some issues need review, and may require choosing
+  a different dependency.
+
+  Run `npm audit` for details.
+#+end_example
+
+Fixed by bumping eslint to ^9.0.0.
+
+** TODO eslint flat config stuff
+
+Inevitable warning for now:
+
+#+begin_example
+  (node:2740) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/tom/github/beeblink/server/eslint.config.js?mtime=1759427782011 is not specified and it doesn't parse as CommonJS.
+  Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+  To eliminate this warning, add "type": "module" to C:\tom\github\beeblink\server\package.json.
+  (Use `node --trace-warnings ...` to show where the warning was created)
+#+end_example
+
+#+begin_src js
+
+    "name": "beeblink-server",
+    "version": "0.1.0",
+    "description": "",
+    "bin": ".build/main.js",
+    "main": ".build/main.js",
+    "scripts": {
+      "test": "echo \"Error: no test specified\" && exit 1",
+      "compile": "tsc -p ./tsconfig.json --forceConsistentCasingInFileNames",
+      "lint": "eslint -f unix --ext .ts .",
+      "start": "npm run compile && node ./.build/main.js"
+    },
+    "author": "",
+    "license": "GPL-3.0-or-later",
+    "dependencies": {
+      "argparse": "^1",
+      "chalk": "^2.4.2",
+      "serialport": "^10",
+      "usb": "^1.6.3"
+    },
+    "optionalDependencies": {
+      "ioctl": "^2.0.1"
+    },
+    "devDependencies": {
+      "@types/argparse": "^1",
+      "@types/node": "^20",
+      "@types/usb": "^1.5.2",
+      "@typescript-eslint/eslint-plugin": "^8.0.0",
+      "@typescript-eslint/parser": "^8.0.0",
+      "eslint": "^9.0.0",
+      "eslint-plugin-import": "^2.27.5",
+      "eslint-plugin-jsdoc": "^60.0.0",
+      "eslint-plugin-prefer-arrow": "^1.2.3",
+      "pkg": "^5",
+      "typescript": "^4.9"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "pkg": {
+      "assets": [
+        "./node_modules/@serialport/bindings-cpp/prebuilds/",
+        "./node_modules/usb/prebuilds/"
+      ]
+    }
+  }
+#+end_src
+
+** TODO ="type":module"=
+
+Needs adding to package.json. But there's enough fallout from doing
+this that it needs to be its own thing.
+
+After attempt 2: looks like serialport just doesn't like this? To be
+continued.
+
+** TODO =this= type
+
+https://typescript-eslint.io/rules/prefer-return-this-type/
+
+Possibly useful for the FS stuff too?
+
+** TODO dynamic =require= in main.ts
+
+Can this be sorted out now?
+
+** DONE =void= not valid as constituent in union type
+CLOSED: [2025-10-02 Thu 23:04]
+
 
 * eof.
