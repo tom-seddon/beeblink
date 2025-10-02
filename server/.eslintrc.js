@@ -30,7 +30,6 @@ module.exports = {
         "eslint-plugin-jsdoc",
         "eslint-plugin-prefer-arrow",
         "@typescript-eslint",
-        "@typescript-eslint/tslint"
     ],
     "root": true,
     "rules": {
@@ -302,15 +301,6 @@ module.exports = {
         ],
         "use-isnan": "error",
         "valid-typeof": "off",
-        "@typescript-eslint/tslint/config": [
-            "error",
-            {
-                "rules": {
-                    "import-spacing": true,
-                    "strict-type-predicates": true
-                }
-            }
-        ],
 
         // Conflicts with VSCode formatting (which I suppose I should figure out
         // how to configure...)
