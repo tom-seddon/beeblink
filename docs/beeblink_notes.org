@@ -1704,5 +1704,42 @@ Can this be sorted out now?
 ** DONE =void= not valid as constituent in union type
 CLOSED: [2025-10-02 Thu 23:04]
 
+* Example tasks.json
+
+#+begin_src js
+  {
+  	"version": "2.0.0",
+  	"tasks": [
+  		{
+  			"type": "npm",
+  			"script": "lint",
+  			"problemMatcher": [
+  				"$eslint-compact"
+  			],
+  			"label": "npm: lint",
+  			"detail": "eslint",
+  			"presentation": {
+  				"clear": true
+  			}
+  		},
+  		{
+  			"type": "npm",
+  			"script": "compile",
+  			"group": {
+  				"kind": "build",
+  				"isDefault": true
+  			},
+  			"problemMatcher": [
+  				"$tsc"
+  			],
+  			"label": "npm: compile",
+  			"detail": "tsc -p ./tsconfig.json --forceConsistentCasingInFileNames",
+  			"presentation": {
+  				"clear": true
+  			}
+  		}
+  	]
+  }
+#+end_src
 
 * eof.
