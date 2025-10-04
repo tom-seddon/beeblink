@@ -23,7 +23,6 @@
 
 import * as argparse from 'argparse';
 import * as utils from './utils';
-import * as usb from 'usb';
 import * as path from 'path';
 import * as assert from 'assert';
 import * as beeblink from './beeblink';
@@ -174,7 +173,6 @@ interface ICommandLineOptions {
     http_all_interfaces: boolean;
     https_all_interfaces: boolean;
     http_verbose: boolean;
-    libusb_debug_level: number | null;
     serial_verbose: string[] | null;
     serial_sync_verbose: string[] | null;
     serial_data_verbose: string[] | null;
@@ -215,55 +213,6 @@ function UInt32(b0: number, b1: number, b2: number, b3: number): number {
 async function delayMS(ms: number): Promise<void> {
     await new Promise<void>((resolve, _reject) => setTimeout(() => { resolve() }, ms));
 }
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-async function deviceControlTransfer(device: usb.Device, bmRequestType: number, bRequest: number, wValue: number, wIndex: number, dataOrLength: number | Buffer | undefined): Promise<Buffer | undefined> {
-    return await new Promise<Buffer | undefined>((resolve, reject) => {
-        if (dataOrLength === undefined) {
-            dataOrLength = Buffer.alloc(0);
-        }
-        device.controlTransfer(bmRequestType, bRequest, wValue, wIndex, dataOrLength, (error, buffer) => {
-            if (error !== undefined) {
-                reject(error);
-            } else {
-                resolve(buffer);
-            }
-        });
-    });
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-// async function getUSBDeviceStringDescriptor(device: usb.Device, iIdentifier: number): Promise<string | undefined> {
-//     if (iIdentifier === 0) {
-//         return undefined;
-//     }
-
-//     let value: string | undefined;
-//     try {
-//         value = await new Promise<string | undefined>((resolve, reject) => {
-//             device.getStringDescriptor(iIdentifier, (error, buffer) => {
-//                 //tslint:disable-next-line strict-type-predicates
-//                 if (error !== undefined && error !== null) {
-//                     reject(error);
-//                 } else {
-//                     resolve(buffer);
-//                 }
-//             });
-//         });
-//     } catch (error) {
-//         return undefined;//`<<usb.Device.getStringDescriptor failed: ${error}>>`;
-//     }
-
-//     if (value === undefined) {
-//         return undefined;//`<<usb.Device.getStringDescriptor retured nothing>>`;
-//     }
-
-//     return value;
-// }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -426,86 +375,6 @@ async function listSerialDevices(options: ICommandLineOptions): Promise<void> {
         }
     }
 }
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-// The OS X location ID is a 32-bit number. There doesn't seem to be any actual
-// documentation about how this value is formed, but it appears to be the
-// device's busNumber in bits 24-31, then first portNumber entry in bits 20-23,
-// second portNumber entry in bits 16-19, and so on. (No idea what happens if
-// you run out of bits.)
-//
-// This is easy enough to do as a string operation. The serial device list
-// returns it as a string anyway.
-//
-// (I don't know how alpha hex digit come through in the serial device list, as
-// there are none on my system. So this just does the comparison
-// case-insensitively.)
-function getOSXLocationId(d: usb.Device): string {
-    let locationId = utils.hex2(d.busNumber);
-
-    for (let i = 0; i < 6; ++i) {
-        // comment says portNumbers can be undefined, even though the TS type
-        // definitions doesn't include that.
-        //
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (d.portNumbers !== undefined && i < d.portNumbers.length) {
-            locationId += d.portNumbers[i].toString(16);
-        } else {
-            locationId += '0';
-        }
-    }
-
-    return locationId;
-}
-
-/////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////
-
-// async function listUSBDevices(): Promise<void> {
-//     const devices = usb.getDeviceList();
-
-//     process.stdout.write(`${devices.length} USB devices:\n`);
-//     for (let i = 0; i < devices.length; ++i) {
-//         const device: usb.Device = devices[i];
-
-//         process.stdout.write(`${i}.BusNumber: ${device.busNumber}, DeviceAddress: ${device.deviceAddress}`);
-//         if (process.platform === 'darwin') {
-//             process.stdout.write(` (LocationId: 0x${getOSXLocationId(device)}/${device.deviceAddress})`);
-//         }
-
-//         process.stdout.write(`\n`);
-
-//         process.stdout.write(`    PID: ${utils.hex4(device.deviceDescriptor.idProduct)}, VID: ${utils.hex4(device.deviceDescriptor.idVendor)}\n`);
-//         process.stdout.write(`    PortNumbers: ${device.portNumbers}\n`);
-
-//         let parentIndex: number | undefined;
-//         for (let j = 0; j < devices.length; ++j) {
-//             if (device.parent === devices[j]) {
-//                 parentIndex = j;
-//                 break;
-//             }
-//         }
-//         if (parentIndex === undefined) {
-//             process.stdout.write(`    No parent device.\n`);
-//         } else {
-//             process.stdout.write(`    Parent: ${parentIndex}\n`);
-//         }
-
-//         try {
-//             device.open(false);
-
-//             process.stdout.write(`    Serial: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iSerialNumber)}\n`);
-//             process.stdout.write(`    Product: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iProduct)}\n`);
-//             process.stdout.write(`    Manufacturer: ${await getUSBDeviceStringDescriptor(device, device.deviceDescriptor.iManufacturer)}\n`);
-
-//             device.close();
-//         } catch (error) {
-//             process.stdout.write(`   Failed to open device: ${error}\n`);
-//         }
-//     }
-// }
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -838,11 +707,6 @@ async function serialTestSendFile(options: ICommandLineOptions, filePath: string
 /////////////////////////////////////////////////////////////////////////
 
 async function handleCommandLineOptions(options: ICommandLineOptions, log: utils.Log | undefined): Promise<boolean> {
-    log?.pn('libusb_debug_level: ``' + options.libusb_debug_level + '\'\'');
-    if (options.libusb_debug_level !== null) {
-        usb.setDebugLevel(options.libusb_debug_level);
-    }
-
     function getFixedUpPath(p: null): null;
     function getFixedUpPath(p: string): string;
     function getFixedUpPath(p: string | null): string | null;
@@ -1330,117 +1194,24 @@ function handleHTTPAndHTTPS(options: ICommandLineOptions, globals: IGlobalState,
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function findUSBDeviceForSerialPort(portInfo: PortInfo): usb.Device | undefined {
-    if (portInfo.productId !== undefined && portInfo.vendorId !== undefined && portInfo.locationId !== undefined) {
-        const idProduct = Number.parseInt(portInfo.productId, 16);//why not a number?
-        const idVendor = Number.parseInt(portInfo.vendorId, 16);//why not a number?
-        const usbDevices = usb.getDeviceList();
-        for (const usbDevice of usbDevices) {
-            if (usbDevice.deviceDescriptor.idProduct === idProduct && usbDevice.deviceDescriptor.idVendor === idVendor) {
-                if (getOSXLocationId(usbDevice).toLowerCase() === portInfo.locationId.toLowerCase()) {
-                    return usbDevice;
-                }
-            }
-        }
-    }
-
-    return undefined;
-}
-
-async function setFTDILatencyTimer(portInfo: PortInfo, serialLog: utils.Log | undefined): Promise<void> {
+async function setFTDILatencyTimer(portInfo: PortInfo): Promise<void> {
     if (process.platform === 'win32') {
-        // When trying to open the device with libusb, the device open
-        // fails with LIBUSB_ERROR_UNSUPPORTED. See, e.g.,
+        // When trying to open the device with libusb, the device open fails
+        // with LIBUSB_ERROR_UNSUPPORTED. See, e.g.,
         // https://stackoverflow.com/questions/17350177/
         //
         // But it's not a huge problem, as the latency timer can be set
         // manually, and the setting is persistent.
     } else if (process.platform === 'darwin') {
-        if (portInfo.locationId === undefined) {
-            process.stderr.write(`${getSerialPortPath(portInfo)}: not setting FTDI latency timer - no locationId.\n`);
-        } else if (portInfo.productId === undefined) {
-            process.stderr.write(`${getSerialPortPath(portInfo)}: not setting FTDI latency timer - no productId.\n`);
-        } else if (portInfo.vendorId === undefined) {
-            process.stderr.write(`${getSerialPortPath(portInfo)}: not setting FTDI latency timer - no vendorId.\n`);
-        } else {
-            // Send USB control request to set the latency timer.
-
-            // Try to find the corresponding usb device in the device list.
-            //
-            // The serial numbers for the FTDI devices aren't necessarily
-            // unique, so search by OS X location id rather than serial number.
-
-            let maybeUSBDevice: usb.Device | undefined;
-            let numAttempts = 0;
-            while (numAttempts++ < 5) {
-                maybeUSBDevice = findUSBDeviceForSerialPort(portInfo);
-                if (maybeUSBDevice !== undefined) {
-                    break;
-                }
-
-                await delayMS(500);
-            }
-
-            if (maybeUSBDevice === undefined) {
-                process.stderr.write(`${getSerialPortPath(portInfo)}: not setting FTDI latency timer - didn't find corresponding USB device after ${numAttempts} attempt(s)\n`);
-                return;
-            }
-
-            const usbDevice: usb.Device = maybeUSBDevice;
-
-            try {
-                const ms = 1;
-                process.stderr.write(`${getSerialPortPath(portInfo)}: setting FTDI latency timer to ${ms}ms.\n`);
-
-                usbDevice.open();
-
-                // logic copied out of libftdi's ftdi_usb_open_dev.
-                serialLog?.pn(`Setting USB device configuration...`);
-                if (usbDevice.configDescriptor.bConfigurationValue !== usbDevice.allConfigDescriptors[0].bConfigurationValue) {
-                    await new Promise<void>((resolve, reject) => {
-                        usbDevice.setConfiguration(usbDevice.allConfigDescriptors[0].bConfigurationValue, (err) => {
-                            if (err !== undefined) {//callback type is (error: undefined | LibUSBException) => void
-                                reject(err);
-                            } else {
-                                resolve();
-                            }
-                        });
-                    });
-                }
-
-                const FTDI_DEVICE_OUT_REQTYPE = usb.LIBUSB_REQUEST_TYPE_VENDOR | usb.LIBUSB_RECIPIENT_DEVICE | usb.LIBUSB_ENDPOINT_OUT;
-                const SIO_SET_LATENCY_TIMER_REQUEST = 0x09;
-
-                // values corresponding to ftdi->interface and ftdi->index. 1 =
-                // INTERFACE_A. (No idea, just copying code here.)
-                const ftdiInterface = 0;
-                const ftdiIndex = 1;
-
-                //serialLog?.pn(`${usbDevice.interfaces.length} interfaces`);
-
-                try {
-                    // 1 = INTERFACE_A.
-                    serialLog?.pn(`Claiming USB device interface...`);
-                    usbDevice.__claimInterface(ftdiInterface);
-                } catch (error) {
-                    serialLog?.pn(`Ignoring claimInterface error: ${error}`);
-                }
-
-                serialLog?.pn(`Setting latency timer...`);
-                await deviceControlTransfer(usbDevice,
-                    FTDI_DEVICE_OUT_REQTYPE,
-                    SIO_SET_LATENCY_TIMER_REQUEST,
-                    ms,
-                    ftdiIndex,
-                    undefined);
-
-                serialLog?.pn(`Done... hopefully.`);
-            } catch (error) {
-                process.stderr.write(`${getSerialPortPath(portInfo)}: error setting FTDI latency timer: ${error}\n`);
-            } finally {
-                usbDevice.close();
-            }
-        }
+        // There used to be a bunch of code to send the right USB control
+        // requests to set the latency timer to 1 ms automatically:
+        // https://github.com/tom-seddon/beeblink/blob/58776b038d1fe7494a2c15564b0a5e1b7860a928/server/main.ts#L1353
+        //
+        // But I had some difficulty keeping up with the updates to the libusb
+        // Node wrapper, so this is gone. Speculative responses/fire-and-forget
+        // requests make it no longer essential for general use, but it may
+        // return as there'll still be some rather bad cases that would be
+        // improved with a 1 ms latency timer.
     } else if (process.platform === 'linux') {
         if (ioctl === undefined) {
             process.stderr.write(`${getSerialPortPath(portInfo)}: not setting low latency - ioctl module not available.\n`);
@@ -1568,7 +1339,7 @@ async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortIn
     }
 
     if (isSerialPortUSBDevice(portInfo, TUBE_SERIAL_DEVICE) || isSerialPortUSBDevice(portInfo, FTDI_USB_SERIAL_DEVICE)) {
-        await setFTDILatencyTimer(portInfo, serialLog);
+        await setFTDILatencyTimer(portInfo);
     }
 
     let readWaiter: IReadWaiter | undefined;
@@ -2131,14 +1902,14 @@ async function main(options: ICommandLineOptions) {
 /////////////////////////////////////////////////////////////////////////
 
 // argparse calls parseInt with a radix of 10.
-function integer(s: string): number {
-    const x = parseInt(s);
-    if (Number.isNaN(x)) {
-        throw new Error('invalid number provided: "' + s + '"');
-    }
+// function integer(s: string): number {
+//     const x = parseInt(s);
+//     if (Number.isNaN(x)) {
+//         throw new Error('invalid number provided: "' + s + '"');
+//     }
 
-    return x;
-}
+//     return x;
+// }
 
 function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     const epi =
@@ -2181,7 +1952,6 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     fullHelpOnly(['--fs-verbose'], { action: 'storeTrue', help: 'extra filing system-related output' });
     fullHelpOnly(['--server-verbose'], { action: 'storeTrue', help: 'extra request/response output' });
     fullHelpOnly(['--server-data-verbose'], { action: 'storeTrue', help: 'dump request/response data (requires --server-verbose)' });
-    fullHelpOnly(['--libusb-debug-level'], { type: integer, metavar: 'LEVEL', help: 'if provided, set libusb debug logging level to %(metavar)s' });
     fullHelpOnly(['--fatal-verbose'], { action: 'storeTrue', help: 'print debugging info on a fatal error' });
     fullHelpOnly(['--locate-verbose'], { action: 'storeTrue', help: 'extra *LOCATE output (requires --server-verbose)' });
     fullHelpOnly(['--beeb-error-verbose'], { action: 'storeTrue', help: 'print server code stack trace when raising a BRK error' });

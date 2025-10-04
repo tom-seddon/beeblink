@@ -15,8 +15,7 @@
   "dependencies": {
     "argparse": "^1",
     "chalk": "^2.4.2",
-    "serialport": "^13",
-    "usb": "^1.6.3"
+    "serialport": "^13"
   },
   "optionalDependencies": {
     "ioctl": "^2.0.1"
@@ -25,7 +24,6 @@
     "@eslint/js": "^9.36.0",
     "@types/argparse": "^1",
     "@types/node": "^20",
-    "@types/usb": "^1.5.2",
     "eslint": "^9.36.0",
     "pkg": "^5",
     "typescript": "^5",
