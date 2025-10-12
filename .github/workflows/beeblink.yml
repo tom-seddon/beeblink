@@ -1,0 +1,15 @@
+name: Build BeebLink
+
+on:
+  push:
+    branches:
+      - wip/tom
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: make github_ci_windows
