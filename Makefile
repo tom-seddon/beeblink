@@ -13,3 +13,4 @@ default:
 .PHONY:github_ci_windows
 github_ci_windows:
 	echo hello
+	set
