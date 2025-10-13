@@ -132,8 +132,7 @@ _roms:
 	@echo "***"
 	@echo "*** Build ROMs"
 	@echo "***"
-
-	$(_V)cd "$(WORKSPACE_ROOT_PATH)/beeb" && $(MAKE) roms CI_BUILD=1 "TASS=$(TASS)"
+	$(_V)cd "$(WORKSPACE_ROOT_PATH)/beeb" && $(MAKE) roms CI_BUILD=1 $(if $(TASS),TASS=$(TASS),)
 
 .PHONY:_debug_output
 _debug_output:
