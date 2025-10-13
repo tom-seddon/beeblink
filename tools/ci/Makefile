@@ -213,5 +213,5 @@ _create_github_release:
 # Ignore errors. There are multiple runners doing this, so the release
 # might already exist. Any more problems, gh release upload will
 # fail...
-	$(_V)-gh release create "$(RELEASE_NAME)" --notes "Release notos to follow." --target "$(HEAD_HASH)" --title "$(RELEASE_NAME)" $(GH_PRELEASE_ARG)
+	$(_V)-gh release create "$(RELEASE_NAME)" --notes "Release notes to follow." --target "$(HEAD_HASH)" --title "$(RELEASE_NAME)" $(GH_PRELEASE_ARG)
 	$(_V)gh release upload "$(RELEASE_NAME)" "$(ZIP_PATH)"
