@@ -22,13 +22,13 @@ endif
 ##########################################################################
 ##########################################################################
 
-WORKSPACE_ROOT_PATH:=$(shell $(PYTHON) submodules/shellcmd.py/shellcmd.py realpath .)
+WORKSPACE_ROOT_PATH:=$(shell $(PYTHON) "../../submodules/shellcmd.py/shellcmd.py" realpath "../..")
 
 SHELLCMD:=$(PYTHON) "$(WORKSPACE_ROOT_PATH)/submodules/shellcmd/shellcmd.py"
 
 TMP_PATH:=$(WORKSPACE_ROOT_PATH)/tmp
 
-ifeq($(UNAME),Windows_NT)
+ifeq ($(UNAME),Windows_NT)
 
 # don't bother setting the 64tass path. The ROMs makefile will find
 # the repo's copy.
