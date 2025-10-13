@@ -136,6 +136,8 @@ _roms:
 
 .PHONY:_debug_output
 _debug_output:
+	$(_V)echo OS: $(OS)
+	$(_V)echo UNAME: $(UNAME)
 	$(_V)echo SHELL: $(SHELL)
 	$(_V)echo BUILD_SUFFIX: $(BUILD_SUFFIX)
 	$(_V)echo TMP_PATH: $(TMP_PATH)
