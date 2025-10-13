@@ -11,7 +11,7 @@ NPROC:=$(NUMBER_OF_PROCESSORS)
 UNAME:=Windows_NT
 else
 UNAME:=$(shell uname -s)
-PYTHON:=python3
+PYTHON3:=python3
 ifeq ($(UNAME),Darwin)
 NPROC:=$(shell sysctl -n hw.ncpu)
 else
@@ -22,9 +22,9 @@ endif
 ##########################################################################
 ##########################################################################
 
-WORKSPACE_ROOT_PATH:=$(shell $(PYTHON) "../../submodules/shellcmd.py/shellcmd.py" realpath "../..")
+WORKSPACE_ROOT_PATH:=$(shell $(PYTHON3) "../../submodules/shellcmd.py/shellcmd.py" realpath "../..")
 
-SHELLCMD:=$(PYTHON) "$(WORKSPACE_ROOT_PATH)/submodules/shellcmd/shellcmd.py"
+SHELLCMD:=$(PYTHON3) "$(WORKSPACE_ROOT_PATH)/submodules/shellcmd/shellcmd.py"
 
 TMP_PATH:=$(WORKSPACE_ROOT_PATH)/tmp
 
@@ -125,7 +125,7 @@ _server:
 
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && npm install
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && npm run compile
-	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && ./node_modules/.bin/pkg -t $(TARGET) --out-path "$(TMP_PATH)" .
+	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && "./node_modules/.bin/pkg" -t $(TARGET) --out-path "$(TMP_PATH)" .
 
 ##########################################################################
 ##########################################################################
