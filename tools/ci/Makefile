@@ -186,7 +186,7 @@ _compile_64tass:
 	@echo XXX Build 64tass
 	@echo XXX
 
-	$(_V)cd "$(TMP_PATH)" && svn checkout $(if $(VERBOSE),,--quiet) https://svn.code.sf.net/p/tass64/code/trunk tass64-code
+	$(_V)cd "$(TMP_PATH)" && svn checkout -r 3120 $(if $(VERBOSE),,--quiet) https://svn.code.sf.net/p/tass64/code/trunk tass64-code
 	$(_V)cd "$(TASS_PATH)" && make -j $(NPROC)
 
 ##########################################################################
