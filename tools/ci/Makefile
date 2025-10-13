@@ -47,12 +47,16 @@ endif
 ##########################################################################
 
 BUILD_SUFFIX:=$(shell git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S)
+HEAD_HASH:=$(shell git rev-parse HEAD)
 
 ifneq ($(shell git branch --show-current),master)
 BUILD_SUFFIX:=$(BUILD_SUFFIX)-prerelease
+GH_PRELEASE_ARG:=--prerelease
 endif
 
-ZIP_PATH:=$(TMP_PATH)/beeblink-$(BUILD_SUFFIX)$(NAME_SUFFIX).zip
+RELEASE_NAME:=beeblink-$(BUILD_SUFFIX)
+
+ZIP_PATH:=$(TMP_PATH)/$(RELEASE_NAME)$(NAME_SUFFIX).zip
 
 NODE_VERSION:=22
 
@@ -77,24 +81,37 @@ github_ci_windows:
 	$(_V)$(MAKE) _roms
 	$(_V)$(MAKE) _server TARGET=node$(NODE_VERSION)-win-x64
 	$(_V)$(MAKE) _create_zip
+ifdef GITHUB_CI
+	$(_V)$(MAKE) _create_github_release
+endif
 
 .PHONY: github_ci_macos_intel
 github_ci_macos_intel:
 	$(_V)$(MAKE) _init
+ifdef GITHUB_CI
 	$(_V)$(MAKE) _install_prerequisites_macos
+endif
 	$(_V)$(MAKE) _compile_64tass
 	$(_V)$(MAKE) _roms
 	$(_V)$(MAKE) _server TARGET=node$(NODE_VERSION)-macos-x64
 	$(_V)$(MAKE) _create_zip
+ifdef GITHUB_CI
+	$(_V)$(MAKE) _create_github_release
+endif
 
 .PHONY: github_ci_macos_arm
 github_ci_macos_arm:
 	$(_V)$(MAKE) _init
+ifdef GITHUB_CI
 	$(_V)$(MAKE) _install_prerequisites_macos
+endif
 	$(_V)$(MAKE) _compile_64tass
 	$(_V)$(MAKE) _roms
 	$(_V)$(MAKE) _server TARGET=node$(NODE_VERSION)-macos-arm64
 	$(_V)$(MAKE) _create_zip
+ifdef GITHUB_CI
+	$(_V)$(MAKE) _create_github_release
+endif
 
 ##########################################################################
 ##########################################################################
@@ -104,32 +121,20 @@ github_ci_macos_arm:
 
 # .PHONY:_install_prerequisites_windows
 # _install_prerequisites_windows:
-# ifdef INSTALL_PREREQUISITES
 # 	@echo XXX
 # 	@echo XXX Install prerequisites
 # 	@echo XXX
 # 	$(_V)choco install svn
-# else
-# 	@echo XXX
-# 	@echo XXX (Skipping prerequisites)
-# 	@echo XXX
-# endif
 
 ##########################################################################
 ##########################################################################
 
 .PHONY:_install_prerequisites_macos
 _install_prerequisites_macos:
-ifdef INSTALL_PREREQUISITES
 	@echo XXX
 	@echo XXX Install prerequisites
 	@echo XXX
 	$(_V)brew install subversion
-else
-	@echo XXX
-	@echo XXX (Skipping prerequisites)
-	@echo XXX
-endif
 
 ##########################################################################
 ##########################################################################
@@ -157,7 +162,9 @@ _roms:
 .PHONY:_init
 _init:
 	@echo BUILD_SUFFIX: $(BUILD_SUFFIX)
+	@echo GH_PRELEASE_ARG: $(GH_PRELEASE_ARG)
 	@echo OS: $(OS)
+	@echo RELEASE_NAME: $(RELEASE_NAME)
 	@echo SHELL: $(SHELL)
 	@echo SHELLCMD: $(SHELLCMD)
 	@echo TASS_PATH: $(TASS_PATH)
@@ -197,3 +204,14 @@ _create_zip:
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/beeb/.build" && 7z a $(_ARGS) "$(ZIP_PATH)" "beeblink_avr_fe60.rom" "beeblink_tube_serial.rom" "beeblink_tube_serial_safe.rom" "beeblink_upurs_fe60.rom" "beeblink_tube_serial_electron.rom" "beeblink_tube_serial_safe_electron.rom" "beeblink_b2.rom"
 	$(_V)cd "$(TMP_PATH)" && 7z a $(_ARGS) "$(ZIP_PATH)" "beeblink-server$(EXE_EXT)"
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)" && 7z a "$(ZIP_PATH)" $(_ARGS) "volumes" "COPYING.txt"
+
+.PHONY:_create_github_release
+_create_github_release:
+	@echo XXX
+	@echo XXX Create GitHub release
+	@echo XXX
+# Ignore errors. There are multiple runners doing this, so the release
+# might already exist. Any more problems, gh release upload will
+# fail...
+	$(_V)-gh release create "$(RELEASE_NAME)" --notes "Release notos to follow." --target "$(HEAD_HASH)" --title "$(RELEASE_NAME)" $(GH_PRELEASE_ARG)
+	$(_V)gh release upload "$(RELEASE_NAME)" "$(ZIP_PATH)"
