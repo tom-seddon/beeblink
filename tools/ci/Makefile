@@ -103,7 +103,7 @@ ifdef INSTALL_PREREQUISITES
 	@echo "***"
 	@echo "*** Install prerequisites"
 	@echo "***"
-	$(_V)sudo brew install subversion
+	$(_V)brew install subversion
 else
 	@echo "***"
 	@echo "*** (Skipping prerequisites)"
