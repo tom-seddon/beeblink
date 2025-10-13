@@ -25,7 +25,7 @@
     "@types/argparse": "^1",
     "@types/node": "^20",
     "eslint": "^9.36.0",
-    "pkg": "^5",
+    "@yao-pkg/pkg": "^6",
     "typescript": "^5",
     "typescript-eslint": "^8.45.0"
   },
@@ -34,8 +34,7 @@
   },
   "pkg": {
     "assets": [
-      "./node_modules/@serialport/bindings-cpp/prebuilds/",
-      "./node_modules/usb/prebuilds/"
+      "./node_modules/@serialport/bindings-cpp/prebuilds/"
     ]
   }
 }
