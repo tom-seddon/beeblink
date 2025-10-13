@@ -43,9 +43,14 @@ endif
 ##########################################################################
 ##########################################################################
 
-_V:=$(if $(VERBOSE),,@)
-
 BUILD_SUFFIX:=$(shell git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S)
+
+NODE_VERSION:=22
+
+##########################################################################
+##########################################################################
+
+_V:=$(if $(VERBOSE),,@)
 
 ##########################################################################
 ##########################################################################
@@ -61,7 +66,7 @@ default:
 github_ci_windows:
 	$(_V)$(MAKE) _debug_output
 	$(_V)$(MAKE) _roms
-	$(_V)$(MAKE) _server TARGET=win-x64
+	$(_V)$(MAKE) _server TARGET=node$(NODE_VERSION)-win-x64
 
 .PHONY: github_ci_macos_intel
 github_ci_macos_intel:
@@ -69,7 +74,7 @@ github_ci_macos_intel:
 	$(_V)$(MAKE) _install_prerequisites_macos
 	$(_V)$(MAKE) _compile_64tass
 	$(_V)$(MAKE) _roms
-	$(_V)$(MAKE) _server TARGET=macos-x64
+	$(_V)$(MAKE) _server TARGET=node$(NODE_VERSION)-macos-x64
 
 .PHONY: github_ci_macos_arm
 github_ci_macos_arm:
@@ -77,7 +82,7 @@ github_ci_macos_arm:
 	$(_V)$(MAKE) _install_prerequisites_macos
 	$(_V)$(MAKE) _compile_64tass
 	$(_V)$(MAKE) _roms
-	$(_V)$(MAKE) _server TARGET=macos-arm64
+	$(_V)$(MAKE) _server TARGET=node$(NODE_VERSION)-macos-arm64
 
 ##########################################################################
 ##########################################################################
