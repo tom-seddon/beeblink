@@ -6,6 +6,7 @@ MAKEFLAGS+=--no-print-directory
 ##########################################################################
 
 WORKSPACE_ROOT_PATH:=$(abspath ../..)
+TMP_PATH:=$(WORKSPACE_ROOT_PATH)/tmp
 
 ##########################################################################
 ##########################################################################
@@ -31,7 +32,6 @@ else
 NPROC:=$(shell nproc)
 endif
 
-TMP_PATH:=$(WORKSPACE_ROOT_PATH)/tmp
 TASS_PATH:=$(TMP_PATH)/tass64-code
 TASS:=$(TASS_PATH)/64tass
 
@@ -57,8 +57,6 @@ default:
 .PHONY: github_ci_windows
 github_ci_windows:
 	$(_V)$(MAKE) _debug_output
-	$(_V)$(MAKE) _install_prerequisites_windows
-	$(_V)$(MAKE) _compile_64tass
 	$(_V)$(MAKE) _roms
 	$(_V)$(MAKE) _server TARGET=win-x64
 
@@ -81,18 +79,21 @@ github_ci_macos_arm:
 ##########################################################################
 ##########################################################################
 
-.PHONY:_install_prerequisites_windows
-_install_prerequisites_windows:
-ifdef INSTALL_PREREQUISITES
-	@echo "***"
-	@echo "*** Install prerequisites"
-	@echo "***"
-	$(_V)choco install svn
-else
-	@echo "***"
-	@echo "*** (Skipping prerequisites)"
-	@echo "***"
-endif
+# Currently no need - there's a prebuilt copy of svn in the repo
+# already.
+
+# .PHONY:_install_prerequisites_windows
+# _install_prerequisites_windows:
+# ifdef INSTALL_PREREQUISITES
+# 	@echo "***"
+# 	@echo "*** Install prerequisites"
+# 	@echo "***"
+# 	$(_V)choco install svn
+# else
+# 	@echo "***"
+# 	@echo "*** (Skipping prerequisites)"
+# 	@echo "***"
+# endif
 
 ##########################################################################
 ##########################################################################
