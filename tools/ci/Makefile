@@ -5,32 +5,35 @@ MAKEFLAGS+=--no-print-directory
 ##########################################################################
 ##########################################################################
 
-WORKSPACE_ROOT_PATH:=$(abspath ../..)
-TMP_PATH:=$(WORKSPACE_ROOT_PATH)/tmp
-
-##########################################################################
-##########################################################################
-
 ifeq ($(OS),Windows_NT)
-
 PYTHON3:=py -3
-
 NPROC:=$(NUMBER_OF_PROCESSORS)
-
-# don't bother setting the 64tass path. The ROMs makefile will find
-# the repo's copy.
-
+UNAME:=Windows_NT
 else
-
 UNAME:=$(shell uname -s)
-
-PYTHON3:=python3
-
+PYTHON:=python3
 ifeq ($(UNAME),Darwin)
 NPROC:=$(shell sysctl -n hw.ncpu)
 else
 NPROC:=$(shell nproc)
 endif
+endif
+
+##########################################################################
+##########################################################################
+
+WORKSPACE_ROOT_PATH:=$(shell $(PYTHON) submodules/shellcmd.py/shellcmd.py realpath .)
+
+SHELLCMD:=$(PYTHON) "$(WORKSPACE_ROOT_PATH)/submodules/shellcmd/shellcmd.py"
+
+TMP_PATH:=$(WORKSPACE_ROOT_PATH)/tmp
+
+ifeq($(UNAME),Windows_NT)
+
+# don't bother setting the 64tass path. The ROMs makefile will find
+# the repo's copy.
+
+else
 
 TASS_PATH:=$(TMP_PATH)/tass64-code
 TASS:=$(TASS_PATH)/64tass
