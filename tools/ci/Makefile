@@ -139,6 +139,8 @@ _roms:
 
 .PHONY:_debug_output
 _debug_output:
+	$(_V)echo WORKSPACE_ROOT_PATH: $(WORKSPACE_ROOT_PATH)
+	$(_V)ECHO SHELLCMD: $(SHELLCMD)
 	$(_V)echo OS: $(OS)
 	$(_V)echo UNAME: $(UNAME)
 	$(_V)echo SHELL: $(SHELL)
