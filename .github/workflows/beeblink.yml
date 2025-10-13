@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - run: make -C tools/ci github_ci_windows VERBOSE=1
+      - run: make -C tools/ci github_ci_windows VERBOSE=1 INSTALL_PREREQUISITES=1
 
   build-macos-intel:
     runs-on: macos-15-intel
@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - run: make -C tools/ci github_ci_macos_intel VERBOSE=1
+      - run: make -C tools/ci github_ci_macos_intel VERBOSE=1 INSTALL_PREREQUISITES=1
 
   build-macos-arm:
     runs-on: macos-15
@@ -28,4 +28,4 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - run: make -C tools/ci github_ci_macos_arm VERBOSE=1
+      - run: make -C tools/ci github_ci_macos_arm VERBOSE=1 INSTALL_PREREQUISITES=1

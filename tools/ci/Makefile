@@ -57,6 +57,7 @@ default:
 .PHONY: github_ci_windows
 github_ci_windows:
 	$(_V)$(MAKE) _debug_output
+	$(_V)$(MAKE) _install_prerequisites_windows
 	$(_V)$(MAKE) _compile_64tass
 	$(_V)$(MAKE) _roms
 	$(_V)$(MAKE) _server TARGET=win-x64
@@ -64,6 +65,7 @@ github_ci_windows:
 .PHONY: github_ci_macos_intel
 github_ci_macos_intel:
 	$(_V)$(MAKE) _debug_output
+	$(_V)$(MAKE) _install_prerequisites_macos
 	$(_V)$(MAKE) _compile_64tass
 	$(_V)$(MAKE) _roms
 	$(_V)$(MAKE) _server TARGET=macos-x64
@@ -71,9 +73,42 @@ github_ci_macos_intel:
 .PHONY: github_ci_macos_arm
 github_ci_macos_arm:
 	$(_V)$(MAKE) _debug_output
+	$(_V)$(MAKE) _install_prerequisites_macos
 	$(_V)$(MAKE) _compile_64tass
 	$(_V)$(MAKE) _roms
 	$(_V)$(MAKE) _server TARGET=macos-arm64
+
+##########################################################################
+##########################################################################
+
+.PHONY:_install_prerequisites_windows
+_install_prerequisites_windows:
+ifdef INSTALL_PREREQUISITES
+	@echo "***"
+	@echo "*** Install prerequisites"
+	@echo "***"
+	$(_V)choco install svn
+else
+	@echo "***"
+	@echo "*** (Skipping prerequisites)"
+	@echo "***"
+endif
+
+##########################################################################
+##########################################################################
+
+.PHONY:_install_prerequisites_macos
+_install_prerequisites_macos:
+ifdef INSTALL_PREREQUISITES
+	@echo "***"
+	@echo "*** Install prerequisites"
+	@echo "***"
+	$(_V)sudo brew install subversion
+else
+	@echo "***"
+	@echo "*** (Skipping prerequisites)"
+	@echo "***"
+endif
 
 ##########################################################################
 ##########################################################################
@@ -101,6 +136,7 @@ _roms:
 
 .PHONY:_debug_output
 _debug_output:
+	$(_V)echo SHELL: $(SHELL)
 	$(_V)echo BUILD_SUFFIX: $(BUILD_SUFFIX)
 	$(_V)echo TMP_PATH: $(TMP_PATH)
 	$(_V)echo TASS_PATH: $(TASS_PATH)
