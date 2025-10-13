@@ -3,7 +3,8 @@ name: Build BeebLink
 on:
   push:
     branches:
-      - wip/test_ci
+      - master
+      - wip/master
 
 jobs:
   build-windows:
