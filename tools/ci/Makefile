@@ -93,14 +93,14 @@ github_ci_macos_arm:
 # .PHONY:_install_prerequisites_windows
 # _install_prerequisites_windows:
 # ifdef INSTALL_PREREQUISITES
-# 	@echo "***"
-# 	@echo "*** Install prerequisites"
-# 	@echo "***"
+# 	@echo XXX
+# 	@echo XXX Install prerequisites
+# 	@echo XXX
 # 	$(_V)choco install svn
 # else
-# 	@echo "***"
-# 	@echo "*** (Skipping prerequisites)"
-# 	@echo "***"
+# 	@echo XXX
+# 	@echo XXX (Skipping prerequisites)
+# 	@echo XXX
 # endif
 
 ##########################################################################
@@ -109,14 +109,14 @@ github_ci_macos_arm:
 .PHONY:_install_prerequisites_macos
 _install_prerequisites_macos:
 ifdef INSTALL_PREREQUISITES
-	@echo "***"
-	@echo "*** Install prerequisites"
-	@echo "***"
+	@echo XXX
+	@echo XXX Install prerequisites
+	@echo XXX
 	$(_V)brew install subversion
 else
-	@echo "***"
-	@echo "*** (Skipping prerequisites)"
-	@echo "***"
+	@echo XXX
+	@echo XXX (Skipping prerequisites)
+	@echo XXX
 endif
 
 ##########################################################################
@@ -124,9 +124,9 @@ endif
 
 .PHONY:_server
 _server:
-	@echo "***"
-	@echo "*** Build server"
-	@echo "***"
+	@echo XXX
+	@echo XXX Build server
+	@echo XXX
 
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && npm install
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && npm run compile
@@ -137,9 +137,9 @@ _server:
 
 .PHONY:_roms
 _roms:
-	@echo "***"
-	@echo "*** Build ROMs"
-	@echo "***"
+	@echo XXX
+	@echo XXX Build ROMs
+	@echo XXX
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/beeb" && $(MAKE) roms CI_BUILD=1 $(if $(TASS),TASS=$(TASS),)
 
 .PHONY:_debug_output
@@ -159,9 +159,9 @@ _debug_output:
 # only done on Unix, so assumes POSIX-style tools.
 .PHONY:_compile_64tass
 _compile_64tass:
-	@echo "***"
-	@echo "*** Build 64tass"
-	@echo "***"
+	@echo XXX
+	@echo XXX Build 64tass
+	@echo XXX
 
 	$(_V)rm -Rf "$(TASS_PATH)"
 	$(_V)mkdir -p "$(TMP_PATH)"
