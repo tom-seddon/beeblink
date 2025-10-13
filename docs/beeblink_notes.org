@@ -1742,4 +1742,124 @@ CLOSED: [2025-10-02 Thu 23:04]
   }
 #+end_src
 
+* old =appveyor.yml=
+
+#+begin_src yaml
+  # https://www.appveyor.com/docs/getting-started-with-appveyor-for-linux/#running-windows-and-linux-builds-side-by-side
+
+  # https://www.appveyor.com/blog/2017/08/01/sharing-configuration-between-branches-in-appveyor-yml/
+
+  version: '{build}'
+
+  skip_tags: true
+
+  branches:
+    only:
+      - master
+      - wip/master
+
+  for:
+    -
+      branches:
+        only:
+          - master
+
+      environment:
+        PRERELEASE: false
+
+    -
+      branches:
+        only:
+        - wip/master
+
+      environment:
+        PRERELEASE: true
+
+  image:
+    - Visual Studio 2019
+    - macos-bigsur
+
+  install:
+    - uname
+    - env
+    - npm version
+    - node --version
+    
+    # on macOS, select Node version using nvm.
+    - sh: nvm ls
+    - sh: nvm use 16
+
+    # on Windows, select Node version using PowerShell Install-Product.
+    - ps: |
+        if ($env:CI_WINDOWS -eq $true) {
+          # https://www.appveyor.com/docs/lang/nodejs-iojs/
+          Install-Product node 16.8.0
+        }
+
+    - npm version
+    - node --version
+    - git submodule init
+    - git submodule update
+    - git status --porcelain
+
+    - ps:
+    - ps: $env:SUFFIX = $(git log -1 --format=%cd-%h --date=format:%Y%m%d-%H%M%S $env:APPVEYOR_REPO_COMMIT)
+    - ps: $env:RELEASE_NAME="beeblink-$env:SUFFIX"
+    - ps: |
+        if ($env:PRERELEASE -eq $true) {
+          $env:RELEASE_NAME="$env:RELEASE_NAME-prerelease"
+        }
+
+  build_script:
+    - ps: pwd
+    - ps: Push-Location
+    - ps: |
+        if ($env:CI_WINDOWS -eq $true) {
+          $env:ZIP=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$env:RELEASE_NAME-windows.zip")
+        } elseif ($env:CI_MACOS -eq $true) {
+          $env:ZIP=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$env:RELEASE_NAME-macos.zip")
+        }
+    - ps: cd ./beeb
+    - git status --porcelain
+    - ps: |
+        if ($env:CI_WINDOWS -eq $true) {
+          ../tools/snmake roms CI_BUILD=1
+        } elseif ($env:CI_MACOS -eq $true) {
+          make roms CI_BUILD=1 TASS=../tools/64tass
+        }
+    - ps: cd .build
+    - ps: 7z a $env:ZIP beeblink_avr_fe60.rom beeblink_tube_serial.rom beeblink_tube_serial_safe.rom beeblink_upurs_fe60.rom beeblink_tube_serial_electron.rom beeblink_tube_serial_safe_electron.rom beeblink_b2.rom
+    - ps: Pop-Location
+    - ps: 7z a $env:ZIP volumes COPYING.txt
+    - ps: Push-Location
+    - ps: cd ./server
+    - npm install
+    - npm run compile
+    - ps: |
+        pwd
+        if ($env:CI_WINDOWS -eq $true) {
+          ./node_modules/.bin/pkg -t win .
+          7z a $env:ZIP beeblink-server.exe
+        } elseif ($env:CI_MACOS -eq $true) {
+          ./node_modules/.bin/pkg -t macos-x64 .
+          7z a $env:ZIP beeblink-server
+        }
+        
+        Push-AppveyorArtifact $env:ZIP -DeploymentName output
+    - ps: Pop-Location
+
+  # artifacts:
+  #   - path: $(OUTPUT_NAME)
+  #     name: output
+
+  deploy:
+    - release: $(RELEASE_NAME)
+      provider: GitHub
+      auth_token:
+        secure: T5CPAJmNl5j/eAVlQln8WoiFKTDkq2ebT9Y/PbWRbMIa4GFyov+t5QdqlU0O2sY9
+      artifact: output
+      draft: false
+      prerelease: $(PRERELEASE)
+#+end_src
+
 * eof.
