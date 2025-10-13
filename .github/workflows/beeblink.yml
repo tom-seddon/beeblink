@@ -14,6 +14,8 @@ jobs:
         with:
           submodules: recursive
       - run: cmd /c beeb\make.bat -C tools/ci github_ci_windows VERBOSE=1 GITHUB_CI=1 NAME_SUFFIX=-windows
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   build-macos-intel:
     runs-on: macos-15-intel
@@ -22,6 +24,8 @@ jobs:
         with:
           submodules: recursive
       - run: make -C tools/ci github_ci_macos_intel VERBOSE=1 GITHUB_CI=1 NAME_SUFFIX=-macos-intel
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   build-macos-arm:
     runs-on: macos-15
@@ -30,3 +34,5 @@ jobs:
         with:
           submodules: recursive
       - run: make -C tools/ci github_ci_macos_arm VERBOSE=1 GITHUB_CI=1 NAME_SUFFIX=-macos-applesilicon
+        env:
+          GH_TOKEN: ${{ github.token }}
