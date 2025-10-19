@@ -217,9 +217,10 @@ The current volume remains selected when you do this.
 Some predefined files are supplied, providing the following
 combinations:
 
-- `B`+`T`+`BREAK` - select BASIC and run BeebLink tools
-- `B`+`R`+`BREAK` - select BASIC and run ROM Tool
 - `B`+`I`+`BREAK` - select BASIC and run BeebLink disk imager
+- `B`+`R`+`BREAK` - select BASIC and run ROM Tool
+- `B`+`T`+`BREAK` - select BASIC and run BeebLink tools
+- `B`+`V`+`BREAK` - run the volume browser
 
 If you'd like to add a custom boot key, you can create additional
 files - or overwrite the existing ones.
