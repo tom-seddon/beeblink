@@ -225,17 +225,23 @@ startup_sync_counter: .fill 1
 ;-------------------------------------------------------------------------
 
                 .section link_workspace
-                .if !target_electron
-; bit 7 set if M128, using internal Tube.
-link_itu: .fill 1
-                .endif
-link_old_y: .fill 1
 link_value: .fill 1
 link_transfer_flags: .fill 1
 link_transfer_thunk: .fill 3    ;$4C, LSB, MSB
+link_itu:
+; bit 7 set if M128, using internal Tube.
+;
+; Still defined on Electron, so it can be set to a safe value as a
+; workaround for https://github.com/tom-seddon/beeblink/issues/202 -
+; looks like Electron ADFS might also have an unknown IRQ handler that
+; tests the same flags.
+                .fill 1
+link_old_y: .fill 1
 link_last_status_byte: .fill 1
                 .endsection link_workspace
 
+                .cerror link_itu!=$cd ;https://github.com/tom-seddon/beeblink/issues/202
+                
 ;-------------------------------------------------------------------------
 ; Check if ACCCON ITU needs resetting to access the FTDI device.
 ;
@@ -627,15 +633,23 @@ sync_timed_out_3:
 ; flag.
 ;
 begin_send_with_restart: .proc
-                .if !target_electron
                 pha             ;save packet type
 
-                ; sort out ITU flag
-                jsr is_itu
+                .if target_electron
+
+                lda #0
                 sta link_itu
 
-                pla             ;restore packet type
+                .else
+                
+                ; sort out ITU flag
+                jsr is_itu
+                and #$80 ; https://github.com/tom-seddon/beeblink/issues/202
+                sta link_itu
+
                 .endif
+
+                pla             ;restore packet type
                 
                 jmp begin_send_without_restart
                 .endproc
