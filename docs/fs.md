@@ -492,6 +492,10 @@ one on the server and it's not showing up in the volume browser. (If
 using a pre-2025 ROM, there is no progress indicator for this process,
 which can take a little while if you have a lot of volumes.)
 
+Press CTRL+G to go to the first volume in the current list whose name
+starts with a given char. After pressing CTRL+G, type the char of
+interest when prompted.
+
 The volume browser isn't recommended in 20-column modes.
 
 ### `WDUMP <fsp>`

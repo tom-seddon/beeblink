@@ -62,6 +62,7 @@ enum BrowserMode {
     Browse,
     EditFilter,
     ShowInfo,
+    Letter,
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -241,6 +242,8 @@ export class Browser {
             }
         } else if (this.mode === BrowserMode.EditFilter) {
             this.handleEditFilterKey(key);
+        } else if (this.mode === BrowserMode.Letter) {
+            this.handleLetterKey(key);
         } else if (this.mode === BrowserMode.ShowInfo) {//eslint-disable-line @typescript-eslint/no-unnecessary-condition
             this.handleShowInfoKey();
         }
@@ -369,6 +372,11 @@ export class Browser {
                 this.printFinish();
                 this.done = true;
             }
+        } else if (key === 7) {
+            // Ctrl+G
+            this.mode = BrowserMode.Letter;
+            this.printLetterMode();
+            this.flushKeyboardBuffer = true;
         } else if (key === 19) {
             // Ctrl+S
             action = BrowserKeyAction.SaveDefaultFilters;
@@ -379,7 +387,7 @@ export class Browser {
             this.print('Default saved');
             this.mode = BrowserMode.ShowInfo;
         } else if (key === 18) {
-            // CTrl+R
+            // Ctrl+R
             action = BrowserKeyAction.RefreshVolumes;
         } else if (key === 32) {
             this.printProperties();
@@ -428,6 +436,30 @@ export class Browser {
                 this.printBrowser();
             }
         }
+    }
+
+    private handleLetterKey(key: number): void {
+        if (key >= 33 && key <= 126) {
+            let found = false;
+            const keyStringUC = String.fromCharCode(key).toUpperCase();
+            for (let colIdx = 0; colIdx < this.columns.length; ++colIdx) {
+                for (let rowIdx = 0; rowIdx < this.columns[colIdx].rows.length; ++rowIdx) {
+                    if (this.columns[colIdx].rows[rowIdx].name.toUpperCase().startsWith(keyStringUC)) {
+                        this.colIdx = colIdx;
+                        this.rowIdx = rowIdx;
+                        this.x = this.columns[colIdx].x;
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) {
+                    break;
+                }
+            }
+        }
+
+        this.mode = BrowserMode.Browse;
+        this.printBrowser();
     }
 
     private handleShowInfoKey(): void {
@@ -487,6 +519,13 @@ export class Browser {
             this.printTAB(2, y + i);
             this.print(lines[i]);
         }
+    }
+
+    private printLetterMode(): void {
+        const y = this.printBox('Go to', 1);
+        this.printTAB(2, y);
+        //..........01234567890123456789
+        this.print('Press first char');
     }
 
     private printFilterEditor(): void {
@@ -576,7 +615,13 @@ export class Browser {
         const oldColIdx = this.colIdx;
         const oldRowIdx = this.rowIdx;
 
-        let col = this.colIdx + dcol;
+        let col = this.colIdx + Math.sign(dcol);
+        if (col < 0) {
+            col = this.columns.length - 1;
+        } else if (col >= this.columns.length) {
+            col = 0;
+        }
+
         if (col < 0 || col >= this.columns.length) {
             return undefined;
         }
