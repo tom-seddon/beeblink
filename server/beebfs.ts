@@ -1251,7 +1251,9 @@ export class FS {
     public async parseDirString(dirString: string): Promise<FilePath> {
         const parseVolumeResult = await this.parseVolumeString(dirString);
 
-        return parseVolumeResult.volume.type.parseDirString(dirString, parseVolumeResult.i, this.getState(), parseVolumeResult.volume, parseVolumeResult.volumeExplicit);
+        const state: IFSState | undefined = parseVolumeResult.volumeExplicit ? undefined : this.getState();
+
+        return parseVolumeResult.volume.type.parseDirString(dirString, parseVolumeResult.i, state, parseVolumeResult.volume, parseVolumeResult.volumeExplicit);
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -1259,8 +1261,9 @@ export class FS {
 
     public async parseFileString(fileString: string): Promise<FQN> {
         const parseVolumeResult = await this.parseVolumeString(fileString);
+        const state: IFSState | undefined = parseVolumeResult.volumeExplicit ? undefined : this.getState();
 
-        return parseVolumeResult.volume.type.parseFileString(fileString, parseVolumeResult.i, this.getState(), parseVolumeResult.volume, parseVolumeResult.volumeExplicit);
+        return parseVolumeResult.volume.type.parseFileString(fileString, parseVolumeResult.i, state, parseVolumeResult.volume, parseVolumeResult.volumeExplicit);
     }
 
     /////////////////////////////////////////////////////////////////////////
