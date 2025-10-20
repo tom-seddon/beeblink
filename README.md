@@ -46,10 +46,10 @@ either; they are equivalent, though not currently bit-identical)
 
 # Setting up the Beeb
 
-You'll need a BBC B/B+/Master 128, ideally with some kind of EEPROM
-module or battery-backed write-protectable sideways RAM - it's no fun
-having to reload the ROM each time you power on, or have it zapped by
-careless programs!
+You'll need a BBC B, B+, Master 128, or Master Compact with Mertec
+Companion. The ROM is best programmed into EPROM, EEPROM, or
+battery-backed sideways RAM with write protection, but it'll run fine
+from ordinary sideways RAM.
 
 (If upgrading: you're advised to run the same version of ROM and
 server, but if both server and ROM are from a 2024 (or later) release
@@ -60,6 +60,8 @@ You can connect BBC and PC using a Tube USB serial adapter or a UPURS
 cable.
 
 ## Tube USB serial adapter
+
+Supports BBC B, B+, and Master 128.
 
 See https://stardot.org.uk/forums/viewtopic.php?f=8&t=14849. You'll
 need the full kit with the PLD.
@@ -82,9 +84,12 @@ and load it on your BBC; otherwise, use the
 
 ## UPURS cable
 
+Supports BBC B, B+, Master 128, and Master Compact with Mertec
+Companion.
+
 See https://www.retro-kit.co.uk/UPURS/. You'll also need a FTDI FT232
-USB serial adapter. Connect UPURS cable to BBC's user port connector
-and USB serial adapter, connect USB serial adapter to PC.
+USB serial adapter. Connect UPURS cable to user port connector and USB
+serial adapter, connect USB serial adapter to PC.
 
 If using Windows, you'll need to
 [tweak one of the device settings](./docs/ftdi_latency_timer.md).
@@ -93,7 +98,8 @@ If using macOS, [UPURS is currently
 unsupported](https://github.com/tom-seddon/beeblink/issues/79), but
 reports are welcome.
 
-If using Linux, there should be nothing to do!
+If using Linux, [you may need to set up your
+user](./docs/upurs_linux_setup.md).
 
 There's no bootstrap process for the UPURS cable. Use the UPURS tools
 to get `beeblink_upurs_fe60.rom` copied onto your BBC.
@@ -111,6 +117,8 @@ Hardware New AP5).
 You'll need a Tube USB serial adapter (see above). The PLD needs to be
 updated to V3 or later, as per the instructions here:
 [./devices/tube_serial](./devices/tube_serial)
+
+(Apologies, but the AP5 EUPURS interface is not yet supported.)
 
 Once set up, connect the Tube serial board to the AP5's Tube
 connector, use the jumper to select Comms mode, and connect the device
