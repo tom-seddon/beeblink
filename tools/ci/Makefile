@@ -201,7 +201,7 @@ _create_zip:
 	@echo XXX
 	@echo XXX Create .zip
 	@echo XXX
-	$(_V)cd "$(WORKSPACE_ROOT_PATH)/beeb/.build" && 7z a $(_ARGS) "$(ZIP_PATH)" "beeblink_avr_fe60.rom" "beeblink_tube_serial.rom" "beeblink_tube_serial_safe.rom" "beeblink_upurs_fe60.rom" "beeblink_tube_serial_electron.rom" "beeblink_tube_serial_safe_electron.rom" "beeblink_b2.rom"
+	$(_V)cd "$(WORKSPACE_ROOT_PATH)/beeb/build" && 7z a $(_ARGS) "$(ZIP_PATH)" "beeblink_avr_fe60.rom" "beeblink_tube_serial.rom" "beeblink_tube_serial_safe.rom" "beeblink_upurs_fe60.rom" "beeblink_tube_serial_electron.rom" "beeblink_tube_serial_safe_electron.rom" "beeblink_b2.rom"
 	$(_V)cd "$(TMP_PATH)" && 7z a $(_ARGS) "$(ZIP_PATH)" "beeblink-server$(EXE_EXT)"
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)" && 7z a "$(ZIP_PATH)" $(_ARGS) "volumes" "COPYING.txt"
 
