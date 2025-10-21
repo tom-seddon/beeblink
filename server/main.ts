@@ -43,6 +43,7 @@ import adfsType from './adfsType';
 import * as errors from './errors';
 import * as https from 'node:https';
 import * as net from 'net';
+import version from './version';
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -1830,10 +1831,17 @@ async function handleSerial(options: ICommandLineOptions, globals: IGlobalState,
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function main(options: ICommandLineOptions) {
-    process.title = 'BeebLink Server';
+function getProductName():string{
+    return `BeebLink Server (${version})`;
+}
 
-    process.stdout.write('BeebLink Server - Copyright (C) 2018-2025 Tom Seddon\nThis program comes with ABSOLUTELY NO WARRANTY. This is free software, and you are welcome to redistribute it under certain conditions. See the file COPYING.txt\n\n');
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+async function main(options: ICommandLineOptions) {
+    process.title = getProductName();
+
+    process.stdout.write(`${getProductName()} - Copyright (C) 2018-2025 Tom Seddon\nThis program comes with ABSOLUTELY NO WARRANTY. This is free software, and you are welcome to redistribute it under certain conditions. See the file COPYING.txt\n\n`);
 
     beebfs.setFSTypes(dfsType, pcType, tubeHostType, adfsType);
 
@@ -1919,7 +1927,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
 
     const parser = new argparse.ArgumentParser({
         addHelp: false,
-        description: 'BeebLink server',
+        description: getProductName(),
         epilog: epi,
     });
 

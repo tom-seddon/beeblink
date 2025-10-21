@@ -42,6 +42,7 @@
         "./tubeHostType.ts",
         "./utils.ts",
         "./volumebrowser.ts",
-        "./adfsType.ts"
+        "./adfsType.ts",
+        "./version.ts"
     ]
 }
