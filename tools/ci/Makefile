@@ -162,6 +162,7 @@ _server:
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && npm run compile
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && "./node_modules/.bin/pkg" -t $(TARGET) --out-path "$(TMP_PATH)" .
 	$(_V)git restore "$(_VERSION_TS)"
+	$(_V)git status
 
 ##########################################################################
 ##########################################################################
