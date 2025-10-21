@@ -5,6 +5,17 @@ MAKEFLAGS+=--no-print-directory
 ##########################################################################
 ##########################################################################
 
+ifneq ($(DIRTY_OK),1)
+
+ifneq ($(shell git status --porcelain),)
+$(error Working copy not clean)
+endif
+
+endif
+
+##########################################################################
+##########################################################################
+
 ifeq ($(OS),Windows_NT)
 PYTHON3:=py -3
 NPROC:=$(NUMBER_OF_PROCESSORS)
@@ -140,14 +151,17 @@ _install_prerequisites_macos:
 ##########################################################################
 
 .PHONY:_server
+_server: _VERSION_TS:=$(WORKSPACE_ROOT_PATH)/server/version.ts
 _server:
 	@echo XXX
 	@echo XXX Build server
 	@echo XXX
 
+	$(_V)$(SHELLCMD) echo-bytes --newline -e @ "export default @22$(BUILD_SUFFIX)@22;" > "$(_VERSION_TS)"
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && npm install
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && npm run compile
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && "./node_modules/.bin/pkg" -t $(TARGET) --out-path "$(TMP_PATH)" .
+	$(_V)git restore "$(_VERSION_TS)"
 
 ##########################################################################
 ##########################################################################
