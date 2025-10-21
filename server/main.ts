@@ -1984,7 +1984,7 @@ function createArgumentParser(fullHelp: boolean): argparse.ArgumentParser {
     //always(['--https'], { action: 'storeTrue', help: 'enable HTTPS server' });
 
     fullHelpOnly(['--http-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTP server listen on all interfaces, not just localhost' });
-    fullHelpOnly(['--https-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTPS server listen on all interfaces, not just localhost' });
+    //fullHelpOnly(['--https-all-interfaces'], { action: 'storeTrue', help: 'at own risk, make HTTPS server listen on all interfaces, not just localhost' });
     fullHelpOnly(['--http-verbose'], { action: 'storeTrue', help: 'extra HTTP-related output for HTTP or HTTPS server' });
 
     // Config file
