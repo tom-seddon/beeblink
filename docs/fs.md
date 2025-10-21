@@ -589,9 +589,16 @@ DFS ones, but there are some non-standard ones too.
 
 ## `Ambiguous name` (same code as `Bad name`)
 
-A wildcard name was used to load a file, and it matches multiple
+The specified name matched multiple files.
+
+This can occur when using wildcards, when the name matches multiple
 files. To fix this, be more precise - e.g., by supplying the full
 name.
+
+This can also occur if there are two files with the same BBC name. The
+server won't do this itself, but if you hand-edit or copy .INF files
+then it can in principle happen! To fix this, you'll need to rename
+the problem files by editing the .inf files on the server.
 
 ## `Ambiguous volume` (same code as `Bad name`)
 
