@@ -58,7 +58,7 @@ tube: .dstruct Tube
                 .endif
                 
                 .include "common.s65"
-                .include ".build/beeblink_constants.s65"
+                .include "build/beeblink_constants.s65"
                 .include "lib.s65"
                 
 ;-------------------------------------------------------------------------
