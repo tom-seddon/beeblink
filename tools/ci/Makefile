@@ -5,17 +5,6 @@ MAKEFLAGS+=--no-print-directory
 ##########################################################################
 ##########################################################################
 
-ifneq ($(DIRTY_OK),1)
-
-ifneq ($(shell git status --porcelain),)
-$(error Working copy not clean)
-endif
-
-endif
-
-##########################################################################
-##########################################################################
-
 ifeq ($(OS),Windows_NT)
 PYTHON3:=py -3
 NPROC:=$(NUMBER_OF_PROCESSORS)
@@ -161,8 +150,6 @@ _server:
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && npm install
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && npm run compile
 	$(_V)cd "$(WORKSPACE_ROOT_PATH)/server" && "./node_modules/.bin/pkg" -t $(TARGET) --out-path "$(TMP_PATH)" .
-	$(_V)git restore "$(_VERSION_TS)"
-	$(_V)git status
 
 ##########################################################################
 ##########################################################################
