@@ -35,6 +35,7 @@ GIT_VER:=$(shell git log -1 '--format=%cd-%h' '--date=format:%Y%m%d-%H%M%S')
 SHELLCMD:=$(PYTHON) ../submodules/shellcmd.py/shellcmd.py
 SMLOAD_JOIN:=$(PYTHON) ../submodules/beeb/bin/smload_join.py
 PRG2BBC:=$(PYTHON) ../submodules/beeb/bin/prg2bbc.py
+CONVERT_64TASS_SYMBOLS_TO_BEEBASM:=$(PYTHON) "../submodules/beeb/bin/convert_64tass_symbols_to_beebasm.py"
 COMMIT:=$(shell git log -1 '--format=%H')
 
 # The ROMs are also copied to drive z on the example beeblink volume.
@@ -173,10 +174,13 @@ _program :
 .PHONY : _rom
 _rom : _EXTRA_ARGS:="-DVERSION=\"$(VER)\"" "-DBUILD_INFO=\"$(BUILD_INFO)\"" "-DCOMMIT=\"$(COMMIT)\"" -Dlink_$(LINK)=true $(EXTRA_ARGS)
 _rom : STEM:=$(DEST)/beeblink_$(ROM_SUFFIX)
+_rom : CONVERT_SYMBOLS_ARGS:=--exclude-glob "tokens.*" --exclude-glob "key_*" --exclude-glob "REQUEST_*" --exclude-glob "RESPONSE_*"
 _rom :
-	$(_V)$(TASSCMD) --nostart beeblink.s65 -L$(STEM).lst -o$(STEM).rom $(_EXTRA_ARGS)
+	$(_V)$(TASSCMD) --nostart beeblink.s65 --dump-labels --labels=$(STEM).lbl -L$(STEM).lst -o$(STEM).rom $(_EXTRA_ARGS)
+	$(_V)$(CONVERT_64TASS_SYMBOLS_TO_BEEBASM) "$(STEM).lbl" -o "$(STEM).beebasm.labels" $(CONVERT_SYMBOLS_ARGS)
 
-	$(_V)$(TASSCMD) --nostart beeblink.s65 -L$(STEM)-test.lst -o$(STEM)-test.rom $(_EXTRA_ARGS) -Dblfs_fs_number=94 -Dblfs_first_handle=160 -Dblfs_prefix=\"$(CMD_PREFIX)\"
+	$(_V)$(TASSCMD) --nostart beeblink.s65 --dump-labels --labels=$(STEM)-test.lbl -L$(STEM)-test.lst -o$(STEM)-test.rom $(_EXTRA_ARGS) -Dblfs_fs_number=94 -Dblfs_first_handle=160 -Dblfs_prefix=\"$(CMD_PREFIX)\"
+	$(_V)$(CONVERT_64TASS_SYMBOLS_TO_BEEBASM) "$(STEM)-test.lbl" -o "$(STEM)-test.beebasm.labels" $(CONVERT_SYMBOLS_ARGS)
 
 	$(_V)$(SHELLCMD) mkdir $(BEEB_DEST)
 	$(_V)$(SHELLCMD) copy-file $(STEM).rom $(BEEB_DEST)/R.$(ROM_BEEB_NAME)
