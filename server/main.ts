@@ -21,28 +21,28 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+import { PortInfo } from '@serialport/bindings-interface';
 import * as argparse from 'argparse';
-import * as utils from './utils';
-import * as path from 'path';
 import * as assert from 'assert';
-import * as beeblink from './beeblink';
-import * as beebfs from './beebfs';
-import * as server from './server';
 import chalk from 'chalk';
-import * as gitattributes from './gitattributes';
 import * as http from 'http';
+import * as net from 'net';
+import * as https from 'node:https';
+import * as os from 'os';
+import * as path from 'path';
+import { SerialPort } from 'serialport';
+import adfsType from './adfsType';
+import * as beebfs from './beebfs';
+import * as beeblink from './beeblink';
+import dfsType from './dfsType';
+import * as errors from './errors';
+import * as gitattributes from './gitattributes';
+import pcType from './pcType';
 import Request from './request';
 import Response from './response';
-import { SerialPort } from 'serialport';
-import { PortInfo } from '@serialport/bindings-interface';
-import * as os from 'os';
-import dfsType from './dfsType';
-import pcType from './pcType';
+import * as server from './server';
 import tubeHostType from './tubeHostType';
-import adfsType from './adfsType';
-import * as errors from './errors';
-import * as https from 'node:https';
-import * as net from 'net';
+import * as utils from './utils';
 import version from './version';
 
 /////////////////////////////////////////////////////////////////////////
@@ -353,18 +353,20 @@ async function listSerialDevices(options: ICommandLineOptions): Promise<void> {
             }
         }
 
-        attr(device.portInfo.manufacturer, `Manufacturer`);
-        attr(device.portInfo.serialNumber, `Serial number`);
-        attr(device.portInfo.vendorId, `Vendor ID`);
-        attr(device.portInfo.productId, `Product ID`);
-        attr(device.portInfo.locationId, `Location ID`);
-        attr(device.portInfo.pnpId, `PNP ID`);
+        if (device.portInfo !== undefined) {
+            attr(device.portInfo.manufacturer, `Manufacturer`);
+            attr(device.portInfo.serialNumber, `Serial number`);
+            attr(device.portInfo.vendorId, `Vendor ID`);
+            attr(device.portInfo.productId, `Product ID`);
+            attr(device.portInfo.locationId, `Location ID`);
+            attr(device.portInfo.pnpId, `PNP ID`);
+        }
 
         const prefix = `${deviceIdx}. `;
 
         const indent = ` `.repeat(prefix.length);
 
-        process.stdout.write(`${prefix}Path: ${getSerialPortPath(device.portInfo)}\n`);
+        process.stdout.write(`${prefix}Path: ${device.path}\n`);
         if (attrs.length > 0) {
             process.stdout.write(`${indent}(${attrs.join('; ')})\n`);
         }
@@ -381,28 +383,29 @@ async function listSerialDevices(options: ICommandLineOptions): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 
 interface ISerialDevice {
-    portInfo: PortInfo;
+    portInfo: PortInfo | undefined;
+    path: string;
     autoDetected: boolean;
     shouldOpen: boolean;
     shouldOpenReason: string;
 }
 
-// SerialPort ver 8 changed a field name, from `comName' to 'path', in such a
-// way that there's a deprecation warning each time `comName' is used.
-//
-// I still have no idea how to update TypeScript typings, so... this.
-function getSerialPortPath(portInfo: PortInfo): string {
-    return (portInfo as { path: string; }).path;
-}
-
-function isSameDevice(a: PortInfo, b: PortInfo): boolean {
-    if (a.locationId !== undefined && b.locationId !== undefined) {
-        if (a.locationId === b.locationId) {
-            return true;
-        }
-
-        // Any more conditions?
+function isSameDevice(a: PortInfo, b: ISerialDevice): boolean {
+    if (utils.getSeparatorAndCaseNormalizedPath(a.path) == utils.getSeparatorAndCaseNormalizedPath(b.path)) {
+        return true;
     }
+
+    if (a.locationId !== undefined) {
+        if (b.portInfo !== undefined) {
+            if (b.portInfo.locationId !== undefined) {
+                if (a.locationId === b.portInfo.locationId) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Any more conditions?
 
     return false;
 }
@@ -410,7 +413,7 @@ function isSameDevice(a: PortInfo, b: PortInfo): boolean {
 function isSerialPortPathInList(portInfo: PortInfo, paths: string[] | null): boolean {
     if (paths !== null) {
         for (const p of paths) {
-            if (utils.getSeparatorAndCaseNormalizedPath(getSerialPortPath(portInfo)) === utils.getSeparatorAndCaseNormalizedPath(p)) {
+            if (utils.getSeparatorAndCaseNormalizedPath(portInfo.path) === utils.getSeparatorAndCaseNormalizedPath(p)) {
                 return true;
             }
         }
@@ -423,6 +426,8 @@ async function getAllSerialDevices(options: ICommandLineOptions): Promise<ISeria
     const portInfos = await SerialPort.list();
     const ports: ISerialDevice[] = [];
 
+    const serialIncludesUsed = new Set<string>();
+
     for (const portInfo of portInfos) {
         let shouldOpen: boolean | undefined;
         let reason = '';
@@ -432,6 +437,7 @@ async function getAllSerialDevices(options: ICommandLineOptions): Promise<ISeria
         if (isSerialPortPathInList(portInfo, options.serial_include)) {
             shouldOpen = true;
             reason = 'explicitly included';
+            serialIncludesUsed.add(portInfo.path);
         } else if (options.serial_exclude_all) {
             shouldOpen = false;
             reason = `excluded by ${SERIAL_EXCLUDE_ALL_OPTION_NAME}`;
@@ -443,7 +449,7 @@ async function getAllSerialDevices(options: ICommandLineOptions): Promise<ISeria
         // By default, exclude devices that appear multiple times in the list.
         if (shouldOpen === undefined) {
             for (const otherPort of ports) {
-                if (isSameDevice(portInfo, otherPort.portInfo)) {
+                if (isSameDevice(portInfo, otherPort)) {
                     // never open duplicate devices by default.
                     //
                     // if the other device should be opened: this one shouldn't,
@@ -457,7 +463,7 @@ async function getAllSerialDevices(options: ICommandLineOptions): Promise<ISeria
                     // (to override this, there's always the explicit
                     // include/exclude options.)
                     shouldOpen = false;
-                    reason = `apparently same device as: ${getSerialPortPath(otherPort.portInfo)}`;
+                    reason = `apparently same device as: ${otherPort.path}`;
                     if (otherPort.shouldOpen) {
                         reason += ` (not going to open same device twice)`;
                     } else {
@@ -486,7 +492,27 @@ async function getAllSerialDevices(options: ICommandLineOptions): Promise<ISeria
             reason = 'unknown device';
         }
 
-        ports.push({ portInfo, autoDetected, shouldOpen, shouldOpenReason: reason });
+        ports.push({
+            portInfo,
+            path: portInfo.path,
+            autoDetected,
+            shouldOpen,
+            shouldOpenReason: reason
+        });
+    }
+
+    if (options.serial_include !== null) {
+        for (const serialInclude of options.serial_include) {
+            if (!serialIncludesUsed.has(serialInclude)) {
+                ports.push({
+                    portInfo: undefined,
+                    path: serialInclude,
+                    autoDetected: false,
+                    shouldOpen: true,
+                    shouldOpenReason: 'path explicitly specified',
+                });
+            }
+        }
     }
 
     return ports;
@@ -501,12 +527,12 @@ async function getOpenableSerialDevices(options: ICommandLineOptions): Promise<I
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-async function openSerialPort(portInfo: PortInfo): Promise<SerialPort> {
+async function openSerialPort(device: ISerialDevice): Promise<SerialPort> {
     // The baud rate is a fixed 115,200. That's the fixed rate supported by the
     // UPURS code, and for the Tube Serial device the baud rate doesn't seem to
     // matter.
     const port = new SerialPort({
-        path: getSerialPortPath(portInfo),
+        path: device.path,
         autoOpen: false,
         baudRate: 115200,
         dataBits: 8,
@@ -537,7 +563,7 @@ async function openSerialPort(portInfo: PortInfo): Promise<SerialPort> {
 /////////////////////////////////////////////////////////////////////////
 
 async function serialTestPCToBBC2(device: ISerialDevice): Promise<void> {
-    process.stderr.write(`${getSerialPortPath(device.portInfo)}: sending bytes...\n`);
+    process.stderr.write(`${device.path}: sending bytes...\n`);
 
     let numBytesSent = 0;
 
@@ -547,7 +573,7 @@ async function serialTestPCToBBC2(device: ISerialDevice): Promise<void> {
         for (; ;) {
             await delayMS(1000);
             if (oldNumBytesSent !== numBytesSent) {
-                process.stderr.write(`${getSerialPortPath(device.portInfo)}: sent ${numBytesSent} bytes\n`);
+                process.stderr.write(`${device.path}: sent ${numBytesSent} bytes\n`);
                 oldNumBytesSent = numBytesSent;
             }
         }
@@ -555,7 +581,7 @@ async function serialTestPCToBBC2(device: ISerialDevice): Promise<void> {
 
     void printBytesSent();
 
-    const port = await openSerialPort(device.portInfo);
+    const port = await openSerialPort(device);
 
     for (; ;) {
         for (let i = 0; i < 256; ++i) {
@@ -589,7 +615,7 @@ async function serialTestPCToBBC(options: ICommandLineOptions): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 
 async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
-    const port = await openSerialPort(device.portInfo);
+    const port = await openSerialPort(device);
     //const log = utils.Log.create(getSerialPortPath(device.portInfo), process.stdout);
 
     await new Promise<void>((resolve, reject) => {
@@ -602,7 +628,7 @@ async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
         });
     });
 
-    process.stderr.write(`${getSerialPortPath(device.portInfo)}: press any key on the BBC now.\n`);
+    process.stderr.write(`${device.path}: press any key on the BBC now.\n`);
 
     let numBytesReceived = 0;
 
@@ -610,7 +636,7 @@ async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
         for (const got of data) {
             const expected = numBytesReceived & 0xff;
             if (got !== expected) {
-                throw new Error(`${getSerialPortPath(device.portInfo)}: +${numBytesReceived}: expected ${expected}, got ${got}\n`);
+                throw new Error(`${device.path}: +${numBytesReceived}: expected ${expected}, got ${got}\n`);
             }
 
             ++numBytesReceived;
@@ -634,7 +660,7 @@ async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
     });
 
     port.on('error', (error: unknown): void => {
-        throw new Error(`${getSerialPortPath(device.portInfo)}: error: ${error}`);
+        throw new Error(`${device.path}: error: ${error}`);
     });
 
     let oldNumBytesReceived = -1;
@@ -642,7 +668,7 @@ async function serialTestBBCToPC2(device: ISerialDevice): Promise<void> {
         await delayMS(1000);
 
         if (oldNumBytesReceived !== numBytesReceived) {
-            process.stderr.write(`${getSerialPortPath(device.portInfo)}: received ${numBytesReceived} bytes\n`);
+            process.stderr.write(`${device.path}: received ${numBytesReceived} bytes\n`);
             oldNumBytesReceived = numBytesReceived;
         }
     }
@@ -658,17 +684,15 @@ async function serialTestBBCToPC(options: ICommandLineOptions): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 
 async function sendFile(device: ISerialDevice, filePath: string): Promise<void> {
-    const port = await openSerialPort(device.portInfo);
+    const port = await openSerialPort(device);
 
     const fileData = await utils.fsReadFile(filePath);
 
-    const portPath = getSerialPortPath(device.portInfo);
-
-    process.stderr.write(`${portPath}: flush\n`);
+    process.stderr.write(`${device.path}: flush\n`);
 
     await flushPort(port);
 
-    process.stderr.write(`${portPath}: sending: ${filePath} (${fileData.length} byte(s))\n`);
+    process.stderr.write(`${device.path}: sending: ${filePath} (${fileData.length} byte(s))\n`);
 
     const maxChunkSize = 1024;
 
@@ -677,7 +701,7 @@ async function sendFile(device: ISerialDevice, filePath: string): Promise<void> 
 
         const chunk = fileData.subarray(chunkBegin, chunkEnd);
 
-        process.stderr.write(`${portPath}: [${chunkBegin},${chunkEnd})\n`);
+        process.stderr.write(`${device.path}: [${chunkBegin},${chunkEnd})\n`);
 
         await new Promise<void>((resolve, reject): void => {
             // Despite what the TypeScript definitions appear to say,
@@ -695,7 +719,7 @@ async function sendFile(device: ISerialDevice, filePath: string): Promise<void> 
         await drainPort(port);
     }
 
-    process.stderr.write(`${portPath}: sent.\n`);
+    process.stderr.write(`${device.path}: sent.\n`);
 }
 
 async function serialTestSendFile(options: ICommandLineOptions, filePath: string): Promise<void> {
@@ -1215,7 +1239,7 @@ async function setFTDILatencyTimer(portInfo: PortInfo): Promise<void> {
         // improved with a 1 ms latency timer.
     } else if (process.platform === 'linux') {
         if (ioctl === undefined) {
-            process.stderr.write(`${getSerialPortPath(portInfo)}: not setting low latency - ioctl module not available.\n`);
+            process.stderr.write(`${portInfo.path}: not setting low latency - ioctl module not available.\n`);
         } else {
             // The latency timer value can be found in the file
             // /sys/bus/usb-serial/devices/<<DEVICE>>/latency_timer, only
@@ -1244,7 +1268,7 @@ async function setFTDILatencyTimer(portInfo: PortInfo): Promise<void> {
 
             let fd = -1;
             try {
-                fd = await utils.fsOpen(getSerialPortPath(portInfo), 'r+');
+                fd = await utils.fsOpen(portInfo.path, 'r+');
 
                 const buf = Buffer.alloc(1000);//exact size doesn't really matter.
 
@@ -1263,7 +1287,7 @@ async function setFTDILatencyTimer(portInfo: PortInfo): Promise<void> {
 
                 ioctl(fd, TIOCSSERIAL, buf);
             } catch (error) {
-                process.stderr.write(`${getSerialPortPath(portInfo)}: error setting low latency mode: ${error}\n`);
+                process.stderr.write(`${portInfo.path}: error setting low latency mode: ${error}\n`);
             } finally {
                 if (fd >= 0) {
                     await utils.fsClose(fd);
@@ -1286,7 +1310,7 @@ interface IReadWaiter {
 //     return `Device ${getSerialPortPath(portInfo)}`;
 // }
 
-function isSerialDeviceVerbose(portInfo: PortInfo, verboseOptions: string[] | null): boolean {
+function isSerialDeviceVerbose(device: ISerialDevice, verboseOptions: string[] | null): boolean {
     if (verboseOptions !== null) {
         if (verboseOptions.includes('')) {
             // --whatever, applying to all devices was provided on its own at some
@@ -1294,7 +1318,7 @@ function isSerialDeviceVerbose(portInfo: PortInfo, verboseOptions: string[] | nu
             return true;
         }
 
-        if (verboseOptions.includes(getSerialPortPath(portInfo))) {
+        if (verboseOptions.includes(device.path)) {
             return true;
         }
     }
@@ -1326,32 +1350,34 @@ async function drainPort(port: SerialPort): Promise<void> {
     });
 }
 
-async function handleSerialDevice(options: ICommandLineOptions, portInfo: PortInfo, srv: server.Server): Promise<void> {
+async function handleSerialDevice(options: ICommandLineOptions, device: ISerialDevice, srv: server.Server): Promise<void> {
     const f = process.stdout;
 
-    const serialLog = utils.Log.create(getSerialPortPath(portInfo), f, isSerialDeviceVerbose(portInfo, options.serial_verbose));
+    const serialLog = utils.Log.create(device.path, f, isSerialDeviceVerbose(device, options.serial_verbose));
 
     let port: SerialPort;
     try {
-        port = await openSerialPort(portInfo);
+        port = await openSerialPort(device);
     } catch (error) {
-        process.stderr.write(`Error opening serial port ${getSerialPortPath(portInfo)}: ${error}\n`);
+        process.stderr.write(`Error opening serial port ${device.path}: ${error}\n`);
         return;
     }
 
-    if (isSerialPortUSBDevice(portInfo, TUBE_SERIAL_DEVICE) || isSerialPortUSBDevice(portInfo, FTDI_USB_SERIAL_DEVICE)) {
-        await setFTDILatencyTimer(portInfo);
+    if (device.portInfo !== undefined) {
+        if (isSerialPortUSBDevice(device.portInfo, TUBE_SERIAL_DEVICE) || isSerialPortUSBDevice(device.portInfo, FTDI_USB_SERIAL_DEVICE)) {
+            await setFTDILatencyTimer(device.portInfo);
+        }
     }
 
     let readWaiter: IReadWaiter | undefined;
     const readBuffers: Buffer[] = [];
     let readIndex = 0;
 
-    const dataInLog = utils.Log.create(getSerialPortPath(portInfo), f, isSerialDeviceVerbose(portInfo, options.serial_data_verbose));
-    const dataOutLog = utils.Log.create(getSerialPortPath(portInfo), f, isSerialDeviceVerbose(portInfo, options.serial_data_verbose));
-    const syncLog = utils.Log.create(`${getSerialPortPath(portInfo)}: sync`, f, isSerialDeviceVerbose(portInfo, options.serial_sync_verbose));
+    const dataInLog = utils.Log.create(device.path, f, isSerialDeviceVerbose(device, options.serial_data_verbose));
+    const dataOutLog = utils.Log.create(device.path, f, isSerialDeviceVerbose(device, options.serial_data_verbose));
+    const syncLog = utils.Log.create(`${device.path}: sync`, f, isSerialDeviceVerbose(device, options.serial_sync_verbose));
 
-    process.stderr.write(`${getSerialPortPath(portInfo)}: serving. (verbose=${utils.Log.isEnabled(serialLog)}, data-verbose=(in: ${utils.Log.isEnabled(dataInLog)}, out: ${utils.Log.isEnabled(dataOutLog)}), sync-verbose=${utils.Log.isEnabled(syncLog)})\n`);
+    process.stderr.write(`${device.path}: serving. (verbose=${utils.Log.isEnabled(serialLog)}, data-verbose=(in: ${utils.Log.isEnabled(dataInLog)}, out: ${utils.Log.isEnabled(dataOutLog)}), sync-verbose=${utils.Log.isEnabled(syncLog)})\n`);
 
     port.on('data', (data: Buffer): void => {
         readBuffers.push(data);
@@ -1784,12 +1810,11 @@ async function handleSerial(options: ICommandLineOptions, globals: IGlobalState,
                 ++numAutoDetected;
             }
 
-            const portPath = getSerialPortPath(device.portInfo);
-            const deviceName = `serial:${portPath}`;
+            const deviceName = `serial:${device.path}`;
 
             let maybeServer: IServer | undefined = globals.serverByDeviceName.get(deviceName);
             if (maybeServer === undefined) {
-                log?.pn(`${portPath}: new serial port`);
+                log?.pn(`${device.path}: new serial port`);
                 maybeServer = {
                     server: await createServer('SERIAL', getRomPaths(options), true),
                     active: false,//not quite active just yet!
@@ -1807,12 +1832,12 @@ async function handleSerial(options: ICommandLineOptions, globals: IGlobalState,
 
             if (!srv.active) {
                 srv.active = true;
-                handleSerialDevice(options, device.portInfo, srv.server).then(() => {
-                    process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed.\n`);
+                handleSerialDevice(options, device, srv.server).then(() => {
+                    process.stderr.write(`${device.path}: connection closed.\n`);
                     srv.active = false;
                 }).catch((error: unknown) => {
                     process.stderr.write(`${(error as { stack: string; }).stack} `);
-                    process.stderr.write(`${getSerialPortPath(device.portInfo)}: connection closed due to error: ${error} \n`);
+                    process.stderr.write(`${device.path}: connection closed due to error: ${error} \n`);
                     srv.active = false;
                 });
             }
@@ -1831,7 +1856,7 @@ async function handleSerial(options: ICommandLineOptions, globals: IGlobalState,
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-function getProductName():string{
+function getProductName(): string {
     return `BeebLink Server (${version})`;
 }
 
