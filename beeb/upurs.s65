@@ -877,7 +877,7 @@ sb:
                 bcs T3		; (2) or (3)
                 bmi T2		; (2) or (3)
                 lda via.irb     ; (3 + 3)
-                bmi T1		; (2) or (3)
+                bmi T1		; (2) or (3) - C=0
                 .rept 10
                 lda via.irb     ; (3 + 3)
                 bmi T0		; (2) or (3)
@@ -915,12 +915,12 @@ xskip:				; (15) (15)
 
                 ;bit 0 +12
                 ldx via.irb
+                cpy #serbuf_max_size ;nop; 2
+                beq overrun          ;nop; 4
+                nop                  ; 6
+                nop                  ; 8
                 cpx #$80
                 ror a
-                nop
-                nop
-                nop
-                nop
 
                 ; bit 1 +12
                 ldx via.irb
@@ -985,6 +985,12 @@ xskip:				; (15) (15)
                 
                 sta serbuf-1,y	; save byte in buffer
                 jmp sb		; and loop for next byte start bit
+
+overrun:
+                plp
+
+                .brk_error 255,"Input overrun"
+                
                 .pend
                 
 ;-------------------------------------------------------------------------
