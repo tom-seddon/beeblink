@@ -1903,6 +1903,11 @@ tools/send_serial_file.py works from Linux. Similar results as the
 BeebLink server on macOS (possibly identical, but didn't check -
 anyway, it doesn't work).
 
+Had to open the port in =ab= mode on macOS (for reasons unknown). With
+this, some corruption when sending the file from Linux. Seems ok if
+opening the port in =wb= mode. =w+b= needs =buffering\=0=, but that
+seems to work ok too?
+
 ** =decode6502 --help=
 
 #+begin_example

@@ -60,7 +60,7 @@ def main2(options):
     # global g_verbose;g_verbose=options.verbose
 
     print('Opening port: %s'%options.port_path)
-    with open(options.port_path,'ab') as port_f:
+    with open(options.port_path,'w+b',buffering=0) as port_f:
         termios.tcflush(port_f,termios.TCIOFLUSH)
         
         attrs=termios.tcgetattr(port_f)
