@@ -1862,4 +1862,178 @@ CLOSED: [2025-10-02 Thu 23:04]
       prerelease: $(PRERELEASE)
 #+end_src
 
+* UPURS stuff
+
+#+begin_example
+./run.sh --serial-exclude /dev/tty.usbserial-FT4AHAA3
+#+end_example
+
+Get bus snoop data:
+
+#+begin_example
+cat /dev/cu.usbserial-FT4AHAA3 > ~/tmp/test.dat
+#+end_example
+
+Suitable decode6502 invocation:
+
+#+begin_example
+./decode6502 --machine=beeb --byte --hex-prefix='$' --state --hex ~/tmp/test.dat
+#+end_example
+
+https://apple.stackexchange.com/questions/177448/stty-device-baud-rate-resets-once-no-longer-being-used
+
+https://ftdichip.com/drivers/vcp-drivers/
+
+UPURS thread: https://www.stardot.org.uk/forums/viewtopic.php?t=3114
+
+** =decode6502 --help=
+
+#+begin_example
+  Usage: decode6502 [OPTION...] [FILENAME]
+
+  Decoder for 6502/65C02/65C816 logic analyzer capture files.
+
+  FILENAME must be a binary capture file containing:
+  - 16 bit samples (of the data bus and control signals), or
+  -  8-bit samples (of the data bus), if the --byte option is present.
+
+  If FILENAME is omitted, stdin is read instead.
+
+  The default sample bit assignments for the 6502/65C02 signals are:
+   - data: bit  0 (assumes 8 consecutive bits)
+   -  rnw: bit  8
+   - sync: bit  9
+   -  rdy: bit 10
+   -  rst: bit 14
+   - phi2: bit 15
+
+  The default sample bit assignments for the 65C816 signals are:
+   - data: bit  0 (assumes 8 consecutive bits)
+   -  rnw: bit  8
+   -  vpa: bit  9
+   -  rdy: bit 10
+   -  vda: bit 11
+   -    e: bit 12
+   -  rst: bit 14
+   - phi2: bit 15
+
+  To specify that an input is unconnected, include the option with an empty
+  BITNUM. e.g. --sync=
+
+  If phi2 is not connected the capture file should contain one sample per
+  falling edge of phi2.
+
+  If rdy is not connected a value of '1' is assumed.
+
+  If sync (or vda/vpa) is not connected a heuristic based decoder is used.
+  This works well, but can take several instructions to lock onto the
+  instruction stream. Use of sync (or vda/vpa) is recommended.
+
+  If RST is not connected, an alternative is to specify the reset vector:
+   - D9CD (D9 is the high byte, CD is the low byte)
+   - A9D9CD (optionally, also specify the first opcode, LDA # in this case)
+
+  If --debug=1 is specified, each instruction is preceeded by it's sample
+  values.
+
+  The --mem= option controls the memory access logging and modelling. The value
+  is three hex nibbles: WRM, where W controls write logging, R controls read
+  logging, and M controls modelling.
+  Each of the three nibbles has the same semantics:
+   - bit 3 applies to stack accesses
+   - bit 2 applies to data accesses
+   - bit 1 applies to pointer accesses
+   - bit 0 applies to instruction accesses
+  Examples:
+   --mem=00F models (and verifies) all accesses, but with minimal extra logging
+   --mem=F0F would additional log all writes
+
+  Supported machine types:
+      default
+      beeb
+      master
+      elk
+      atom
+      mek6800d2
+      blitter
+
+  Supported CPU types:
+      6502      aliases: R6502 SY6502 NMOS 02
+      65C02     aliases: CMOS C02
+      R65C02    aliases: ROCKWELL
+      WD65C02   aliases: W65C02 WDC
+      ARLET     aliases:
+      ARLETC02  aliases:
+      ALANDC02  aliases:
+      65816     aliases: 65C816 W65816 W65C816 816 C816
+      6800      aliases: M6800 MC6800 6802 M6802 MC6802
+
+   General options:
+        --bbctube              BBC tube protocol decoding
+    -b, --byte                 Enable byte-wide sample mode
+    -c, --cpu=CPU              Sets CPU type (see above)
+    -d, --debug=LEVEL          Sets the debug level (0 or 1)
+        --labels=FILE          Swift format label/symbols file e.g. from beebasm
+        --mem[=HEX]            Memory modelling (see above)
+    -m, --machine=MACHINE      Sets machine specific defaults and memory model
+                               (see above)
+    -p, --profile[=PARAMS]     Profile code execution
+        --skew[=SKEW]          Skew the data bus by +/- n samples
+        --skew_rd[=SKEW]       Skew the data bus by +/- n samples for read data
+        --skew_wr[=SKEW]       Skew the data bus by +/- n samples for write data
+        --skip[=HEX]           Skip the first n samples
+    -t, --trigger=ADDRESS      Trigger on address
+        --vecrst[=HEX]         Reset vector, optionally preceeded by the first
+                               opcode (e.g. A9D9CD)
+
+   Output options:
+    -a, --address              Show address of instruction
+    -f, --bbcfwa               Show BBC floating-point work areas
+    -h, --hex                  Show hex bytes of instruction
+    -i, --instruction          Show instruction disassembly
+    -q, --quiet                Set all the output options to off
+    -r, --showromno            Show BBC rom no for address 8000..BFFF
+    -s, --state                Show register/flag state
+    -x, --hex-prefix=STR       Use STR as hex prefix in disassembly
+    -y, --cycles               Show number of bus cycles
+    -Y, --samplenum            Show bus cycle numbers
+
+   Signal defintion options:
+        --data=BITNUM          Bit number for data (default  0)
+        --e[=BITNUM]           Bit number for e    (default 12) (65C816)
+        --phi1[=BITNUM]        Bit number for phi1 (default -1)
+        --phi2[=BITNUM]        Bit number for phi2 (default 15)
+        --rdy[=BITNUM]         Bit number for rdy  (default 10)
+        --rnw[=BITNUM]         Bit number for rnw  (default  8)
+        --rst[=BITNUM]         Bit number for rst  (default 14)
+        --sync[=BITNUM]        Bit number for sync (default  9) (6502/65C02)
+        --user[=BITNUM]        Bit number for user (default -1)
+        --vda[=BITNUM]         Bit number for vda  (default 11) (65C816)
+        --vpa[=BITNUM]         Bit number for vpa  (default  9) (65C816)
+
+   Additional 6502/65C02 options:
+        --sp[=HEX]             Initial value of the Stack Pointer register
+    -u, --undocumented         Enable undocumented opcodes
+
+   Additional 65C816 options:
+        --db[=HEX]             Initial value of the Data Bank register
+        --dp[=HEX]             Initial value of the Direct Page register
+        --emul[=HEX]           Initial value of the E flag
+        --ms[=HEX]             Initial value of the M flag
+        --pb[=HEX]             Initial value of the Program Bank register
+        --sp[=HEX]             Initial value of the Stack Pointer register
+        --xs[=HEX]             Initial value of the X flag
+
+    -?, --help                 Give this help list
+        --usage                Give a short usage message
+    -V, --version              Print program version
+
+  Mandatory or optional arguments to long options are also mandatory or optional
+  for any corresponding short options.
+
+  Report bugs to <dave@hoglet.com>.
+#+end_example
+
+
+
 * eof.
