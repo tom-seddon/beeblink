@@ -1862,7 +1862,7 @@ CLOSED: [2025-10-02 Thu 23:04]
       prerelease: $(PRERELEASE)
 #+end_src
 
-* UPURS stuff
+* UPURS/macOS stuff
 
 #+begin_example
 ./run.sh --serial-exclude /dev/tty.usbserial-FT4AHAA3
@@ -1885,6 +1885,21 @@ https://apple.stackexchange.com/questions/177448/stty-device-baud-rate-resets-on
 https://ftdichip.com/drivers/vcp-drivers/
 
 UPURS thread: https://www.stardot.org.uk/forums/viewtopic.php?t=3114
+
+For testing the basic UPURS transmission, can use the standard UPURS
+ROM. Do =*UPLOAD 5800= in Mode 5 to receive data to $5800, then send
+it an image file. For example:
+
+#+begin_example
+./run.sh --serial-test-send-file ~/github/beeb-files/stuff/Ghouls-Superior/0/\$.GOSTSCR
+#+end_example
+
+This works fine in Linux.
+
+This makes a big mess in macOS. Though, interestingly, sending it the
+same file via [[https://freeware.the-meiers.org/][CoolTerm]] seems to work ok...
+
+tools/send_serial_file.py works from Linux.
 
 ** =decode6502 --help=
 
