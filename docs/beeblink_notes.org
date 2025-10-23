@@ -1899,7 +1899,9 @@ This works fine in Linux.
 This makes a big mess in macOS. Though, interestingly, sending it the
 same file via [[https://freeware.the-meiers.org/][CoolTerm]] seems to work ok...
 
-tools/send_serial_file.py works from Linux.
+tools/send_serial_file.py works from Linux. Similar results as the
+BeebLink server on macOS (possibly identical, but didn't check -
+anyway, it doesn't work).
 
 ** =decode6502 --help=
 

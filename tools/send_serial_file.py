@@ -28,30 +28,56 @@ for name in dir(termios):
         assert Bvalue not in g_baud_by_Bvalue
         g_baud_by_Bvalue[Bvalue]=baud
 
+g_bits_by_CSIZE={
+    termios.CS5:5,
+    termios.CS6:6,
+    termios.CS7:7,
+    termios.CS8:8,
+}
+
 ##########################################################################
 ##########################################################################
+
+def print_tcattr(attrs):
+    def flags(index,prefix,names):
+        flags=[]
+        for name in names:
+            if attrs[index]&getattr(termios,name): flags.append(name)
+        print('    %s: %d (0x%x): %s'%(prefix,
+                                       attrs[index],
+                                       attrs[index],
+                                       ' '.join(flags)))
+    
+    flags(0,'iflag',['IGNBRK','BRKINT','IGNPAR','PARMRK','INPCK','ISTRIP','INLCR','IGNCR','ICRNL','IXANY','IXOFF'])
+    flags(1,'oflag',['OPOST','ONLCR','OCRNL','ONOCR','ONLRET','OFILL','OFDEL','NLDLY','CRDLY','TABDLY','BSDLY','VTDLY','FFDLY'])
+    flags(2,'cflag',['CSTOPB','CREAD','PARENB','PARODD','HUPCL','CLOCAL','CRTSCTS'])
+    print('           CSIZE: %d'%g_bits_by_CSIZE.get(attrs[2]&termios.CSIZE,-1))
+    flags(3,'lflag',['ISIG','ICANON','ECHO','ECHOE','ECHOK','ECHONL','NOFLSH','TOSTOP','IEXTEN'])
+    print('    ispeed: %d'%g_baud_by_Bvalue.get(attrs[4],-1))
+    print('    ospeed: %d'%g_baud_by_Bvalue.get(attrs[5],-1))
 
 def main2(options):
     # global g_verbose;g_verbose=options.verbose
 
-    with open(options.port_path,'wb') as port_f:
+    print('Opening port: %s'%options.port_path)
+    with open(options.port_path,'ab') as port_f:
+        termios.tcflush(port_f,termios.TCIOFLUSH)
+        
         attrs=termios.tcgetattr(port_f)
-        def flags(index,prefix,names):
-            flags=[]
-            for name in names:
-                if attrs[index]&getattr(termios,name): flags.append(name)
-            print('    %s: %d (0x%x): %s'%(prefix,
-                                           attrs[index],
-                                           attrs[index],
-                                           ' '.join(flags)))
 
-        print('Settings for %s:'%options.port_path)
-        flags(0,'iflag',['IGNBRK','BRKINT','IGNPAR','PARMRK','INPCK','ISTRIP','INLCR','IGNCR','ICRNL','IXANY','IXOFF'])
-        flags(1,'oflag',['OPOST','ONLCR','OCRNL','ONOCR','ONLRET','OFILL','OFDEL','NLDLY','CRDLY','TABDLY','BSDLY','VTDLY','FFDLY'])
-        flags(2,'cflag',['CSIZE','CSTOPB','CREAD','PARENB','PARODD','HUPCL','CLOCAL','CRTSCTS'])
-        flags(3,'lflag',['ISIG','ICANON','ECHO','ECHOE','ECHOK','ECHONL','NOFLSH','TOSTOP','IEXTEN'])
-        print('    ispeed: %d'%g_baud_by_Bvalue.get(attrs[4],-1))
-        print('    ospeed: %d'%g_baud_by_Bvalue.get(attrs[5],-1))
+        print('Initial settings for %s:'%options.port_path)
+        print_tcattr(attrs)
+
+        attrs[2]&=~termios.CSIZE
+        attrs[2]|=termios.CS8
+        attrs[2]|=termios.CRTSCTS
+        attrs[4]=termios.B115200
+        attrs[5]=termios.B115200
+
+        print('Updated settings for %s:'%options.port_path)
+        print_tcattr(attrs)
+
+        termios.tcsetattr(port_f,termios.TCSANOW,attrs)
 
         for input_path in options.input_paths:
             print('Sending: %s...'%input_path)
