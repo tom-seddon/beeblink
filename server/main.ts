@@ -684,7 +684,13 @@ async function serialTestBBCToPC(options: ICommandLineOptions): Promise<void> {
 /////////////////////////////////////////////////////////////////////////
 
 async function sendFile(device: ISerialDevice, filePath: string): Promise<void> {
-    const port = await openSerialPort(device);
+    let port: SerialPort;
+    try {
+        port = await openSerialPort(device);
+    } catch (error) {
+        process.stderr.write(`Error opening serial port ${device.path}: ${error}\n`);
+        return;
+    }
 
     const fileData = await utils.fsReadFile(filePath);
 
