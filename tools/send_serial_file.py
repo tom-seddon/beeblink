@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-import sys,argparse,termios,re
+import sys,argparse,termios,re,fcntl,os
 
 # in theory you could do this from the shell - but macOS resets the
 # serial port properties when closed, so it's a bind.
@@ -60,25 +60,47 @@ def main2(options):
     # global g_verbose;g_verbose=options.verbose
 
     print('Opening port: %s'%options.port_path)
-    with open(options.port_path,'w+b',buffering=0) as port_f:
-        termios.tcflush(port_f,termios.TCIOFLUSH)
-        
-        attrs=termios.tcgetattr(port_f)
+    port_fd=os.open(options.port_path,
+                    (os.O_RDWR|
+                     #os.O_NONBLOCK|
+                     os.O_SHLOCK))
+    print('    fd: %d'%port_fd)
 
-        print('Initial settings for %s:'%options.port_path)
-        print_tcattr(attrs)
+    print('Flushing fd...')
+    result=termios.tcflush(port_fd,termios.TCIOFLUSH)
 
-        attrs[2]&=~termios.CSIZE
-        attrs[2]|=termios.CS8
-        attrs[2]|=termios.CRTSCTS
-        attrs[4]=termios.B115200
-        attrs[5]=termios.B115200
+    print('Setting fd to non-blocking...')
+    fcntl.fcntl(port_fd,fcntl.F_SETFL,0)
 
-        print('Updated settings for %s:'%options.port_path)
-        print_tcattr(attrs)
+    attrs=termios.tcgetattr(port_fd)
 
-        termios.tcsetattr(port_f,termios.TCSANOW,attrs)
+    print('Initial settings for %s:'%options.port_path)
+    print_tcattr(attrs)
 
+    attrs[2]&=~termios.CSIZE
+    attrs[2]|=termios.CS8
+    attrs[2]|=0x10000           # CCTS_OFLOW
+    attrs[2]|=0x20000           # CCTS_IFLOW
+    attrs[2]|=termios.CRTSCTS   # CCTS_OFLOW|CCTS_IFLOW
+    attrs[2]|=termios.CLOCAL
+    attrs[4]=termios.B115200
+    attrs[5]=termios.B115200
+
+    print('Intended updated settings for %s:'%options.port_path)
+    print_tcattr(attrs)
+
+    termios.tcsetattr(port_fd,termios.TCSADRAIN,attrs)
+
+    termios.tcdrain(port_fd)
+    termios.tcflush(port_fd,termios.TCIOFLUSH)
+
+    attrs2=termios.tcgetattr(port_fd)
+    print('Actual updated settings for %s:'%options.port_path)
+    print_tcattr(attrs2)
+
+    termios.tcflush(port_fd,termios.TCIOFLUSH)
+
+    with os.fdopen(port_fd,'wb') as port_f:
         for input_path in options.input_paths:
             print('Sending: %s...'%input_path)
             with open(input_path,'rb') as f: data=f.read()
