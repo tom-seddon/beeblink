@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 199309L
+#define _DEFAULT_SOURCE
 #include <termios.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -10,9 +12,23 @@
 #include <stdint.h>
 #include <sys/ioctl.h>
 #include <inttypes.h>
+#include <getopt.h>
+#include <time.h>
+#include <linux/serial.h>
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
 #ifndef B115200
 #error must support 115200 baud
+#endif
+
+#ifdef TIOCMIWAIT
+#define HAVE_TIOCMIWAIT 1
+#endif
+
+#if defined TIOCGSERIAL&&defined TIOCSSERIAL&&defined ASYNC_LOW_LATENCY
+#define HAVE_LOW_LATENCY 1
 #endif
 
 //////////////////////////////////////////////////////////////////////////
@@ -71,9 +87,13 @@ static NORETURN PRINTFY(1,2) void FailErrno(const char*fmt,...){
 struct Options{
     int rdwr;
     int help;
+    int poll_for_cts;
     const char*device_path;
     const char*file_path;
     size_t n;
+#if HAVE_LOW_LATENCY
+    int low_latency;
+#endif
 };
 typedef struct Options Options;
 
@@ -82,7 +102,7 @@ typedef struct Options Options;
 
 static int GetOptions(Options*options,int argc,char*argv[]){
     int ch;
-    while((ch=getopt(argc,argv,"hvri:n:"))!=-1){
+    while((ch=getopt(argc,argv,"hvri:n:pl"))!=-1){
         switch(ch){
         case 'i':
             options->file_path=optarg;
@@ -94,6 +114,18 @@ static int GetOptions(Options*options,int argc,char*argv[]){
 
         case 'r':
             options->rdwr=1;
+            break;
+
+        case 'p':
+            options->poll_for_cts=1;
+            break;
+
+        case 'l':
+#if HAVE_LOW_LATENCY
+            options->low_latency=1;
+#else
+            fprintf(stderr,"WARNING: ignoring -l: not available\n");
+#endif
             break;
 
         case 'n':
@@ -113,7 +145,7 @@ static int GetOptions(Options*options,int argc,char*argv[]){
         case '?':
         default:
         error:
-            printf("usage: send_serial_file [-h] [-v] [-r] [-n N] [-i FILE] DEVICE\n");
+            printf("usage: send_serial_file [-h] [-v] [-r] [-p] [-n N] [-i FILE] [-l] DEVICE\n");
             printf("\n");
             printf("positional arguments:\n");
             printf("  DEVICE        open DEVICE as serial port\n");
@@ -122,8 +154,16 @@ static int GetOptions(Options*options,int argc,char*argv[]){
             printf("  -h            show this help  message and exit\n");
             printf("  -v            be more verbose\n");
             printf("  -r            open for read as well as write\n");
-            printf("  -n N          if polling for CTS, send up to N bytes (default: 1) when ready\n");
+            printf("  -p            always poll for CTS\n");
+            printf("  -n N          send up to N bytes per write\n");
             printf("  -i FILE       send FILE\n");
+            printf("  -l            ");
+#if HAVE_LOW_LATENCY
+            printf("set low latency flag for port");
+#else
+            printf("(ignored)");
+#endif
+            printf("\n");
             return 0;
         }
     }
@@ -202,7 +242,7 @@ static void DumpTermios(const char*message,const struct termios*t){
         }                                       \
     }while(0)
 
-    printf("    c_iflag: %lu (0x%lx):",t->c_iflag,t->c_iflag);
+    printf("    c_iflag: %" PRIu64 " (0x%" PRIx64 "):",(uint64_t)t->c_iflag,(uint64_t)t->c_iflag);
 #define FIELD c_iflag
     BIT(IGNBRK);   /* ignore BREAK condition */
     BIT(BRKINT);   /* map BREAK to SIGINTR */
@@ -226,12 +266,16 @@ static void DumpTermios(const char*message,const struct termios*t){
 #undef FIELD
     printf("\n");
 
-    printf("    c_oflag: %lu (0x%lx):",t->c_oflag,t->c_oflag);
+    printf("    c_oflag: %" PRIu64 " (0x%" PRIx64 "):",(uint64_t)t->c_oflag,(uint64_t)t->c_oflag);
 #define FIELD c_oflag
     BIT(OPOST);   /* enable following output processing */
     BIT(ONLCR);   /* map NL to CR-NL (ala CRMOD) */
+#ifdef OXTABS
     BIT(OXTABS);  /* expand tabs to spaces */
+#endif
+#ifdef ONOEOT
     BIT(ONOEOT);  /* discard EOT's ‘^D’ on output) */
+#endif
     BIT(OCRNL);   /* map CR to NL */
 #ifdef OLCUC
     BIT(OLCUC);   /* translate lower case to upper case */
@@ -245,7 +289,7 @@ static void DumpTermios(const char*message,const struct termios*t){
     printf("\n");
 
 #define FIELD c_cflag
-    printf("    c_cflag: %lu (0x%lx): CSIZE=",t->c_cflag,t->c_cflag);
+    printf("    c_cflag: %" PRIu64 " (0x%" PRIx64 "): CSIZE=",(uint64_t)t->c_cflag,(uint64_t)t->c_cflag);
     switch(t->c_cflag&CSIZE){
     case CS5:
         printf("5");
@@ -273,12 +317,18 @@ static void DumpTermios(const char*message,const struct termios*t){
     BIT(PARODD);      /* odd parity, else even */
     BIT(HUPCL);       /* hang up on last close */
     BIT(CLOCAL);      /* ignore modem status lines */
+#ifdef CCTS_OFLOW
     BIT(CCTS_OFLOW);  /* CTS flow control of output */
+#endif
 #if CRTSCTS!=CCTS_OFLOW&&CRTSCTS!=CRTS_IFLOW&&CRTSCTS!=(CCTS_OFLOW|CCTS_IFLOW)
     BIT(CRTSCTS);     /* same as CCTS_OFLOW */
 #endif
+#ifdef CRTS_IFLOW
     BIT(CRTS_IFLOW);  /* RTS flow control of input */
+#endif
+#ifdef MDMBUF
     BIT(MDMBUF);      /* flow control output via Carrier */
+#endif
 #undef FIELD
     printf("\n");
 
@@ -318,6 +368,15 @@ int main(int argc,char*argv[]){
         oflag|=O_WRONLY;
     }
 
+    printf("Features:");
+#if HAVE_TIOCMIWAIT
+    printf(" TIOCMIWAIT");
+#endif
+#if HAVE_LOW_LATENCY
+    printf(" LOW_LATENCY");
+#endif
+    printf("\n");
+
     VERBOSE("Opening device: %s\n",options.device_path);
 
     int port_fd=open(options.device_path,oflag);
@@ -334,8 +393,13 @@ int main(int argc,char*argv[]){
 
     DumpTermios("initial termios state",&tio);
 
-    /* Attempt to set RTS/CTS, 115200 baud. */
-    tio.c_cflag|=CRTSCTS;
+    /* Attempt to set raw mode, RTS/CTS, 115200 baud. */
+    cfmakeraw(&tio);
+    if(options.poll_for_cts){
+        tio.c_cflag&=~CRTSCTS;
+    }else{
+        tio.c_cflag|=CRTSCTS;
+    }
     cfsetospeed(&tio,B115200);
     cfsetispeed(&tio,B115200);
 
@@ -351,13 +415,39 @@ int main(int argc,char*argv[]){
 
     DumpTermios("actual new termios state",&tio);
 
-    int set_rtscts;
-    if((tio.c_cflag&CRTSCTS)!=CRTSCTS){
-        fprintf(stderr,"WARNING: couldn't set CRTSCTS. Will attempt to poll.\n");
-        set_rtscts=0;
+    int poll_for_cts;
+    if(options.poll_for_cts){
+        poll_for_cts=1;
+    }else if((tio.c_cflag&CRTSCTS)!=CRTSCTS){
+        fprintf(stderr,"WARNING: couldn't set CRTSCTS. Will poll.\n");
+        poll_for_cts=1;
     }else{
-        set_rtscts=1;
+        poll_for_cts=0;
     }
+
+#if HAVE_LOW_LATENCY
+    if(options.low_latency){
+        struct serial_struct ss;
+        if(ioctl(port_fd,TIOCGSERIAL,&ss)==-1){
+            FailErrno("TIOCGSERIAL for device: %s",options.device_path);
+        }
+
+        ss.flags|=ASYNC_LOW_LATENCY;
+
+        if(ioctl(port_fd,TIOCSSERIAL,&ss)==-1){
+            FailErrno("TIOCSSERIAL for device: %s",options.device_path);
+        }
+
+        struct serial_struct ss2;
+        if(ioctl(port_fd,TIOCGSERIAL,&ss2)==-1){
+            FailErrno("TIOCGSERIAL (2) for device: %s",options.device_path);
+        }
+
+        if(!(ss2.flags&ASYNC_LOW_LATENCY)){
+            fprintf(stderr,"WARNING: failed to set the low latency flag on device: %s\n",options.device_path);
+        }
+    }
+#endif
 
     if(options.file_path){
         int file_fd=open(options.file_path,O_RDONLY);
@@ -383,31 +473,36 @@ int main(int argc,char*argv[]){
 
             num_bytes+=(size_t)num_buffer_bytes;
 
-            if(set_rtscts){
+            if(poll_for_cts){
                 size_t i=0;
                 while(i<(size_t)num_buffer_bytes){
-                    ssize_t write_result=write(
-                        port_fd,
-                        buffer+i,
-                        (size_t)num_buffer_bytes-i);
-                    if(write_result==-1){
-                        FailErrno("write to port: %s",options.device_path);
-                    }
+#if HAVE_TIOCMIWAIT
+                    
+                    for(;;){
+                        int cm;
+                        if(ioctl(port_fd,TIOCMGET,&cm)==-1){
+                            FailErrno("TIOCMGET for device: %s",options.device_path);
+                        }
 
-                    i+=write_result;
-                }
-            }else{
-                size_t i=0;
-                while(i<(size_t)num_buffer_bytes){
-                    // Wait for CTS.
+                        if(cm&TIOCM_CTS){
+                            break;
+                        }
+
+                        if(ioctl(port_fd,TIOCMIWAIT,TIOCM_CTS)==-1){
+                            FailErrno("TIOCMGET for CTS for device: %s",options.device_path);
+                        }
+                    }
+#else
+                    
+                    // Poll for CTS.
                     int cm;
                     do{
-                        int rc=ioctl(port_fd,TIOCMGET,&cm);
-                        if(rc==-1){
+                        if(ioctl(port_fd,TIOCMGET,&cm)==-1){
                             FailErrno("TIOCMGET for device: %s",options.device_path);
                         }
                     }while(!(cm&TIOCM_CTS));
-
+#endif
+                    
                     // Send byte(s).
                     size_t n=options.n;
                     if(n==0){
@@ -422,6 +517,25 @@ int main(int argc,char*argv[]){
                     }
 
                     i+=n;
+                }
+            }else{
+                size_t i=0;
+                while(i<(size_t)num_buffer_bytes){
+                    size_t n=(size_t)num_buffer_bytes-i;
+                    if(n>options.n){
+                        n=options.n;
+                    }
+                    
+                    ssize_t write_result=write(port_fd,buffer+i,n);
+                    if(write_result==-1){
+                        FailErrno("write to port: %s",options.device_path);
+                    }
+
+                    i+=write_result;
+                }
+
+                if(tcdrain(port_fd)==-1){
+                    FailErrno("drain port: %s",options.device_path);
                 }
             }
         }

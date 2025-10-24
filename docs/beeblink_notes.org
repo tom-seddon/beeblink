@@ -1936,6 +1936,24 @@ Results for -n 3 (bad transfer):
 
 : sent 10240 bytes in 2.203 seconds: ~4.539 KBytes/sec; 37181.6 bits/sec
 
+Performance in Linux is terrible if polling CTS, and it's no better if
+using TIOCMIWAIT or setting ASYNC_LOW_LATENCY. (But CTS flow control
+seems to work fine, so hopefully this case is irrelevant.)
+
+** USB serial adapters tried
+ 
+Note: Tube Serial device is 0403:6014 Future Technology Devices
+International, Ltd FT232H Single HS USB-UART/FIFO IC
+
+*** 0403:6001 Future Technology Devices International, Ltd FT232 Serial (UART) IC
+
+All tests  performed with this one.
+
+*** 1a86:7523 QinHeng Electronics CH340 serial converter
+
+Tried with Linux. Gets stuck on =Purging link...= on the BBC when
+doing =*UPLOAD=, and no obvious way to get it out of this state.
+
 ** =decode6502 --help=
 
 #+begin_example
