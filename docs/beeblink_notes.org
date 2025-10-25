@@ -1920,6 +1920,10 @@ seems to work ok too?
 
 ** =tools/send_serial_file/send_serial_file.c=
 
+#+begin_example
+  ~/github/beeblink/tools/send_serial_file/send_serial_file -v -i ~/github/beeb-files/stuff/Ghouls-Superior/0/\$.GOSTSCR /dev/cu.usbserial-A97DYC34
+#+end_example
+
 Seems to work ok polling for CTS on macOS, which it does automatically
 if detecting that the RTS/CTS flag didn't get set. Speed doesn't look
 amazing doing this, but that's just going by eye.
@@ -1939,6 +1943,8 @@ Results for -n 3 (bad transfer):
 Performance in Linux is terrible if polling CTS, and it's no better if
 using TIOCMIWAIT or setting ASYNC_LOW_LATENCY. (But CTS flow control
 seems to work fine, so hopefully this case is irrelevant.)
+
+=MDMBUF= doesn't seem to do anything useful.
 
 ** USB serial adapters tried
  
@@ -2103,5 +2109,64 @@ doing =*UPLOAD=, and no obvious way to get it out of this state.
 #+end_example
 
 
+** dtrace output from CoolTerm
+
+CoolTerm works (or seems to) - what is it doing?!
+
+Open port:
+
+: open("/dev/cu.usbserial-A97DYC34\0", 0x20006, 0x0)		 = 4 0
+
+0x20006 = O_RDWR|O_NONBLOCK|O_NOCTTY
+
+Unique ioctls on the port's fd:
+
+|      ioctl | name     | macro                |     # |
+|------------+----------+----------------------+-------|
+| 0x2000740D | TIOCEXCL |                      |     1 |
+| 0x2000740E | TIOCNXCL |                      |     1 |
+| 0x4004667F | FIONREAD |                      |  3047 |
+| 0x4004746A | TIOCMGET | _IOR('t', 0x6a, int) | 17602 |
+| 0x40487413 | TIOCGETA |                      |     5 |
+| 0x8004746D | TIOCMSET | _IOW('t', 0x6d, int) |     4 |
+| 0x80487414 | TIOCSETA |                      |     5 |
+
+ioctl stuff:
+
+: #define IOC_VOID        (__uint32_t)0x20000000
+: #define IOC_OUT         (__uint32_t)0x40000000
+: #define IOC_IN          (__uint32_t)0x80000000
+: #define IOC_INOUT       (IOC_IN|IOC_OUT)
+
+: #define _IOC(inout, group, num, len) \
+: 	(inout | ((len & IOCPARM_MASK) << 16) | ((group) << 8) | (num))
+
+: #define _IOR(g, n, t)     _IOC(IOC_OUT,	(g), (n), sizeof(t))
+: #define _IOW(g, n, t)     _IOC(IOC_IN,	(g), (n), sizeof(t))
+
+So, in general:
+
+: 0xABCDEFGH
+:   ||||||++-- n (the number in the headers)
+:   ||||++---- t (the char in the headers)
+:   ++++------ len
+:   +--------- void/out/in
+
+** More nonsense
+
+After poking about with dtrace - CoolTerm polls for CTS, but it seems
+like it's never actually false?!
+
+If send_serial_file.c carefully polls for CTS, it is also always
+false. And yet, the transfer seems to work?! - which it doesn't if it
+doesn't poll. I'm not sure this isn't coincidence.
+
+If it sends more than 2-3 bytes at a time after polling for CTS=1, the
+data doesn't transfer correctly. But dtrace suggests CoolTerm sends
+256 bytes at a time? So is this possible then or what?!
+
+TIOCMGET does seem to correctly report the CTS state (e.g., it does
+end up reporting CTS=0 after a =*UPLOAD= transfer is complete). So
+maybe there's something that could be done.
 
 * eof.

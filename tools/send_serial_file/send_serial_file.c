@@ -1,5 +1,9 @@
 #define _POSIX_C_SOURCE 199309L
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#elif defined __linux__
 #define _DEFAULT_SOURCE
+#endif
 #include <termios.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -14,7 +18,9 @@
 #include <inttypes.h>
 #include <getopt.h>
 #include <time.h>
+#ifdef __linux__
 #include <linux/serial.h>
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -24,11 +30,19 @@
 #endif
 
 #ifdef TIOCMIWAIT
-#define HAVE_TIOCMIWAIT 1
+#define HAVE_TIOCMIWAIT (1)
 #endif
 
 #if defined TIOCGSERIAL&&defined TIOCSSERIAL&&defined ASYNC_LOW_LATENCY
-#define HAVE_LOW_LATENCY 1
+#define HAVE_LOW_LATENCY (1)
+#else
+#define HAVE_LOW_LATENCY (0)
+#endif
+
+#ifdef MDMBUF
+#define HAVE_MDMBUF (1)
+#else
+#define HAVE_MDMBUF (0)
 #endif
 
 //////////////////////////////////////////////////////////////////////////
@@ -94,6 +108,12 @@ struct Options{
 #if HAVE_LOW_LATENCY
     int low_latency;
 #endif
+#if HAVE_MDMBUF
+    int mdmbuf;
+#endif
+    int exclusive;
+    int nbio;
+    int noctty;
 };
 typedef struct Options Options;
 
@@ -102,7 +122,7 @@ typedef struct Options Options;
 
 static int GetOptions(Options*options,int argc,char*argv[]){
     int ch;
-    while((ch=getopt(argc,argv,"hvri:n:pl"))!=-1){
+    while((ch=getopt(argc,argv,"hvri:n:pmleBC"))!=-1){
         switch(ch){
         case 'i':
             options->file_path=optarg;
@@ -120,12 +140,23 @@ static int GetOptions(Options*options,int argc,char*argv[]){
             options->poll_for_cts=1;
             break;
 
+        case 'm':
+#if HAVE_MDMBUF
+            options->mdmbuf=1;
+#else
+            fprintf(stderr,"WARNING: ignoring -m\n");
+#endif
+
         case 'l':
 #if HAVE_LOW_LATENCY
             options->low_latency=1;
 #else
-            fprintf(stderr,"WARNING: ignoring -l: not available\n");
+            fprintf(stderr,"WARNING: ignoring -l\n");
 #endif
+            break;
+
+        case 'e':
+            options->exclusive=1;
             break;
 
         case 'n':
@@ -140,12 +171,20 @@ static int GetOptions(Options*options,int argc,char*argv[]){
             }
             break;
 
+        case 'B':
+            options->nbio=1;
+            break;
+
+        case 'C':
+            options->noctty=1;
+            break;
+
         case 'h':
             options->help=1;
         case '?':
         default:
         error:
-            printf("usage: send_serial_file [-h] [-v] [-r] [-p] [-n N] [-i FILE] [-l] DEVICE\n");
+            printf("usage: send_serial_file [-h] [-v] [-r] [-p] [-P] [-n N] [-i FILE] [-l] [-e] [-B] DEVICE\n");
             printf("\n");
             printf("positional arguments:\n");
             printf("  DEVICE        open DEVICE as serial port\n");
@@ -154,16 +193,15 @@ static int GetOptions(Options*options,int argc,char*argv[]){
             printf("  -h            show this help  message and exit\n");
             printf("  -v            be more verbose\n");
             printf("  -r            open for read as well as write\n");
+            printf("  -m            %s\n",HAVE_MDMBUF?"use MDMBUF (overrides -p)":"(ignored)");
             printf("  -p            always poll for CTS\n");
+            printf("\n");
             printf("  -n N          send up to N bytes per write\n");
             printf("  -i FILE       send FILE\n");
-            printf("  -l            ");
-#if HAVE_LOW_LATENCY
-            printf("set low latency flag for port");
-#else
-            printf("(ignored)");
-#endif
-            printf("\n");
+            printf("  -l            %s\n",HAVE_LOW_LATENCY?"set low latency flag for port":"(ignored)");
+            printf("  -e            put the device in exclusive mode\n");
+            printf("  -B            use non-blocking I/O\n");
+            printf("  -C            open device with O_NOCTTY\n");
             return 0;
         }
     }
@@ -233,7 +271,7 @@ static int GetBaudRateForSpeed(speed_t speed){
 //////////////////////////////////////////////////////////////////////////
 
 static void DumpTermios(const char*message,const struct termios*t){
-    printf("%s\n",message);
+    printf("%s (begin=%p; end=%p):\n",message,(void*)t,(void*)(t+1));
 
 #define BIT(X)                                  \
     do{                                         \
@@ -320,7 +358,7 @@ static void DumpTermios(const char*message,const struct termios*t){
 #ifdef CCTS_OFLOW
     BIT(CCTS_OFLOW);  /* CTS flow control of output */
 #endif
-#if CRTSCTS!=CCTS_OFLOW&&CRTSCTS!=CRTS_IFLOW&&CRTSCTS!=(CCTS_OFLOW|CCTS_IFLOW)
+#if CRTSCTS!=CCTS_OFLOW&&CRTSCTS!=CRTS_IFLOW&&CRTSCTS!=(CCTS_OFLOW|CRTS_IFLOW)
     BIT(CRTSCTS);     /* same as CCTS_OFLOW */
 #endif
 #ifdef CRTS_IFLOW
@@ -351,6 +389,8 @@ static double GetSecondsForTimespec(const struct timespec *t){
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+#define PRINT_VALUE(NAME) (printf(#NAME "=0x%" PRIx64 " (%" PRIu64 ")\n",(uint64_t)(NAME),(uint64_t)(NAME)),(void)0)
+
 int main(int argc,char*argv[]){
     Options options={0};
     if(!GetOptions(&options,argc,argv)){
@@ -368,6 +408,14 @@ int main(int argc,char*argv[]){
         oflag|=O_WRONLY;
     }
 
+    if(options.noctty){
+        oflag|=O_NOCTTY;
+    }
+
+    if(options.nbio){
+        oflag|=O_NONBLOCK;
+    }
+
     printf("Features:");
 #if HAVE_TIOCMIWAIT
     printf(" TIOCMIWAIT");
@@ -377,11 +425,33 @@ int main(int argc,char*argv[]){
 #endif
     printf("\n");
 
+    PRINT_VALUE(TIOCMGET);
+    PRINT_VALUE(TIOCMSET);
+    PRINT_VALUE(TIOCGETA);
+    PRINT_VALUE(TIOCSETA);
+    PRINT_VALUE(sizeof(struct termios));
+    
+    VERBOSE("TIOCMGET=0x%" PRIx64 "\n",(uint64_t)TIOCMGET);
+    VERBOSE("TIOCMGET=0x%" PRIx64 "\n",(uint64_t)TIOCMGET);
+    //VERBOSE("zzz=0x%" PRIx64 "\n",(uint64_t)(O_RDWR|O_NONBLOCK|O_NOCTTY));
+
     VERBOSE("Opening device: %s\n",options.device_path);
 
     int port_fd=open(options.device_path,oflag);
     if(port_fd==-1){
         FailErrno("open device: %s",options.device_path);
+    }
+
+    if(options.exclusive){
+        if(ioctl(port_fd,TIOCEXCL)==-1){
+            FailErrno("TIOCEXCL for device: %s",options.device_path);
+        }
+    }
+
+    if(options.nbio){
+        if(fcntl(port_fd,F_SETFL,O_NONBLOCK)==-1){
+            FailErrno("F_SETFL O_NONBLOCK for device: %s",options.device_path);
+        }
     }
 
     VERBOSE("    port_fd=%d\n",port_fd);
@@ -400,6 +470,14 @@ int main(int argc,char*argv[]){
     }else{
         tio.c_cflag|=CRTSCTS;
     }
+
+#if HAVE_MDMBUF
+    if(options.mdmbuf){
+        tio.c_cflag&=~CRTSCTS;
+        tio.c_cflag|=MDMBUF;
+    }
+#endif
+    
     cfsetospeed(&tio,B115200);
     cfsetispeed(&tio,B115200);
 
@@ -418,8 +496,10 @@ int main(int argc,char*argv[]){
     int poll_for_cts;
     if(options.poll_for_cts){
         poll_for_cts=1;
+    }else if(options.mdmbuf){
+        poll_for_cts=0; 
     }else if((tio.c_cflag&CRTSCTS)!=CRTSCTS){
-        fprintf(stderr,"WARNING: couldn't set CRTSCTS. Will poll.\n");
+        fprintf(stderr,"WARNING: couldn't set CRTSCTS (wanted 0x%" PRIx64 "; got 0x%" PRIx64 "). Will poll.\n",(uint64_t)CRTSCTS,(uint64_t)(tio.c_cflag&CRTSCTS));
         poll_for_cts=1;
     }else{
         poll_for_cts=0;
@@ -462,6 +542,7 @@ int main(int argc,char*argv[]){
         
         uint8_t buffer[4096];
         uint64_t num_bytes=0;
+        uint64_t num_cts_false=0;
 
         for(;;){
             ssize_t num_buffer_bytes=read(file_fd,buffer,sizeof buffer);
@@ -500,9 +581,19 @@ int main(int argc,char*argv[]){
                         if(ioctl(port_fd,TIOCMGET,&cm)==-1){
                             FailErrno("TIOCMGET for device: %s",options.device_path);
                         }
+
+                        if(!(cm&TIOCM_CTS)){
+                            ++num_cts_false;
+                        }
+                        
+                        int nread;
+                        if(ioctl(port_fd,FIONREAD,&nread)==-1){
+                            FailErrno("FIONREAD for device: %s",options.device_path);
+                        }
                     }while(!(cm&TIOCM_CTS));
+
 #endif
-                    
+
                     // Send byte(s).
                     size_t n=options.n;
                     if(n==0){
@@ -511,7 +602,11 @@ int main(int argc,char*argv[]){
                     
                     ssize_t write_result=write(port_fd,buffer+i,n);
                     if(write_result==-1){
-                        FailErrno("write to port: %s",options.device_path);
+                        if(options.nbio&&errno==EWOULDBLOCK){
+                            // go back to waiting...
+                        }else{
+                            FailErrno("write to port: %s",options.device_path);
+                        }
                     } else if(write_result==0){
                         Fail("result was %zd from writing to port: %s",write_result,options.device_path);
                     }
@@ -552,6 +647,15 @@ int main(int argc,char*argv[]){
                num_seconds,
                num_bytes/1024./num_seconds,
                num_bytes*8./num_seconds);
+        printf("CTS false count: %" PRIu64 "\n",num_cts_false);
+
+        for(;;){
+            int cm;
+            if(ioctl(port_fd,TIOCMGET,&cm)==-1){
+                FailErrno("TIOCMGET for device: %s",options.device_path);
+            }
+            printf("CTS=%d\n",!!(cm&TIOCM_CTS));
+        }
 
         close(file_fd),file_fd=-1;
     }
