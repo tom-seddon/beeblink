@@ -1,4 +1,5 @@
-# Intended for use on the Github CI runners, but
+# Intended for use on the GitHub CI runners, but in theory it can be
+# run locally too.
 
 MAKEFLAGS+=--no-print-directory
 
