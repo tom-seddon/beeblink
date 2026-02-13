@@ -643,13 +643,13 @@ The volume name supplied didn't match any volumes.
 
 ## `Won't` (&93) (as seen on ADFS)
 
-The request operation won't be performed.
+The requested operation won't be performed.
 
 When running a file with `*RUN` or loading a file with `*LOAD` and not
 providing an explicit load address, this occurs when the file has a
 load address of &FFFFFFFF. For `*RUN` this will also occur when the
-execution address is &FFFFFFFF. (This usually means the file has a
-0-byte .inf file, but these addresses can also be assigned manually.)
+execution address is &FFFFFFFF. (This usually means the file has no
+.inf file, but these addresses can also be assigned manually.)
 
 `*SRLOAD` produces this error if trying to load a ROM image over the
 BLFS itself, or if the address range would be outside the ROM area of

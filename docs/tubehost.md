@@ -20,7 +20,7 @@ them, use `*VOL`, e.g.:
 
 	*VOL BEEB_DISKS
 	
-One a TubeHost volume is selected, things work a bit more like
+Once a TubeHost volume is selected, things work a bit more like
 TubeHost: you have 10 numbered drives, you can "insert" new "disks"
 into the drive using `*DIN`, see which disks are available with
 `*DCAT`, navigate the folder structure with `*HCF` and `*HFOLDERS` -
