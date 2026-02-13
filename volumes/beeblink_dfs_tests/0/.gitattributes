@@ -1,1 +1,4 @@
 $.BEGIN diff=bbcbasic
+$.THFSTEST diff=bbcbasic
+$.ALL diff=bbcbasic
+$.DONE diff=bbcbasic

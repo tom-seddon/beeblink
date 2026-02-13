@@ -2169,4 +2169,22 @@ TIOCMGET does seem to correctly report the CTS state (e.g., it does
 end up reporting CTS=0 after a =*UPLOAD= transfer is complete). So
 maybe there's something that could be done.
 
+* Basic BBC-side tests
+
+1. Ensure supplied volumes are available to BeebLink:
+
+   - =beeblink_dfs_tests=
+   - =beeblink_tubehost_tests= (a TubeHost volume)
+
+2. Ensure [[https://github.com/tom-seddon/beeb-fstest/][beeb-fstest]] volume is available to BeebLink:
+
+   - =beeb-fstest=
+
+3. Do =*VOL beeblink_dfs_tests=
+
+4. Do SHIFT+BREAK
+
+The tests will fail with an error at some point if anything goes
+wrong, or (eventually) print `TESTS SUCCEEDED` if successful.
+
 * eof.
