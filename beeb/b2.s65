@@ -125,7 +125,7 @@ signature:
                 .text 'BeebLink',0
                 
 status_text:
-                .text 'BeebLink support not detected. Ensure b2 version is recent enough (consult documentation) and that BeebLink support is enabled',0
+                .text 'b2 BeebLink support not detected',0
 
 recv_file_data_host: .proc
                 lda #routines_table.recv_host-routines_table
