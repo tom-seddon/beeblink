@@ -8,7 +8,7 @@ If you use a second processor, switch it off and press CTRL+BREAK.
 Then type in the following program at the BASIC prompt.
 
     10S%=&FEFF:D%=&FEFE
-    20IF?(S%AND8)=0:STOP
+    20IF(?S%AND8)=0:STOP
     30MODE128:MODE135:HIMEM=HIMEM-&4000:A%=HIMEM:REPEAT:V%=?D%:UNTIL(?S%AND1)=0:PRINT;~HIMEM:REPEATREPEATUNTIL(?S%AND1)<>0:?A%=?D%:A%=A%+1:PRINTCHR$13;~A%;:UNTILFALSE
 
 Run it with `RUN`. If you get a `STOP at line 20`, the Tube Serial
