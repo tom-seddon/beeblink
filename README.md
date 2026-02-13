@@ -20,19 +20,21 @@ files.
 
 Get the latest release from
 https://github.com/tom-seddon/beeblink/releases/latest. Download the
-Windows zip and unzip it somewhere.
+-windows zip and unzip it somewhere.
 
 ## macOS
 
 Get the latest release from
 https://github.com/tom-seddon/beeblink/releases/latest. Download the
-macOS zip and unzip it somewhere.
+-macos-intel or -macos-applesilicon zip (depending on the sort of Mac
+you have) and unzip it somewhere.
 
-The macOS version is not notarized. To bypass any Gatekeeper dialogs:
-open Terminal, change to the folder to which you unzipped the server,
-and run the following command:
-
-    xattr -dr com.apple.quarantine beeblink-server bindings.node prebuilds/darwin-x64+arm64/node.napi.node
+The first time running it, you'll probably get a popup warning you
+that macOS can't check it for safety. Cancel the dialog (without
+letting macOS delete the file!) and follow the instructions here to
+allow it: https://support.apple.com/en-gb/guide/mac-help/mh40616/mac
+(The second time you run it, you'll get another dialog that you'll
+have to dismiss; third and subsequent times, it'll just run.)
 
 ## Linux
 
