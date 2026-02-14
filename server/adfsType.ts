@@ -243,7 +243,7 @@ class ADFSState implements beebfs.IFSState {
     public getCurrentDir(): string {
         return getDirString(this.current.dir);
     }
-    
+
     public getCurrentFilePath(): beebfs.FilePath {
         // Just return an ordinary FilePath. findObjectsMatching does the rest.
         return new beebfs.FilePath(this.volume, false, getDirString(this.current.dir), true, this.current.drive, true);
@@ -663,8 +663,19 @@ class ADFSType implements beebfs.IFSType {
     }
 
     public async findObjectsMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.FSObject[]> {
+        if (fqn.name === '$' || fqn.name === '&') {
+            // I clearly got something wrong at some point. It'd be nice not to
+            // have to special-case this.
+            const rootFilePath = await this.mustFindADFSFilePath(new beebfs.FilePath(fqn.filePath.volume, true, fqn.filePath.drive, true, '$', true), log);
+            return [new beebfs.Dir(rootFilePath.serverFolder, new beebfs.FQN(rootFilePath, '$'), beebfs.DEFAULT_ATTR)];
+        }
+
         const filePath = await this.mustFindADFSFilePath(fqn.filePath, log);
+
         const nameRegExp = utils.getOptionalRegExpFromAFSP(fqn.name);
+
+        log?.pn(`findObjectsMatching: fqn name=${fqn.name}`);
+        log?.pn(`findObjectsMatching: nameRegExp=${nameRegExp}`);
 
         const foundObjects = await this.findObjects(filePath, log);
         if (nameRegExp === undefined) {
