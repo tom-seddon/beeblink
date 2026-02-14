@@ -11,84 +11,93 @@ file on it you want to use with Disk Imager or ROM Tool.)
 
 Create a disk image on a BeebLink volume from a disk, or write a disk
 image on a BeebLink volume to a formatted disk. Supports
-single-density DFS, ADFS, and double density disks from Opus
-DDOS/Challenger or Watford DDFS.
+single-density Acorn DFS (and compatible systems), ADFS, and double
+density disks from Opus DDOS/Challenger or Watford DDFS.
 
 Select `R` to read a disk, creating a disk image, or `W` to write a
 disk from a disk image.
 
-Select `A` to read/write all of the disk, or `U` to read/write only
-the used areas.
+Next, pick to drive to read from or write to.
 
-Pick the drive to read from or write to.
+Next, select the disk type and other settings, as follows.
 
-Select the disk type (see below), then specify the image to read from
-or write to. (You can also enter * commands at this point by entering
-a line starting with `*` - e.g., to change volume, or get a
-catalogue.)
+### Acorn DFS
 
-### Disk types
+Handles single- or double-sided Acorn DFS disks. Also covers
+single-density disks from Acorn compatible DFSs: Opus, Watford,
+Solidisk, etc.
 
-#### Acorn DFS
+Select `S` for a single-sided disk or `D` for a double-sided disk.
 
-Use this for reading or writing ordinary single density Acorn
-DFS-style disks. DFS type shouldn't matter and this should hopefully
-work with just about everything.
+Select `A` to read or write the entire disk, or `U` to have BeebLink
+scan the catalogue and transfer only the tracks that are actualrly
+used.
 
-You'll need to specify single or double sided. The track count is
-detected by reading the disk.
+(Note: the used areas option only looks at the standard 31 Acorn
+DFS-style files. For 62-file Watford DFS disks, always use the `A`
+option.)
 
-Watford DFS 62-file disks are not yet fully supported. If you have a
-62-file disk, be sure to read/write all of the disk to ensure all the
-data is transfercred.
+Usual PC file extensions:
 
-#### ADFS
+- `.ssd` - single sided
+- `.dsd` - double sided
 
-Use this for reading or writing ADFS disks or hard disks.
+### ADFS
 
-You'll need to specify the disk type: auto-detect, or hard disk.
-Select auto-detect, which will do the right thing in every useful
-case. (The explicit hard disk option is there to accommodate the
-unlikely corner case of a hard disk formatted to 640 KB.)
+Handle ADFS S/M/L disks, or hard disks.
 
-#### Opus DDOS
+Select `A` to autodetect the disk type, which will almost certainly do
+the right thing. (If you have a hard disk formatted to exactly 640 KB,
+select `H`.)
 
-Use this for reading or writing double density Opus DDOS or Challenger
-disks when you have the Opus DDOS ROM installed. (For single density
-disks, use the Acorn DFS option.)
+Usual PC file extensions:
 
-You'll need to specify single or double sided. The track count is
-detected by reading the disk.
+- `.ads` - ADFS S
+- `.adm` - ADFS M
+- `.adl` - ADFS L
+- `.dat` - ADFS hard disk
 
-The used areas option is not yet supported, and the whole disk is
-always read or written.
+### Opus Challenger (DD)
 
-#### Opus Challenger
+Handles double-density Opus DDOS/Challenger disks. (Use this option if
+you have the Challenger ROM installed.)
 
-Use this for reading or writing double density Opus DDOS or Challenger
-disks when you have the Challenger ROM installed. (For single density
-disks, use the Acorn DFS option.)
+Usual PC file extensions:
 
-You'll need to specify single or double sided. The track count is
-detected by reading the disk.
+- `.sdd` - single sided
+- `.ddd` - double sided
 
-The used areas option is not yet supported, and the whole disk is
-always read or written.
+### Opus DDOS (DD)
 
-#### Watford DDFS
+Handles double-density Opus DDOS/Challenger disks. (Use this option if
+you have the Opus DDOS ROM installed.)
 
-Use this for reading or writing double density Watford DDFS disks when
-you have Watford DDFS installed. (For single density disks, use the
-Acorn DFS option.)
+Select `S` for a single-sided disk or `D` for a double-sided disk.
 
-You'll need to specify single or double sided. The track count is
-detected by reading the disk.
+Usual PC file extensions:
 
-The used areas option is not yet supported, and the whole disk is
-always read or written. There's currently no special consideration
-required for 62-file disks.
+- `.sdd` - single sided
+- `.ddd` - double sided
 
-### Disk imager notes
+### Watford DDFS (DD)
+
+Handles double density Watford DDFS disks.
+
+Select `S` for a single-sided disk or `D` for a double-sided disk.
+
+(Unlike the single density case, there's no used areas option. So no
+special consideration required for 62-file disks.)
+
+Usual PC file extensions:
+
+- `.sdd` - single sided
+- `.ddd` - double sided
+
+### Other disk imager notes
+
+- when creating a disk image file, you can use any BBC-friendly name
+  you like. The idea is that it can get subsequently renamed on the
+  server
 
 - protected disks are not supported
 
