@@ -2214,7 +2214,7 @@ export class FS {
         if (object === undefined) {
             return new OSFILEResult(0, undefined, undefined, undefined);
         } else {
-            return new OSFILEResult(1, this.createOSFILEBlock(object.getLoad(), object.getExec(), await object.tryGetSize(), object.attr), undefined, undefined);
+            return new OSFILEResult(object.getObjectType(), this.createOSFILEBlock(object.getLoad(), object.getExec(), await object.tryGetSize(), object.attr), undefined, undefined);
         }
     }
 
