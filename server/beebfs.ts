@@ -854,13 +854,15 @@ export async function writeFile(filePath: string, data: Buffer): Promise<void> {
 export interface IFSState {
     readonly volume: Volume;
 
-    // get current drive. (OSGBPB 6 reads this, so it's part of the standard
-    // interface.)
-    getCurrentDrive: () => string;
-
-    // get current directory. (OSGBPB 6 reads this, so it's part of the standard
-    // interface.)
-    getCurrentDir: () => string;
+    // get FilePath for current drive/directory. (OSGBPB 8 uses this. Maybe
+    // OSGBPB 6 could use this too...)
+    //
+    // The resulting FilePath has implicit volume, explicit drive, and explicit
+    // directory.
+    //
+    // The resulting FilePath must be something that the corresponding type's
+    // findObjectsMatching can deal with.
+    getCurrentFilePath: () => FilePath;
 
     // get library drive. (OSGBPB 7 reads this, so it's part of the standard
     // interface.)
@@ -2534,8 +2536,9 @@ export class FS {
         let drive: string;
         let dir: string;
         if (current) {
-            drive = state.getCurrentDrive();
-            dir = state.getCurrentDir();
+            const currentFilePath = state.getCurrentFilePath();
+            drive = currentFilePath.drive;
+            dir = currentFilePath.dir;
         } else {
             drive = state.getLibraryDrive();
             dir = state.getLibraryDir();
@@ -2553,7 +2556,7 @@ export class FS {
     private async OSGBPBReadNames(numBytes: number, newPtr: number): Promise<OSGBPBResult> {
         const state = this.getState();
 
-        const fqn = new FQN(new FilePath(state.volume, false, state.getCurrentDrive(), true, state.getCurrentDir(), true), utils.MATCH_N_CHAR);
+        const fqn = new FQN(state.getCurrentFilePath(), utils.MATCH_N_CHAR);
         const objects = await fqn.filePath.volume.type.findObjectsMatching(fqn, undefined);
 
         const builder = new utils.BufferBuilder();

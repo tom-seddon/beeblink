@@ -445,6 +445,12 @@ class TubeHostState implements beebfs.IFSState {
         return this.current.dir;
     }
 
+    public getCurrentFilePath(): beebfs.FilePath {
+        const drive: string = this.getCurrentDrive();
+        const driveFolder: VolRelPath = this.mustGetDriveFolder(drive);
+        return new TubeHostFilePath(this.volume, false, this.current.drive, true, this.current.dir, true, driveFolder);
+    }
+
     public getLibraryDrive(): string {
         return this.library.drive;
     }
@@ -580,7 +586,9 @@ class TubeHostState implements beebfs.IFSState {
 
     public async starDir(filePath: beebfs.FilePath | undefined): Promise<void> {
         if (filePath !== undefined) {
+            this.log?.pn(`THs starDir: filePath=${filePath}`);
             this.current = this.getTubeHostPathFromFilePath(filePath);
+            this.log?.pn(`THs starDir: this.current={drive:${this.current.drive},dir:"${this.current.dir}"}`);
         }
     }
 
@@ -944,7 +952,7 @@ class TubeHostType implements beebfs.IFSType {
     }
 
     public parseDirString(str: string, i: number, state: beebfs.IFSState | undefined, volume: beebfs.Volume, volumeExplicit: boolean): TubeHostFilePath {
-        const parseResult = this.parseFileOrDirString(str, i, state, false, volume, volumeExplicit);
+        const parseResult = this.parseFileOrDirString(str, i, state, true, volume, volumeExplicit);
         return parseResult.filePath;
     }
 
@@ -975,8 +983,6 @@ class TubeHostType implements beebfs.IFSType {
     }
 
     public async findObjectsMatching(fqn: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.File[]> {
-        // The recurse flag is ignored. TubeHost disks don't nest.
-
         const tubeHostFilePath = mustBeTubeHostFilePath(fqn.filePath);
 
         if (tubeHostFilePath.serverFolder === undefined) {

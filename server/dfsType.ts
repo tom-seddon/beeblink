@@ -135,6 +135,10 @@ class DFSState implements beebfs.IFSState {
         return this.current.dir;
     }
 
+    public getCurrentFilePath(): beebfs.FilePath {
+        return new beebfs.FilePath(this.volume, false, this.current.drive, true, this.current.dir, true);
+    }
+
     public getLibraryDrive(): string {
         return this.library.drive;
     }
@@ -392,7 +396,7 @@ class DFSType implements beebfs.IFSType {
         let text = '';
 
         const title = await this.loadTitle(filePath.volume, filePath.drive);
-        if (title !=='' && title !== undefined) {
+        if (title !== '' && title !== undefined) {
             text += title + utils.BNL;
         }
 
@@ -401,7 +405,7 @@ class DFSType implements beebfs.IFSType {
         const boot = await this.loadBootOption(filePath.volume, filePath.drive);
         text += ('Drive ' + filePath.drive + ' (' + boot + ' - ' + beebfs.getBootOptionDescription(boot) + ')').padEnd(20);
 
-        text+=`${beebFiles.length} file(s)`.padEnd(20);
+        text += `${beebFiles.length} file(s)`.padEnd(20);
 
         if (dfsState !== undefined) {
             text += ('Dir :' + dfsState.getCurrentDrive() + '.' + dfsState.getCurrentDir()).padEnd(10);

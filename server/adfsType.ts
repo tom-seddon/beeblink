@@ -243,6 +243,11 @@ class ADFSState implements beebfs.IFSState {
     public getCurrentDir(): string {
         return getDirString(this.current.dir);
     }
+    
+    public getCurrentFilePath(): beebfs.FilePath {
+        // Just return an ordinary FilePath. findObjectsMatching does the rest.
+        return new beebfs.FilePath(this.volume, false, getDirString(this.current.dir), true, this.current.drive, true);
+    }
 
     public getLibraryDrive(): string {
         return this.library.drive;

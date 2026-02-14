@@ -55,12 +55,8 @@ class PCState implements beebfs.IFSState {
         this.log = log;
     }
 
-    public getCurrentDrive(): string {
-        return '';
-    }
-
-    public getCurrentDir(): string {
-        return '';
+    public getCurrentFilePath(): beebfs.FilePath {
+        return new beebfs.FilePath(this.volume, false, '', true, '', true);
     }
 
     public getLibraryDrive(): string {
