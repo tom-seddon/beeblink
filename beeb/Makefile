@@ -89,7 +89,7 @@ programs: _uputest_program
 .PHONY : roms
 roms : _avr_rom _tube_serial_rom _upurs_rom _tube_serial_electron_rom _b2_rom
 	@echo ---
-	$(_V)cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x "$(VER)" -x "$(BUILD_INFO)" -x "$(COMMIT)" beeblink_tube_serial.rom beeblink_tube_serial_safe.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom beeblink_tube_serial_electron.rom beeblink_tube_serial_safe_electron.rom beeblink_b2.rom
+	$(_V)cd "$(DEST)" && $(PYTHON) ../../tools/sha1sum.py --size -x "$(VER)" -x "$(BUILD_INFO)" -x "$(COMMIT)" beeblink_tube_serial.rom beeblink_tube_serial_safe.rom beeblink_avr_fe60.rom beeblink_upurs_fe60.rom beeblink_tube_serial_electron.rom beeblink_tube_serial_safe_electron.rom beeblink_b2.rom beeblink_b2_electron.rom
 
 ##########################################################################
 ##########################################################################
@@ -124,6 +124,7 @@ _avr_rom : _dest $(DEST)/beeblink_constants.s65
 .PHONY : _b2_rom
 _b2_rom : _dest $(DEST)/beeblink_constants.s65
 	$(_V)$(MAKE) _rom "BUILD_INFO=$(BUILD_INFO)" ROM_SUFFIX=b2 ROM_BEEB_NAME=b2 LINK=b2 CMD_PREFIX=B2
+	$(_V)$(MAKE) _rom "BUILD_INFO=$(BUILD_INFO)" ROM_SUFFIX=b2_electron ROM_BEEB_NAME=b2e LINK=b2 CMD_PREFIX=B2E "EXTRA_ARGS=-Dtarget_electron=true"
 
 .PHONY : _tube_serial_rom
 _tube_serial_rom : _dest $(DEST)/beeblink_constants.s65

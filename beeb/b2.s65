@@ -22,8 +22,14 @@
 
 b2: .block
 
+                .if target_electron
+                ; 2 addresses in the test hardware area.
+b2_control=$fc8e
+b2_data=$fc8f
+                .else
 b2_control=$fe9e
 b2_data=$fe9f
+                .endif
 
                 .section link_workspace
 link_routines_offset: .fill 1
