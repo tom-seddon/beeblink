@@ -33,10 +33,11 @@ Notes:
   ignored
 * the server pays no attention to existing `.gitattributes` files, and
   will make the modifications even if the files would already be
-  covered by a perfectly `.gitattributes` in some parent folder
+  covered by a perfectly good `.gitattributes` setting in some parent
+  folder
 * the `.gitattributes` files in volume folders are owned by Beeblink,
   and not designed for editing. The server will blithely add and
-  remove entries as it sees fit
+  remove entries as it sees fit, and may even delete the file
 
 ## `diff=bbcbasic`
 
