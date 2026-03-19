@@ -1044,7 +1044,7 @@ class ADFSType implements beebfs.IFSType {
             if (lastSeparatorIndex < strIndex) {
                 name = str.slice(strIndex);
             } else {
-                dirs = str.slice(strIndex, lastSeparatorIndex - strIndex).split('.');
+                dirs = str.slice(strIndex, lastSeparatorIndex).split('.');
                 name = str.slice(lastSeparatorIndex + 1);
                 if (name.length === 0) {
                     name = undefined;
