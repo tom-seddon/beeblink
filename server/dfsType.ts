@@ -452,17 +452,25 @@ class DFSType implements beebfs.IFSType {
         return text;
     }
 
-    public async deleteFile(file: beebfs.File): Promise<void> {
-        try {
-            await utils.forceFsUnlink(file.serverPath + inf.ext);
-            await utils.forceFsUnlink(file.serverPath);
-        } catch (error) {
-            errors.nodeError(error as NodeJS.ErrnoException);
+    public async deleteObject(object: beebfs.FSObject): Promise<void> {
+        if (object instanceof beebfs.File) {
+            try {
+                await utils.forceFsUnlink(object.serverPath + inf.ext);
+                await utils.forceFsUnlink(object.serverPath);
+            } catch (error) {
+                errors.nodeError(error as NodeJS.ErrnoException);
+            }
+        } else {
+            errors.notAFile();
         }
     }
 
-    public async rename(oldFQN: beebfs.FQN, newFQN: beebfs.FQN): Promise<beebfs.IRenameFileResult> {
+    public async rename(oldFQN: beebfs.FQN, newFQN: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.IRenameFileResult> {
         const oldFile = await beebfs.mustGetBeebFile(oldFQN, false, undefined);
+
+        if (await beebfs.getBeebFile(newFQN, false, log) !== undefined) {
+            return errors.exists();
+        }
 
         const newServerPath = await this.getIdealAbsoluteServerPath(newFQN);
         await inf.mustNotExist(newServerPath);

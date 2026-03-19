@@ -768,12 +768,41 @@ class ADFSType implements beebfs.IFSType {
         return drives;
     }
 
-    public async deleteFile(_file: beebfs.File): Promise<void> {
-        return errors.generic('TODO: delete');
+    public async deleteObject(_object: beebfs.FSObject): Promise<void> {
+        return todoError('delete');
     }
 
-    public async rename(_oldFQN: beebfs.FQN, _newFQN: beebfs.FQN): Promise<beebfs.IRenameFileResult> {
-        return errors.generic('TODO: rename');
+    public async rename(oldFQN: beebfs.FQN, newFQN: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.IRenameFileResult> {
+        log?.pn(`ADFS rename: oldFQN=${oldFQN}; newFQN=${newFQN}`);
+
+        const oldObjects = await this.findObjectsMatching(oldFQN, log);
+        if (oldObjects.length === 0) {
+            return errors.notFound();
+        } else if (oldObjects.length > 1) {
+            return errors.ambiguousName();
+        }
+
+        const newObjects = await this.findObjectsMatching(newFQN, log);
+        if (newObjects.length != 0) {
+            return errors.exists();
+        }
+
+        const oldServerPath = oldObjects[0].serverPath;
+
+        // (getIdealAbsoluteServerPath checks that the target directory exists.)
+        const newServerPath = await this.getIdealAbsoluteServerPath(newFQN);
+
+        await this.writeBeebMetadata(newServerPath, newFQN, oldObjects[0].getLoad(), oldObjects[0].getExec(), await oldObjects[0].tryGetSize(), oldObjects[0].attr);
+
+        try {
+            await utils.fsRename(oldServerPath, newServerPath);
+        } catch (error) {
+            return errors.nodeError(error);
+        }
+
+        await utils.forceFsUnlink(oldObjects[0].serverPath + inf.ext);
+
+        return { oldServerPath, newServerPath };
     }
 
     public async writeBeebMetadata(serverPath: string, fqn: beebfs.FQN, load: beebfs.FileAddress, exec: beebfs.FileAddress, size: number, attr: beebfs.FileAttributes): Promise<void> {

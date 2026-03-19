@@ -238,11 +238,11 @@ class PCType implements beebfs.IFSType {
         return text;
     }
 
-    public async deleteFile(_file: beebfs.File): Promise<void> {
+    public async deleteObject(_object: beebfs.FSObject): Promise<void> {
         return notSupported();
     }
 
-    public async rename(_oldFQN: beebfs.FQN, _newFQN: beebfs.FQN): Promise<undefined> {
+    public async rename(_oldFQN: beebfs.FQN, _newFQN: beebfs.FQN, _log: utils.Log | undefined): Promise<undefined> {
         return notSupported();
     }
 

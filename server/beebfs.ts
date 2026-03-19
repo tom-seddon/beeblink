@@ -993,15 +993,15 @@ export interface IFSType {
     // get *CAT text.
     getCAT: (filePath: FilePath, state: IFSState | undefined, log: utils.Log | undefined) => Promise<string>;
 
-    // delete the given file.
-    deleteFile: (file: File) => Promise<void>;
+    // delete the given object.
+    deleteObject: (object: FSObject) => Promise<void>;
 
-    // rename the given entry. The volume won't change. The new name doesn't
-    // obviously exist.
+    // rename the given entry. The volume won't change. The new name hasn't been
+    // checked, so it may already exist.
     //
     // If a file rename, return old and new file paths on the server, so the
     // gitattributes manipulator can sort it out. Otherwise, return undefined.
-    rename: (oldFQN: FQN, newName: FQN) => Promise<IRenameFileResult | undefined>;
+    rename: (oldFQN: FQN, newName: FQN, log: utils.Log | undefined) => Promise<IRenameFileResult | undefined>;
 
     // write the metadata for the given file.
     writeBeebMetadata: (serverPath: string, fqn: FQN, load: FileAddress, exec: FileAddress, size: number, attr: FileAttributes) => Promise<void>;
@@ -1987,13 +1987,9 @@ export class FS {
             return errors.badDrive();
         }
 
-        if (await getBeebFile(newFQN, false, this.log) !== undefined) {
-            return errors.exists();
-        }
-
         //const oldFile = await mustGetBeebFile(oldFQN, false, this.log);
 
-        const renameFileResult = await oldFQN.filePath.volume.type.rename(oldFQN, newFQN);
+        const renameFileResult = await oldFQN.filePath.volume.type.rename(oldFQN, newFQN, this.log);
 
         if (this.gaManipulator !== undefined && renameFileResult !== undefined) {
             if (!newFQN.filePath.volume.isReadOnly()) {
@@ -2238,18 +2234,19 @@ export class FS {
     /////////////////////////////////////////////////////////////////////////
 
     private async deleteObject(object: FSObject): Promise<void> {
-        if (!(object instanceof File)) {
-            return errors.notAFile();//TODO...
-        }
-
         FS.mustBeWriteableVolume(object.fqn.filePath.volume);
         this.mustNotBeOpen(object);
-        FS.mustBeWriteableFile(object);
 
-        await object.fqn.filePath.volume.type.deleteFile(object);
+        if (object instanceof File) {
+            FS.mustBeWriteableFile(object);
+        }
+
+        await object.fqn.filePath.volume.type.deleteObject(object);
 
         if (this.gaManipulator !== undefined) {
-            this.gaManipulator.deleteFile(object.serverPath);
+            if (object instanceof File) {
+                this.gaManipulator.deleteFile(object.serverPath);
+            }
         }
     }
 
