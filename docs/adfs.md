@@ -33,6 +33,11 @@ floppy disk or hard disk.
 
 - There are no sequence numbers
 
+## Other differences from ADFS
+
+- You can delete the CSD. You'll need to do a `*DIR $` (or similar) if
+  you do this!
+
 # Extracting ADFS disk contents
 
 I've done this using [my adf_extract

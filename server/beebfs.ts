@@ -994,7 +994,7 @@ export interface IFSType {
     getCAT: (filePath: FilePath, state: IFSState | undefined, log: utils.Log | undefined) => Promise<string>;
 
     // delete the given object.
-    deleteObject: (object: FSObject) => Promise<void>;
+    deleteObject: (object: FSObject, log: utils.Log | undefined) => Promise<void>;
 
     // rename the given entry. The volume won't change. The new name hasn't been
     // checked, so it may already exist.
@@ -2241,7 +2241,7 @@ export class FS {
             FS.mustBeWriteableFile(object);
         }
 
-        await object.fqn.filePath.volume.type.deleteObject(object);
+        await object.fqn.filePath.volume.type.deleteObject(object, this.log);
 
         if (this.gaManipulator !== undefined) {
             if (object instanceof File) {

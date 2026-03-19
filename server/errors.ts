@@ -65,6 +65,12 @@ function createErrorFactory(code: number, defaultMessage: string): (message?: st
     };
 }
 
+export const wont = createErrorFactory(147, 'Won\'t');//0x93
+
+export const cantDeleteCSD = createErrorFactory(150, 'Can\t delete CSD');//0x96
+
+export const dirNotEmpty = createErrorFactory(180, 'Dir not empty');
+
 export const accessViolation = createErrorFactory(189, 'Access violation');
 export const notAFile = createErrorFactory(189, 'Not a file');
 export const notADirectory = createErrorFactory(189, 'Not a directory');
@@ -84,6 +90,8 @@ export const tooBig = createErrorFactory(198, 'Too big');
 export const discFault = createErrorFactory(199, 'Disc fault');
 
 export const volumeReadOnly = createErrorFactory(201, 'Volume read only');
+
+export const dataLost = createErrorFactory(202, 'Data lost');//0xca
 
 export const badName = createErrorFactory(204, 'Bad name');
 export const ambiguousName = createErrorFactory(204, 'Ambiguous name');
@@ -107,10 +115,6 @@ export const eof = createErrorFactory(223, 'EOF');
 export const badString = createErrorFactory(253, 'Bad string');
 
 export const badCommand = createErrorFactory(254, 'Bad command');
-
-export const dataLost = createErrorFactory(0xca, 'Data lost');
-
-export const wont = createErrorFactory(0x93, 'Won\'t');
 
 // Message is mandatory for generic errors.
 //

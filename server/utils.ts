@@ -49,6 +49,7 @@ export const fsRead = util.promisify(fs.read);
 export const fsRename = util.promisify(fs.rename);
 export const fsMkdir = util.promisify(fs.mkdir);
 export const fsWriteFile = util.promisify(fs.writeFile);
+export const fsRmdir = util.promisify(fs.rmdir);
 
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -755,7 +756,7 @@ export function splitTextFileLines(b: Buffer, encoding: BufferEncoding): string[
 export function isBASIC(b: Buffer): boolean {
     let i = 0;
 
-    for(;;) {
+    for (; ;) {
         if (i >= b.length) {
             // Hit EOF before end of program marker.
             return false;

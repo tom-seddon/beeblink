@@ -31,6 +31,7 @@ import * as errors from './errors';
 import CommandLine from './CommandLine';
 import * as inf from './inf';
 import * as server from './server';
+import * as gitattributes from './gitattributes';
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -406,6 +407,7 @@ class ADFSState implements beebfs.IFSState {
         return [
             new server.Command('BACK', undefined, this.backCommand),
             new server.Command('CDIR', '<Ob Spec>', this.cdirCommand),
+            //new server.Command('DESTROYDIR', '<Ob Spec>', this.destroydirCommand),
             // new server.Command('LCAT', undefined, this.lcatCommand),
             // new server.Command('LEX', undefined, this.lexCommand),
         ];
@@ -497,6 +499,19 @@ class ADFSState implements beebfs.IFSState {
 
         return undefined;
     };
+
+    // private readonly destroydirCommand = async (commandLine: CommandLine): Promise<undefined> => {
+    //     if (commandLine.parts.length < 2) {
+    //         return errors.syntax();
+    //     }
+
+    //     const adfsType = mustBeADFSType(this.volume.type);
+    //     const filePath = adfsType.parseDirString(commandLine.parts[1], 0, this, this.volume, false);
+    //     const adfsFilePath = await adfsType.mustFindADFSFilePath(filePath, this.log);
+
+    //     if(adfsFilePath.
+
+    // };
 
     private readonly lcatCommand = async (_commandLine: CommandLine): Promise<void> => {
         return todoError('LCAT');
@@ -768,8 +783,68 @@ class ADFSType implements beebfs.IFSType {
         return drives;
     }
 
-    public async deleteObject(_object: beebfs.FSObject): Promise<void> {
-        return todoError('delete');
+    public async deleteObject(object: beebfs.FSObject, log: utils.Log | undefined): Promise<void> {
+        if (object instanceof beebfs.File) {
+            try {
+                await utils.forceFsUnlink(object.serverPath + inf.ext);
+                await utils.forceFsUnlink(object.serverPath);
+            } catch (error) {
+                errors.nodeError(error as NodeJS.ErrnoException);
+            }
+        } else if (object instanceof beebfs.Dir) {
+            let entries: fs.Dirent[];
+            try {
+                entries = await utils.fsReaddir(object.serverPath, { withFileTypes: true });
+            } catch (error) {
+                return errors.nodeError(error);
+            }
+
+            for (let i = 0; i < entries.length; ++i) {
+                log?.pn(`${i}: dir=${entries[i].isDirectory()} name="${entries[i].name}"`);
+            }
+
+            // Ignore these files when deciding if the directory is empty.
+            //
+            // If they're present, they'll still need removing before the folder
+            // can be deleted.
+            const ignoreFiles: string[] = [
+                gitattributes.fileName,
+            ];
+
+            let empty = true;
+            for (const entry of entries) {
+                if (entry.isFile()) {
+                    if (ignoreFiles.indexOf(entry.name) >= 0) {
+                        continue;
+                    }
+                }
+
+                empty = false;
+                break;
+            }
+
+            if (!empty) {
+                return errors.dirNotEmpty();
+            }
+
+            // Remove any ignored files.
+            for (const ignoreFile of ignoreFiles) {
+                try {
+                    await utils.forceFsUnlink(path.join(object.serverPath, ignoreFile));
+                } catch (error) {
+                    return errors.nodeError(error);
+                }
+            }
+
+            try {
+                await utils.fsRmdir(object.serverPath);
+                await utils.fsUnlink(object.serverPath + inf.ext);
+            } catch (error) {
+                return errors.nodeError(error);
+            }
+        } else {
+            return errors.generic('Not file/dir');
+        }
     }
 
     public async rename(oldFQN: beebfs.FQN, newFQN: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.IRenameFileResult> {

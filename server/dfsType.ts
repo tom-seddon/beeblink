@@ -452,7 +452,7 @@ class DFSType implements beebfs.IFSType {
         return text;
     }
 
-    public async deleteObject(object: beebfs.FSObject): Promise<void> {
+    public async deleteObject(object: beebfs.FSObject, _log: utils.Log | undefined): Promise<void> {
         if (object instanceof beebfs.File) {
             try {
                 await utils.forceFsUnlink(object.serverPath + inf.ext);

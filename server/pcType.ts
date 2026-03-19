@@ -238,7 +238,7 @@ class PCType implements beebfs.IFSType {
         return text;
     }
 
-    public async deleteObject(_object: beebfs.FSObject): Promise<void> {
+    public async deleteObject(_object: beebfs.FSObject, _log: utils.Log | undefined): Promise<void> {
         return notSupported();
     }
 

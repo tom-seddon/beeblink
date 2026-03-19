@@ -29,6 +29,8 @@ import * as path from 'path';
 import * as utils from './utils';
 import * as beebfs from './beebfs';
 
+export const fileName = '.gitattributes';
+
 export class Manipulator {
     private queue: (() => Promise<void>)[];
     private log: utils.Log | undefined;
@@ -39,7 +41,7 @@ export class Manipulator {
 
     public constructor(verbose: boolean, extraVerbose: boolean) {
         this.queue = [];
-        this.log = utils.Log.create('.gitattributes', process.stdout, verbose);
+        this.log = utils.Log.create(fileName, process.stdout, verbose);
         this.idleCallbacks = [];
         this.extraVerbose = extraVerbose;
     }
@@ -162,7 +164,7 @@ export class Manipulator {
                 this.log?.p('\n');
             }
 
-            const gaPath = path.join(path.dirname(filePath), '.gitattributes');
+            const gaPath = path.join(path.dirname(filePath), fileName);
 
             const basename = this.getGitattributesBasename(filePath);
 
