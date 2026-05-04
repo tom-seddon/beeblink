@@ -23,9 +23,10 @@
 b2: .block
 
                 .if target_electron
-                ; 2 addresses in the test hardware area.
-b2_control=$fc8e
-b2_data=$fc8f
+; $FC5x is where BeebEm puts its internal stuff, so that's where b2's
+; goes too.
+b2_control=$fc5e
+b2_data=$fc5f
                 .else
 b2_control=$fe9e
 b2_data=$fe9f
