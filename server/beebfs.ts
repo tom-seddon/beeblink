@@ -864,12 +864,16 @@ export interface IFSState {
     // findObjectsMatching can deal with.
     getCurrentFilePath: () => FilePath;
 
-    // get library drive. (OSGBPB 7 reads this, so it's part of the standard
-    // interface.)
+    // get current drive. This is what OSGBPB 6 returns.
+    getCurrentDrive: () => string;
+
+    // get current directory. This is what OSGBPB 6 returns.
+    getCurrentDir: () => string;
+
+    // get library drive. This is what OSGBPB 7 returns.
     getLibraryDrive: () => string;
 
-    // get library directory. (OSGBPB 7 reads this, so it's part of the standard
-    // interface.)
+    // get library directory. This is what OSGBPB 7 returns.
     getLibraryDir: () => string;
 
     // get human-readable string for printing on the BBC.
@@ -2533,9 +2537,8 @@ export class FS {
         let drive: string;
         let dir: string;
         if (current) {
-            const currentFilePath = state.getCurrentFilePath();
-            drive = currentFilePath.drive;
-            dir = currentFilePath.dir;
+            drive = state.getCurrentDrive();
+            dir = state.getCurrentDir();
         } else {
             drive = state.getLibraryDrive();
             dir = state.getLibraryDir();

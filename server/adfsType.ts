@@ -242,12 +242,16 @@ class ADFSState implements beebfs.IFSState {
     }
 
     public getCurrentDir(): string {
-        return getDirString(this.current.dir);
+        if (this.current.dir.length === 0) {
+            return errors.generic(`No current dir`);
+        } else {
+            return this.current.dir[this.current.dir.length - 1];
+        }
     }
 
     public getCurrentFilePath(): beebfs.FilePath {
         // Just return an ordinary FilePath. findObjectsMatching does the rest.
-        return new beebfs.FilePath(this.volume, false, getDirString(this.current.dir), true, this.current.drive, true);
+        return new beebfs.FilePath(this.volume, false, this.current.drive, true, getDirString(this.current.dir), true);
     }
 
     public getLibraryDrive(): string {
@@ -255,7 +259,11 @@ class ADFSState implements beebfs.IFSState {
     }
 
     public getLibraryDir(): string {
-        return getDirString(this.library.dir);
+        if (this.library.dir.length === 0) {
+            return '';//no library dir
+        } else {
+            return this.library.dir[this.library.dir.length - 1];
+        }
     }
 
     public getTransientSettings(): ADFSTransientSettings {
@@ -276,9 +284,9 @@ class ADFSState implements beebfs.IFSState {
     public getCurrentSettingsString(): string {
         let text = ``;
 
-        text += `Current dir :${this.current.drive}.${this.getCurrentDir()}${utils.BNL}`;
+        text += `Current dir :${this.current.drive}.${getDirString(this.current.dir)}${utils.BNL}`;
         text += `Previous dir :${this.previous.drive}.${getDirString(this.previous.dir)}${utils.BNL}`;
-        text += `Current lib :${this.library.drive}.${this.getLibraryDir()}${utils.BNL}`;
+        text += `Current lib :${this.library.drive}.${getDirString(this.library.dir)}${utils.BNL}`;
 
         return text;
     }
@@ -302,7 +310,7 @@ class ADFSState implements beebfs.IFSState {
         }
 
         if (tryLibDir) {
-            const libPath = new beebfs.FilePath(fqn.filePath.volume, fqn.filePath.volumeExplicit, this.library.drive, true, this.getLibraryDir(), true);
+            const libPath = new beebfs.FilePath(fqn.filePath.volume, fqn.filePath.volumeExplicit, this.library.drive, true, getDirString(this.library.dir), true);
             const libFQN = new beebfs.FQN(libPath, fqn.name);
             const libFile = await beebfs.getBeebFile(libFQN, true, this.log);
             if (libFile !== undefined) {
@@ -784,6 +792,8 @@ class ADFSType implements beebfs.IFSType {
     }
 
     public async deleteObject(object: beebfs.FSObject, log: utils.Log | undefined): Promise<void> {
+        log?.pn(`ADFS delete: ${object.fqn.toString()} (type=${object.getObjectType()})`);
+
         if (object instanceof beebfs.File) {
             try {
                 await utils.forceFsUnlink(object.serverPath + inf.ext);
@@ -799,8 +809,13 @@ class ADFSType implements beebfs.IFSType {
                 return errors.nodeError(error);
             }
 
-            for (let i = 0; i < entries.length; ++i) {
-                log?.pn(`${i}: dir=${entries[i].isDirectory()} name="${entries[i].name}"`);
+            if (log !== undefined) {
+                log.pn(`Server folder contents: (${entries.length} item(s))`);
+                log.withIndent(`    `, (): void => {
+                    for (let i = 0; i < entries.length; ++i) {
+                        log.pn(`${i}: dir=${entries[i].isDirectory()} name="${entries[i].name}"`);
+                    }
+                });
             }
 
             // Ignore these files when deciding if the directory is empty.
@@ -824,7 +839,7 @@ class ADFSType implements beebfs.IFSType {
             }
 
             if (!empty) {
-                return errors.dirNotEmpty();
+                return errors.dirNotEmpty('Dir not empty on server');
             }
 
             // Remove any ignored files.
@@ -848,7 +863,7 @@ class ADFSType implements beebfs.IFSType {
     }
 
     public async rename(oldFQN: beebfs.FQN, newFQN: beebfs.FQN, log: utils.Log | undefined): Promise<beebfs.IRenameFileResult> {
-        log?.pn(`ADFS rename: oldFQN=${oldFQN}; newFQN=${newFQN}`);
+        log?.pn(`ADFS rename: oldFQN=${oldFQN}; newFQN = ${newFQN} `);
 
         const oldObjects = await this.findObjectsMatching(oldFQN, log);
         if (oldObjects.length === 0) {
@@ -909,19 +924,19 @@ class ADFSType implements beebfs.IFSType {
     public async getInfoText(object: beebfs.FSObject, wide: boolean): Promise<string> {
         const stats = await object.tryGetStats();
 
-        let text = `${object.fqn.name.padEnd(15)} ${this.getAttrString(object).padEnd(6)}`;
+        let text = `${object.fqn.name.padEnd(15)} ${this.getAttrString(object).padEnd(6)} `;
         if (object instanceof beebfs.File) {
             text += ` ${utils.hex8(object.load)} ${utils.hex8(object.exec)} `;
             if (stats !== undefined) {
                 text += utils.hex8(stats.size);
             } else {
-                text += `????????`;
+                text += `???????? `;
             }
         }
 
         if (wide) {
             if (stats !== undefined) {
-                text += ` ${utils.getDateString(stats.mtime)}`;
+                text += ` ${utils.getDateString(stats.mtime)} `;
             }
         }
 
@@ -957,7 +972,7 @@ class ADFSType implements beebfs.IFSType {
     public async loadFilePathMetadata(filePath: beebfs.FilePath, log: utils.Log | undefined): Promise<IADFSDirectoryMetadata | undefined> {
         const adfsFilePath = await this.findADFSFilePath(filePath, log);
         if (adfsFilePath === undefined) {
-            log?.pn(`loadTitle: failed to find ADFS path: ${filePath}`);
+            log?.pn(`loadTitle: failed to find ADFS path: ${filePath} `);
             return undefined;
         }
 
@@ -1005,7 +1020,7 @@ class ADFSType implements beebfs.IFSType {
             return filePath;
         }
 
-        //log?.pn(`findADFSFilePath: filePath=${filePath.toString()}`);
+        //log?.pn(`findADFSFilePath: filePath = ${ filePath.toString() } `);
         log?.pn(`findADFSFilePath: volume: \`\`${filePath.volume.name}'' (explicit=${filePath.volumeExplicit})`);
         log?.pn(`findADFSFilePath: drive: \`\`${filePath.drive}'' (explicit=${filePath.driveExplicit})`);
         log?.pn(`findADFSFilePath: dir: \`\`${filePath.dir}'' (explicit=${filePath.dirExplicit})`);
@@ -1111,8 +1126,10 @@ class ADFSType implements beebfs.IFSType {
                 return errors.badName();
             }
 
+            const current: ADFSPath = adfsState.getCurrent();
+
             return {
-                filePath: new beebfs.FilePath(volume, volumeExplicit, adfsState.getCurrentDrive(), false, adfsState.getCurrentDir(), false),
+                filePath: new beebfs.FilePath(volume, volumeExplicit, current.drive, false, getDirString(current.dir), false),
                 name: undefined,
                 i: 0,
             };
