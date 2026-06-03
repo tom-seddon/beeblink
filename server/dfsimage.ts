@@ -299,7 +299,13 @@ export class WriteFlow extends diskimage.Flow {
             }
 
             const trackSizeBytes = numSides * TRACK_SIZE_BYTES;
-            const numTracks = Math.floor((this.image.length + trackSizeBytes - 1) / trackSizeBytes);
+
+            // Don't let the number of tracks exceed 80!
+            let numTracks = Math.floor((this.image.length + trackSizeBytes - 1) / trackSizeBytes);
+            if (numTracks > 80) {
+                numTracks = 80;
+            }
+
             for (let track = 0; track < numTracks; ++track) {
                 for (let side = 0; side < numSides; ++side) {
                     this.tracks.push({ side, track });
