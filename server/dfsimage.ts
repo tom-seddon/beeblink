@@ -118,6 +118,9 @@ function getUsedTracks(subType: ISubType, data: Buffer, track0Offset: number, al
     } else {
         const usedTracksSet = new Set<number>();
 
+        // Track 0 is always used, since it's got the catalogue in it!
+        usedTracksSet.add(0);
+
         for (let offset = 8; offset <= cat1[0x05]; offset += 8) {
             let size = 0;
             size |= cat1[offset + 4] << 0;
