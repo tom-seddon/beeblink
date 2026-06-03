@@ -37,6 +37,10 @@ used.
 DFS-style files. For 62-file Watford DFS disks, always use the `A`
 option.)
 
+(Note: if writing an entire disk image, the disk image's size is taken
+into account. The imager may write fewer tracks than expected, if the
+disk image covers less than the full disk.)
+
 Usual PC file extensions:
 
 - `.ssd` - single sided
